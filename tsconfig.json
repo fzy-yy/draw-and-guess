@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "useDefineForClassFields": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "paths": {
+      "@draw-guess/shared": ["./packages/shared/src/index.ts"],
+      "@draw-guess/config": ["./config.ts"],
+      "@/*": ["./apps/client/src/*"]
+    }
+  }
+}

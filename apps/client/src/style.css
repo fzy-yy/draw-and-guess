@@ -1,0 +1,2377 @@
+/*
+ * 全局游戏舞台与视觉系统。
+ * 使用容器单位让 1280×720 的逻辑布局按舞台整体缩放；页面本身永不滚动，也不使用渐变色。
+ */
+@import 'tailwindcss';
+
+/* 设计令牌：全局字体、配色与舞台圆角统一在此约定，供各分区引用。 */
+:root {
+  font-family: Inter, ui-rounded, 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+  color: #172033;
+  background: #111827;
+  font-synthesis: none;
+  --navy: #172554;
+  --blue: #2563eb;
+  --sky: #dbeafe;
+  --yellow: #facc15;
+  --orange: #f97316;
+  --green: #16a34a;
+  --red: #dc2626;
+  --ink: #172033;
+  --muted: #64748b;
+  --paper: #f8fafc;
+  --line: #cbd5e1;
+  --stage-radius: clamp(6px, 1cqh, 14px);
+}
+
+/* 统一盒模型：所有元素按 border-box 计算宽高，避免内边距撑破布局。 */
+* {
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* 只有可编辑控件恢复文本选择；其余游戏文字不可拖选。 */
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+/* 页面与根节点铺满视口，禁止出现滚动条。 */
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+/* 表单控件继承全局字体设置。 */
+button,
+input,
+select {
+  font: inherit;
+}
+/* 可点击按钮显示手型光标。 */
+button {
+  cursor: pointer;
+}
+/* 禁用态：禁止点击并降低视觉权重，避免误认为可操作。 */
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+/* 键盘聚焦高亮：保证纯键盘用户能看清当前焦点。 */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 0.35cqh solid #facc15;
+  outline-offset: 0.25cqh;
+}
+/* 图标默认尺寸：基于 em 缩放，并阻止其在弹性布局中被压缩。 */
+svg {
+  width: 1.1em;
+  height: 1.1em;
+  stroke-width: 2.2;
+  flex: 0 0 auto;
+}
+
+/* 视口外壳：始终把舞台居中，超出的内容裁剪在舞台外。 */
+.viewport-shell {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: #111827;
+  overflow: hidden;
+}
+/* 游戏舞台：按 16:9 约束尺寸，并使用容器查询单位(cq)做整体缩放。 */
+.game-stage {
+  position: relative;
+  width: min(99vw, calc(99vh * 16 / 9));
+  height: min(99vh, calc(99vw * 9 / 16));
+  aspect-ratio: 16 / 9;
+  container-type: size;
+  overflow: hidden;
+  background: var(--paper);
+  border: max(1px, 0.28cqh) solid #334155;
+  border-radius: var(--stage-radius);
+  box-shadow: 0 1.2cqh 5cqh #0009;
+  font-size: clamp(8px, 2cqh, 18px);
+}
+.game-stage h1,
+.game-stage h2,
+.game-stage p {
+  margin: 0;
+}
+.game-stage h1 {
+  font-size: 2.8em;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+.game-stage h2 {
+  font-size: 1.45em;
+  line-height: 1.15;
+}
+.game-stage button {
+  border: 0;
+}
+/* 小节标题/眉题：统一蓝色小字号大写样式。 */
+.step-label,
+.eyebrow {
+  color: var(--blue);
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  font-size: 0.72em;
+}
+
+/* 通用控件保持平面边线和色块，不采用网页式白卡片阵列。 */
+/* 通用按钮基类：三色动作按钮共用统一高度、内边距和按压反馈。 */
+.primary-action,
+.secondary-action,
+.danger-action {
+  min-height: 5.2cqh;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65em;
+  border-radius: 0.7em;
+  padding: 0 1.35em;
+  font-weight: 900;
+}
+/* 主操作按钮：蓝色实心，用于创建/开始等推进流程的动作。 */
+.primary-action {
+  color: white;
+  background: var(--blue);
+  box-shadow: 0 0.4cqh 0 #1e40af;
+}
+/* 次操作按钮：白底描边，用于取消、返回等次要动作。 */
+.secondary-action {
+  color: var(--navy);
+  background: white;
+  border: 0.18cqh solid var(--line) !important;
+}
+/* 危险操作按钮：红色实心，用于退出/清空/提前结束等破坏性动作。 */
+.danger-action {
+  color: white;
+  background: var(--red);
+}
+/* 文本输入框与下拉框统一样式。 */
+.game-input,
+select {
+  min-width: 0;
+  height: 5.2cqh;
+  border: 0.2cqh solid var(--line);
+  border-radius: 0.7em;
+  background: white;
+  color: var(--ink);
+  padding: 0 1em;
+  font-weight: 700;
+}
+/* 表单字段标签。 */
+.field-label {
+  display: block;
+  margin-bottom: 0.65cqh;
+  color: #334155;
+  font-weight: 800;
+}
+/* 字段下方辅助说明文字。 */
+.field-help {
+  margin-top: 0.6cqh !important;
+  color: var(--muted);
+  font-size: 0.74em;
+}
+/* 行内错误提示。 */
+.inline-warning {
+  margin-top: 0.75cqh !important;
+  color: #b91c1c;
+  font-size: 0.72em;
+  font-weight: 700;
+}
+/* 连接状态徽章：默认表示离线/异常，红色系。 */
+.connection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55em;
+  color: #991b1b;
+  background: #fee2e2;
+  padding: 0.65cqh 1.05em;
+  border-radius: 99em;
+  font-size: 0.8em;
+  font-weight: 800;
+}
+/* 连接徽章在线态：绿色系，表示已连通主机。 */
+.connection-chip.online {
+  color: #14532d;
+  background: #dcfce7;
+}
+/* 搜索框容器：带边框的胶囊样式，内含输入框和清空按钮。 */
+.search-field {
+  height: 4.8cqh;
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  border: 0.18cqh solid var(--line);
+  border-radius: 0.65em;
+  padding: 0 0.75em;
+  background: white;
+}
+/* 搜索框内部输入：透明无边框，占用剩余宽度。 */
+.search-field input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+/* 搜索框内的清空按钮。 */
+.search-field button {
+  display: grid;
+  place-items: center;
+  background: transparent;
+}
+
+/* 玩家资料。 */
+/* 玩家资料页：左右分栏，左品牌区右资料面板。 */
+.profile-layout {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 43% 57%;
+}
+/* 品牌介绍区：深蓝底色、白字，并带装饰性圆环。 */
+.brand-zone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8cqh 7cqw;
+  color: white;
+  background: var(--navy);
+  overflow: hidden;
+}
+/* 品牌区背景的两个装饰圆环。 */
+.brand-zone::before,
+.brand-zone::after {
+  content: '';
+  position: absolute;
+  border: 0.5cqh solid #ffffff18;
+  border-radius: 50%;
+}
+.brand-zone::before {
+  width: 34cqh;
+  height: 34cqh;
+  right: -12cqh;
+  top: -10cqh;
+}
+.brand-zone::after {
+  width: 22cqh;
+  height: 22cqh;
+  left: -9cqh;
+  bottom: -7cqh;
+}
+/* 品牌区眉题颜色。 */
+.brand-zone .eyebrow {
+  margin-top: 3cqh;
+  color: #93c5fd;
+}
+/* 品牌区主标题，放大并展示游戏名。 */
+.brand-zone h1 {
+  margin-top: 0.8cqh;
+  font-size: 3.5em;
+}
+/* 品牌区宣传语：限宽排版保证可读性。 */
+.brand-copy {
+  max-width: 25em;
+  margin: 1.8cqh 0 3.2cqh !important;
+  color: #dbeafe;
+  line-height: 1.8;
+}
+/* 品牌 Logo：黄色卡片上叠加画笔与问号气泡。 */
+.brand-mark {
+  position: relative;
+  width: 13cqh;
+  height: 13cqh;
+  border: 0.55cqh solid white;
+  border-radius: 2.4cqh;
+  background: var(--yellow);
+  transform: rotate(-3deg);
+  box-shadow: 0.8cqh 0.8cqh 0 #0f172a55;
+}
+/* Logo 内的画笔图形。 */
+.brand-pencil {
+  position: absolute;
+  width: 2.3cqh;
+  height: 9cqh;
+  left: 3.1cqh;
+  top: 1.6cqh;
+  border: 0.35cqh solid var(--navy);
+  background: var(--orange);
+  transform: rotate(38deg);
+  border-radius: 99em;
+}
+/* Logo 内的问号气泡。 */
+.brand-bubble {
+  position: absolute;
+  right: 1.2cqh;
+  top: 1.2cqh;
+  display: grid;
+  place-items: center;
+  width: 4.5cqh;
+  height: 4.5cqh;
+  color: white;
+  background: var(--blue);
+  border-radius: 50%;
+  font-weight: 1000;
+  font-size: 1.7em;
+}
+/* 玩家资料面板：垂直居中承载表单。 */
+.profile-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 5cqh 7cqw 4cqh;
+  background: #f8fafc;
+}
+/* 分区大标题行：两端对齐，右侧可放辅助按钮。 */
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2.7cqh;
+}
+.section-heading h2 {
+  margin-top: 0.5cqh;
+  font-size: 1.8em;
+}
+/* 图标+文字按钮，用于“换一组”等轻量动作。 */
+.icon-text-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  color: var(--blue);
+  background: transparent;
+  font-weight: 800;
+}
+/* 昵称输入行：右侧预留对勾图标空间。 */
+.nickname-row {
+  position: relative;
+  display: flex;
+}
+.nickname-row input {
+  width: 100%;
+  padding-right: 3em;
+  font-size: 1.05em;
+}
+/* 昵称有效对勾：绝对定位到输入框右侧。 */
+.valid-icon {
+  position: absolute;
+  right: 1em;
+  top: 50%;
+  color: var(--green);
+  transform: translateY(-50%);
+}
+/* 头像标题行：左右两端显示标题与当前选中名。 */
+.avatar-label-row {
+  display: flex;
+  justify-content: space-between;
+  margin: 2.3cqh 0 0.8cqh;
+  color: var(--muted);
+  font-size: 0.82em;
+}
+/* 纯色头像编辑区：头像预览、预设色和任意颜色选择器保持在同一行。 */
+.avatar-color-editor {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1.2em;
+}
+.solid-avatar,
+.avatar-preview {
+  display: inline-block;
+  width: 5cqh;
+  height: 5cqh;
+  flex: 0 0 auto;
+  border: 0.28cqh solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0.18cqh #94a3b8;
+}
+.avatar-preview {
+  width: 9cqh;
+  height: 9cqh;
+}
+.avatar-color-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.8cqh;
+}
+.avatar-color-option {
+  aspect-ratio: 1;
+  min-width: 3.5cqh;
+  border: 0.25cqh solid white !important;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0.14cqh #94a3b8;
+}
+.avatar-color-option.selected {
+  box-shadow:
+    0 0 0 0.35cqh var(--yellow),
+    0 0 0 0.55cqh var(--navy);
+}
+.avatar-color-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5cqh;
+  color: var(--muted);
+  font-size: 0.72em;
+  font-weight: 800;
+}
+.avatar-color-picker input,
+.profile-color-field input {
+  width: 7cqh;
+  height: 4.6cqh;
+  padding: 0.2cqh;
+  border: 0.18cqh solid var(--line);
+  background: white;
+}
+/* 进入在线大厅按钮：整行宽度并预留顶部间距。 */
+.enter-action {
+  width: 100%;
+  margin-top: 2.5cqh;
+}
+
+/* 大厅 HUD 与横向房间列表。 */
+/* 在线大厅：左右分栏，左侧房间区域右侧在线玩家区。 */
+.lobby-layout {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28%;
+  grid-template-rows: 11% 89%;
+  background: #eef2ff;
+}
+/* 大厅顶栏：身份、标题、辅助操作三点式布局。 */
+.lobby-hud {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 2cqw;
+  color: white;
+  background: var(--navy);
+  border-bottom: 0.5cqh solid var(--yellow);
+}
+/* 顶栏身份区：头像+昵称+连接信息，超长昵称省略。 */
+.identity-block {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  min-width: 0;
+}
+.identity-block img {
+  width: 6cqh;
+  height: 6cqh;
+  border-radius: 50%;
+  background: white;
+  border: 0.25cqh solid #93c5fd;
+}
+.identity-block div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.identity-block strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.identity-block span {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  color: #bfdbfe;
+  font-size: 0.67em;
+}
+/* 顶栏中间标题区：图标+游戏名+英文副题。 */
+.lobby-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+.lobby-title > svg {
+  width: 4.2cqh;
+  height: 4.2cqh;
+  color: var(--yellow);
+}
+.lobby-title div {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+.lobby-title b {
+  font-size: 1.2em;
+}
+.lobby-title span {
+  color: #93c5fd;
+  font-size: 0.58em;
+  letter-spacing: 0.18em;
+}
+/* 顶栏右侧辅助按钮：设置入口。 */
+.hud-actions {
+  justify-self: end;
+  display: flex;
+  gap: 0.7em;
+}
+/* 顶栏与房间 HUD 共用的半透明胶囊按钮。 */
+.hud-actions button,
+.room-hud-actions button {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.8cqh 0.8em;
+  color: #dbeafe;
+  background: #ffffff0d;
+  border-radius: 0.55em;
+}
+/* 左侧房间区：右侧分隔线隔开在线玩家区。 */
+.room-zone {
+  min-width: 0;
+  padding: 3cqh 2cqw;
+  border-right: 0.2cqh solid #cbd5e1;
+}
+/* 各类分区标题行：标题靠左、数量靠右。 */
+.room-zone-head,
+.online-head,
+.seat-zone-title {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+.room-zone-head > span,
+.online-head > span {
+  color: var(--muted);
+  font-size: 0.78em;
+}
+/* 快捷操作区：固定公开模式只保留创建房间入口。 */
+.quick-actions {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 1.3cqw;
+  margin: 2cqh 0;
+}
+/* 创建房间大按钮：蓝色实心，左图标+标题右箭头。 */
+.create-room-button {
+  height: 12cqh;
+  display: flex;
+  align-items: center;
+  gap: 1em;
+  padding: 0 1.4em;
+  color: white;
+  background: var(--blue);
+  border-radius: 0.9em;
+  box-shadow: 0 0.55cqh 0 #1e40af;
+  text-align: left;
+}
+.create-room-button > svg:first-child {
+  width: 4.5cqh;
+  height: 4.5cqh;
+  color: var(--yellow);
+}
+.create-room-button > svg:last-child {
+  margin-left: auto;
+}
+.create-room-button span {
+  display: flex;
+  flex-direction: column;
+}
+.create-room-button b {
+  font-size: 1.2em;
+}
+.create-room-button small {
+  margin-top: 0.35cqh;
+  color: #dbeafe;
+}
+/* 固定公开模式只有一个创建入口，按钮占满快捷操作区域。 */
+.quick-actions.public-only {
+  grid-template-columns: 1fr;
+}
+.room-public-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72em;
+  line-height: 1.6;
+}
+/* 公开房间列表：纵向滚动容器。 */
+.public-room-list {
+  height: 49cqh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85cqh;
+  overflow: hidden;
+}
+/* 单个房间行：图标、名称、房主、状态、人数和加入按钮。 */
+.room-row {
+  min-height: 7.8cqh;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 0.9em;
+  padding: 0.6cqh 0.9em;
+  background: white;
+  border-left: 0.45cqh solid var(--blue);
+  border-bottom: 0.16cqh solid var(--line);
+}
+/* 房间图标徽章。 */
+.room-emblem {
+  width: 5cqh;
+  height: 5cqh;
+  display: grid;
+  place-items: center;
+  color: var(--blue);
+  background: var(--sky);
+  border-radius: 0.6em;
+}
+/* 房间主信息：名称与规则摘要。 */
+.room-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.room-main b {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.room-main span,
+.room-phase {
+  color: var(--muted);
+  font-size: 0.68em;
+}
+/* 房间人数徽章。 */
+.room-count {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  font-weight: 800;
+}
+.room-row > button {
+  padding: 0.75cqh 1em;
+  color: white;
+  background: var(--blue);
+  border-radius: 0.5em;
+  font-weight: 800;
+}
+/* 空状态：无公开房间时的居中占位提示。 */
+.empty-stage {
+  height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.8cqh;
+  color: var(--muted);
+  border: 0.2cqh dashed #94a3b8;
+}
+.empty-stage svg {
+  width: 6cqh;
+  height: 6cqh;
+  color: #94a3b8;
+}
+/* 在线玩家区：纵向列表展示，可筛选。 */
+.online-zone {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 3cqh 1.6cqw 2cqh;
+  background: #f8fafc;
+}
+.online-head h2 {
+  margin-top: 0.3cqh;
+}
+/* 在线人数徽章：绿色圆形数字。 */
+.online-head > span {
+  display: grid;
+  place-items: center;
+  width: 3cqh;
+  height: 3cqh;
+  color: white;
+  background: var(--green);
+  border-radius: 50%;
+}
+.online-zone .search-field {
+  margin: 1.6cqh 0 1.2cqh;
+}
+/* 玩家发现列表：可滚动，展示当前允许被发现的玩家。 */
+.player-discovery-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7cqh;
+  overflow: hidden;
+}
+/* 单个可发现玩家行：头像+昵称+状态。 */
+.discovery-player {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  padding: 0.55cqh 0.5em;
+  border-bottom: 0.14cqh solid #e2e8f0;
+}
+.discovery-player img {
+  width: 4.8cqh;
+  height: 4.8cqh;
+  border-radius: 50%;
+  background: #e2e8f0;
+}
+.discovery-player div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.discovery-player b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.discovery-player span {
+  font-size: 0.66em;
+  color: var(--muted);
+}
+.discovery-player span.idle {
+  color: var(--green);
+}
+/* 发现列表空提示：说明发现机制仅限已登录玩家。 */
+.discovery-note {
+  color: var(--muted);
+  font-size: 0.72em;
+  line-height: 1.6;
+}
+/* 局域网说明条：蓝色信息提示。 */
+.lan-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65em;
+  padding: 1.1cqh 0.75em;
+  color: #1e3a8a;
+  background: var(--sky);
+  border-left: 0.35cqh solid var(--blue);
+  font-size: 0.68em;
+}
+.lan-tip span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.45;
+}
+
+/* 舞台内弹层，不依赖浏览器页面滚动。 */
+/* 舞台内全屏遮罩：所有弹窗都定位在舞台内部，不触发页面滚动。 */
+.stage-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 4cqh 5cqw;
+  background: #0f172acc;
+}
+/* 通用对话框：白底卡片，含标题栏与底部操作区。 */
+.game-dialog {
+  width: min(76cqw, 62em);
+  max-height: 86cqh;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  background: #f8fafc;
+  border: 0.35cqh solid white;
+  border-radius: 1.2em;
+  box-shadow: 0 1.4cqh 4cqh #0007;
+  overflow: hidden;
+}
+/* 对话框标题栏：深蓝底，左侧标题右侧关闭按钮。 */
+.game-dialog > header {
+  min-height: 9cqh;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.3cqh 1.7em;
+  color: white;
+  background: var(--navy);
+}
+/* 对话框标题栏的关闭按钮（圆形）。 */
+.game-dialog > header button {
+  display: grid;
+  place-items: center;
+  width: 4cqh;
+  height: 4cqh;
+  color: white;
+  background: #ffffff1a;
+  border-radius: 50%;
+  font-size: 1.2em;
+}
+/* 对话框底部操作区：次级背景，按钮右对齐。 */
+.game-dialog > footer {
+  min-height: 8cqh;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.8em;
+  padding: 1cqh 1.7em;
+  background: #e2e8f0;
+}
+.game-dialog > footer p {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 0.72em;
+}
+/* 创建房间对话框：略窄以保证纵向表单空间。 */
+.create-dialog {
+  width: 58cqw;
+}
+/* 创建房间表单：两列网格。 */
+.create-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.8cqh 1.4em;
+  padding: 2.8cqh 2em;
+}
+.create-grid > label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55cqh;
+  font-weight: 800;
+}
+/* 创建房间表单的开关项：复选框与标题横向排列。 */
+.create-grid .toggle-line {
+  flex-direction: row;
+  align-items: center;
+}
+.create-grid .wide-field {
+  grid-column: 1 / -1;
+}
+/* 开关复选框统一样式。 */
+.toggle-line input {
+  width: 2.2cqh;
+  height: 2.2cqh;
+  accent-color: var(--blue);
+}
+
+/* 等待房间：左侧固定席位，右侧平面控制区。 */
+/* 等待房间：左侧席位区，右侧规则/控制区。 */
+.waiting-layout {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 67%) 33%;
+  grid-template-rows: 11% 89%;
+  background: #eef2ff;
+}
+/* 房间顶栏：房间名、固定公开标识和右侧操作按钮。 */
+.room-hud {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 2cqw;
+  color: white;
+  background: var(--navy);
+  border-bottom: 0.5cqh solid var(--yellow);
+}
+/* 房间标题区：标签+房名，房名过长省略。 */
+.room-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8em;
+  min-width: 0;
+}
+.room-heading span {
+  color: #93c5fd;
+  font-size: 0.65em;
+  letter-spacing: 0.15em;
+}
+.room-heading h1 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.35em;
+}
+/* 固定公开徽章替代房间码，明确玩家应从大厅一键加入。 */
+.room-public-badge {
+  display: flex;
+  align-items: center;
+  justify-self: center;
+  gap: 0.6em;
+  color: var(--yellow);
+  font-size: 0.72em;
+  font-weight: 900;
+}
+/* 房间顶栏右侧操作：连接状态+退出按钮。 */
+.room-hud-actions {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+.room-hud-actions .connection-chip {
+  font-size: 0.65em;
+}
+/* 席位区：左侧，右分隔线隔开控制区。 */
+.seat-zone {
+  min-width: 0;
+  padding: 3cqh 2.5cqw;
+  border-right: 0.2cqh solid var(--line);
+}
+.seat-zone-title > span {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  color: var(--muted);
+  font-weight: 800;
+}
+/* 席位网格：3 列 2 行固定六席位。 */
+.seat-grid {
+  height: 67cqh;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 2cqh 1.5cqw;
+  margin-top: 2.5cqh;
+}
+/* 单个玩家席位：白底卡片，底部加粗边模拟立体感。 */
+.player-seat {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 0.24cqh solid #cbd5e1;
+  border-bottom: 0.6cqh solid #94a3b8;
+  border-radius: 1em;
+}
+.player-seat.ready {
+  border-color: #86efac;
+  border-bottom-color: var(--green);
+}
+.player-seat.me {
+  box-shadow: inset 0 0 0 0.3cqh var(--blue);
+}
+.player-seat.empty {
+  color: #94a3b8;
+  border-style: dashed;
+  background: #f8fafc;
+}
+.player-seat.empty > svg {
+  width: 5cqh;
+  height: 5cqh;
+}
+.player-seat.empty span {
+  font-size: 0.65em;
+}
+/* 席位头像容器：供房主皇冠绝对定位。 */
+.seat-avatar {
+  position: relative;
+  width: 10cqh;
+  height: 10cqh;
+}
+.seat-solid-avatar {
+  width: 100%;
+  height: 100%;
+}
+/* 房主皇冠徽章：黄色圆形置于头像右上角。 */
+.host-crown {
+  position: absolute;
+  right: -0.4cqh;
+  top: -0.7cqh;
+  width: 3.2cqh;
+  height: 3.2cqh;
+  padding: 0.45cqh;
+  color: #854d0e;
+  background: var(--yellow);
+  border-radius: 50%;
+}
+/* 席位昵称行：昵称+“我”标记，超长省略。 */
+.seat-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  max-width: 90%;
+  margin-top: 0.7cqh;
+}
+.seat-name b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.seat-name span {
+  padding: 0.1cqh 0.45em;
+  color: white;
+  background: var(--blue);
+  border-radius: 99em;
+  font-size: 0.55em;
+}
+/* 准备状态标签：默认灰底，准备后变绿。 */
+.ready-label {
+  min-width: 7em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35em;
+  margin-top: 0.7cqh;
+  padding: 0.4cqh 0.8em;
+  color: #475569;
+  background: #e2e8f0;
+  border-radius: 99em;
+  font-size: 0.68em;
+  font-weight: 900;
+}
+.ready .ready-label {
+  color: #14532d;
+  background: #dcfce7;
+}
+/* 房主移除玩家按钮：右上角红色圆形 X。 */
+.seat-manage {
+  position: absolute;
+  right: 0.6cqh;
+  top: 0.6cqh;
+  display: grid;
+  place-items: center;
+  width: 3cqh;
+  height: 3cqh;
+  color: #991b1b;
+  background: #fee2e2;
+  border-radius: 50%;
+}
+/* 右侧房间控制区：纵向堆叠规则、词库、邀请、准备。 */
+.room-control-zone {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 2.5cqh 1.6cqw;
+  background: #f8fafc;
+}
+/* 控制区标题行：标题+编辑按钮。 */
+.control-title {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+.control-title .step-label,
+.control-title h2 {
+  grid-column: 1;
+}
+.control-title button {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  color: var(--blue);
+  background: transparent;
+  font-weight: 800;
+}
+.rule-summary dl {
+  margin: 1.4cqh 0;
+  border-top: 0.16cqh solid var(--line);
+}
+.rule-summary dl div {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.85cqh 0;
+  border-bottom: 0.14cqh solid #e2e8f0;
+  font-size: 0.75em;
+}
+.rule-summary dt {
+  color: var(--muted);
+}
+.rule-summary dd {
+  margin: 0;
+  font-weight: 900;
+}
+/* 词库入口：蓝色信息条，显示已选/总词数。 */
+.vocabulary-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+  min-height: 7cqh;
+  padding: 0.8cqh 0.8em;
+  color: #1e3a8a;
+  background: var(--sky);
+  border-left: 0.45cqh solid var(--blue) !important;
+  text-align: left;
+}
+.vocabulary-entry > svg {
+  width: 3.4cqh;
+  height: 3.4cqh;
+}
+.vocabulary-entry > span:nth-child(2) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.vocabulary-entry small {
+  color: #64748b;
+}
+.vocabulary-entry > span:last-child {
+  font-size: 0.68em;
+  font-weight: 800;
+}
+/* 邀请按钮块：两个按钮并排。 */
+.invite-block {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6em;
+  margin: 1.3cqh 0;
+}
+.invite-block button {
+  min-height: 4.6cqh;
+  padding: 0 0.5em;
+  font-size: 0.72em;
+}
+/* 准备控制区：靠底部，含准备状态+按钮。 */
+.ready-controls {
+  margin-top: auto;
+  padding-top: 1.3cqh;
+  border-top: 0.2cqh solid var(--line);
+  text-align: center;
+}
+.ready-controls p {
+  min-height: 2.4cqh;
+  color: var(--muted);
+  font-size: 0.69em;
+}
+.ready-controls .ready-success {
+  color: var(--green);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.3em;
+}
+/* 准备按钮：默认白底蓝框，激活后绿底。 */
+.ready-button {
+  width: 100%;
+  min-height: 5.2cqh;
+  margin: 0.8cqh 0;
+  color: var(--navy);
+  background: white;
+  border: 0.22cqh solid var(--blue) !important;
+  border-radius: 0.7em;
+  font-weight: 1000;
+}
+.ready-button.active {
+  color: #14532d;
+  background: #dcfce7;
+  border-color: var(--green) !important;
+}
+.start-button {
+  width: 100%;
+}
+
+/* 词库使用紧凑分栏；47 个默认词条可在舞台内完整呈现。 */
+/* 词库弹窗：占据较大的宽高，容纳 6 列词条网格。 */
+.vocabulary-dialog {
+  width: 88cqw;
+  height: 84cqh;
+}
+/* 词库统计条：显示全部/搜索结果/已选数量。 */
+.vocab-stats {
+  display: flex;
+  gap: 2em;
+  padding: 1.2cqh 1.7em;
+  color: #475569;
+  background: #dbeafe;
+  font-size: 0.78em;
+}
+.vocab-stats b {
+  color: var(--blue);
+}
+/* 词库工具栏：搜索框+四个批量选择按钮。 */
+.vocab-toolbar {
+  display: grid;
+  grid-template-columns: 2fr repeat(4, auto);
+  gap: 0.6em;
+  padding: 1.1cqh 1.7em;
+  border-bottom: 0.18cqh solid var(--line);
+}
+.vocab-toolbar > button {
+  padding: 0 0.8em;
+  color: var(--navy);
+  background: #e2e8f0;
+  border-radius: 0.5em;
+  font-size: 0.72em;
+  font-weight: 800;
+}
+/* 词条网格：6 列排列，超出部分隐藏。 */
+.word-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-auto-rows: minmax(4.2cqh, 1fr);
+  gap: 0.65cqh 0.6em;
+  padding: 1.2cqh 1.7em;
+  overflow: hidden;
+}
+/* 单个词条项：白底卡片，选中态蓝底高亮。 */
+.word-grid label {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.5cqh 0.65em;
+  color: #475569;
+  background: white;
+  border: 0.16cqh solid var(--line);
+  border-radius: 0.5em;
+  font-size: 0.76em;
+  cursor: pointer;
+}
+.word-grid label.selected {
+  color: #1e3a8a;
+  background: #dbeafe;
+  border-color: var(--blue);
+}
+.word-grid label input {
+  position: absolute;
+  opacity: 0;
+}
+.word-grid label span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.word-grid label svg {
+  color: var(--blue);
+}
+/* 词库底部错误提示：红字提醒已选数量不足。 */
+.vocabulary-dialog footer .error {
+  color: var(--red);
+}
+/* 规则编辑弹窗：三分栏网格承载各设置项。 */
+.rules-dialog {
+  width: 70cqw;
+}
+.rule-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.2cqh 1.3em;
+  padding: 2cqh 1.8em;
+}
+.rule-edit-grid label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5cqh;
+  font-size: 0.76em;
+  font-weight: 800;
+}
+.rule-edit-grid label b {
+  color: var(--blue);
+}
+.rule-edit-grid label small {
+  color: var(--muted);
+  font-size: 0.8em;
+}
+/* 规则编辑的开关项：横向排列的卡片样式。 */
+.rule-edit-grid .toggle-line {
+  flex-direction: row;
+  align-items: center;
+  min-height: 4.8cqh;
+  padding: 0 0.8em;
+  background: #e2e8f0;
+  border-radius: 0.5em;
+}
+/* 邀请弹窗只展示可邀请玩家，不包含链接或二维码分享。 */
+.invite-dialog {
+  width: 52cqw;
+}
+.invite-content.player-only {
+  min-height: 40cqh;
+  padding: 2cqh 2em;
+}
+.invite-block.public-only {
+  grid-template-columns: 1fr;
+}
+/* 可邀请玩家列表：纵向按钮列表。 */
+.invite-player-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7cqh;
+}
+.invite-player-list button {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  padding: 0.65cqh 0.7em;
+  color: var(--ink);
+  background: white;
+  border: 0.16cqh solid var(--line);
+  border-radius: 0.6em;
+  text-align: left;
+}
+.invite-player-list img {
+  width: 4.7cqh;
+  height: 4.7cqh;
+  border-radius: 50%;
+}
+.invite-player-list b {
+  flex: 1;
+}
+/* 确认弹窗：居中窄卡片，图标+正文+底部按钮。 */
+.confirm-dialog {
+  width: 40cqw;
+  align-items: center;
+  gap: 1.4cqh;
+  padding-top: 3cqh;
+  text-align: center;
+}
+/* 确认弹窗顶部警示图标：红色圆形。 */
+.confirm-dialog > svg {
+  width: 7cqh;
+  height: 7cqh;
+  padding: 1.4cqh;
+  color: #991b1b;
+  background: #fee2e2;
+  border-radius: 50%;
+}
+/* 确认弹窗正文说明文字。 */
+.confirm-dialog > p {
+  max-width: 30em;
+  color: var(--muted);
+  line-height: 1.6;
+}
+/* 确认弹窗底部按钮：整行宽度。 */
+.confirm-dialog > footer {
+  width: 100%;
+  margin-top: 1cqh;
+}
+
+/* 对局骨架：HUD、玩家条、画布、聊天和工具栏固定在同一视图。 */
+/* 对局骨架：顶栏、玩家条、画布、聊天、工具栏三列三行布局。 */
+.game-layout {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 17% minmax(0, 61%) 22%;
+  grid-template-rows: 11% minmax(0, 76%) 13%;
+  background: #cbd5e1;
+}
+/* 对局顶栏：回合、画家、答案、计时、网络、暂停按钮。 */
+.game-hud {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto 1fr 2fr auto auto auto;
+  align-items: center;
+  gap: 1.3em;
+  padding: 0 1.2cqw;
+  color: white;
+  background: var(--navy);
+  border-bottom: 0.45cqh solid var(--yellow);
+}
+/* 回合指示：当前回合/总回合。 */
+.round-indicator {
+  display: flex;
+  flex-direction: column;
+  color: #93c5fd;
+  font-size: 0.65em;
+}
+.round-indicator b {
+  color: white;
+  font-size: 2em;
+}
+.round-indicator small {
+  font-size: 0.55em;
+  color: #bfdbfe;
+}
+/* 当前画家指示：头像+昵称。 */
+.drawer-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.55em;
+  min-width: 0;
+}
+.drawer-indicator img {
+  width: 5.2cqh;
+  height: 5.2cqh;
+  border-radius: 50%;
+  background: white;
+}
+.drawer-indicator span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  color: #93c5fd;
+  font-size: 0.62em;
+}
+.drawer-indicator b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: white;
+  font-size: 1.5em;
+}
+/* 答案/遮罩展示：画家看题目，猜词者看遮罩。 */
+.answer-hud {
+  justify-self: center;
+  min-width: 16cqw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.answer-hud span {
+  color: #93c5fd;
+  font-size: 0.6em;
+}
+.answer-hud b {
+  min-height: 3.8cqh;
+  display: flex;
+  align-items: center;
+  color: var(--yellow);
+  font-size: 1.45em;
+  letter-spacing: 0.16em;
+}
+/* 计时器：秒数+底部进度条，紧急时变红。 */
+.timer-hud {
+  position: relative;
+  min-width: 7cqw;
+  height: 6.5cqh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3em;
+  overflow: hidden;
+  background: #ffffff12;
+  border-radius: 0.65em;
+}
+.timer-hud b {
+  font-size: 1.65em;
+}
+.timer-hud span {
+  font-size: 0.6em;
+  color: #bfdbfe;
+}
+.timer-hud i {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 0.45cqh;
+  background: var(--green);
+  transform-origin: left;
+}
+.timer-hud.urgent {
+  background: #7f1d1d;
+}
+.timer-hud.urgent i {
+  background: var(--yellow);
+}
+/* 网络状态：连接标签+延迟 ms。 */
+.game-network {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  color: #bfdbfe;
+  font-size: 0.7em;
+}
+.game-network span {
+  display: flex;
+  flex-direction: column;
+}
+/* 顶栏方形按钮：暂停/继续。 */
+.hud-square {
+  display: grid;
+  place-items: center;
+  width: 4.4cqh;
+  height: 4.4cqh;
+  color: white;
+  background: #ffffff18;
+  border-radius: 0.6em;
+}
+/* 左侧玩家得分条：纵向列出成员及状态。 */
+.score-strip {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8cqh;
+  padding: 1.7cqh 0.8cqw;
+  background: #f1f5f9;
+  border-right: 0.2cqh solid #94a3b8;
+}
+.score-strip article {
+  min-height: 8.5cqh;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55em;
+  padding: 0.55cqh 0.5em;
+  background: white;
+  border-left: 0.35cqh solid #94a3b8;
+}
+.score-strip article.active {
+  border-left-color: var(--orange);
+  background: #fff7ed;
+}
+.score-strip article.guessed {
+  border-left-color: var(--green);
+  background: #f0fdf4;
+}
+.score-strip article.offline {
+  opacity: 0.55;
+  border-style: dashed;
+}
+/* 得分条头像：右上角叠加画家/猜中标记。 */
+.score-avatar {
+  position: relative;
+}
+.score-avatar img {
+  width: 5.8cqh;
+  height: 5.8cqh;
+  border-radius: 50%;
+  background: #e2e8f0;
+}
+.score-avatar svg {
+  position: absolute;
+  right: -0.3cqh;
+  bottom: -0.2cqh;
+  width: 2.4cqh;
+  height: 2.4cqh;
+  padding: 0.35cqh;
+  color: white;
+  background: var(--blue);
+  border-radius: 50%;
+}
+.score-strip article > div:nth-child(2) {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.score-strip article b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75em;
+}
+.score-strip article span {
+  color: var(--blue);
+  font-size: 0.7em;
+  font-weight: 900;
+}
+.score-strip article > svg {
+  color: #a16207;
+}
+/* 画布区域：白底边框容器，承载实时画布。 */
+.canvas-zone {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  margin: 1.5cqh 1cqw;
+  background: white;
+  border: 0.3cqh solid #64748b;
+  box-shadow: 0.5cqh 0.5cqh 0 #94a3b8;
+  overflow: hidden;
+}
+/* 实时画布：铺满容器，禁用触摸滚动以支持绘图。 */
+.drawing-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: white;
+  touch-action: none;
+}
+.drawing-canvas.drawable {
+  cursor: crosshair;
+}
+.drawing-canvas.drawable.erasing {
+  cursor: cell;
+}
+.drawing-canvas.drawable.filling {
+  cursor: copy;
+}
+/* 画布状态遮罩：非作画阶段覆盖画布展示状态文字。 */
+.canvas-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6cqh;
+  color: #475569;
+  background: #f8fafce8;
+  pointer-events: none;
+}
+.canvas-status svg {
+  width: 7cqh;
+  height: 7cqh;
+  color: var(--blue);
+}
+.canvas-status b {
+  font-size: 1.35em;
+}
+.canvas-status span {
+  font-size: 0.75em;
+}
+/* 右侧聊天区：纵向排布消息列表与输入/快捷短语。 */
+.chat-zone {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5cqh 0.9cqw;
+  background: #f8fafc;
+  border-left: 0.2cqh solid #94a3b8;
+}
+.chat-zone > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 1cqh;
+  border-bottom: 0.18cqh solid var(--line);
+}
+.chat-zone header div span {
+  color: var(--blue);
+  font-size: 0.56em;
+  letter-spacing: 0.15em;
+}
+.chat-zone header h2 {
+  font-size: 1.05em;
+}
+.chat-zone header > span {
+  padding: 0.35cqh 0.6em;
+  color: #1e3a8a;
+  background: var(--sky);
+  border-radius: 99em;
+  font-size: 0.62em;
+  font-weight: 800;
+}
+/* 消息列表：底部对齐，最新消息贴近输入框。 */
+.message-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.6cqh;
+  padding: 1cqh 0;
+  overflow: hidden;
+}
+/* 单条消息：不同类型用不同左边框与底色区分。 */
+.message {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35em;
+  padding: 0.6cqh 0.65em;
+  color: #334155;
+  background: white;
+  border-left: 0.3cqh solid #94a3b8;
+  font-size: 0.72em;
+  line-height: 1.35;
+}
+.message.correct {
+  color: #14532d;
+  background: #dcfce7;
+  border-left-color: var(--green);
+  font-weight: 800;
+}
+.message.system {
+  color: #1e3a8a;
+  background: var(--sky);
+  border-left-color: var(--blue);
+}
+.message.preset {
+  color: #7c2d12;
+  background: #ffedd5;
+  border-left-color: var(--orange);
+}
+/* 无消息占位：居中提示。 */
+.no-messages {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #94a3b8;
+  font-size: 0.7em;
+}
+.no-messages svg {
+  width: 4cqh;
+  height: 4cqh;
+}
+/* 猜词输入表单：输入框+发送按钮拼成一体化控件。 */
+.guess-form {
+  padding-top: 0.8cqh;
+  border-top: 0.18cqh solid var(--line);
+}
+.guess-form label {
+  font-size: 0.65em;
+  color: var(--muted);
+}
+.guess-form div {
+  display: flex;
+  margin-top: 0.45cqh;
+}
+.guess-form input {
+  width: 100%;
+  min-width: 0;
+  height: 5.2cqh;
+  padding: 0 0.8em;
+  border: 0.2cqh solid var(--blue);
+  border-right: 0;
+  border-radius: 0.65em 0 0 0.65em;
+  outline: 0;
+}
+.guess-form button {
+  width: 5cqh;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: var(--blue);
+  border-radius: 0 0.65em 0.65em 0;
+}
+/* 快捷短语区：画家/已猜中者使用的安全互动短语。 */
+.preset-zone {
+  padding-top: 0.8cqh;
+  border-top: 0.18cqh solid var(--line);
+}
+.preset-zone p {
+  color: var(--muted);
+  font-size: 0.62em;
+  line-height: 1.3;
+}
+.preset-zone div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4cqh 0.4em;
+  margin-top: 0.5cqh;
+}
+.preset-zone button {
+  padding: 0.45cqh 0.3em;
+  color: #7c2d12;
+  background: #ffedd5;
+  border-radius: 0.45em;
+  font-size: 0.58em;
+}
+/* 底部绘图工具栏：工具、颜色、线宽、历史操作四组。 */
+.drawing-toolbar {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1.35fr 1fr 0.8fr auto;
+  align-items: center;
+  gap: 1.2em;
+  padding: 0 1.4cqw;
+  background: #f8fafc;
+  border-top: 0.25cqh solid #64748b;
+}
+.drawing-toolbar.disabled {
+  color: #94a3b8;
+}
+/* 工具栏各组共用横向弹性排列。 */
+.tool-group,
+.color-group,
+.width-group,
+.history-group {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+}
+.drawing-toolbar div > span,
+.drawing-toolbar label > span {
+  margin-right: 0.3em;
+  color: var(--muted);
+  font-size: 0.62em;
+  font-weight: 800;
+}
+/* 工具/历史按钮：灰底圆角，选中态蓝底。 */
+.tool-group button,
+.history-group button {
+  min-height: 4.6cqh;
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  padding: 0 0.7em;
+  color: #334155;
+  background: #e2e8f0;
+  border-radius: 0.55em;
+  font-size: 0.72em;
+  font-weight: 800;
+}
+.tool-group button.selected {
+  color: white;
+  background: var(--blue);
+}
+/* 单键提示随工具按钮显示；设置关闭提示后不会占用布局。 */
+.tool-group kbd {
+  min-width: 1.6em;
+  padding: 0.1em 0.35em;
+  color: var(--navy);
+  background: white;
+  border: 0.12em solid currentcolor;
+  border-radius: 0.35em;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.82em;
+  text-transform: uppercase;
+}
+/* 颜色组：圆形色块按钮，选中态加双色描边。 */
+.color-group {
+  justify-content: center;
+}
+.color-group button {
+  width: 3.5cqh;
+  height: 3.5cqh;
+  background: var(--paint);
+  border: 0.2cqh solid #94a3b8;
+  border-radius: 50%;
+}
+/* 颜色按钮选中态：外圈黄色+深蓝双描边高亮。 */
+.color-group button.selected {
+  box-shadow:
+    0 0 0 0.3cqh var(--yellow),
+    0 0 0 0.5cqh var(--navy);
+}
+/* 连续线宽滑块与粗细预览保持双向同步。 */
+.width-group input[type='range'] {
+  width: 10cqw;
+  accent-color: var(--blue);
+}
+.width-preview {
+  display: block;
+  max-width: 2.5cqh;
+  max-height: 2.5cqh;
+  background: var(--ink);
+  border-radius: 50%;
+}
+.custom-paint {
+  position: relative;
+  width: 3.8cqh;
+  height: 3.8cqh;
+  border: 0.2cqh solid #94a3b8;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.custom-paint input {
+  position: absolute;
+  inset: -1cqh;
+  width: 6cqh;
+  height: 6cqh;
+  padding: 0;
+  border: 0;
+}
+/* 开赛倒计时遮罩：黄色大数字。 */
+.countdown-overlay {
+  color: white;
+}
+.countdown-overlay > b {
+  display: grid;
+  place-items: center;
+  width: 20cqh;
+  height: 20cqh;
+  margin: 2cqh 0;
+  color: var(--navy);
+  background: var(--yellow);
+  border-radius: 50%;
+  font-size: 6em;
+}
+/* 对局阶段信息面板：选词/暂停/回合/最终共用卡片。 */
+.word-choice,
+.pause-panel,
+.round-result-panel,
+.final-result-panel {
+  min-width: 50cqw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.2cqh;
+  padding: 4cqh 4cqw;
+  background: #f8fafc;
+  border: 0.35cqh solid white;
+  border-radius: 1.2em;
+  text-align: center;
+}
+/* 面板顶部圆形图标。 */
+.word-choice > svg,
+.pause-panel > svg,
+.final-result-panel > svg {
+  width: 8cqh;
+  height: 8cqh;
+  padding: 1.4cqh;
+  color: white;
+  background: var(--blue);
+  border-radius: 50%;
+}
+/* 选词选项按钮：黄色大按钮供画家点选。 */
+.word-choice > div {
+  display: flex;
+  gap: 1em;
+  margin: 2cqh 0;
+}
+.word-choice > div button {
+  min-width: 12cqw;
+  min-height: 7cqh;
+  padding: 0 1em;
+  color: var(--navy);
+  background: var(--yellow);
+  border-bottom: 0.6cqh solid #ca8a04;
+  border-radius: 0.7em;
+  font-size: 1.25em;
+  font-weight: 1000;
+}
+/* 暂停/最终面板底部按钮行。 */
+.pause-panel div,
+.final-result-panel > div:last-child {
+  display: flex;
+  gap: 0.8em;
+  margin-top: 1.5cqh;
+}
+/* 回合得分明细：逐行展示每个猜中者。 */
+.score-details {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6cqh;
+  margin: 1.5cqh 0;
+}
+.score-details article {
+  display: grid;
+  grid-template-columns: 1.5fr repeat(4, 1fr);
+  align-items: center;
+  padding: 0.8cqh 0.8em;
+  background: #e2e8f0;
+  text-align: left;
+  font-size: 0.72em;
+}
+.score-details strong {
+  color: var(--blue);
+  font-size: 1.2em;
+}
+/* 最终结算面板：略宽，顶部为奖杯图标。 */
+.final-result-panel {
+  min-width: 55cqw;
+  padding-top: 2.5cqh;
+}
+.final-result-panel > svg {
+  color: #854d0e;
+  background: var(--yellow);
+}
+/* 最终排行列表：第一名高亮底色。 */
+.ranking-list {
+  width: 100%;
+  display: flex !important;
+  flex-direction: column;
+  gap: 0.6cqh !important;
+  margin: 1cqh 0 !important;
+}
+.ranking-list article {
+  display: grid;
+  grid-template-columns: 3em auto 1fr auto;
+  align-items: center;
+  gap: 0.8em;
+  padding: 0.6cqh 1em;
+  background: #e2e8f0;
+  text-align: left;
+}
+.ranking-list article.winner {
+  color: #713f12;
+  background: #fef3c7;
+}
+.ranking-list img {
+  width: 4.5cqh;
+  height: 4.5cqh;
+  border-radius: 50%;
+}
+.ranking-list article > span {
+  display: flex;
+  flex-direction: column;
+  font-weight: 800;
+}
+.ranking-list article small {
+  color: var(--muted);
+  font-size: 0.62em;
+  font-weight: 600;
+}
+
+/* 设置使用分页标签，主体始终在一屏内。 */
+/* 设置子页：顶部标题栏、标签栏和正文三段布局。 */
+.subpage-layout {
+  height: 100%;
+  display: grid;
+  grid-template-rows: 11% 9% minmax(0, 1fr);
+  background: #eef2ff;
+}
+/* 子页顶栏：返回按钮+标题+右侧说明。 */
+.subpage-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 2cqw;
+  color: white;
+  background: var(--navy);
+  border-bottom: 0.45cqh solid var(--yellow);
+}
+.subpage-header > button {
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  color: white;
+  background: #ffffff18;
+  padding: 0.8cqh 0.8em;
+  border-radius: 0.55em;
+}
+.subpage-header > div {
+  text-align: center;
+}
+.subpage-header .step-label {
+  color: #93c5fd;
+}
+.subpage-header h1 {
+  font-size: 1.25em;
+}
+.subpage-header > span {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  color: #bfdbfe;
+  font-size: 0.72em;
+}
+/* 设置标签栏：横向切换声音/显示/资料分类。 */
+.tab-strip {
+  display: flex;
+  justify-content: center;
+  gap: 0.5em;
+  padding: 1cqh;
+  background: white;
+  border-bottom: 0.18cqh solid var(--line);
+}
+.tab-strip button {
+  min-width: 13cqw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45em;
+  color: #475569;
+  background: transparent;
+  border-bottom: 0.35cqh solid transparent;
+  font-weight: 800;
+}
+.tab-strip button.active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+/* 设置正文容器：左右留白撑开内容。 */
+.settings-content {
+  min-height: 0;
+  padding: 3cqh 9cqw;
+}
+/* 设置分类介绍：图标+标题+说明。 */
+.settings-intro {
+  display: flex;
+  align-items: center;
+  gap: 1.2em;
+  margin-bottom: 2.5cqh;
+}
+.settings-intro > svg {
+  width: 6cqh;
+  height: 6cqh;
+  padding: 1.2cqh;
+  color: white;
+  background: var(--blue);
+  border-radius: 0.8em;
+}
+.settings-intro p {
+  margin-top: 0.5cqh !important;
+  color: var(--muted);
+  font-size: 0.72em;
+}
+/* 滑块设置列表：音量等滑块行。 */
+.slider-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2cqh;
+}
+.slider-settings > label {
+  min-height: 8cqh;
+  display: grid;
+  grid-template-columns: 1.2fr 1.8fr auto;
+  align-items: center;
+  gap: 1em;
+  padding: 1cqh 1.2em;
+  background: white;
+  border-left: 0.4cqh solid var(--blue);
+}
+.slider-settings label > span {
+  display: flex;
+  flex-direction: column;
+}
+.slider-settings small {
+  color: var(--muted);
+  font-size: 0.7em;
+}
+.slider-settings input[type='range'] {
+  accent-color: var(--blue);
+}
+.slider-settings .setting-switch {
+  grid-template-columns: 1fr auto;
+}
+.slider-settings input[type='checkbox'],
+.switch-grid input {
+  width: 2.6cqh;
+  height: 2.6cqh;
+  accent-color: var(--blue);
+}
+/* 显示/操作开关网格：两列排布复选框行。 */
+.switch-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.2cqh 1em;
+}
+.switch-grid label {
+  min-height: 8cqh;
+  display: flex;
+  align-items: center;
+  gap: 1em;
+  padding: 1cqh 1.2em;
+  background: white;
+  border-left: 0.35cqh solid #94a3b8;
+}
+.switch-grid label span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.switch-grid small {
+  color: var(--muted);
+  font-size: 0.68em;
+}
+/* 资料与诊断内容：两列网格。 */
+.diagnostic-content {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  grid-template-rows: 1fr auto;
+  gap: 2cqh 2cqw;
+}
+.profile-edit,
+/* 诊断信息框：顶端加蓝边。 */
+.diagnostic-box {
+  padding: 2cqh 1.5em;
+  background: white;
+  border-top: 0.4cqh solid var(--blue);
+}
+/* 资料编辑：头像+昵称+保存按钮。 */
+.profile-edit {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 1.5cqh 1em;
+}
+.profile-solid-avatar {
+  grid-row: 1 / 3;
+  width: 14cqh;
+  height: 14cqh;
+}
+.profile-color-field {
+  grid-column: 2;
+}
+.profile-edit label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6cqh;
+  font-weight: 800;
+}
+.profile-edit button {
+  grid-column: 2;
+}
+.diagnostic-box pre {
+  margin: 1.4cqh 0;
+  padding: 1.2cqh 1em;
+  color: #dbeafe;
+  background: var(--navy);
+  border-radius: 0.6em;
+  font:
+    0.7em/1.5 ui-monospace,
+    monospace;
+  white-space: pre-wrap;
+}
+/* 快捷键设置：每个工具独占一行，输入框捕获单个可打印按键。 */
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1em;
+}
+.shortcut-grid label {
+  min-height: 12cqh;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.8em;
+  padding: 1.2em;
+  background: white;
+  border: 0.18cqh solid var(--line);
+  border-radius: 0.8em;
+}
+.shortcut-grid label > svg {
+  width: 3.6cqh;
+  color: var(--blue);
+}
+.shortcut-grid span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+}
+.shortcut-grid small,
+.shortcut-note {
+  color: var(--muted);
+  font-size: 0.68em;
+}
+.shortcut-grid input {
+  width: 3.2em;
+  height: 3.2em;
+  color: white;
+  background: var(--blue);
+  border: 0;
+  border-radius: 0.55em;
+  font:
+    900 1em/1 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  text-align: center;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.shortcut-grid input:focus {
+  outline: 0.3cqh solid var(--yellow);
+  outline-offset: 0.2cqh;
+}
+.shortcut-error {
+  margin-top: 1.2cqh;
+  color: var(--red);
+  font-weight: 800;
+}
+.shortcut-note {
+  margin-top: 1.2cqh;
+}
+/* 破坏性操作区：恢复默认+清空资料右对齐。 */
+.destructive-settings {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.8em;
+}
+.destructive-settings > button {
+  min-height: 5cqh;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0 1em;
+  border-radius: 0.6em;
+}
+.destructive-settings > button:first-child {
+  color: var(--navy);
+  background: white;
+  border: 0.18cqh solid var(--line);
+}
+/* Toast 与邀请都位于舞台内部，避免遮挡页面外部。 */
+/* Toast 堆叠：舞台右上角，多条通知纵向堆叠。 */
+.toast-stack {
+  position: absolute;
+  z-index: 70;
+  right: 1.2cqw;
+  top: 12cqh;
+  width: 28cqw;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8cqh;
+  pointer-events: none;
+}
+/* 单条 Toast：默认成功绿底，含关闭按钮。 */
+.toast {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.7em;
+  padding: 1.1cqh 0.9em;
+  color: #14532d;
+  background: #dcfce7;
+  border-left: 0.45cqh solid var(--green);
+  box-shadow: 0 0.6cqh 2cqh #0f172a44;
+  pointer-events: auto;
+  font-size: 0.75em;
+  font-weight: 800;
+}
+.toast.warning {
+  color: #713f12;
+  background: #fef3c7;
+  border-left-color: #ca8a04;
+}
+.toast.error {
+  color: #7f1d1d;
+  background: #fee2e2;
+  border-left-color: var(--red);
+}
+.toast button {
+  display: grid;
+  place-items: center;
+  color: currentColor;
+  background: transparent;
+}
+/* 房间邀请横幅：舞台底部居中，含头像、昵称、接受/拒绝。 */
+.invite-banner {
+  position: absolute;
+  z-index: 50;
+  left: 50%;
+  bottom: 3cqh;
+  width: 66cqw;
+  min-height: 10cqh;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 1em;
+  padding: 1cqh 1em;
+  background: white;
+  border: 0.3cqh solid var(--blue);
+  border-left: 1cqh solid var(--blue);
+  box-shadow: 0 1cqh 3cqh #0f172a55;
+  transform: translateX(-50%);
+}
+.invite-banner .solid-avatar {
+  width: 6.5cqh;
+  height: 6.5cqh;
+}
+.invite-banner div {
+  display: flex;
+  flex-direction: column;
+}
+.invite-banner span {
+  color: var(--blue);
+  font-size: 0.65em;
+}
+
+/* 竖屏警告：默认隐藏，仅竖屏时显示全屏提示。 */
+.portrait-warning {
+  display: none;
+}
+@media (orientation: portrait) {
+  /* 竖屏时隐藏舞台其他内容，只保留旋转提示。 */
+  .game-stage > *:not(.portrait-warning) {
+    visibility: hidden;
+  }
+  .portrait-warning {
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.2cqh;
+    color: white;
+    background: var(--navy);
+    text-align: center;
+    visibility: visible;
+  }
+  .portrait-warning svg {
+    width: 10cqh;
+    height: 10cqh;
+    color: var(--yellow);
+  }
+}
+/* 色觉友好：准备标签改用蓝底，避免仅依赖红绿区分。 */
+.color-friendly .ready-label {
+  color: #1e3a8a;
+  background: #dbeafe;
+}
