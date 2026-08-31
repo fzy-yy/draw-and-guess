@@ -1,0 +1,94 @@
+/* 舞台内弹层，不依赖浏览器页面滚动。 */
+/* 舞台内全屏遮罩：所有弹窗都定位在舞台内部，不触发页面滚动。 */
+.stage-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 4cqh 5cqw;
+  background: #0f172acc;
+}
+/* 通用对话框：白底卡片，含标题栏与底部操作区。 */
+.game-dialog {
+  width: min(76cqw, 62em);
+  max-height: 86cqh;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  background: #f8fafc;
+  border: 0.35cqh solid white;
+  border-radius: 1.2em;
+  box-shadow: 0 1.4cqh 4cqh #0007;
+  overflow: hidden;
+}
+/* 对话框标题栏：深蓝底，左侧标题右侧关闭按钮。 */
+.game-dialog > header {
+  min-height: 9cqh;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.3cqh 1.7em;
+  color: white;
+  background: var(--navy);
+}
+/* 对话框标题栏的关闭按钮（圆形）。 */
+.game-dialog > header button {
+  display: grid;
+  place-items: center;
+  width: 4cqh;
+  height: 4cqh;
+  color: white;
+  background: #ffffff1a;
+  border-radius: 50%;
+  font-size: 1.2em;
+}
+/* 对话框底部操作区：次级背景，按钮右对齐。 */
+.game-dialog > footer {
+  min-height: 8cqh;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.8em;
+  padding: 1cqh 1.7em;
+  background: #e2e8f0;
+}
+/* 对话框底部左侧说明文字。 */
+.game-dialog > footer p {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 0.72em;
+}
+/* 创建房间对话框：略窄以保证纵向表单空间。 */
+.create-dialog {
+  width: 58cqw;
+}
+/* 创建房间表单：两列网格。 */
+.create-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.8cqh 1.4em;
+  padding: 2.8cqh 2em;
+}
+/* 创建表单字段列。 */
+.create-grid > label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55cqh;
+  font-weight: 800;
+}
+/* 创建房间表单的开关项：复选框与标题横向排列。 */
+.create-grid .toggle-line {
+  flex-direction: row;
+  align-items: center;
+}
+/* 跨两列的宽字段。 */
+.create-grid .wide-field {
+  grid-column: 1 / -1;
+}
+/* 开关复选框统一样式。 */
+.toggle-line input {
+  width: 2.2cqh;
+  height: 2.2cqh;
+  accent-color: var(--blue);
+}

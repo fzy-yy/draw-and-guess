@@ -6,6 +6,7 @@ import { networkInterfaces } from 'node:os'
 import pino from 'pino'
 import { z } from 'zod'
 import { APP_CONFIG, getDeploymentConfig } from '../../../config.ts'
+import { serverStrings } from '../../../config/strings.ts'
 import { createApplication } from './app.ts'
 
 /** 使用 schema 在启动时验证跨字段配置，错误会阻止服务带病运行。 */
@@ -121,7 +122,7 @@ async function main(): Promise<void> {
     logger.info({ signal }, '正在优雅关闭服务')
     application.io.emit('system:error', {
       code: 'SERVER_SHUTDOWN',
-      message: '主机服务已关闭，请稍后重新连接',
+      message: serverStrings.notices.serverShutdown,
     })
     application.io.close(() => application.httpServer.close(() => process.exit(0)))
     // 3 秒兜底强退，防止连接未关闭导致进程挂起

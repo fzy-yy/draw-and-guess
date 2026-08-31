@@ -1,0 +1,224 @@
+/* 玩家资料。 */
+/* 玩家资料页：左右分栏，左品牌区右资料面板。 */
+.profile-layout {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 43% 57%;
+}
+/* 品牌介绍区：深蓝底色、白字，并带装饰性圆环。 */
+.brand-zone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8cqh 7cqw;
+  color: white;
+  background: var(--navy);
+  overflow: hidden;
+}
+/* 品牌区背景的两个装饰圆环。 */
+.brand-zone::before,
+.brand-zone::after {
+  content: '';
+  position: absolute;
+  border: 0.5cqh solid #ffffff18;
+  border-radius: 50%;
+}
+.brand-zone::before {
+  width: 34cqh;
+  height: 34cqh;
+  right: -12cqh;
+  top: -10cqh;
+}
+.brand-zone::after {
+  width: 22cqh;
+  height: 22cqh;
+  left: -9cqh;
+  bottom: -7cqh;
+}
+/* 品牌区眉题颜色。 */
+.brand-zone .eyebrow {
+  margin-top: 3cqh;
+  color: #93c5fd;
+}
+/* 品牌区主标题，放大并展示游戏名。 */
+.brand-zone h1 {
+  margin-top: 0.8cqh;
+  font-size: 3.5em;
+}
+/* 品牌区宣传语：限宽排版保证可读性。 */
+.brand-copy {
+  max-width: 25em;
+  margin: 1.8cqh 0 3.2cqh !important;
+  color: #dbeafe;
+  line-height: 1.8;
+}
+/* 品牌 Logo：黄色卡片上叠加画笔与问号气泡。 */
+.brand-mark {
+  position: relative;
+  width: 13cqh;
+  height: 13cqh;
+  border: 0.55cqh solid white;
+  border-radius: 2.4cqh;
+  background: var(--yellow);
+  transform: rotate(-3deg);
+  box-shadow: 0.8cqh 0.8cqh 0 #0f172a55;
+}
+/* Logo 内的画笔图形。 */
+.brand-pencil {
+  position: absolute;
+  width: 2.3cqh;
+  height: 9cqh;
+  left: 3.1cqh;
+  top: 1.6cqh;
+  border: 0.35cqh solid var(--navy);
+  background: var(--orange);
+  transform: rotate(38deg);
+  border-radius: 99em;
+}
+/* Logo 内的问号气泡。 */
+.brand-bubble {
+  position: absolute;
+  right: 1.2cqh;
+  top: 1.2cqh;
+  display: grid;
+  place-items: center;
+  width: 4.5cqh;
+  height: 4.5cqh;
+  color: white;
+  background: var(--blue);
+  border-radius: 50%;
+  font-weight: 1000;
+  font-size: 1.7em;
+}
+/* 玩家资料面板：垂直居中承载表单。 */
+.profile-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 5cqh 7cqw 4cqh;
+  background: #f8fafc;
+}
+/* 分区大标题行：两端对齐，右侧可放辅助按钮。 */
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2.7cqh;
+}
+/* 分区大标题副级别：更醒目的字号。 */
+.section-heading h2 {
+  margin-top: 0.5cqh;
+  font-size: 1.8em;
+}
+/* 图标+文字按钮，用于“换一组”等轻量动作。 */
+.icon-text-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  color: var(--blue);
+  background: transparent;
+  font-weight: 800;
+}
+/* 昵称输入行：右侧预留对勾图标空间。 */
+.nickname-row {
+  position: relative;
+  display: flex;
+}
+/* 昵称输入框：占满整行，给右侧对勾留出空间。 */
+.nickname-row input {
+  width: 100%;
+  padding-right: 3em;
+  font-size: 1.05em;
+}
+/* 昵称有效对勾：绝对定位到输入框右侧。 */
+.valid-icon {
+  position: absolute;
+  right: 1em;
+  top: 50%;
+  color: var(--green);
+  transform: translateY(-50%);
+}
+/* 通用 SVG 头像：白色圆形底，中间图片保持完整比例，不允许拖拽。 */
+.avatar-image,
+.solid-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 5cqh;
+  height: 5cqh;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 0.28cqh solid white;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 0 0 0.18cqh #94a3b8;
+}
+.avatar-image img {
+  width: 82%;
+  height: 82%;
+  object-fit: contain;
+  pointer-events: none;
+}
+/* 登录资料区的大头像居中置顶，提示文字位于圆形头像下方。 */
+.profile-avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 2.2cqh;
+}
+.profile-avatar-trigger {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8cqh;
+  color: var(--blue);
+  background: transparent;
+  font-size: 0.76em;
+  font-weight: 900;
+}
+.profile-avatar-trigger .avatar-image {
+  width: 15cqh;
+  height: 15cqh;
+  box-shadow:
+    0 0 0 0.35cqh white,
+    0 0 0 0.55cqh var(--line),
+    0 1cqh 2.5cqh #17255422;
+}
+/* 头像选择弹窗使用可滚动网格；40 个头像始终全部可访问。 */
+.avatar-picker-dialog {
+  width: 64cqw;
+}
+.avatar-picker-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 1.4cqh 1cqw;
+  padding: 2.5cqh 2cqw;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.avatar-picker-grid > button {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  padding: 0.7cqh;
+  border: 0.22cqh solid var(--line) !important;
+  border-radius: 50%;
+  background: white;
+}
+.avatar-picker-grid > button .avatar-image {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  box-shadow: none;
+}
+.avatar-picker-grid > button.selected {
+  border-color: var(--navy) !important;
+  box-shadow: 0 0 0 0.45cqh var(--yellow);
+}
+/* 进入在线大厅按钮：整行宽度并预留顶部间距。 */
+.enter-action {
+  width: 100%;
+  margin-top: 2.5cqh;
+}

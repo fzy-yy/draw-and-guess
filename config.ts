@@ -1,165 +1,37 @@
 /// <reference types="node" />
 /**
- * 项目唯一业务配置中心。
+ * 项目唯一业务配置中心（聚合）。
  *
+ * 各领域配置按 app/network/player/room/game/drawing/vocabulary/audio/localSettings/ui/presets
+ * 拆分在 config/ 目录内，这里统一组装成 APP_CONFIG 并导出部署覆盖与公开子集，保持引用路径不变。
  * 除部署环境中的端口、监听地址和日志级别外，所有可调整规则、文案、视觉令牌与限制都在此维护。
  * 前端构建通过 Vite 虚拟模块仅打包 PUBLIC_CONFIG，`/api/info` 也只返回同一公开子集，避免内部限制泄露。
+ *
+ * UI 展示文案不走本聚合：统一管理在 config/strings.ts（含模板函数，无法 JSON 序列化进公开子集），
+ * 客户端经 @draw-guess/strings 别名导入、服务端经相对路径导入，见该文件头部说明。
  */
+import { app, network } from './config/app.ts'
+import { player } from './config/player.ts'
+import { room } from './config/room.ts'
+import { game } from './config/game.ts'
+import { drawing } from './config/drawing.ts'
+import { vocabulary } from './config/vocabulary.ts'
+import { audio } from './config/audio.ts'
+import { localSettings, presets, ui } from './config/settings.ts'
 
+/** 领域配置合并为唯一业务配置对象。 */
 export const APP_CONFIG = {
-  app: {
-    name: '你画我猜',
-    englishName: 'Draw and Guess',
-    version: '2.1.0',
-    protocolVersion: '3', // 前后端通信协议版本，不匹配时拒绝注册
-    storageKey: 'draw-and-guess-profile-v1', // localStorage 资料键
-    settingsStorageKey: 'draw-and-guess-settings-v1', // localStorage 设置键
-  },
-  network: {
-    host: '0.0.0.0', // 监听所有网卡，供局域网访问
-    port: 5174,
-    requestTimeoutMs: 8_000, // 客户端请求超时
-    reconnectGraceMs: 120_000, // 断线恢复宽限期（玩家级）
-    drawerReconnectGraceMs: 20_000, // 画家/房主断线宽限期
-    inviteExpiryMs: 30_000, // 邀请 30 秒有效
-    inviteCooldownMs: 5_000, // 同一目标邀请冷却
-    pingIntervalMs: 10_000, // Socket.IO 心跳与延迟测量周期
-    guessEventsPerSecond: 5, // 猜词事件限频（滑动窗口）
-    requestEventsPerSecond: 25, // 应用层请求限频（每连接每秒，防刷事件触发全量广播）
-  },
-  player: {
-    minPlayers: 2,
-    maxPlayers: 6,
-    defaultMaxPlayers: 6,
-    nicknameMinLength: 1,
-    nicknameMaxLength: 16,
-    roomNameMaxLength: 24,
-    chatMaxLength: 60,
-    defaultNicknames: [
-      '泡泡狐',
-      '棉花喵',
-      '竹叶熊',
-      '星星兔',
-      '布丁汪',
-      '荷叶蛙',
-      '齿轮仔',
-      '月球客',
-      '豆豆龙',
-      '阳光鸡',
-      '云朵熊',
-      '小幽灵',
-    ],
-    /** 头像只使用安全的纯色圆形；客户端可通过颜色选择器提交同格式的任意颜色。 */
-    avatarColors: [
-      '#F97316',
-      '#8B5CF6',
-      '#334155',
-      '#A16207',
-      '#EC4899',
-      '#CA8A04',
-      '#16A34A',
-      '#2563EB',
-      '#0891B2',
-      '#65A30D',
-      '#EAB308',
-      '#7C3AED',
-    ],
-    defaultAvatarColor: '#2563EB',
-    colorPattern: '^#[0-9A-Fa-f]{6}$',
-  },
-  room: {
-    defaultName: '快乐画室',
-    allowPlayerInvite: true,
-    allowPause: true,
-    joinPolicy: 'next_game' as const,
-  },
-  game: {
-    roundsPerPlayer: { min: 1, max: 5, default: 2, step: 1 }, // 每人作画轮数
-    drawSeconds: { min: 45, max: 180, default: 90, step: 15 }, // 每回合作画秒数
-    chooseSeconds: { min: 10, max: 30, default: 15, step: 5 }, // 选词阶段秒数
-    optionCount: { min: 2, max: 5, default: 3, step: 1 }, // 候选词数量
-    startingCountdownSeconds: 3, // 开局倒计时
-    roundResultSeconds: 6, // 回合结算展示时长
-    finalHintThresholds: [0.35, 0.2], // 逐步提示的剩余时间比例阈值
-    showWordLength: true, // 默认显示答案字数
-    progressiveHints: true, // 默认开启逐步提示
-    closeGuessEnabled: true, // 默认开启近似答案提示
-    // 猜词比较固定为：NFKC 规范化 → 去首尾空白 → 折叠连续空白 → 忽略拉丁大小写（由 shared normalizeAnswer 内置）
-    score: {
-      guessBase: 300, // 猜中基础分
-      maxSpeedBonus: 700, // 速度奖励上限
-      orderBonuses: [100, 60, 30, 0, 0], // 猜中顺序奖励（前 3 名）
-      drawerPerCorrect: 120, // 画家每个猜中者得分
-      drawerAllCorrectBonus: 100, // 画家全员猜中奖励
-    },
-  },
-  drawing: {
-    colors: [
-      '#1F2937',
-      '#EF4444',
-      '#F97316',
-      '#EAB308',
-      '#22C55E',
-      '#3B82F6',
-      '#8B5CF6',
-      '#FFFFFF',
-    ],
-    colorPattern: '^#[0-9A-Fa-f]{6}$',
-    defaultColor: '#1F2937',
-    /** 画笔与橡皮擦共用同一粗细值，画板滚轮按 wheelStep 连续调整。 */
-    width: { min: 1, max: 30, default: 5, step: 1, wheelStep: 1 },
-    /** 洪泛填充比较目标像素时允许的单通道误差，用于兼容 Canvas 抗锯齿边缘。 */
-    fillTolerance: 8,
-    batchIntervalMs: 24, // 自由笔画批次发送间隔
-    maxPointsPerBatch: 120, // 每批次最多点数
-    maxDrawEventsPerSecond: 45, // 绘图事件限频
-    maxHistoryCommands: 1_500, // 画布历史命令上限
-  },
-  vocabulary: {
-    filePath: 'vocabulary.md', // 唯一词库文件路径
-    encoding: 'utf8' as const,
-    minWords: 12, // 词库最小词条数（也是每局最少选择数）
-    maxWordLength: 24, // 单条词面最大字符数
-    deduplicate: true, // 按规范化词面去重
-    resetWhenExhausted: true, // 词池用完后允许重新启用全部词条
-  },
-  audio: {
-    cues: {
-      room: { frequencies: [440, 560], duration: 0.1 },
-      ready: { frequencies: [620], duration: 0.12 },
-      starting: { frequencies: [440, 440, 660], duration: 0.1 },
-      drawing: { frequencies: [520, 700], duration: 0.12 },
-      correct: { frequencies: [660, 880, 1040], duration: 0.12 },
-      warning: { frequencies: [330], duration: 0.08 },
-      result: { frequencies: [520, 660], duration: 0.16 },
-      final: { frequencies: [523, 659, 784, 1046], duration: 0.16 },
-      invite: { frequencies: [740, 880], duration: 0.13 },
-    },
-    synthesizedGain: 0.13,
-  },
-  localSettings: {
-    masterVolume: 0.8,
-    soundVolume: 0.8,
-    musicVolume: 0.35,
-    muted: false,
-    colorFriendly: false,
-    showShortcuts: true,
-    /** 工具快捷键只保存单个可打印字符；客户端会阻止重复键覆盖其他工具。 */
-    penShortcut: 'b',
-    eraserShortcut: 'e',
-    fillShortcut: 'f',
-    autoFocusGuess: true,
-    discoverable: true,
-    acceptsInvites: true,
-  },
-  ui: {
-    stageAspectRatio: '16 / 9', // 舞台宽高比
-    toastDurationMs: 3_200, // Toast 展示时长
-    recentMessageCount: 8, // 聊天窗口展示的消息条数
-  },
-  presets: {
-    safeChat: ['画得真棒！', '我知道了！', '再来一点提示', '好难猜呀'],
-  },
+  app,
+  network,
+  player,
+  room: room,
+  game,
+  drawing,
+  vocabulary,
+  audio,
+  localSettings,
+  ui,
+  presets,
 } as const
 
 /** 部署环境仅允许覆盖网络绑定和日志级别，不形成第二份业务配置。 */
@@ -194,7 +66,13 @@ export const PUBLIC_CONFIG = {
     recoveryTokenLifetimeMs: APP_CONFIG.network.reconnectGraceMs,
   },
   player: APP_CONFIG.player,
-  room: APP_CONFIG.room,
+  room: {
+    defaultName: APP_CONFIG.room.defaultName,
+    allowPlayerInvite: APP_CONFIG.room.allowPlayerInvite,
+    allowPause: APP_CONFIG.room.allowPause,
+    joinPolicy: APP_CONFIG.room.joinPolicy,
+    privateCodeLength: APP_CONFIG.room.privateCodeLength,
+  },
   game: APP_CONFIG.game,
   drawing: APP_CONFIG.drawing,
   audio: APP_CONFIG.audio,

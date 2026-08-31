@@ -1,0 +1,244 @@
+/*
+ * 全局游戏舞台与视觉系统。
+ * 使用容器单位让 1280×720 的逻辑布局按舞台整体缩放；页面本身永不滚动，也不使用渐变色。
+ */
+@import 'tailwindcss';
+
+/* 设计令牌：全局字体、配色与舞台圆角统一在此约定，供各分区引用。 */
+:root {
+  font-family: Inter, ui-rounded, 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+  color: #172033;
+  background: #111827;
+  font-synthesis: none;
+  --navy: #172554;
+  --blue: #2563eb;
+  --sky: #dbeafe;
+  --yellow: #facc15;
+  --orange: #f97316;
+  --green: #16a34a;
+  --red: #dc2626;
+  --ink: #172033;
+  --muted: #64748b;
+  --paper: #f8fafc;
+  --line: #cbd5e1;
+  --stage-radius: clamp(6px, 1cqh, 14px);
+}
+
+/* 统一盒模型：所有元素按 border-box 计算宽高，避免内边距撑破布局。 */
+* {
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* 只有可编辑控件恢复文本选择；其余游戏文字不可拖选。 */
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+/* 页面与根节点铺满视口，禁止出现滚动条。 */
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+/* 表单控件继承全局字体设置。 */
+button,
+input,
+select {
+  font: inherit;
+}
+/* 可点击按钮显示手型光标。 */
+button {
+  cursor: pointer;
+}
+/* 禁用态：禁止点击并降低视觉权重，避免误认为可操作。 */
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+/* 键盘聚焦高亮：保证纯键盘用户能看清当前焦点。 */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 0.35cqh solid #facc15;
+  outline-offset: 0.25cqh;
+}
+/* 图标默认尺寸：基于 em 缩放，并阻止其在弹性布局中被压缩。 */
+svg {
+  width: 1.1em;
+  height: 1.1em;
+  stroke-width: 2.2;
+  flex: 0 0 auto;
+}
+
+/* 视口外壳：始终把舞台居中，超出的内容裁剪在舞台外。 */
+.viewport-shell {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: #111827;
+  overflow: hidden;
+}
+/* 游戏舞台：按 16:9 约束尺寸，并使用容器查询单位(cq)做整体缩放。 */
+.game-stage {
+  position: relative;
+  width: min(99vw, calc(99vh * 16 / 9));
+  height: min(99vh, calc(99vw * 9 / 16));
+  aspect-ratio: 16 / 9;
+  container-type: size;
+  overflow: hidden;
+  background: var(--paper);
+  border: max(1px, 0.28cqh) solid #334155;
+  border-radius: var(--stage-radius);
+  box-shadow: 0 1.2cqh 5cqh #0009;
+  font-size: clamp(8px, 2cqh, 18px);
+}
+/* 浏览器全屏时舞台铺满屏幕，并移除窗口模式装饰。 */
+.game-stage:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+/* 舞台内标题与段落：去除浏览器默认外边距，统一由布局容器控制间距。 */
+.game-stage h1,
+.game-stage h2,
+.game-stage p {
+  margin: 0;
+}
+/* 舞台一级标题：游戏名等大号标题。 */
+.game-stage h1 {
+  font-size: 2.8em;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+/* 舞台二级标题：面板/分区标题。 */
+.game-stage h2 {
+  font-size: 1.45em;
+  line-height: 1.15;
+}
+/* 舞台内按钮去掉默认边框，由各按钮样式自行定义。 */
+.game-stage button {
+  border: 0;
+}
+/* 小节标题/眉题：统一蓝色小字号大写样式。 */
+.step-label,
+.eyebrow {
+  color: var(--blue);
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  font-size: 0.72em;
+}
+
+/* 通用控件保持平面边线和色块，不采用网页式白卡片阵列。 */
+/* 通用按钮基类：三色动作按钮共用统一高度、内边距和按压反馈。 */
+.primary-action,
+.secondary-action,
+.danger-action {
+  min-height: 5.2cqh;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65em;
+  border-radius: 0.7em;
+  padding: 0 1.35em;
+  font-weight: 900;
+}
+/* 主操作按钮：蓝色实心，用于创建/开始等推进流程的动作。 */
+.primary-action {
+  color: white;
+  background: var(--blue);
+  box-shadow: 0 0.4cqh 0 #1e40af;
+}
+/* 次操作按钮：白底描边，用于取消、返回等次要动作。 */
+.secondary-action {
+  color: var(--navy);
+  background: white;
+  border: 0.18cqh solid var(--line) !important;
+}
+/* 危险操作按钮：红色实心，用于退出/清空/提前结束等破坏性动作。 */
+.danger-action {
+  color: white;
+  background: var(--red);
+}
+/* 文本输入框与下拉框统一样式。 */
+.game-input,
+select {
+  min-width: 0;
+  height: 5.2cqh;
+  border: 0.2cqh solid var(--line);
+  border-radius: 0.7em;
+  background: white;
+  color: var(--ink);
+  padding: 0 1em;
+  font-weight: 700;
+}
+/* 表单字段标签。 */
+.field-label {
+  display: block;
+  margin-bottom: 0.65cqh;
+  color: #334155;
+  font-weight: 800;
+}
+/* 字段下方辅助说明文字。 */
+.field-help {
+  margin-top: 0.6cqh !important;
+  color: var(--muted);
+  font-size: 0.74em;
+}
+/* 行内错误提示。 */
+.inline-warning {
+  margin-top: 0.75cqh !important;
+  color: #b91c1c;
+  font-size: 0.72em;
+  font-weight: 700;
+}
+/* 连接状态徽章：默认表示离线/异常，红色系。 */
+.connection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55em;
+  color: #991b1b;
+  background: #fee2e2;
+  padding: 0.65cqh 1.05em;
+  border-radius: 99em;
+  font-size: 0.8em;
+  font-weight: 800;
+}
+/* 连接徽章在线态：绿色系，表示已连通主机。 */
+.connection-chip.online {
+  color: #14532d;
+  background: #dcfce7;
+}
+/* 搜索框容器：带边框的胶囊样式，内含输入框和清空按钮。 */
+.search-field {
+  height: 4.8cqh;
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  border: 0.18cqh solid var(--line);
+  border-radius: 0.65em;
+  padding: 0 0.75em;
+  background: white;
+}
+/* 搜索框内部输入：透明无边框，占用剩余宽度。 */
+.search-field input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+/* 搜索框内的清空按钮。 */
+.search-field button {
+  display: grid;
+  place-items: center;
+  background: transparent;
+}

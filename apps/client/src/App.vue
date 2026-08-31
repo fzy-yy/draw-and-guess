@@ -8,8 +8,10 @@
 <script setup lang="ts">
 // 图标库：系统/操作提示/邀请横幅使用的图标
 import { AlertCircle, CheckCircle2, Gamepad2, RotateCw, X } from 'lucide-vue-next'
+import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
 import { useAudioFeedback } from '@/composables/useAudioFeedback'
+import AvatarImage from '@/components/AvatarImage.vue'
 // 五个视图组件：对局、房间等待、设置、大厅、资料确认
 import ProfileView from '@/views/ProfileView.vue'
 import LobbyView from '@/views/LobbyView.vue'
@@ -27,7 +29,7 @@ useAudioFeedback()
   <!-- 视口外壳：把舞台整体居中在屏幕中央 -->
   <div class="viewport-shell">
     <!-- 游戏舞台：16:9 容器，全部游戏内容都在此内部 -->
-    <section class="game-stage" :aria-label="`${store.config.app.name} 游戏舞台`">
+    <section class="game-stage" :aria-label="strings.app.stageAriaLabel(store.config.app.name)">
       <!-- 四个页面视图按状态互斥渲染：对局 > 房间 > 设置 > 大厅 > 资料 -->
       <GameView v-if="store.room && store.room.phase !== 'waiting'" />
       <RoomView v-else-if="store.room" />
@@ -35,58 +37,79 @@ useAudioFeedback()
       <LobbyView v-else-if="store.playerId && store.page === 'lobby'" />
       <ProfileView v-else />
 
-      <!-- 操作通知 Toast 堆栈：右上角，成功/警告/错误三种风格 -->
-      <div class="toast-stack" aria-live="polite" aria-label="操作通知">
-        <div v-for="toast in store.toasts" :key="toast.id" class="toast" :class="toast.type">
+      <!-- 操作通知 Toast 堆栈：右上角，成功/警告/错误三种风格；repeated 为防抖变色标记 -->
+      <TransitionGroup
+        name="toast"
+        tag="div"
+        class="toast-stack"
+        aria-live="polite"
+        :aria-label="strings.app.toastStackAria"
+      >
+        <div
+          v-for="toast in store.toasts"
+          :key="toast.id"
+          class="toast"
+          :class="[toast.type, { repeated: toast.repeated }]"
+        >
           <!-- 成功用对勾图标，其余用警示图标 -->
           <CheckCircle2 v-if="toast.type === 'success'" />
           <AlertCircle v-else />
           <span>{{ toast.text }}</span>
           <!-- 手动关闭按钮：从 toasts 数组移除该条（store 内做 index 边界保护） -->
-          <button type="button" aria-label="关闭通知" @click="store.dismissToast(toast.id)">
+          <button
+            type="button"
+            :aria-label="strings.app.toastDismissAria"
+            @click="store.dismissToast(toast.id)"
+          >
             <X />
           </button>
         </div>
-      </div>
+      </TransitionGroup>
 
       <!-- 房间邀请横幅：不在房间时收到邀请才会显示，可接受或拒绝 -->
-      <div
-        v-if="store.invites.length && !store.room"
-        class="invite-banner"
-        role="dialog"
-        aria-label="房间邀请"
-      >
-        <!-- 邀请者纯色头像 -->
-        <span
-          class="solid-avatar"
-          :style="{ backgroundColor: store.invites[0]?.from.avatarColor }"
-          aria-label="邀请者纯色头像"
-        ></span>
-        <div>
-          <span>收到房间邀请</span
-          ><b>{{ store.invites[0]?.from.nickname }} 邀请你加入“{{ store.invites[0]?.roomName }}”</b>
+      <Transition name="banner">
+        <div
+          v-if="store.invites.length && !store.room"
+          class="invite-banner"
+          role="dialog"
+          :aria-label="strings.app.inviteDialogAria"
+        >
+          <!-- 邀请者内置 SVG 头像 -->
+          <AvatarImage
+            :avatar-id="store.invites[0]?.from.avatarId"
+            :label="strings.app.inviterAvatarAria"
+          />
+          <div>
+            <span>{{ strings.app.inviteHeading }}</span
+            ><b>{{
+              strings.app.inviteReceived(
+                store.invites[0]?.from.nickname ?? '',
+                store.invites[0]?.roomName ?? '',
+              )
+            }}</b>
+          </div>
+          <button
+            class="secondary-action"
+            type="button"
+            @click="store.respondInvite(store.invites[0]!.id, false)"
+          >
+            {{ strings.common.decline }}
+          </button>
+          <button
+            class="primary-action"
+            type="button"
+            @click="store.respondInvite(store.invites[0]!.id, true)"
+          >
+            <Gamepad2 />{{ strings.common.accept }}
+          </button>
         </div>
-        <button
-          class="secondary-action"
-          type="button"
-          @click="store.respondInvite(store.invites[0]!.id, false)"
-        >
-          拒绝
-        </button>
-        <button
-          class="primary-action"
-          type="button"
-          @click="store.respondInvite(store.invites[0]!.id, true)"
-        >
-          <Gamepad2 />接受
-        </button>
-      </div>
+      </Transition>
 
       <!-- 竖屏警告：手机竖屏时全屏提示旋转设备（见 style.css） -->
       <div class="portrait-warning">
         <RotateCw />
-        <h2>请横屏使用</h2>
-        <p>旋转设备后即可获得完整的游戏舞台。</p>
+        <h2>{{ strings.app.portraitTitle }}</h2>
+        <p>{{ strings.app.portraitHint }}</p>
       </div>
     </section>
   </div>

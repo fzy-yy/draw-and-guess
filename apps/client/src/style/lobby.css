@@ -1,0 +1,409 @@
+/* 大厅 HUD 与横向房间列表。 */
+/* 在线大厅：左右分栏，左侧房间区域右侧在线玩家区。 */
+.lobby-layout {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28%;
+  grid-template-rows: 11% 89%;
+  background: #eef2ff;
+}
+/* 大厅顶栏：身份、标题、辅助操作三点式布局。 */
+.lobby-hud {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 2cqw;
+  color: white;
+  background: var(--navy);
+  border-bottom: 0.5cqh solid var(--yellow);
+}
+/* 顶栏身份区：头像+昵称+连接信息，超长昵称省略。 */
+.identity-block {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  min-width: 0;
+}
+/* 顶栏头像：浅蓝描边圆形。 */
+.identity-block .avatar-image {
+  width: 6cqh;
+  height: 6cqh;
+  border-color: #93c5fd;
+}
+/* 身份文字列：昵称 + 连接信息纵向排列。 */
+.identity-block div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* 昵称超长省略。 */
+.identity-block strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 连接信息小字。 */
+.identity-block span {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  color: #bfdbfe;
+  font-size: 0.67em;
+}
+/* 顶栏中间标题区：图标+游戏名+英文副题。 */
+.lobby-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+/* 顶栏标题图标：黄色手柄图标。 */
+.lobby-title > svg {
+  width: 4.2cqh;
+  height: 4.2cqh;
+  color: var(--yellow);
+}
+/* 标题文字列：游戏名 + 英文副题。 */
+.lobby-title div {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+/* 游戏名粗体。 */
+.lobby-title b {
+  font-size: 1.2em;
+}
+/* 英文副题小字。 */
+.lobby-title span {
+  color: #93c5fd;
+  font-size: 0.58em;
+  letter-spacing: 0.18em;
+}
+/* 顶栏右侧辅助按钮：设置入口。 */
+.hud-actions {
+  justify-self: end;
+  display: flex;
+  gap: 0.7em;
+}
+/* 顶栏与房间 HUD 共用的半透明胶囊按钮。 */
+.hud-actions button,
+.room-hud-actions button {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.8cqh 0.8em;
+  color: #dbeafe;
+  background: #ffffff0d;
+  border-radius: 0.55em;
+}
+/* 左侧房间区：右侧分隔线隔开在线玩家区。 */
+.room-zone {
+  min-width: 0;
+  padding: 3cqh 2cqw;
+  border-right: 0.2cqh solid #cbd5e1;
+}
+/* 各类分区标题行：标题靠左、数量靠右。 */
+.room-zone-head,
+.online-head,
+.seat-zone-title {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+/* 分区头部右侧数量小字。 */
+.room-zone-head > span,
+.online-head > span {
+  color: var(--muted);
+  font-size: 0.78em;
+}
+/* 快捷操作区：公开创建与私密加入两个入口等宽排列。 */
+.quick-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.3cqw;
+  margin: 2cqh 0;
+}
+/* 创建房间大按钮：蓝色实心，左图标+标题右箭头。 */
+.create-room-button {
+  height: 12cqh;
+  display: flex;
+  align-items: center;
+  gap: 1em;
+  padding: 0 1.4em;
+  color: white;
+  background: var(--blue);
+  border-radius: 0.9em;
+  box-shadow: 0 0.55cqh 0 #1e40af;
+  text-align: left;
+}
+/* 创建按钮左侧图标。 */
+.create-room-button > svg:first-child {
+  width: 4.5cqh;
+  height: 4.5cqh;
+  color: var(--yellow);
+}
+/* 创建按钮右侧箭头。 */
+.create-room-button > svg:last-child {
+  margin-left: auto;
+}
+/* 创建按钮文字列（标题 + 说明）。 */
+.create-room-button span {
+  display: flex;
+  flex-direction: column;
+}
+/* 创建按钮标题。 */
+.create-room-button b {
+  font-size: 1.2em;
+}
+/* 创建按钮说明小字。 */
+.create-room-button small {
+  margin-top: 0.35cqh;
+  color: #dbeafe;
+}
+/* 私密入口用深蓝区分，但保持与公开创建按钮相同结构。 */
+.create-room-button.private-entry {
+  background: var(--navy);
+  box-shadow: 0 0.55cqh 0 #0f172a;
+}
+/* 房间可见性单选组：两个大选项横向排列并提供完整说明。 */
+.visibility-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8em;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.visibility-options legend {
+  margin-bottom: 0.7cqh;
+  font-weight: 900;
+}
+.visibility-options label {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  padding: 1cqh 1em;
+  border: 0.18cqh solid var(--line);
+  border-radius: 0.7em;
+  background: white;
+}
+.visibility-options label span {
+  display: flex;
+  flex-direction: column;
+}
+.visibility-options small {
+  color: var(--muted);
+  font-size: 0.68em;
+}
+.visibility-options input {
+  width: 2.2cqh;
+  height: 2.2cqh;
+  accent-color: var(--blue);
+}
+/* 创建表单中的公开/私密说明。 */
+.room-public-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72em;
+  line-height: 1.6;
+}
+/* 公开房间列表：纵向滚动容器。 */
+.public-room-list {
+  height: 49cqh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85cqh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* 单个房间行：图标、名称、房主、状态、人数和加入按钮。 */
+.room-row {
+  min-height: 7.8cqh;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 0.9em;
+  padding: 0.6cqh 0.9em;
+  background: white;
+  border-left: 0.45cqh solid var(--blue);
+  border-bottom: 0.16cqh solid var(--line);
+}
+/* 房间图标徽章。 */
+.room-emblem {
+  width: 5cqh;
+  height: 5cqh;
+  display: grid;
+  place-items: center;
+  color: var(--blue);
+  background: var(--sky);
+  border-radius: 0.6em;
+}
+/* 房间主信息：名称与规则摘要。 */
+.room-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* 房间名称：超长省略。 */
+.room-main b {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* 房间规则摘要与阶段文字。 */
+.room-main span,
+.room-phase {
+  color: var(--muted);
+  font-size: 0.68em;
+}
+/* 房间人数徽章。 */
+.room-count {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  font-weight: 800;
+}
+/* 房间行加入按钮。 */
+.room-row > button {
+  padding: 0.75cqh 1em;
+  color: white;
+  background: var(--blue);
+  border-radius: 0.5em;
+  font-weight: 800;
+}
+/* 空状态：无公开房间时的居中占位提示。 */
+.empty-stage {
+  height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.8cqh;
+  color: var(--muted);
+  border: 0.2cqh dashed #94a3b8;
+}
+/* 空状态图标。 */
+.empty-stage svg {
+  width: 6cqh;
+  height: 6cqh;
+  color: #94a3b8;
+}
+/* 在线玩家区：纵向列表展示，可筛选。 */
+.online-zone {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 3cqh 1.6cqw 2cqh;
+  background: #f8fafc;
+}
+/* 在线区标题间距。 */
+.online-head h2 {
+  margin-top: 0.3cqh;
+}
+/* 在线人数徽章：绿色圆形数字。 */
+.online-head > span {
+  display: grid;
+  place-items: center;
+  width: 3cqh;
+  height: 3cqh;
+  color: white;
+  background: var(--green);
+  border-radius: 50%;
+}
+/* 在线区搜索框外边距。 */
+.online-zone .search-field {
+  margin: 1.6cqh 0 1.2cqh;
+}
+/* 玩家发现列表：可滚动，展示当前允许被发现的玩家。 */
+.player-discovery-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7cqh;
+  overflow: hidden;
+}
+/* 单个可发现玩家行：头像+昵称+状态。 */
+.discovery-player {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  padding: 0.55cqh 0.5em;
+  border-bottom: 0.14cqh solid #e2e8f0;
+}
+/* 可发现玩家头像。 */
+.discovery-player .avatar-image {
+  width: 4.8cqh;
+  height: 4.8cqh;
+}
+/* 私密加入弹窗：短码输入居中并强化等宽辨识。 */
+.private-join-dialog {
+  width: 42cqw;
+}
+.private-join-content {
+  display: grid;
+  justify-items: center;
+  gap: 1.5cqh;
+  padding: 4cqh 4cqw;
+  text-align: center;
+}
+.private-join-content > svg {
+  width: 7cqh;
+  height: 7cqh;
+  color: var(--blue);
+}
+.private-join-content p {
+  color: var(--muted);
+}
+.private-code-input {
+  width: 22cqw;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  font:
+    900 1.25em/1 ui-monospace,
+    monospace;
+}
+/* 玩家文字列容器。 */
+.discovery-player div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* 玩家昵称省略。 */
+.discovery-player b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 玩家状态小字。 */
+.discovery-player span {
+  font-size: 0.66em;
+  color: var(--muted);
+}
+/* 空闲状态绿色强调。 */
+.discovery-player span.idle {
+  color: var(--green);
+}
+/* 发现列表空提示：说明发现机制仅限已登录玩家。 */
+.discovery-note {
+  color: var(--muted);
+  font-size: 0.72em;
+  line-height: 1.6;
+}
+/* 局域网说明条：蓝色信息提示。 */
+.lan-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65em;
+  padding: 1.1cqh 0.75em;
+  color: #1e3a8a;
+  background: var(--sky);
+  border-left: 0.35cqh solid var(--blue);
+  font-size: 0.68em;
+}
+/* LAN 说明文字列。 */
+.lan-tip span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.45;
+}

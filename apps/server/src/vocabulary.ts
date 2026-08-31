@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { APP_CONFIG } from '../../../config.ts'
+import { serverStrings } from '../../../config/strings.ts'
 import { normalizeAnswer, type VocabularyItem } from '@draw-guess/shared'
 
 /** 词库装载结果：词条列表 + 按 ID 索引的 Map + 内容哈希版本。 */
@@ -25,15 +26,26 @@ export function parseVocabulary(source: string): VocabularyStore {
     // 超长词条直接报错，避免后续遮罩/提示逻辑被长词拖垮
     if (Array.from(text).length > APP_CONFIG.vocabulary.maxWordLength) {
       throw new Error(
-        `词条“${text.slice(0, 12)}…”超过 ${APP_CONFIG.vocabulary.maxWordLength} 个字符`,
+        serverStrings.vocabulary.wordTooLong(
+          text.slice(0, 12),
+          APP_CONFIG.vocabulary.maxWordLength,
+        ),
       )
     }
     const normalized = normalizeAnswer(text)
     if (normalized) unique.set(normalized, unique.get(normalized) ?? text)
   }
+  // 数量超出配置预算时拒绝启动，避免一次快照或批量选择造成无界内存与网络负载。
+  if (unique.size > APP_CONFIG.vocabulary.maxWords) {
+    throw new Error(
+      serverStrings.vocabulary.tooManyWords(unique.size, APP_CONFIG.vocabulary.maxWords),
+    )
+  }
   // 词条过少时拒绝启动，保证选词阶段有足够候选项
   if (unique.size < APP_CONFIG.vocabulary.minWords) {
-    throw new Error(`有效词条仅 ${unique.size} 个，至少需要 ${APP_CONFIG.vocabulary.minWords} 个`)
+    throw new Error(
+      serverStrings.vocabulary.tooFewWords(unique.size, APP_CONFIG.vocabulary.minWords),
+    )
   }
   // 用规范化词面的 SHA-256 前 12 位生成稳定 ID，词库变更后 ID 也变
   const items = [...unique.entries()].map(([normalized, text]) => ({

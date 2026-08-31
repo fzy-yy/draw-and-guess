@@ -4,11 +4,13 @@
  */
 import type { Socket } from 'socket.io'
 import type {
+  Ack,
   ChatMessage,
   PresencePreferences,
   Profile,
   RoomPhase,
   RoomSettings,
+  RoomVisibility,
   DrawingCommand,
   RoundResult,
   VocabularyItem,
@@ -21,7 +23,7 @@ import type {
 export interface PlayerSecret {
   id: string // 玩家唯一 ID（UUID）
   token: string // 服务端签发的临时恢复令牌（仅当前进程内有效）
-  profile: Profile // 昵称与头像色
+  profile: Profile // 昵称与内置 SVG 头像编号
   preferences: PresencePreferences // 发现/邀请偏好
   socket?: Socket // 当前活跃的 Socket 连接（断线重连时会替换）
   socketId?: string // 当前连接 ID，用于防串号
@@ -30,11 +32,13 @@ export interface PlayerSecret {
   joinedAt: number // 注册时间戳
   disconnectedAt?: number // 最近断线时间戳（用于宽限期判断）
   disconnectTimer?: NodeJS.Timeout // 断线清理定时器
-  requestCache: Map<string, unknown> // requestId → 结果 的幂等缓存
+  requestCache: Map<string, Ack<unknown>> // event + requestId → 完整 ack 的幂等缓存
   lastInviteAt: Map<string, number> // 目标玩家 ID → 最近邀请时间（限频）
   /** 一秒滑动窗口内的猜词与绘图事件时间，用于局域网刷包保护。 */
   guessEventTimes: number[]
   drawEventTimes: number[]
+  /** 私密房间码尝试时间窗口，独立于通用事件限频以阻止短码枚举。 */
+  privateJoinAttemptTimes: number[]
 }
 
 /** 房间内成员状态：独立于玩家身份，随房间生命周期存在。 */
@@ -88,6 +92,9 @@ export interface RoomSecret {
   id: string
   name: string
   hostId: string // 房主玩家 ID（可迁移）
+  visibility: RoomVisibility
+  /** 服务端生成的私密房间码；仅通过角色裁剪快照向当前房主显示。 */
+  privateJoinCode?: string
   phase: RoomPhase
   stateVersion: number // 状态版本号（乐观并发控制）
   settings: RoomSettings

@@ -13,6 +13,7 @@ import {
   type ToolKind,
 } from '@draw-guess/shared'
 import { APP_CONFIG } from '@draw-guess/config'
+import { strings } from '@draw-guess/strings'
 import { createUuid } from '@/utils/createUuid'
 
 const props = defineProps<{
@@ -445,11 +446,7 @@ onBeforeUnmount(() => {
     ref="canvas"
     class="drawing-canvas"
     :class="{ drawable: canDraw, erasing: tool === 'eraser', filling: tool === 'fill' }"
-    :aria-label="
-      canDraw
-        ? '作画画布，支持画笔、橡皮擦、封闭区域填充和滚轮调整画笔或橡皮擦粗细'
-        : '实时观看画布'
-    "
+    :aria-label="canDraw ? strings.canvas.drawingAria : strings.canvas.watchingAria"
     @pointerdown="pointerDown"
     @pointermove="pointerMove"
     @pointerup="pointerUp"

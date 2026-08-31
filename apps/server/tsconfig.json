@@ -4,5 +4,10 @@
     "types": ["node"],
     "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*.ts", "../../config.ts", "../../packages/shared/src/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "../../config.ts",
+    "../../config/strings.ts",
+    "../../packages/shared/src/**/*.ts"
+  ]
 }

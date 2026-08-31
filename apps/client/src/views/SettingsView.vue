@@ -16,44 +16,62 @@ import {
   Trash2,
   Volume2,
 } from 'lucide-vue-next'
+import { strings } from '@draw-guess/strings'
+import AvatarImage from '@/components/AvatarImage.vue'
+import AvatarPickerDialog from '@/components/AvatarPickerDialog.vue'
 import { useGameStore } from '@/stores/game'
 
 const store = useGameStore()
 // 当前激活的设置分类标签
 const tab = ref<'audio' | 'accessibility' | 'shortcuts' | 'diagnostics'>('audio')
 const shortcutError = ref('') // 快捷键错误提示文案
+const showAvatarPicker = ref(false) // 资料页复用的内置 SVG 头像选择弹窗
 // 可自定义的快捷键设置键名类型
 type ShortcutSettingKey = 'penShortcut' | 'eraserShortcut' | 'fillShortcut'
 
-// 快捷键配置行：设置键、中文名、说明与图标
+// 快捷键配置行：设置键、中文名（来自 strings）、说明与图标
 const shortcutRows: Array<{
   setting: ShortcutSettingKey
   name: string
   detail: string
   icon: typeof Brush
 }> = [
-  { setting: 'penShortcut', name: '画笔', detail: '切换到自由画笔', icon: Brush },
-  { setting: 'eraserShortcut', name: '橡皮擦', detail: '切换到橡皮擦并沿用当前粗细', icon: Eraser },
+  {
+    setting: 'penShortcut',
+    name: strings.settings.pen,
+    detail: strings.settings.penDetail,
+    icon: Brush,
+  },
+  {
+    setting: 'eraserShortcut',
+    name: strings.settings.eraser,
+    detail: strings.settings.eraserDetail,
+    icon: Eraser,
+  },
   {
     setting: 'fillShortcut',
-    name: '区域填充',
-    detail: '填充点击位置的封闭区域',
+    name: strings.settings.fill,
+    detail: strings.settings.fillDetail,
     icon: PaintBucket,
   },
 ]
 
 // 诊断信息：当前页面来源（host）作为服务地址展示
 const serverAddress = location.origin
-// 汇总连接与身份诊断文本，供一键复制排障
+// 汇总连接与身份诊断文本，供一键复制排障（统一文案来自 strings.settings.diag*）
 const diagnostic = computed(() =>
   [
-    `${store.config.app.name} ${store.config.app.version}`,
-    `协议版本：${store.config.app.protocolVersion}`,
-    `服务地址：${serverAddress}`,
-    `连接状态：${store.connectionLabel}`,
-    `近似延迟：${store.latency || '未知'}ms`,
-    `玩家 ID：${store.playerId ? `${store.playerId.slice(0, 8)}…` : '未登录'}`,
-    `房间：${store.room?.name ?? '无'}`,
+    strings.settings.diagAppLine(store.config.app.name, store.config.app.version),
+    strings.settings.diagProtocol(store.config.app.protocolVersion),
+    strings.settings.diagAddress(serverAddress),
+    strings.settings.diagConnection(store.connectionLabel),
+    strings.settings.diagLatency(
+      store.latency ? String(store.latency) : strings.settings.unknownLatency,
+    ),
+    strings.settings.diagPlayerId(
+      store.playerId ? `${store.playerId.slice(0, 8)}…` : strings.settings.notLoggedIn,
+    ),
+    strings.settings.diagRoom(store.room?.name ?? strings.settings.noRoom),
   ].join('\n'),
 )
 
@@ -89,7 +107,7 @@ async function copyDiagnostics(): Promise<void> {
     document.body.removeChild(textarea)
   }
   store.notify(
-    copied ? '脱敏诊断信息已复制' : '当前环境不支持复制，请手动选择文本',
+    copied ? strings.settings.copied : strings.settings.copyFailed,
     copied ? 'success' : 'warning',
   )
 }
@@ -100,7 +118,7 @@ async function copyDiagnostics(): Promise<void> {
  */
 function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): void {
   if (event.ctrlKey || event.metaKey || event.altKey || event.key.trim().length !== 1) {
-    shortcutError.value = '请直接按一个字母、数字或符号，不要组合 Ctrl、Alt 或 Command。'
+    shortcutError.value = strings.settings.shortcutErrorSimple
     return
   }
   const next = event.key.toLocaleLowerCase()
@@ -108,7 +126,7 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
     (row) => row.setting !== setting && store.settings[row.setting].toLocaleLowerCase() === next,
   )
   if (conflict) {
-    shortcutError.value = `“${next}”已用于${conflict.name}，请换一个按键。`
+    shortcutError.value = strings.settings.shortcutErrorConflict(next, conflict.name)
     return
   }
   store.settings[setting] = next
@@ -122,31 +140,33 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
   <main class="subpage-layout settings-page">
     <!-- 顶栏：返回大厅 / 标题 / 只保存在本机的提示 -->
     <header class="subpage-header">
-      <button type="button" @click="store.page = 'lobby'"><ArrowLeft /> 返回大厅</button>
+      <button type="button" @click="store.page = 'lobby'">
+        <ArrowLeft /> {{ strings.settings.backToLobby }}
+      </button>
       <div>
-        <p class="step-label">SETTINGS</p>
-        <h1>游戏设置</h1>
+        <p class="step-label">{{ strings.settings.label }}</p>
+        <h1>{{ strings.settings.title }}</h1>
       </div>
-      <span><ShieldCheck /> 设置仅保存在本机</span>
+      <span><ShieldCheck /> {{ strings.settings.localOnly }}</span>
     </header>
     <!-- 分类标签：声音 / 显示与操作 / 快捷键 / 资料与诊断 -->
-    <nav class="tab-strip" aria-label="设置分类">
+    <nav class="tab-strip" :aria-label="strings.settings.categoryAria">
       <button :class="{ active: tab === 'audio' }" type="button" @click="tab = 'audio'">
-        <Volume2 />声音</button
+        <Volume2 />{{ strings.settings.tabAudio }}</button
       ><button
         :class="{ active: tab === 'accessibility' }"
         type="button"
         @click="tab = 'accessibility'"
       >
-        <Eye />显示与操作</button
+        <Eye />{{ strings.settings.tabAccessibility }}</button
       ><button :class="{ active: tab === 'shortcuts' }" type="button" @click="tab = 'shortcuts'">
-        <Keyboard />快捷键</button
+        <Keyboard />{{ strings.settings.tabShortcuts }}</button
       ><button
         :class="{ active: tab === 'diagnostics' }"
         type="button"
         @click="tab = 'diagnostics'"
       >
-        <SlidersHorizontal />资料与诊断
+        <SlidersHorizontal />{{ strings.settings.tabDiagnostics }}
       </button>
     </nav>
 
@@ -155,13 +175,15 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
       <div class="settings-intro">
         <Music2 />
         <div>
-          <h2>声音反馈</h2>
-          <p>所有音量会乘以主音量；浏览器首次交互前不会强制播放。</p>
+          <h2>{{ strings.settings.audioTitle }}</h2>
+          <p>{{ strings.settings.audioIntro }}</p>
         </div>
       </div>
       <div class="slider-settings">
         <label
-          ><span><b>主音量</b><small>控制游戏全部声音</small></span
+          ><span
+            ><b>{{ strings.settings.masterVolume }}</b
+            ><small>{{ strings.settings.masterVolumeHint }}</small></span
           ><input
             v-model.number="store.settings.masterVolume"
             type="range"
@@ -172,7 +194,9 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
           /><strong>{{ Math.round(store.settings.masterVolume * 100) }}%</strong></label
         >
         <label
-          ><span><b>音效音量</b><small>倒计时、猜中、邀请等反馈</small></span
+          ><span
+            ><b>{{ strings.settings.soundVolume }}</b
+            ><small>{{ strings.settings.soundVolumeHint }}</small></span
           ><input
             v-model.number="store.settings.soundVolume"
             type="range"
@@ -183,7 +207,9 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
           /><strong>{{ Math.round(store.settings.soundVolume * 100) }}%</strong></label
         >
         <label
-          ><span><b>背景音乐</b><small>轻量大厅和结算音乐</small></span
+          ><span
+            ><b>{{ strings.settings.musicVolume }}</b
+            ><small>{{ strings.settings.musicVolumeHint }}</small></span
           ><input
             v-model.number="store.settings.musicVolume"
             type="range"
@@ -194,52 +220,64 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
           /><strong>{{ Math.round(store.settings.musicVolume * 100) }}%</strong></label
         >
         <label class="setting-switch"
-          ><span><b>全部静音</b><small>视觉反馈仍会保留</small></span
+          ><span
+            ><b>{{ strings.settings.muted }}</b
+            ><small>{{ strings.settings.mutedHint }}</small></span
           ><input v-model="store.settings.muted" type="checkbox" @change="store.saveSettings"
         /></label>
       </div>
     </section>
 
-    <!-- 显示与操作设置：色觉友好 / 快捷键提示 / 自动聚焦 / 发现与邀请开关 -->
+    <!-- 显示与操作设置：动画 / 快捷键提示 / 自动聚焦 / 发现与邀请开关 -->
     <section v-else-if="tab === 'accessibility'" class="settings-content accessibility-settings">
       <div class="settings-intro">
         <Eye />
         <div>
-          <h2>显示与便捷操作</h2>
-          <p>关键状态始终同时使用文字或图标，不仅依赖颜色。</p>
+          <h2>{{ strings.settings.accessibilityTitle }}</h2>
+          <p>{{ strings.settings.accessibilityIntro }}</p>
         </div>
       </div>
       <div class="switch-grid">
         <label
-          ><span><b>色觉友好调色板</b><small>调整准备与警告的辅助色</small></span
+          ><span
+            ><b>{{ strings.settings.animations }}</b
+            ><small>{{ strings.settings.animationsHint }}</small></span
           ><input
-            v-model="store.settings.colorFriendly"
+            v-model="store.settings.animationsEnabled"
             type="checkbox"
             @change="store.saveSettings"
         /></label>
         <label
-          ><span><b>显示快捷键提示</b><small>在画板工具旁显示组合键</small></span
+          ><span
+            ><b>{{ strings.settings.showShortcuts }}</b
+            ><small>{{ strings.settings.showShortcutsHint }}</small></span
           ><input
             v-model="store.settings.showShortcuts"
             type="checkbox"
             @change="store.saveSettings"
         /></label>
         <label
-          ><span><b>自动聚焦猜词框</b><small>新回合作画开始时方便直接输入</small></span
+          ><span
+            ><b>{{ strings.settings.autoFocus }}</b
+            ><small>{{ strings.settings.autoFocusHint }}</small></span
           ><input
             v-model="store.settings.autoFocusGuess"
             type="checkbox"
             @change="store.saveSettings"
         /></label>
         <label
-          ><span><b>允许在线发现</b><small>关闭后不出现在当前服务的发现列表</small></span
+          ><span
+            ><b>{{ strings.settings.discoverable }}</b
+            ><small>{{ strings.settings.discoverableHint }}</small></span
           ><input
             v-model="store.settings.discoverable"
             type="checkbox"
             @change="store.saveSettings"
         /></label>
         <label
-          ><span><b>接收房间邀请</b><small>关闭后其他玩家不能定向邀请你</small></span
+          ><span
+            ><b>{{ strings.settings.acceptsInvites }}</b
+            ><small>{{ strings.settings.acceptsInvitesHint }}</small></span
           ><input
             v-model="store.settings.acceptsInvites"
             type="checkbox"
@@ -253,8 +291,8 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
       <div class="settings-intro">
         <Keyboard />
         <div>
-          <h2>画板工具快捷键</h2>
-          <p>点击输入框后直接按下新按键；猜词框或其他输入控件聚焦时不会切换工具。</p>
+          <h2>{{ strings.settings.shortcutsTitle }}</h2>
+          <p>{{ strings.settings.shortcutsIntro }}</p>
         </div>
       </div>
       <div class="shortcut-grid">
@@ -268,50 +306,57 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
             :value="store.settings[row.setting]"
             type="text"
             readonly
-            :aria-label="`设置${row.name}快捷键`"
+            :aria-label="strings.settings.setShortcutAria(row.name)"
             @keydown.prevent="captureShortcut(row.setting, $event)"
           />
         </label>
       </div>
       <p v-if="shortcutError" class="shortcut-error" role="alert">{{ shortcutError }}</p>
-      <p class="shortcut-note">
-        撤销固定为 Ctrl/Command + Z，重做固定为 Ctrl/Command + Shift + Z 或 Ctrl/Command + Y。
-      </p>
+      <p class="shortcut-note">{{ strings.settings.shortcutNote }}</p>
     </section>
 
     <!-- 资料与诊断：修改大厅资料 / 查看诊断 / 恢复默认与清除资料 -->
     <section v-else class="settings-content diagnostic-content">
       <div class="profile-edit">
-        <span
-          class="solid-avatar profile-solid-avatar"
-          :style="{ backgroundColor: store.profile.avatarColor }"
-          aria-label="我的纯色头像"
-        ></span
-        ><label
-          >大厅昵称<input
+        <button
+          class="profile-avatar-edit"
+          type="button"
+          :aria-label="strings.profile.changeAvatarAria"
+          @click="showAvatarPicker = true"
+        >
+          <AvatarImage :avatar-id="store.profile.avatarId" :label="strings.common.myAvatarAria" />
+          <span>{{ strings.settings.avatarField }}</span>
+        </button>
+        <label
+          >{{ strings.settings.nicknameField
+          }}<input
             v-model="store.profile.nickname"
             :maxlength="store.config.player.nicknameMaxLength"
             class="game-input" /></label
-        ><label class="profile-color-field"
-          >头像颜色<input
-            v-model="store.profile.avatarColor"
-            type="color"
-            aria-label="修改头像颜色" /></label
-        ><button class="primary-action" type="button" @click="store.updateProfile">保存资料</button>
+        ><button class="primary-action" type="button" @click="store.updateProfile">
+          {{ strings.settings.saveProfile }}
+        </button>
       </div>
       <div class="diagnostic-box">
-        <h2>关于与连接诊断</h2>
+        <h2>{{ strings.settings.diagnosticsTitle }}</h2>
         <pre>{{ diagnostic }}</pre>
         <button class="secondary-action" type="button" @click="copyDiagnostics">
-          <Clipboard />复制诊断信息
+          <Clipboard />{{ strings.settings.copyDiagnostics }}
         </button>
       </div>
       <div class="destructive-settings">
-        <button type="button" @click="store.resetSettings"><RotateCcw />恢复本地默认设置</button
+        <button type="button" @click="store.resetSettings">
+          <RotateCcw />{{ strings.settings.resetSettings }}</button
         ><button class="danger-action" type="button" @click="store.clearProfile">
-          <Trash2 />清除本地资料
+          <Trash2 />{{ strings.settings.clearProfile }}
         </button>
       </div>
     </section>
+
+    <AvatarPickerDialog
+      v-model="store.profile.avatarId"
+      :open="showAvatarPicker"
+      @close="showAvatarPicker = false"
+    />
   </main>
 </template>

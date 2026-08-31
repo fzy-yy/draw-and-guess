@@ -1,0 +1,87 @@
+/**
+ * 对局 HUD 组合式逻辑：时间驱动、剩余时间/进度、猜词权限、阶段标签、画家与排行榜。
+ * 从 GameView 拆出，便于独立测试；ticker 的生命周期在 composable 内管理。
+ */
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { strings } from '@draw-guess/strings'
+import type { RoomMember } from '@draw-guess/shared'
+import type { useGameStore } from '@/stores/game'
+
+type GameStore = ReturnType<typeof useGameStore>
+
+/** 从对局快照派生 HUD 计算属性，并启动/清理时间刷新定时器。 */
+export function useGameHud(store: GameStore) {
+  const now = ref(Date.now())
+  let ticker = 0
+
+  const game = computed(() => store.room?.game)
+  // 校正后的本地时钟：叠加了与服务端的时钟偏移，避免设备时钟偏差导致倒计时不准（F2）
+  const correctedNow = computed(() => now.value + store.clockOffset)
+  // 剩余秒数：按服务端权威截止时间向上取整
+  const secondsLeft = computed(() =>
+    game.value?.phaseEndsAt
+      ? Math.max(0, Math.ceil((game.value.phaseEndsAt - correctedNow.value) / 1_000))
+      : 0,
+  )
+  // 阶段进度：剩余毫秒 / 阶段总时长，用于进度条 scaleX
+  const progress = computed(() => {
+    if (!game.value?.phaseEndsAt || game.value.phaseEndsAt <= game.value.phaseStartedAt) return 0
+    return Math.max(
+      0,
+      Math.min(
+        1,
+        (game.value.phaseEndsAt - correctedNow.value) /
+          (game.value.phaseEndsAt - game.value.phaseStartedAt),
+      ),
+    )
+  })
+  // 当前玩家是否可猜词：作画阶段、非画家、非观战、未猜中且在线
+  const canGuess = computed(
+    () =>
+      store.room?.phase === 'drawing' &&
+      !store.isDrawer &&
+      !store.me?.spectating &&
+      !store.me?.guessed &&
+      store.me?.connection === 'online',
+  )
+  // 阶段中文标签（画布状态遮罩 / 各面板复用；统一来自 config/strings.ts）
+  const phaseLabel = computed(
+    () =>
+      ({
+        starting: strings.status.phaseStarting,
+        choosing_word: strings.status.phaseChoosing,
+        drawing: strings.status.phaseDrawing,
+        round_result: strings.status.phaseRoundResult,
+        paused: strings.status.phasePaused,
+        game_result: strings.status.phaseGameResult,
+        waiting: strings.status.phaseWaiting,
+        closed: strings.status.phaseClosed,
+      })[store.room?.phase ?? 'waiting'],
+  )
+  // 当前画家成员信息
+  const drawer = computed(() =>
+    store.room?.members.find((member) => member.id === game.value?.drawerId),
+  )
+  // 最终排行：按分数降序并计算同名次（同分并列）
+  const rankings = computed(() => {
+    const members = [...(store.room?.members ?? [])].sort((a, b) => b.score - a.score)
+    let previous = -1
+    let rank = 0
+    return members.map((member, index) => {
+      if (member.score !== previous) rank = index + 1
+      previous = member.score
+      return { ...member, rank }
+    })
+  })
+
+  onMounted(() => {
+    ticker = window.setInterval(() => (now.value = Date.now()), 200)
+  })
+  onBeforeUnmount(() => {
+    window.clearInterval(ticker)
+  })
+
+  return { game, correctedNow, secondsLeft, progress, canGuess, phaseLabel, drawer, rankings }
+}
+
+export type { RoomMember }

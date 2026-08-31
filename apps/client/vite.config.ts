@@ -4,10 +4,12 @@ import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type Plugin } from 'vite'
 import { PUBLIC_CONFIG } from '../../config.ts'
+import { strings } from '../../config/strings.ts'
 
 /**
  * 将根级配置在构建时裁剪为虚拟公开模块。源码仍只有 config.ts 一个配置入口，
  * 但浏览器产物不会包含词库路径、服务端限流和重连清理等内部字段。
+ * 同时把页面标题 / 描述等元信息从 config/strings.ts 注入 index.html，保持文案唯一来源。
  */
 function publicConfigPlugin(): Plugin {
   const virtualId = '\0draw-guess-public-config'
@@ -22,6 +24,15 @@ function publicConfigPlugin(): Plugin {
       const serialized = JSON.stringify(PUBLIC_CONFIG)
       return `export const PUBLIC_CONFIG = ${serialized}; export const APP_CONFIG = PUBLIC_CONFIG;`
     },
+    // 用统一文案表（config/strings.ts）注入 index.html 的标题与描述，避免 HTML 内硬编码
+    transformIndexHtml(html) {
+      return html
+        .replace(/<title>[^<]*<\/title>/, `<title>${strings.meta.title}</title>`)
+        .replace(
+          /<meta name="description" content="[^"]*"/,
+          `<meta name="description" content="${strings.meta.description}"`,
+        )
+    },
   }
 }
 
@@ -33,6 +44,8 @@ export default defineConfig({
       '@draw-guess/shared': fileURLToPath(
         new URL('../../packages/shared/src/index.ts', import.meta.url),
       ),
+      // 统一 UI 文案表：与根 tsconfig paths 保持一致，供组件/仓库静态导入
+      '@draw-guess/strings': fileURLToPath(new URL('../../config/strings.ts', import.meta.url)),
     },
   },
   server: {

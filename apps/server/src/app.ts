@@ -1,6 +1,8 @@
 /**
  * HTTP 与 Socket.IO 适配层。
- * 本文件只执行输入 schema 校验、统一 ack 和领域服务调用，不在传输层自行裁决游戏状态。
+ * 本文件只负责端口/静态资源/Socket.IO 装配与统一连接入口；
+ * 事件绑定与 schema 校验分别收敛到 handlers/* 与 protocol/binder.ts，
+ * 领域服务调用仍由 GameService 承载，本层不裁决任何游戏状态。
  */
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
 import path from 'node:path'
@@ -8,22 +10,15 @@ import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
 import { Server } from 'socket.io'
-import { z, type ZodType } from 'zod'
 import { APP_CONFIG, PUBLIC_CONFIG } from '../../../config.ts'
-import {
-  CreateRoomSchema,
-  EVENTS,
-  FillCommandSchema,
-  JoinRoomSchema,
-  ProfileSchema,
-  RegisterSchema,
-  RequestSchema,
-  RoomSettingsSchema,
-  StrokeSchema,
-  type Ack,
-} from '@draw-guess/shared'
-import { failure, GameError, GameService, success, type RuntimeLogger } from './game-service.ts'
+import { GameService } from './game-service.ts'
+import type { RuntimeLogger } from './errors.ts'
 import { loadVocabulary, type VocabularyStore } from './vocabulary.ts'
+import { registerSessionHandlers } from './handlers/session.ts'
+import { registerRoomHandlers } from './handlers/room.ts'
+import { registerGameHandlers } from './handlers/game.ts'
+import { registerChatHandlers } from './handlers/chat.ts'
+import { registerDrawHandlers } from './handlers/draw.ts'
 
 export interface RunningApplication {
   httpServer: HttpServer
@@ -31,282 +26,17 @@ export interface RunningApplication {
   service: GameService
 }
 
-/** 统一请求包装器：所有失败都以结构化 ack 返回，避免未捕获异常断开 Socket。 */
-function bindRequest<T extends { requestId: string }, R>(
-  socket: import('socket.io').Socket,
-  event: string,
-  schema: ZodType<T>,
-  handler: (input: T, playerId: string) => R | Promise<R>,
-  options: { registration?: boolean; rateLimit?: boolean } = {},
-): void {
-  socket.on(event, async (raw: unknown, callback?: (ack: Ack<R>) => void) => {
-    // 从原始载荷中尽量提取 requestId，保证报错时客户端仍能对上号
-    const provisionalId =
-      typeof raw === 'object' && raw && 'requestId' in raw
-        ? String((raw as { requestId: unknown }).requestId)
-        : 'invalid-request'
-    const respond = typeof callback === 'function' ? callback : () => undefined
-    // B2：会话级滑动窗口限频——每连接每秒最多 requestEventsPerSecond 个可失败请求，
-    // 防止 createRoom/leaveRoom/stateResync 等高频刷包触发大面积广播。
-    // 绘图类事件（draw:*）与 networkPing 例外：绘图已有 45/s 专用限频，避免误伤正常绘画。
-    if (options.rateLimit !== false) {
-      const now = Date.now()
-      const history = ((socket.data.eventTimes as number[] | undefined) ?? []).filter(
-        (time) => now - time < 1_000,
-      )
-      if (history.length >= APP_CONFIG.network.requestEventsPerSecond) {
-        socket.data.eventTimes = history
-        respond(
-          failure(
-            new GameError('RATE_LIMITED', '操作过于频繁，请稍后再试'),
-            provisionalId,
-          ) as Ack<R>,
-        )
-        return
-      }
-      history.push(now)
-      socket.data.eventTimes = history
-    }
-    try {
-      // 先做 schema 严格校验，非法载荷直接拒绝
-      const input = schema.parse(raw)
-      const playerId = socket.data.playerId as string | undefined
-      // 除注册事件外，所有请求都必须已登录
-      if (!options.registration && !playerId)
-        throw new GameError('UNAUTHORIZED', '请先确认玩家资料并登录')
-      // 幂等缓存：重复 requestId 直接返回上次结果，避免重复建房/计分
-      const cache = socket.data.requestCache as Map<string, unknown> | undefined
-      if (cache?.has(input.requestId)) {
-        respond(success(cache.get(input.requestId) as R, input.requestId))
-        return
-      }
-      const result = await handler(input, playerId ?? '')
-      // 成功结果写入缓存，容量超过 100 条时逐出最早的记录
-      if (cache) {
-        cache.set(input.requestId, result)
-        if (cache.size > 100) cache.delete(cache.keys().next().value as string)
-      }
-      respond(success(result, input.requestId))
-    } catch (error) {
-      // 把 zod 校验错误归一化为可读的 INVALID_PAYLOAD；其余业务错误原样处理
-      const normalized =
-        error instanceof z.ZodError
-          ? new GameError('INVALID_PAYLOAD', '请求格式无效或字段超出允许范围')
-          : error
-      // C2：仅对非业务预期的内部错误记录脱敏日志，便于定位神秘 INTERNAL_ERROR
-      if (!(normalized instanceof GameError) && !(error instanceof z.ZodError)) {
-        ;(
-          socket.data.service as
-            { logUnexpectedError: (e: unknown, c: Record<string, unknown>) => void } | undefined
-        )?.logUnexpectedError(error, { event })
-      }
-      respond(failure(normalized, provisionalId) as Ack<R>)
-    }
-  })
-}
-
-/** 注册一个连接的全部协议事件，事件名只引用共享 EVENTS 常量。 */
+/** 注册一个连接的全部协议事件：按领域分组挂载，并把服务挂到 socket.data 供日志回调使用。 */
 function registerSocketHandlers(socket: import('socket.io').Socket, service: GameService): void {
-  // 把服务挂到 socket.data 上，供 bindRequest 的 catch 分支记录内部错误日志（C2）
+  // 注册前即初始化幂等缓存与并发请求表，保证首次 session:register 也不会重复执行。
   socket.data.service = service
-  // 会话注册：校验协议版本，创建/恢复身份并返回 recoveryToken
-  bindRequest(
-    socket,
-    EVENTS.sessionRegister,
-    RegisterSchema,
-    (input) => {
-      const result = service.register(socket, input)
-      // 把该玩家的幂等缓存挂到 socket 上，供后续请求复用
-      socket.data.requestCache = service.players.get(result.player.id)?.requestCache
-      // 注册成功后立即推送：身份、大厅状态、房间快照（若在房间中）
-      socket.emit(EVENTS.sessionReady, result)
-      socket.emit(EVENTS.presenceSnapshot, service.presenceSnapshot())
-      const room = service.snapshotForPlayer(result.player.id)
-      if (room) socket.emit(EVENTS.roomSnapshot, room)
-      return result
-    },
-    { registration: true },
-  )
-
-  // 资料与偏好管理
-  bindRequest(
-    socket,
-    EVENTS.sessionUpdateProfile,
-    RequestSchema.extend({ profile: ProfileSchema }),
-    (input, playerId) => service.updateProfile(playerId, input.profile),
-  )
-  bindRequest(
-    socket,
-    EVENTS.presenceUpdatePreferences,
-    RequestSchema.extend({ discoverable: z.boolean(), acceptsInvites: z.boolean() }),
-    (input, playerId) => service.updatePreferences(playerId, input),
-  )
-  // 大厅只读查询
-  bindRequest(
-    socket,
-    EVENTS.roomList,
-    RequestSchema,
-    (_input, _playerId) => service.presenceSnapshot().rooms,
-  )
-  // 房间生命周期：创建 / 加入 / 离开
-  bindRequest(socket, EVENTS.roomCreate, CreateRoomSchema, (input, playerId) =>
-    service.createRoom(playerId, input),
-  )
-  bindRequest(socket, EVENTS.roomJoin, JoinRoomSchema, (input, playerId) =>
-    service.joinRoom(playerId, input.roomId),
-  )
-  bindRequest(socket, EVENTS.roomLeave, RequestSchema, (_input, playerId) =>
-    service.leaveRoom(playerId),
-  )
-  // 房间规则：准备、改规则、词库管理
-  bindRequest(
-    socket,
-    EVENTS.roomSetReady,
-    RequestSchema.extend({ ready: z.boolean() }),
-    (input, playerId) => service.setReady(playerId, input.ready),
-  )
-  bindRequest(
-    socket,
-    EVENTS.roomUpdateSettings,
-    RequestSchema.extend({
-      patch: RoomSettingsSchema.partial(),
-      expectedVersion: z.number().int().nonnegative(),
-    }),
-    (input, playerId) => service.updateSettings(playerId, input.patch, input.expectedVersion),
-  )
-  bindRequest(socket, EVENTS.roomGetVocabulary, RequestSchema, (_input, playerId) =>
-    service.getVocabulary(playerId),
-  )
-  bindRequest(
-    socket,
-    EVENTS.roomUpdateVocabulary,
-    RequestSchema.extend({
-      ids: z.array(z.string()).max(2_000),
-      expectedVersion: z.number().int().nonnegative(),
-    }),
-    (input, playerId) => service.updateVocabulary(playerId, input.ids, input.expectedVersion),
-  )
-  // 房主管理：踢人 / 移交房主
-  bindRequest(
-    socket,
-    EVENTS.roomKick,
-    RequestSchema.extend({ targetId: z.string().uuid() }),
-    (input, playerId) => service.kick(playerId, input.targetId),
-  )
-  bindRequest(
-    socket,
-    EVENTS.roomTransferHost,
-    RequestSchema.extend({ targetId: z.string().uuid() }),
-    (input, playerId) => service.transferHost(playerId, input.targetId),
-  )
-  // 定向邀请：发送 / 应答
-  bindRequest(
-    socket,
-    EVENTS.inviteSend,
-    RequestSchema.extend({ targetId: z.string().uuid() }),
-    (input, playerId) => service.sendInvite(playerId, input.targetId),
-  )
-  bindRequest(
-    socket,
-    EVENTS.inviteRespond,
-    RequestSchema.extend({ inviteId: z.string().uuid(), accept: z.boolean() }),
-    (input, playerId) => service.respondInvite(playerId, input.inviteId, input.accept),
-  )
-  // 对局控制：开始 / 选词 / 暂停 / 恢复 / 提前结束 / 返回房间
-  bindRequest(
-    socket,
-    EVENTS.gameStart,
-    RequestSchema.extend({ expectedVersion: z.number().int().nonnegative() }),
-    (input, playerId) => service.startGame(playerId, input.expectedVersion),
-  )
-  bindRequest(
-    socket,
-    EVENTS.gameChooseWord,
-    RequestSchema.extend({ roundId: z.string().uuid(), wordId: z.string() }),
-    (input, playerId) => service.chooseWord(playerId, input.roundId, input.wordId),
-  )
-  bindRequest(
-    socket,
-    EVENTS.gamePauseRequest,
-    RequestSchema.extend({ reason: z.string().max(40) }),
-    (input, playerId) => service.pause(playerId, input.reason),
-  )
-  bindRequest(socket, EVENTS.gameResume, RequestSchema, (_input, playerId) =>
-    service.resume(playerId),
-  )
-  bindRequest(socket, EVENTS.gameEndEarly, RequestSchema, (_input, playerId) =>
-    service.endEarly(playerId),
-  )
-  bindRequest(socket, EVENTS.gameReturnWaiting, RequestSchema, (_input, playerId) =>
-    service.returnWaiting(playerId),
-  )
-  // 猜词与聊天：提交猜词 / 发送安全预设短语
-  bindRequest(
-    socket,
-    EVENTS.guessSubmit,
-    RequestSchema.extend({
-      roundId: z.string().uuid(),
-      text: z.string().min(1).max(APP_CONFIG.player.chatMaxLength),
-    }),
-    (input, playerId) => service.submitGuess(playerId, input.roundId, input.text),
-  )
-  bindRequest(
-    socket,
-    EVENTS.chatPreset,
-    RequestSchema.extend({ roundId: z.string().uuid(), preset: z.string() }),
-    (input, playerId) => service.sendPreset(playerId, input.roundId, input.preset),
-  )
-  // 绘图：笔画批次 / 区域填充 / 撤销 / 重做 / 清空（跳过通用限频，绘图有专用的 45/s 窗口限频）
-  bindRequest(
-    socket,
-    EVENTS.drawStrokeBatch,
-    RequestSchema.extend({ roundId: z.string().uuid(), stroke: StrokeSchema }),
-    (input, playerId) => service.addStroke(playerId, input.roundId, input.stroke),
-    { rateLimit: false },
-  )
-  bindRequest(
-    socket,
-    EVENTS.drawFillCommit,
-    RequestSchema.extend({ roundId: z.string().uuid(), fill: FillCommandSchema }),
-    (input, playerId) => service.addFill(playerId, input.roundId, input.fill),
-    { rateLimit: false },
-  )
-  bindRequest(
-    socket,
-    EVENTS.drawUndo,
-    RequestSchema.extend({ roundId: z.string().uuid() }),
-    (input, playerId) => service.undo(playerId, input.roundId),
-    { rateLimit: false },
-  )
-  bindRequest(
-    socket,
-    EVENTS.drawRedo,
-    RequestSchema.extend({ roundId: z.string().uuid() }),
-    (input, playerId) => service.redo(playerId, input.roundId),
-    { rateLimit: false },
-  )
-  bindRequest(
-    socket,
-    EVENTS.drawClear,
-    RequestSchema.extend({ roundId: z.string().uuid() }),
-    (input, playerId) => service.clearDrawing(playerId, input.roundId),
-    { rateLimit: false },
-  )
-  // 状态重同步：断线恢复后拉取权威快照
-  bindRequest(socket, EVENTS.stateResync, RequestSchema, (_input, playerId) =>
-    service.snapshotForPlayer(playerId),
-  )
-  // 网络检测：往返延迟估算（低频，无需限频）
-  bindRequest(
-    socket,
-    EVENTS.networkPing,
-    RequestSchema.extend({ clientTime: z.number() }),
-    (input) => ({ clientTime: input.clientTime, serverTime: Date.now() }),
-    { rateLimit: false },
-  )
-
-  // 连接断开：进入恢复宽限期，超时后释放身份与座位
-  socket.on('disconnect', () => service.handleDisconnect(socket))
+  socket.data.requestCache = new Map()
+  socket.data.inFlightRequests = new Map()
+  registerSessionHandlers(socket, service)
+  registerRoomHandlers(socket, service)
+  registerGameHandlers(socket, service)
+  registerChatHandlers(socket, service)
+  registerDrawHandlers(socket, service)
 }
 
 /** 创建完整应用，并允许启动入口按部署环境注入公开地址和日志器。 */

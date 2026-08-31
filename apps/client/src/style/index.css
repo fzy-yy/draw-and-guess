@@ -1,0 +1,14 @@
+/*
+ * 全局游戏舞台与视觉系统（拆分入口）。
+ * 保持原 style.css 的书写顺序以避免层叠覆盖变化；视觉令牌与基础 reset 见 base.css。
+ */
+@import 'tailwindcss';
+@import './base.css';
+@import './profile.css';
+@import './lobby.css';
+@import './dialog.css';
+@import './room.css';
+@import './game.css';
+@import './settings.css';
+@import './toast.css';
+@import './motion.css';

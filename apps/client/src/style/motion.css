@@ -1,0 +1,101 @@
+/*
+ * 全局轻量动效与反馈。
+ * 仅控制视觉层的过渡和动画；倒计时、画布绘制、服务端状态机等功能逻辑不依赖本文件。
+ */
+.game-stage button,
+.game-stage input,
+.game-stage select,
+.room-row,
+.player-seat,
+.message,
+.avatar-image {
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+/* 所有可用按钮都有轻微抬起与按下缩放反馈，不改变禁用控件。 */
+.game-stage button:not(:disabled):hover {
+  transform: translateY(-0.16cqh);
+  filter: brightness(1.03);
+}
+.game-stage button:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+/* 常用卡片在指针经过时轻微强调，避免大幅位移动画影响布局判断。 */
+.room-row:hover,
+.player-seat:not(.empty):hover,
+.discovery-player:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 0.6cqh 1.6cqh #17255418;
+}
+
+/* Vue Transition：遮罩淡入淡出，对话框同步执行缩放。 */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 180ms ease;
+}
+.modal-enter-active .game-dialog,
+.modal-leave-active .game-dialog {
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+}
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+.modal-enter-from .game-dialog,
+.modal-leave-to .game-dialog {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+/* Toast 与邀请横幅的进入/离开动画。 */
+.toast-enter-active,
+.toast-leave-active {
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(2cqw) scale(0.96);
+}
+.banner-enter-active,
+.banner-leave-active {
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+.banner-enter-from,
+.banner-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 2cqh) scale(0.96);
+}
+
+/* 用户关闭动画，或操作系统要求减少动态效果时，把非必要过渡压缩为瞬时。 */
+.motion-disabled .game-stage *,
+.motion-disabled .game-stage *::before,
+.motion-disabled .game-stage *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.001ms !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-stage *,
+  .game-stage *::before,
+  .game-stage *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}
