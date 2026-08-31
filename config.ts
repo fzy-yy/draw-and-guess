@@ -11,21 +11,21 @@ export const APP_CONFIG = {
     name: '你画我猜',
     englishName: 'Draw and Guess',
     version: '2.1.0',
-    protocolVersion: '3',
-    storageKey: 'draw-and-guess-profile-v1',
-    settingsStorageKey: 'draw-and-guess-settings-v1',
+    protocolVersion: '3', // 前后端通信协议版本，不匹配时拒绝注册
+    storageKey: 'draw-and-guess-profile-v1', // localStorage 资料键
+    settingsStorageKey: 'draw-and-guess-settings-v1', // localStorage 设置键
   },
   network: {
-    host: '0.0.0.0',
+    host: '0.0.0.0', // 监听所有网卡，供局域网访问
     port: 5174,
-    requestTimeoutMs: 8_000,
-    reconnectGraceMs: 120_000,
-    drawerReconnectGraceMs: 20_000,
-    roomCleanupMs: 300_000,
-    inviteExpiryMs: 30_000,
-    inviteCooldownMs: 5_000,
-    pingIntervalMs: 10_000,
-    guessEventsPerSecond: 5,
+    requestTimeoutMs: 8_000, // 客户端请求超时
+    reconnectGraceMs: 120_000, // 断线恢复宽限期（玩家级）
+    drawerReconnectGraceMs: 20_000, // 画家/房主断线宽限期
+    inviteExpiryMs: 30_000, // 邀请 30 秒有效
+    inviteCooldownMs: 5_000, // 同一目标邀请冷却
+    pingIntervalMs: 10_000, // Socket.IO 心跳与延迟测量周期
+    guessEventsPerSecond: 5, // 猜词事件限频（滑动窗口）
+    requestEventsPerSecond: 25, // 应用层请求限频（每连接每秒，防刷事件触发全量广播）
   },
   player: {
     minPlayers: 2,
@@ -74,24 +74,23 @@ export const APP_CONFIG = {
     joinPolicy: 'next_game' as const,
   },
   game: {
-    roundsPerPlayer: { min: 1, max: 5, default: 2, step: 1 },
-    drawSeconds: { min: 45, max: 180, default: 90, step: 15 },
-    chooseSeconds: { min: 10, max: 30, default: 15, step: 5 },
-    optionCount: { min: 2, max: 5, default: 3, step: 1 },
-    startingCountdownSeconds: 3,
-    roundResultSeconds: 6,
-    finalHintThresholds: [0.35, 0.2],
-    showWordLength: true,
-    progressiveHints: true,
-    closeGuessEnabled: true,
-    ignoreLatinCase: true,
-    collapseSpaces: true,
+    roundsPerPlayer: { min: 1, max: 5, default: 2, step: 1 }, // 每人作画轮数
+    drawSeconds: { min: 45, max: 180, default: 90, step: 15 }, // 每回合作画秒数
+    chooseSeconds: { min: 10, max: 30, default: 15, step: 5 }, // 选词阶段秒数
+    optionCount: { min: 2, max: 5, default: 3, step: 1 }, // 候选词数量
+    startingCountdownSeconds: 3, // 开局倒计时
+    roundResultSeconds: 6, // 回合结算展示时长
+    finalHintThresholds: [0.35, 0.2], // 逐步提示的剩余时间比例阈值
+    showWordLength: true, // 默认显示答案字数
+    progressiveHints: true, // 默认开启逐步提示
+    closeGuessEnabled: true, // 默认开启近似答案提示
+    // 猜词比较固定为：NFKC 规范化 → 去首尾空白 → 折叠连续空白 → 忽略拉丁大小写（由 shared normalizeAnswer 内置）
     score: {
-      guessBase: 300,
-      maxSpeedBonus: 700,
-      orderBonuses: [100, 60, 30, 0, 0],
-      drawerPerCorrect: 120,
-      drawerAllCorrectBonus: 100,
+      guessBase: 300, // 猜中基础分
+      maxSpeedBonus: 700, // 速度奖励上限
+      orderBonuses: [100, 60, 30, 0, 0], // 猜中顺序奖励（前 3 名）
+      drawerPerCorrect: 120, // 画家每个猜中者得分
+      drawerAllCorrectBonus: 100, // 画家全员猜中奖励
     },
   },
   drawing: {
@@ -111,18 +110,18 @@ export const APP_CONFIG = {
     width: { min: 1, max: 30, default: 5, step: 1, wheelStep: 1 },
     /** 洪泛填充比较目标像素时允许的单通道误差，用于兼容 Canvas 抗锯齿边缘。 */
     fillTolerance: 8,
-    batchIntervalMs: 24,
-    maxPointsPerBatch: 120,
-    maxDrawEventsPerSecond: 45,
-    maxHistoryCommands: 1_500,
+    batchIntervalMs: 24, // 自由笔画批次发送间隔
+    maxPointsPerBatch: 120, // 每批次最多点数
+    maxDrawEventsPerSecond: 45, // 绘图事件限频
+    maxHistoryCommands: 1_500, // 画布历史命令上限
   },
   vocabulary: {
-    filePath: 'vocabulary.md',
+    filePath: 'vocabulary.md', // 唯一词库文件路径
     encoding: 'utf8' as const,
-    minWords: 12,
-    maxWordLength: 24,
-    deduplicate: true,
-    resetWhenExhausted: true,
+    minWords: 12, // 词库最小词条数（也是每局最少选择数）
+    maxWordLength: 24, // 单条词面最大字符数
+    deduplicate: true, // 按规范化词面去重
+    resetWhenExhausted: true, // 词池用完后允许重新启用全部词条
   },
   audio: {
     cues: {
@@ -154,9 +153,9 @@ export const APP_CONFIG = {
     acceptsInvites: true,
   },
   ui: {
-    stageAspectRatio: '16 / 9',
-    toastDurationMs: 3_200,
-    recentMessageCount: 8,
+    stageAspectRatio: '16 / 9', // 舞台宽高比
+    toastDurationMs: 3_200, // Toast 展示时长
+    recentMessageCount: 8, // 聊天窗口展示的消息条数
   },
   presets: {
     safeChat: ['画得真棒！', '我知道了！', '再来一点提示', '好难猜呀'],

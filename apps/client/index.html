@@ -1,17 +1,22 @@
 <!doctype html>
+<!-- 客户端 HTML 入口：Vue 将应用挂载到 #app；元信息保证移动端缩放与主题色 -->
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <!-- 禁止用户手动缩放，适合固定 16:9 游戏舞台的触屏设备 -->
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
+    <!-- 浏览器地址栏 / 状态栏主题色（与舞台深蓝主色一致） -->
     <meta name="theme-color" content="#172554" />
     <meta name="description" content="局域网实时多人你画我猜游戏" />
     <title>你画我猜</title>
   </head>
   <body>
+    <!-- Vue 应用挂载点：全部界面都由 src/main.ts 动态渲染 -->
     <div id="app"></div>
+    <!-- ES 模块入口脚本：由 Vite 打包并注入 -->
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -4,7 +4,7 @@
   坐标始终归一化为 0～1，因此窗口缩放和断线重建不会使绘图位置漂移。
 -->
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   type DrawingCommand,
   type DrawPoint,
@@ -18,6 +18,8 @@ import { createUuid } from '@/utils/createUuid'
 const props = defineProps<{
   strokes: DrawingCommand[]
   undoneStrokeIds: string[]
+  /** 服务端已接受的最大绘图序号（从对局快照获取），用于本地序号续起对齐。 */
+  lastSequence: number
   canDraw: boolean
   tool: ToolKind
   color: string
@@ -29,32 +31,36 @@ const emit = defineEmits<{
   widthChange: [width: number]
 }>()
 
-const canvas = ref<HTMLCanvasElement>()
-const activePoints = ref<DrawPoint[]>([])
-const drawing = ref(false)
-let observer: ResizeObserver | undefined
-let sequence = 0
-let activeStrokeId = ''
-let sentPointCount = 0
-let batchTimer = 0
+const canvas = ref<HTMLCanvasElement>() // 画布 DOM 引用
+const activePoints = ref<DrawPoint[]>([]) // 当前未提交的自由笔画本地点列
+const drawing = ref(false) // 是否正在按下画布绘图
+let observer: ResizeObserver | undefined // 画布尺寸监听（窗口缩放重建像素缓冲）
+let sequence = 0 // 本地绘图序号（提交时与权威历史比较取更大值）
+let activeStrokeId = '' // 当前按下动作的笔画 ID（各批次共用）
+let sentPointCount = 0 // 已发送到服务端的点数（用于切片增量）
+let batchTimer = 0 // 批次发送定时器句柄
 
+/** 过滤掉已撤销的命令，得到实际应重绘的可见历史。 */
 const visibleCommands = computed(() =>
   props.strokes.filter((command) => !props.undoneStrokeIds.includes(command.id)),
 )
 
-/** 按 CSS 尺寸与设备像素比重建像素缓冲，再完整重绘权威历史。 */
+/** 画布像素缓冲尺寸：按设备像素比缩放并封顶 2.0，限制填充类大内存分配的上限。 */
 function resizeCanvas(): void {
   const element = canvas.value
   if (!element) return
   const rect = element.getBoundingClientRect()
-  const ratio = Math.min(window.devicePixelRatio || 1, 2.5)
+  const ratio = Math.min(window.devicePixelRatio || 1, 2.0)
   element.width = Math.max(1, Math.round(rect.width * ratio))
   element.height = Math.max(1, Math.round(rect.height * ratio))
   redraw()
 }
 
-/** 绘制自由笔画；橡皮擦使用 destination-out 做透明擦除，并与画笔共用 width。 */
-function drawStroke(context: CanvasRenderingContext2D, stroke: Stroke): void {
+/**
+ * 绘制自由笔画；橡皮擦使用 destination-out 做透明擦除，并与画笔共用 width。
+ * fromIndex 表示从第几个采样点开始绘制（用于增量绘制局部笔画，0 = 从头画））。
+ */
+function drawStroke(context: CanvasRenderingContext2D, stroke: Stroke, fromIndex = 0): void {
   if (!stroke.points.length) return
   const canvasWidth = context.canvas.width
   const canvasHeight = context.canvas.height
@@ -66,16 +72,26 @@ function drawStroke(context: CanvasRenderingContext2D, stroke: Stroke): void {
   context.lineCap = 'round'
   context.lineJoin = 'round'
   context.beginPath()
-  const first = stroke.points[0]
+  // 从 fromIndex-1 起笔，保证与上一段线段连续（首段从 0 起）
+  const start = Math.max(0, fromIndex - 1)
+  const first = stroke.points[start]
   if (!first) {
     context.restore()
     return
   }
   context.moveTo(first.x * canvasWidth, first.y * canvasHeight)
-  for (const point of stroke.points.slice(1))
+  for (const point of stroke.points.slice(start + 1))
     context.lineTo(point.x * canvasWidth, point.y * canvasHeight)
   if (stroke.points.length === 1)
     context.lineTo(first.x * canvasWidth + 0.01, first.y * canvasHeight + 0.01)
+  else if (start >= 1 && stroke.points.length - start === 1 && stroke.points[start - 1]) {
+    // 追加单点时补一条极短线段让笔迹可见
+    const previous = stroke.points[start - 1]!
+    context.lineTo(
+      previous.x * canvasWidth + (first.x - previous.x) * canvasWidth + 0.01,
+      previous.y * canvasHeight + (first.y - previous.y) * canvasHeight + 0.01,
+    )
+  }
   context.stroke()
   context.restore()
 }
@@ -175,9 +191,19 @@ function drawFill(context: CanvasRenderingContext2D, command: FillCommand): void
   context.putImageData(image, 0, 0)
 }
 
-/** 清空并依序重绘权威历史，再叠加尚未提交完毕的本地自由笔画。 */
+/** 取画布 2D 上下文（绘图/填充需频繁读像素）。 */
+function getContext(): CanvasRenderingContext2D | null {
+  return canvas.value?.getContext('2d', { willReadFrequently: true }) ?? null
+}
+
+// —— E2 增量绘制游标：避免高频笔画（约 40 批/秒）每次都全量重绘 1500 条历史 ——
+let committedCount = 0 // 已绘制到画布的可见命令数
+let committedUndoLen = props.undoneStrokeIds.length // 上次已绘制时的撤销栈长度
+const drawnPoints = new Map<string, number>() // strokeId → 本画布已绘制的点数（-1 表示填充命令已画）
+
+/** 清空并依序重绘权威历史，再叠加尚未提交完毕的本地自由笔画；重绘后重置增量游标。 */
 function redraw(): void {
-  const context = canvas.value?.getContext('2d', { willReadFrequently: true })
+  const context = getContext()
   if (!context) return
   context.clearRect(0, 0, context.canvas.width, context.canvas.height)
   for (const command of visibleCommands.value) {
@@ -195,6 +221,44 @@ function redraw(): void {
       sequence,
     })
   }
+  // 登记已绘制游标：撤销等结构变化后必须全量重绘，游标随之重建
+  drawnPoints.clear()
+  for (const command of visibleCommands.value)
+    drawnPoints.set(command.id, command.kind === 'stroke' ? command.points.length : -1)
+  committedCount = visibleCommands.value.length
+  committedUndoLen = props.undoneStrokeIds.length
+}
+
+/**
+ * 增量绘制服务端新到达的命令或同 ID 追加点。
+ * 跳过本地预览已覆盖的点（画家本地画的点数 ≥ 服务端确认点数），避免笔迹重复加深。
+ */
+function drawIncoming(context: CanvasRenderingContext2D): void {
+  const visible = visibleCommands.value
+  // 1. 新命令（从已绘制游标起）
+  for (let index = committedCount; index < visible.length; index += 1) {
+    const command = visible[index]!
+    if (command.kind === 'stroke') {
+      const prev = drawnPoints.get(command.id) ?? 0
+      if (command.points.length > prev) {
+        drawStroke(context, command, prev)
+        drawnPoints.set(command.id, command.points.length)
+      }
+    } else if (!drawnPoints.has(command.id)) {
+      drawFill(context, command)
+      drawnPoints.set(command.id, -1)
+    }
+  }
+  // 2. 最后一条命令的追加点（同 ID 分批到达时 visible.length 不变但点数增长）
+  const last = visible[visible.length - 1]
+  if (last && last.kind === 'stroke') {
+    const prev = drawnPoints.get(last.id) ?? 0
+    if (last.points.length > prev) {
+      drawStroke(context, last, prev)
+      drawnPoints.set(last.id, last.points.length)
+    }
+  }
+  committedCount = visible.length
 }
 
 /** 将指针事件坐标裁剪并归一化到 0～1。 */
@@ -209,7 +273,13 @@ function normalizedPoint(event: PointerEvent): DrawPoint {
 
 /** 返回严格递增且高于当前权威历史的序号，避免本地重连后提交旧命令。 */
 function nextSequence(): number {
-  sequence = Math.max(sequence + 1, ...props.strokes.map((command) => command.sequence + 1), 0)
+  // 基准取：本地序号 +1、服务端 lastSequence +1、历史命令最大序号 +1 三者的最大值
+  sequence = Math.max(
+    sequence + 1,
+    props.lastSequence + 1,
+    ...props.strokes.map((command) => command.sequence + 1),
+    0,
+  )
   return sequence
 }
 
@@ -227,25 +297,58 @@ function pointerDown(event: PointerEvent): void {
     })
     return
   }
-  canvas.value?.setPointerCapture(event.pointerId)
+  canvas.value?.setPointerCapture(event.pointerId) // 捕获指针，支持在组件外持续绘制
   drawing.value = true
   activeStrokeId = createUuid()
   sentPointCount = 0
   activePoints.value = [point]
+  // 同步登记本地已画点数：服务端回写同 ID 点时按此跳过，防止笔迹加深
+  drawnPoints.set(activeStrokeId, 1)
+  // 本地预览立即画出落笔点
+  const context = getContext()
+  if (context)
+    drawStroke(context, {
+      kind: 'stroke',
+      id: 'local-preview',
+      tool: props.tool === 'eraser' ? 'eraser' : 'pen',
+      color: props.color,
+      width: props.width,
+      points: activePoints.value,
+      sequence,
+    })
+  // 启动批次发送周期：按下后定期把新采样点批量上传
   batchTimer = window.setTimeout(flushPointBatch, APP_CONFIG.drawing.batchIntervalMs)
-  redraw()
 }
 
-/** 指针移动时为自由笔画追加经过距离去抖的采样点。 */
+/** 指针移动时为自由笔画追加经过距离去抖的采样点，并增量绘制新增点段。 */
 function pointerMove(event: PointerEvent): void {
   if (!drawing.value || !props.canDraw) return
   const point = normalizedPoint(event)
   const previous = activePoints.value.at(-1)
+  // 距离过近的去抖：避免一帧内产生大量重复点
   if (previous && Math.hypot(point.x - previous.x, point.y - previous.y) < 0.0015) return
+  const from = activePoints.value.length
   activePoints.value.push(point)
+  drawnPoints.set(activeStrokeId, activePoints.value.length)
+  // 本地预览增量绘制新增点段（只画末尾这一小段）
+  const context = getContext()
+  if (context)
+    drawStroke(
+      context,
+      {
+        kind: 'stroke',
+        id: 'local-preview',
+        tool: props.tool === 'eraser' ? 'eraser' : 'pen',
+        color: props.color,
+        width: props.width,
+        points: activePoints.value,
+        sequence,
+      },
+      from,
+    )
+  // 批次周期外的新点也触发一次批次发送
   if (!batchTimer)
     batchTimer = window.setTimeout(flushPointBatch, APP_CONFIG.drawing.batchIntervalMs)
-  redraw()
 }
 
 /** 每个配置批处理周期仅发送自由笔画新增点，既保证实时性也限制网络事件量。 */
@@ -271,7 +374,7 @@ function flushPointBatch(): void {
   sentPointCount = activePoints.value.length
 }
 
-/** 指针抬起或取消时冲刷自由笔画最后一个批次并清除本地预览。 */
+/** 指针抬起或取消时冲刷自由笔画最后一个批次并清除本地预览（已画像素保留在画布）。 */
 function pointerUp(event: PointerEvent): void {
   if (!drawing.value) return
   canvas.value?.releasePointerCapture(event.pointerId)
@@ -280,7 +383,6 @@ function pointerUp(event: PointerEvent): void {
   activePoints.value = []
   activeStrokeId = ''
   sentPointCount = 0
-  redraw()
 }
 
 /** 画笔或橡皮擦位于画板内时，滚轮调整二者共用的连续粗细值。 */
@@ -298,12 +400,33 @@ function wheelWidth(event: WheelEvent): void {
   emit('widthChange', next)
 }
 
+/**
+ * 权威历史变化监听：
+ * - 撤销栈长度变化 / 命令数减少（撤销、清空、回合切换）→ 全量重绘并重建游标；
+ * - 其余情况（笔画批次、同 ID 追加点）→ 增量绘制，避免每帧全量重绘历史。
+ */
 watch(
-  () => [props.strokes, props.undoneStrokeIds],
-  () => nextTick(redraw),
+  () => [props.strokes.length, props.undoneStrokeIds.length, props.undoneStrokeIds.at(-1)],
+  () => {
+    const visibleLen = visibleCommands.value.length
+    if (props.undoneStrokeIds.length !== committedUndoLen || visibleLen < committedCount) {
+      redraw()
+      return
+    }
+    const context = getContext()
+    if (!context) return
+    drawIncoming(context)
+  },
   { deep: true },
 )
-watch(() => [props.tool, props.color, props.width], redraw)
+
+// 工具/颜色/线宽变化不影响历史像素，仅当存在未完成的本地预览时才重绘预览
+watch(
+  () => [props.tool, props.color, props.width],
+  () => {
+    if (activePoints.value.length) redraw()
+  },
+)
 
 onMounted(() => {
   observer = new ResizeObserver(resizeCanvas)
@@ -317,6 +440,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <!-- 画布元素：绑定指针/滚轮事件；canDraw 时显示不同光标（绘画/橡皮/填充） -->
   <canvas
     ref="canvas"
     class="drawing-canvas"

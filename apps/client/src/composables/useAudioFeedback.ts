@@ -14,17 +14,22 @@ export function useAudioFeedback(): void {
   const store = useGameStore()
   let context: AudioContext | undefined
   let lastWarningSecond = -1
+  // 页面级防抖：最后一分钟内每秒只播放一次警告音
   let timer = 0
 
+  /** 首次用户交互时解锁音频上下文（遵守浏览器自动播放限制）。 */
   const unlock = (): void => {
     context ??= new AudioContext()
     if (context.state === 'suspended') void context.resume()
   }
+  // 只用首次指针/键盘交互触发一次解锁
   window.addEventListener('pointerdown', unlock, { once: true })
   window.addEventListener('keydown', unlock, { once: true })
 
+  /** 播放指定提示音 cue：按频率序列合成短音，先静音/音量检查再发声。 */
   function play(name: CueName): void {
     const cue = store.config.audio.cues[name]
+    // 静音且主/音效音量≤0 时不发声
     if (
       !cue ||
       !context ||
@@ -34,6 +39,7 @@ export function useAudioFeedback(): void {
     )
       return
     const baseTime = context.currentTime
+    // 为每个频率创建一个振荡器 + 增益包络，形成一拍短的提示音
     cue.frequencies.forEach((frequency, index) => {
       const oscillator = context?.createOscillator()
       const gain = context?.createGain()
@@ -41,6 +47,7 @@ export function useAudioFeedback(): void {
       const start = baseTime + index * (cue.duration + 0.025)
       oscillator.type = 'sine'
       oscillator.frequency.value = frequency
+      // 快速淡入淡出避免爆音：从接近 0 指数爬升到目标音量再衰减回 0
       gain.gain.setValueAtTime(0.0001, start)
       gain.gain.exponentialRampToValueAtTime(
         Math.max(
@@ -58,6 +65,7 @@ export function useAudioFeedback(): void {
     })
   }
 
+  // 房间阶段变化时播放对应音效
   watch(
     () => store.room?.phase,
     (phase, previous) => {
@@ -69,6 +77,7 @@ export function useAudioFeedback(): void {
       else if (phase === 'game_result') play('final')
     },
   )
+  // 自己准备/猜中/收到邀请时播放对应音效
   watch(
     () => store.me?.ready,
     (ready) => ready && play('ready'),
@@ -93,6 +102,7 @@ export function useAudioFeedback(): void {
     }
   }, 200)
 
+  // 组件卸载时清理定时器、事件监听与音频上下文
   onBeforeUnmount(() => {
     window.clearInterval(timer)
     window.removeEventListener('pointerdown', unlock)

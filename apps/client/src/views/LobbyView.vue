@@ -6,9 +6,10 @@ import { useGameStore } from '@/stores/game'
 import type { RoomSettings } from '@draw-guess/shared'
 
 const store = useGameStore()
-const showCreate = ref(false)
-const playerFilter = ref('')
-const createForm = reactive({ name: store.config.room.defaultName })
+const showCreate = ref(false) // 创建房间弹窗开关
+const playerFilter = ref('') // 在线玩家昵称筛选关键词
+const createForm = reactive({ name: store.config.room.defaultName }) // 创建表单：房间名
+// 创建房间的默认规则快照（可编辑，提交时整体传给服务端）
 const roomSettings = reactive<RoomSettings>({
   maxPlayers: store.config.player.defaultMaxPlayers,
   roundsPerPlayer: store.config.game.roundsPerPlayer.default,
@@ -23,11 +24,13 @@ const roomSettings = reactive<RoomSettings>({
   joinPolicy: store.config.room.joinPolicy,
 })
 
+// 在线玩家筛选列表：排除自己，按昵称子串过滤
 const filteredPlayers = computed(() =>
   store.presence.players.filter(
     (player) => player.id !== store.playerId && player.nickname.includes(playerFilter.value.trim()),
   ),
 )
+// 玩家状态中文文案
 const statusText = {
   idle: '空闲',
   in_room: '房间中',
@@ -43,9 +46,12 @@ async function createRoom(): Promise<void> {
 </script>
 
 <template>
+  <!-- 在线大厅骨架：左侧房间区 + 右侧在线玩家区，顶栏含身份与设置入口 -->
   <main class="lobby-layout">
+    <!-- 顶栏：我的身份 / 游戏标题 / 设置入口 -->
     <header class="lobby-hud">
       <div class="identity-block">
+        <!-- 我的头像与昵称 -->
         <span
           class="solid-avatar"
           :style="{ backgroundColor: store.profile.avatarColor }"
@@ -68,6 +74,7 @@ async function createRoom(): Promise<void> {
       </nav>
     </header>
 
+    <!-- 左侧：全部公开房间列表 -->
     <section class="room-zone">
       <div class="room-zone-head">
         <div>
@@ -77,12 +84,14 @@ async function createRoom(): Promise<void> {
         <span>{{ store.presence.rooms.length }} 个房间</span>
       </div>
       <div class="quick-actions public-only">
+        <!-- 创建公开房间大按钮：固定公开模式只有一个入口 -->
         <button class="create-room-button" type="button" @click="showCreate = true">
           <CirclePlus /><span><b>创建公开房间</b><small>创建后立即对所有在线玩家可见</small></span
           ><ChevronRight />
         </button>
       </div>
 
+      <!-- 房间列表：每行展示名称、房主、规则、状态、人数与加入按钮 -->
       <div class="public-room-list" aria-label="全部公开房间列表">
         <article v-for="publicRoom in store.presence.rooms" :key="publicRoom.id" class="room-row">
           <div class="room-emblem"><Gamepad2 /></div>
@@ -93,20 +102,33 @@ async function createRoom(): Promise<void> {
               {{ publicRoom.drawSeconds }} 秒</span
             >
           </div>
-          <span class="room-phase">{{ publicRoom.phase === 'waiting' ? '等待中' : '进行中' }}</span>
+          <span class="room-phase">{{
+            publicRoom.phase === 'waiting'
+              ? '等待中'
+              : publicRoom.joinPolicy === 'spectate'
+                ? '可以观战'
+                : '进行中'
+          }}</span>
           <span class="room-count"
             ><Users /> {{ publicRoom.playerCount }}/{{ publicRoom.maxPlayers }}</span
           >
+          <!-- 加入按钮：等待阶段可直接加入；游戏中仅 joinPolicy='spectate' 可观战加入；满员时禁用 -->
           <button
             type="button"
             :disabled="
-              publicRoom.phase !== 'waiting' || publicRoom.playerCount >= publicRoom.maxPlayers
+              publicRoom.playerCount >= publicRoom.maxPlayers ||
+              (publicRoom.phase !== 'waiting' && publicRoom.joinPolicy !== 'spectate')
             "
             @click="store.joinRoom(publicRoom.id)"
           >
-            加入
+            {{
+              publicRoom.phase !== 'waiting' && publicRoom.joinPolicy === 'spectate'
+                ? '观战'
+                : '加入'
+            }}
           </button>
         </article>
+        <!-- 空状态：没有公开房间时的提示 -->
         <div v-if="!store.presence.rooms.length" class="empty-stage">
           <Gamepad2 /><b>还没有公开房间</b
           ><span>成为第一个房主，新房间会实时广播给所有在线玩家。</span>
@@ -114,6 +136,7 @@ async function createRoom(): Promise<void> {
       </div>
     </section>
 
+    <!-- 右侧：在线玩家发现列表，可按昵称筛选 -->
     <aside class="online-zone">
       <div class="online-head">
         <div>
@@ -126,6 +149,7 @@ async function createRoom(): Promise<void> {
         ><Search /><input v-model="playerFilter" placeholder="按昵称筛选" aria-label="筛选在线玩家"
       /></label>
       <div class="player-discovery-list">
+        <!-- 每个可发现玩家：头像 + 昵称 + 状态 -->
         <div v-for="player in filteredPlayers" :key="player.id" class="discovery-player">
           <span
             class="solid-avatar"
@@ -141,6 +165,7 @@ async function createRoom(): Promise<void> {
           其他玩家需先访问本主机地址并确认资料，之后会自动显示在这里。
         </p>
       </div>
+      <!-- 局域网发现机制说明 -->
       <footer class="lan-tip">
         <Wifi /><span
           ><b>局域网发现说明</b>这里只展示已经连接到当前主机服务且允许被发现的玩家。</span
@@ -148,6 +173,7 @@ async function createRoom(): Promise<void> {
       </footer>
     </aside>
 
+    <!-- 创建房间弹窗：房间名与开局规则设置 -->
     <div
       v-if="showCreate"
       class="stage-overlay"

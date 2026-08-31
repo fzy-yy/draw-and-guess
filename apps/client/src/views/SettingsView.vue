@@ -19,10 +19,13 @@ import {
 import { useGameStore } from '@/stores/game'
 
 const store = useGameStore()
+// 当前激活的设置分类标签
 const tab = ref<'audio' | 'accessibility' | 'shortcuts' | 'diagnostics'>('audio')
-const shortcutError = ref('')
+const shortcutError = ref('') // 快捷键错误提示文案
+// 可自定义的快捷键设置键名类型
 type ShortcutSettingKey = 'penShortcut' | 'eraserShortcut' | 'fillShortcut'
 
+// 快捷键配置行：设置键、中文名、说明与图标
 const shortcutRows: Array<{
   setting: ShortcutSettingKey
   name: string
@@ -39,7 +42,9 @@ const shortcutRows: Array<{
   },
 ]
 
+// 诊断信息：当前页面来源（host）作为服务地址展示
 const serverAddress = location.origin
+// 汇总连接与身份诊断文本，供一键复制排障
 const diagnostic = computed(() =>
   [
     `${store.config.app.name} ${store.config.app.version}`,
@@ -52,9 +57,41 @@ const diagnostic = computed(() =>
   ].join('\n'),
 )
 
+/**
+ * 复制脱敏后的诊断信息到剪贴板。
+ * 局域网 HTTP 属非安全上下文，navigator.clipboard 可能不存在，需降级到 execCommand。
+ */
 async function copyDiagnostics(): Promise<void> {
-  await navigator.clipboard.writeText(diagnostic.value)
-  store.notify('脱敏诊断信息已复制')
+  const text = diagnostic.value
+  let copied = false
+  if (typeof navigator.clipboard?.writeText === 'function') {
+    try {
+      await navigator.clipboard.writeText(text)
+      copied = true
+    } catch {
+      // 安全上下文内也可能因权限被拒，继续走降级方案
+    }
+  }
+  if (!copied) {
+    // 非安全上下文降级：隐藏 textarea + execCommand('copy')
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    try {
+      copied = document.execCommand('copy')
+    } catch {
+      copied = false
+    }
+    document.body.removeChild(textarea)
+  }
+  store.notify(
+    copied ? '脱敏诊断信息已复制' : '当前环境不支持复制，请手动选择文本',
+    copied ? 'success' : 'warning',
+  )
 }
 
 /**
@@ -81,7 +118,9 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
 </script>
 
 <template>
+  <!-- 设置子页骨架：顶栏 + 标签栏 + 正文四段（声音/显示/快捷键/资料诊断） -->
   <main class="subpage-layout settings-page">
+    <!-- 顶栏：返回大厅 / 标题 / 只保存在本机的提示 -->
     <header class="subpage-header">
       <button type="button" @click="store.page = 'lobby'"><ArrowLeft /> 返回大厅</button>
       <div>
@@ -90,6 +129,7 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
       </div>
       <span><ShieldCheck /> 设置仅保存在本机</span>
     </header>
+    <!-- 分类标签：声音 / 显示与操作 / 快捷键 / 资料与诊断 -->
     <nav class="tab-strip" aria-label="设置分类">
       <button :class="{ active: tab === 'audio' }" type="button" @click="tab = 'audio'">
         <Volume2 />声音</button
@@ -110,6 +150,7 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
       </button>
     </nav>
 
+    <!-- 声音设置：主音量 / 音效音量 / 背景音乐 / 全部静音 -->
     <section v-if="tab === 'audio'" class="settings-content">
       <div class="settings-intro">
         <Music2 />
@@ -159,6 +200,7 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
       </div>
     </section>
 
+    <!-- 显示与操作设置：色觉友好 / 快捷键提示 / 自动聚焦 / 发现与邀请开关 -->
     <section v-else-if="tab === 'accessibility'" class="settings-content accessibility-settings">
       <div class="settings-intro">
         <Eye />
@@ -206,6 +248,7 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
       </div>
     </section>
 
+    <!-- 快捷键设置：三个工具各自捕获一个单键，重复键会报错 -->
     <section v-else-if="tab === 'shortcuts'" class="settings-content shortcut-settings">
       <div class="settings-intro">
         <Keyboard />
@@ -236,6 +279,7 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
       </p>
     </section>
 
+    <!-- 资料与诊断：修改大厅资料 / 查看诊断 / 恢复默认与清除资料 -->
     <section v-else class="settings-content diagnostic-content">
       <div class="profile-edit">
         <span

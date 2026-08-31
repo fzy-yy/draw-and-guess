@@ -34,6 +34,7 @@ export default [
         WheelEvent: 'readonly',
         KeyboardEvent: 'readonly',
         EventTarget: 'readonly',
+        HTMLInputElement: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
         URLSearchParams: 'readonly',

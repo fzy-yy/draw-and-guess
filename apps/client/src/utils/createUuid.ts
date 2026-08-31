@@ -5,8 +5,11 @@
  * 本项目通过局域网 IP（http://192.168.x.x:5174）访问属于非安全上下文，该 API 不存在，
  * 会导致进入大厅时抛 `TypeError: crypto.randomUUID is not a function`。
  * 因此这里优先使用原生 API，缺失时回退到 `crypto.getRandomValues` 手工构造 RFC 4122 v4，
- * 最后才使用 `Math.random` 兜底，保证任何环境下都能生成合法 UUID。
+ * 最后才使用“时间戳 + 计数器 + Math.random”混合兜底，保证任何环境下都能生成合法、几乎不重复的 UUID。
  */
+
+/** 无 Web Crypto 时的进程内单调计数器，配合时间戳降低兜底碰撞概率。 */
+let fallbackCounter = 0
 
 /** 是否可以直接使用 Web Crypto 原生 randomUUID。 */
 function hasNativeRandomUuid(): boolean {
@@ -30,12 +33,31 @@ function uuidFromRandomValues(): string {
   )
 }
 
-/** 极端环境兜底：非浏览器且无 Web Crypto 时使用随机数模板。 */
+/**
+ * 极端环境兜底：连 Web Crypto 都不存在时使用“时间戳 + 单调计数器 + Math.random”混合构造。
+ * 注意：此分支无密码学强度，仅保证格式合法、同进程内几乎不重复（用于 requestId 等非机密用途）；
+ * 服务端对所有 ID 仍做独立校验，不构成实际安全风险。
+ */
 function uuidFallback(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (marker) => {
-    const value = (Math.random() * 16) | 0
-    return (marker === 'x' ? value : (value & 0x3) | 0x8).toString(16)
-  })
+  fallbackCounter = (fallbackCounter + 1) & 0xfffff
+  // 时间戳（低 32 位十六进制）+ 计数器拼接出 8 位段，其余段用随机数填充
+  const stamp = (Date.now() & 0xffffffff).toString(16).padStart(8, '0')
+  const counter = fallbackCounter.toString(16).padStart(5, '0').slice(0, 5)
+  const randomA = Math.floor(Math.random() * 0xffff)
+    .toString(16)
+    .padStart(4, '0')
+  const randomB = Math.floor(Math.random() * 0xffff)
+    .toString(16)
+    .padStart(4, '0')
+  const randomC = Math.floor(Math.random() * 0xffff)
+    .toString(16)
+    .padStart(4, '0')
+  const randomD = Math.floor(Math.random() * 0xfff)
+    .toString(16)
+    .padStart(3, '0')
+  // 版本 4（第四段首位 4）与变体（第五段首位 8~b）
+  const variant = (8 + Math.floor(Math.random() * 4)).toString(16)
+  return `${stamp}-${counter}-4${randomA.slice(1)}-${variant}${randomC.slice(1)}-${randomB}${randomD}`
 }
 
 /** 生成可在任意上下文中使用的 UUID v4。 */

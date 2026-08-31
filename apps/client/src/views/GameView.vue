@@ -1,6 +1,6 @@
 <!-- 对局统一骨架：画家与猜词者共享 HUD、画布和玩家区，仅按服务端角色快照切换权限。 -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   Brush,
   CirclePause,
@@ -24,38 +24,48 @@ import { useGameStore } from '@/stores/game'
 import GameCanvas from '@/components/GameCanvas.vue'
 
 const store = useGameStore()
-const now = ref(Date.now())
-const guess = ref('')
-const tool = ref<ToolKind>('pen')
-const color = ref<string>(APP_CONFIG.drawing.defaultColor)
-const width = ref<number>(APP_CONFIG.drawing.width.default)
-const showClearConfirm = ref(false)
-const showEndConfirm = ref(false)
-let ticker = 0
+// ---- 本地 UI 状态 ----
+const now = ref(Date.now()) // 每 200ms 刷新的当前时间，驱动倒计时
+const guess = ref('') // 猜词输入框内容
+const tool = ref<ToolKind>('pen') // 当前绘图工具
+const color = ref<string>(APP_CONFIG.drawing.defaultColor) // 当前画笔/填充颜色
+const width = ref<number>(APP_CONFIG.drawing.width.default) // 当前线宽
+const showClearConfirm = ref(false) // 清空确认弹窗
+const showEndConfirm = ref(false) // 提前结束确认弹窗
+let ticker = 0 // 时间刷新定时器句柄
 
+// 对局数据：从 store 房间快照中取出当前对局视图
 const game = computed(() => store.room?.game)
+// 校正后的本地时钟：叠加了与服务的时钟偏移，避免设备时钟偏差导致倒计时不准（F2）
+const correctedNow = computed(() => now.value + store.clockOffset)
+// 剩余秒数：按服务端权威截止时间向上取整
 const secondsLeft = computed(() =>
   game.value?.phaseEndsAt
-    ? Math.max(0, Math.ceil((game.value.phaseEndsAt - now.value) / 1_000))
+    ? Math.max(0, Math.ceil((game.value.phaseEndsAt - correctedNow.value) / 1_000))
     : 0,
 )
+// 阶段进度：剩余毫秒 / 阶段总时长，用于进度条 scaleX
 const progress = computed(() => {
   if (!game.value?.phaseEndsAt || game.value.phaseEndsAt <= game.value.phaseStartedAt) return 0
   return Math.max(
     0,
     Math.min(
       1,
-      (game.value.phaseEndsAt - now.value) / (game.value.phaseEndsAt - game.value.phaseStartedAt),
+      (game.value.phaseEndsAt - correctedNow.value) /
+        (game.value.phaseEndsAt - game.value.phaseStartedAt),
     ),
   )
 })
+// 当前玩家是否可猜词：作画阶段、非画家、非观战、未猜中且在线
 const canGuess = computed(
   () =>
     store.room?.phase === 'drawing' &&
     !store.isDrawer &&
+    !store.me?.spectating &&
     !store.me?.guessed &&
     store.me?.connection === 'online',
 )
+// 阶段中文标签（画布状态遮罩 / 各面板复用）
 const phaseLabel = computed(
   () =>
     ({
@@ -69,9 +79,11 @@ const phaseLabel = computed(
       closed: '关闭',
     })[store.room?.phase ?? 'waiting'],
 )
+// 当前画家成员信息
 const drawer = computed(() =>
   store.room?.members.find((member) => member.id === game.value?.drawerId),
 )
+// 最终排行：按分数降序并计算同名次（同分并列）
 const rankings = computed(() => {
   const members = [...(store.room?.members ?? [])].sort((a, b) => b.score - a.score)
   let previous = -1
@@ -143,6 +155,20 @@ async function clearDrawing(): Promise<void> {
   showClearConfirm.value = false
 }
 
+// D2：按“自动聚焦猜词框”开关在进入可猜词状态时聚焦输入框（替代静态 autofocus）
+const guessInput = ref<HTMLInputElement>()
+watch(
+  () =>
+    store.room?.phase === 'drawing' &&
+    !store.isDrawer &&
+    !store.me?.guessed &&
+    !store.me?.spectating,
+  (canGuessNow) => {
+    if (canGuessNow && store.settings.autoFocusGuess) void nextTick(() => guessInput.value?.focus())
+  },
+  { immediate: true },
+)
+
 onMounted(() => {
   ticker = window.setInterval(() => (now.value = Date.now()), 200)
   window.addEventListener('keydown', keyHandler)
@@ -154,14 +180,18 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <!-- 对局主骨架：仅在房间存在且对局未结束时渲染 -->
   <main v-if="store.room && game" class="game-layout">
+    <!-- 顶栏 HUD：回合数、当前画家、答案、计时器、网络状态与暂停按钮 -->
     <header class="game-hud">
+      <!-- 回合指示：当前回合/总回合 -->
       <div class="round-indicator">
         <span>ROUND</span
         ><b
           >{{ game.currentRound }} <small>/ {{ game.totalRounds }}</small></b
         >
       </div>
+      <!-- 当前画家指示：头像 + 昵称 -->
       <div class="drawer-indicator">
         <span
           class="solid-avatar"
@@ -172,19 +202,23 @@ onBeforeUnmount(() => {
           >当前画家<b>{{ drawer?.nickname || '即将揭晓' }}</b></span
         >
       </div>
+      <!-- 答案展示：画家看自己的题目，猜词者看遮罩 -->
       <div class="answer-hud">
         <span>{{ store.isDrawer && game.answer ? '你的题目' : '猜猜这是什么' }}</span
         ><b>{{ store.isDrawer && game.answer ? game.answer : game.answerMask || '等待选词…' }}</b>
       </div>
+      <!-- 计时器：剩余秒数 + 进度条；最后 10 秒进入紧急样式 -->
       <div class="timer-hud" :class="{ urgent: secondsLeft <= 10 && secondsLeft > 0 }">
         <Clock3 /><b>{{ secondsLeft }}</b
         ><span>秒</span><i :style="{ transform: `scaleX(${progress})` }"></i>
       </div>
+      <!-- 网络状态：连接标签 + 延迟 -->
       <div class="game-network">
         <Wifi /><span
           >{{ store.connectionLabel }}<small>{{ store.latency || '—' }} ms</small></span
         >
       </div>
+      <!-- 暂停按钮：房主直接暂停，普通玩家发送暂停请求；暂停态变为继续按钮 -->
       <button
         v-if="store.room.phase !== 'paused'"
         class="hud-square"
@@ -205,6 +239,7 @@ onBeforeUnmount(() => {
       </button>
     </header>
 
+    <!-- 左侧玩家得分条：列出全部成员、得分与画家/猜中标记 -->
     <aside class="score-strip" aria-label="玩家得分">
       <article
         v-for="member in store.room.members"
@@ -231,10 +266,12 @@ onBeforeUnmount(() => {
       </article>
     </aside>
 
+    <!-- 中央画布区：实时画板 + 非作画阶段的状态提示遮罩 -->
     <section class="canvas-zone">
       <GameCanvas
         :strokes="game.strokes"
         :undone-stroke-ids="game.undoneStrokeIds"
+        :last-sequence="game.lastSequence"
         :can-draw="store.isDrawer && store.room.phase === 'drawing'"
         :tool="tool"
         :color="color"
@@ -243,6 +280,7 @@ onBeforeUnmount(() => {
         @fill="submitFill"
         @width-change="width = $event"
       />
+      <!-- 画布状态遮罩：选词/结算/暂停等非作画阶段覆盖在画布上 -->
       <div v-if="store.room.phase !== 'drawing'" class="canvas-status">
         <Brush /><b>{{ phaseLabel }}</b
         ><span v-if="store.room.phase === 'choosing_word' && !store.isDrawer"
@@ -251,16 +289,28 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
+    <!-- 右侧聊天区：消息列表 + 猜词输入 / 安全预设短语 -->
     <aside class="chat-zone">
       <header>
         <div>
           <span>LIVE CHAT</span>
           <h2>猜词消息</h2>
         </div>
-        <span>{{ store.me?.guessed ? '已猜中' : store.isDrawer ? '作画中' : '猜词中' }}</span>
+        <!-- 当前角色标签：观战中 / 已猜中 / 作画中 / 猜词中 -->
+        <span>{{
+          store.me?.spectating
+            ? '观战中'
+            : store.me?.guessed
+              ? '已猜中'
+              : store.isDrawer
+                ? '作画中'
+                : '猜词中'
+        }}</span>
       </header>
+      <!-- 消息列表：猜词、系统、猜中、预设等类型分别高亮 -->
       <div class="message-list" aria-live="polite">
         <div v-for="message in game.messages" :key="message.id" :class="`message ${message.type}`">
+          <!-- 玩家消息显示发送者昵称 -->
           <b v-if="message.playerId">{{
             store.room.members.find((member) => member.id === message.playerId)?.nickname
           }}</b>
@@ -270,27 +320,31 @@ onBeforeUnmount(() => {
           <Send /><span>回合消息会显示在这里</span>
         </div>
       </div>
+      <!-- 猜词输入表单：仅可猜词的玩家显示 -->
       <form v-if="canGuess" class="guess-form" @submit.prevent="sendGuess">
         <label for="guess-input">输入你的答案</label>
         <div>
           <input
             id="guess-input"
+            ref="guessInput"
             v-model="guess"
             maxlength="60"
             autocomplete="off"
             placeholder="按 Enter 发送猜词"
-            autofocus
           /><button type="submit" :disabled="!guess.trim()" aria-label="发送猜词"><Send /></button>
         </div>
       </form>
+      <!-- 安全短语区：画家 / 已猜中者 / 观战者不能发送文字 -->
       <div v-else class="preset-zone">
         <p>
           {{
             store.isDrawer
               ? '画家不能发送文字，可使用安全互动短语'
-              : store.me?.guessed
-                ? '你已猜中，只能发送安全互动短语'
-                : '等待作画阶段开始'
+              : store.me?.spectating
+                ? '观战成员只能观看，不能发言或猜词'
+                : store.me?.guessed
+                  ? '你已猜中，只能发送安全互动短语'
+                  : '等待作画阶段开始'
           }}
         </p>
         <div>
@@ -298,7 +352,7 @@ onBeforeUnmount(() => {
             v-for="preset in store.config.presets.safeChat"
             :key="preset"
             type="button"
-            :disabled="store.room.phase !== 'drawing'"
+            :disabled="store.room.phase !== 'drawing' || store.me?.spectating"
             @click="store.sendPreset(preset)"
           >
             {{ preset }}
@@ -307,10 +361,12 @@ onBeforeUnmount(() => {
       </div>
     </aside>
 
+    <!-- 底部绘图工具栏：工具 / 颜色 / 线宽 / 历史操作（非画家时整条禁用） -->
     <footer
       class="drawing-toolbar"
       :class="{ disabled: !store.isDrawer || store.room.phase !== 'drawing' }"
     >
+      <!-- 工具组：画笔 / 橡皮擦 / 填充，可自定义快捷键 -->
       <div class="tool-group">
         <span>工具</span>
         <button
@@ -347,6 +403,7 @@ onBeforeUnmount(() => {
           }}</kbd>
         </button>
       </div>
+      <!-- 颜色组：预设色块 + 任意颜色选择器 -->
       <div class="color-group">
         <span>颜色</span>
         <button
@@ -368,6 +425,7 @@ onBeforeUnmount(() => {
           />
         </label>
       </div>
+      <!-- 线宽滑块：画笔与橡皮擦共用；填充工具下禁用 -->
       <label class="width-group">
         <span>线宽 {{ width }}</span>
         <input
@@ -384,6 +442,7 @@ onBeforeUnmount(() => {
           :style="{ width: `${Math.min(width, 20)}px`, height: `${Math.min(width, 20)}px` }"
         ></i>
       </label>
+      <!-- 历史操作组：撤销 / 重做 / 清空 -->
       <div class="history-group">
         <button
           type="button"
@@ -410,10 +469,12 @@ onBeforeUnmount(() => {
       </div>
     </footer>
 
+    <!-- 阶段遮罩：开局倒计时 -->
     <div v-if="store.room.phase === 'starting'" class="stage-overlay countdown-overlay">
       <span>游戏即将开始</span><b>{{ secondsLeft }}</b>
       <p>画家顺序和首个回合由服务器统一确定</p>
     </div>
+    <!-- 阶段遮罩：画家选词（只有画家可见候选词按钮） -->
     <div v-if="store.room.phase === 'choosing_word' && store.isDrawer" class="stage-overlay">
       <section class="word-choice">
         <Brush />
@@ -432,6 +493,7 @@ onBeforeUnmount(() => {
         <span>{{ secondsLeft }} 秒后将自动选择</span>
       </section>
     </div>
+    <!-- 阶段遮罩：游戏暂停（房主可继续或提前结束） -->
     <div v-if="store.room.phase === 'paused'" class="stage-overlay">
       <section class="pause-panel">
         <CirclePause />
@@ -447,6 +509,7 @@ onBeforeUnmount(() => {
         </div>
       </section>
     </div>
+    <!-- 阶段遮罩：回合结算（答案、得分明细） -->
     <div v-if="store.room.phase === 'round_result' && game.roundResult" class="stage-overlay">
       <section class="round-result-panel">
         <p>本回合答案</p>
@@ -466,6 +529,7 @@ onBeforeUnmount(() => {
         >
       </section>
     </div>
+    <!-- 阶段遮罩：最终结算（排行榜、统计） -->
     <div v-if="store.room.phase === 'game_result'" class="stage-overlay">
       <section class="final-result-panel">
         <Trophy />
@@ -510,6 +574,7 @@ onBeforeUnmount(() => {
       </section>
     </div>
 
+    <!-- 确认弹窗：清空画板 -->
     <div v-if="showClearConfirm" class="stage-overlay">
       <section class="game-dialog confirm-dialog">
         <Trash2 />
@@ -522,6 +587,7 @@ onBeforeUnmount(() => {
         </footer>
       </section>
     </div>
+    <!-- 确认弹窗：提前结束本局 -->
     <div v-if="showEndConfirm" class="stage-overlay">
       <section class="game-dialog confirm-dialog">
         <X />
