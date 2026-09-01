@@ -139,7 +139,7 @@ function clearCanvas(): void {
     </div>
     <!-- 线宽滑块：画笔与橡皮擦共用；填充工具下禁用 -->
     <label class="flex items-center gap-[0.45em]">
-      <span class="mr-[0.3em] text-muted text-[0.62em] font-extrabold">{{
+      <span class="mr-[0.3em] text-muted text-[0.62em] font-extrabold tabular-nums">{{
         strings.game.widthLabel(width)
       }}</span>
       <input
@@ -153,10 +153,13 @@ function clearCanvas(): void {
         :aria-label="strings.game.widthAria"
         @input="onWidthInput"
       />
-      <i
-        class="block max-h-[2.5cqh] max-w-[2.5cqh] rounded-full bg-ink"
-        :style="{ width: `${Math.min(width, 20)}px`, height: `${Math.min(width, 20)}px` }"
-      ></i>
+      <!-- 画笔宽度预览：外包固定尺寸容器，圆点尺寸变化不影响同一行其它组件位置 -->
+      <span class="flex h-[2.5cqh] w-[2.5cqh] shrink-0 items-center justify-center">
+        <i
+          class="block rounded-full bg-ink"
+          :style="{ width: `${Math.min(width, 20)}px`, height: `${Math.min(width, 20)}px` }"
+        ></i>
+      </span>
     </label>
     <!-- 历史操作组：撤销 / 重做 / 清空 -->
     <div class="flex items-center gap-[0.45em]">

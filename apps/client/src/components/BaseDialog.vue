@@ -6,7 +6,7 @@
   - Esc / 关闭按钮统一触发 close 事件（顺带统一了键盘可访问性）。
 -->
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { X } from 'lucide-vue-next'
 
 const props = withDefaults(
@@ -35,15 +35,72 @@ const props = withDefaults(
 
 const emit = defineEmits<{ close: [] }>()
 
-/** P2：在 document 级监听 Esc，确保弹窗无论焦点在哪都能可靠关闭（原仅在遮罩 div 上，焦点在外时失效）。 */
+/**
+ * 可访问性：Esc 关闭 + 初始聚焦 + Tab 焦点陷阱 + 关闭后焦点还原。
+ * Esc 放在 document 级，确保焦点不在弹窗内时也能关闭；监听仅在 `open` 为 true 期间挂载，
+ * 这样条件挂载式与常驻式弹窗两种用法下行为一致，也不会出现常驻监听被多实例反复触发。
+ */
+const dialogRef = ref<HTMLElement>()
+/** 打开弹窗前的焦点元素，关闭后归还，避免键盘用户丢失位置。 */
+let previouslyFocused: HTMLElement | null = null
+
+/** 枚举弹窗内当前可聚焦元素（跳过禁用与不可见项），用于 Tab 循环。 */
+function focusableItems(): HTMLElement[] {
+  if (!dialogRef.value) return []
+  return Array.from(
+    dialogRef.value.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((element) => !element.hasAttribute('disabled') && element.offsetParent !== null)
+}
+
 function handleKeydown(event: KeyboardEvent): void {
-  if (props.open && event.key === 'Escape') {
+  if (event.key === 'Escape') {
     event.stopPropagation()
     emit('close')
+    return
+  }
+  // 焦点陷阱：Tab 只在弹窗内部循环，不会跑到遮罩后面的页面内容上
+  if (event.key !== 'Tab') return
+  const items = focusableItems()
+  if (!items.length) return
+  const first = items[0]
+  const last = items[items.length - 1]
+  if (!first || !last) return
+  const active = document.activeElement
+  if (event.shiftKey && (active === first || !dialogRef.value?.contains(active))) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault()
+    first.focus()
   }
 }
-onMounted(() => document.addEventListener('keydown', handleKeydown))
-onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
+
+/** 关闭时解除监听并把焦点还给触发元素。 */
+function releaseFocus(): void {
+  document.removeEventListener('keydown', handleKeydown)
+  if (previouslyFocused?.isConnected) previouslyFocused.focus()
+  previouslyFocused = null
+}
+
+watch(
+  () => props.open,
+  async (isOpen) => {
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeydown)
+      previouslyFocused =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null
+      await nextTick()
+      // 聚焦卡片本身（tabindex=-1）：不显示焦点环，但让后续 Tab 从弹窗内部开始
+      dialogRef.value?.focus()
+    } else {
+      releaseFocus()
+    }
+  },
+  { immediate: true },
+)
+onBeforeUnmount(releaseFocus)
 </script>
 
 <template>
@@ -57,10 +114,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
       aria-modal="true"
       :aria-labelledby="labelledby"
       :aria-label="ariaLabel"
-      @keydown.esc="emit('close')"
     >
       <section
-        class="game-dialog flex max-h-[86cqh] flex-col overflow-hidden rounded-[1.2em] border-[0.35cqh] border-white bg-paper text-ink shadow-[0_1.4cqh_4cqh_#0007]"
+        ref="dialogRef"
+        tabindex="-1"
+        class="game-dialog flex max-h-[86cqh] flex-col overflow-hidden rounded-[1.2em] border-[0.35cqh] border-white bg-paper text-ink shadow-[0_1.4cqh_4cqh_#0007] outline-none"
         :class="[widthClass, sectionClass]"
       >
         <header

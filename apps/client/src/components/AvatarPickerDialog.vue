@@ -1,9 +1,9 @@
 <!-- 内置 SVG 头像选择弹窗：列出全部白名单资源，选择后立即回写并关闭。 -->
 <script setup lang="ts">
-import { X } from 'lucide-vue-next'
 import type { AvatarId } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import AvatarImage from '@/components/AvatarImage.vue'
+import BaseDialog from '@/components/BaseDialog.vue'
 import { useGameStore } from '@/stores/game'
 
 const props = defineProps<{
@@ -24,62 +24,44 @@ function selectAvatar(avatarId: AvatarId): void {
 </script>
 
 <template>
-  <Transition name="modal">
+  <!-- 统一使用 BaseDialog：自动获得 document 级 Esc 关闭、遮罩/卡片/标题栏骨架与淡入缩放过渡 -->
+  <BaseDialog
+    :open="props.open"
+    width-class="w-[64cqw]"
+    labelledby="avatar-picker-title"
+    :close-aria="strings.profile.avatarPickerCloseAria"
+    @close="emit('close')"
+  >
+    <template #header>
+      <p class="text-blue font-black tracking-[0.16em] text-[0.72em]">
+        {{ strings.profile.avatarPickerLabel }}
+      </p>
+      <h2 id="avatar-picker-title">{{ strings.profile.avatarPickerTitle }}</h2>
+    </template>
     <div
-      v-if="props.open"
-      class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="avatar-picker-title"
-      @keydown.esc="emit('close')"
+      class="grid min-h-0 grid-cols-[repeat(8,minmax(0,1fr))] gap-[1.4cqh_1cqw] overflow-y-auto px-[2cqw] py-[2.5cqh] [overscroll-behavior:contain]"
+      role="radiogroup"
+      :aria-label="strings.profile.avatarPickerAria"
     >
-      <section
-        class="game-dialog flex max-h-[86cqh] w-[64cqw] flex-col overflow-hidden rounded-[1.2em] border-[0.35cqh] border-white bg-paper text-ink shadow-[0_1.4cqh_4cqh_#0007]"
+      <button
+        v-for="avatarId in store.config.player.avatarIds"
+        :key="avatarId"
+        type="button"
+        role="radio"
+        class="grid aspect-square place-items-center rounded-full border-[0.22cqh] border-line bg-white p-[0.7cqh]"
+        :class="{
+          '!border-navy shadow-[0_0_0_0.45cqh_#facc15]': props.modelValue === avatarId,
+        }"
+        :aria-checked="props.modelValue === avatarId"
+        :aria-label="strings.profile.avatarOptionAria(avatarId)"
+        @click="selectAvatar(avatarId)"
       >
-        <header
-          class="flex min-h-[9cqh] items-center justify-between bg-navy px-[1.7em] py-[1.3cqh] text-white"
-        >
-          <div>
-            <p class="text-blue font-black tracking-[0.16em] text-[0.72em]">
-              {{ strings.profile.avatarPickerLabel }}
-            </p>
-            <h2 id="avatar-picker-title">{{ strings.profile.avatarPickerTitle }}</h2>
-          </div>
-          <button
-            type="button"
-            class="grid h-[4cqh] w-[4cqh] place-items-center rounded-full bg-white/10 text-white text-[1.2em]"
-            :aria-label="strings.profile.avatarPickerCloseAria"
-            @click="emit('close')"
-          >
-            <X />
-          </button>
-        </header>
-        <div
-          class="grid min-h-0 grid-cols-[repeat(8,minmax(0,1fr))] gap-[1.4cqh_1cqw] overflow-y-auto px-[2cqw] py-[2.5cqh] [overscroll-behavior:contain]"
-          role="radiogroup"
-          :aria-label="strings.profile.avatarPickerAria"
-        >
-          <button
-            v-for="avatarId in store.config.player.avatarIds"
-            :key="avatarId"
-            type="button"
-            role="radio"
-            class="grid aspect-square place-items-center rounded-full border-[0.22cqh] border-line bg-white p-[0.7cqh]"
-            :class="{
-              '!border-navy shadow-[0_0_0_0.45cqh_#facc15]': props.modelValue === avatarId,
-            }"
-            :aria-checked="props.modelValue === avatarId"
-            :aria-label="strings.profile.avatarOptionAria(avatarId)"
-            @click="selectAvatar(avatarId)"
-          >
-            <AvatarImage
-              :avatar-id="avatarId"
-              :label="strings.profile.avatarOptionAria(avatarId)"
-              class="h-full w-full !border-0 !shadow-none"
-            />
-          </button>
-        </div>
-      </section>
+        <AvatarImage
+          :avatar-id="avatarId"
+          :label="strings.profile.avatarOptionAria(avatarId)"
+          class="h-full w-full !border-0 !shadow-none"
+        />
+      </button>
     </div>
-  </Transition>
+  </BaseDialog>
 </template>

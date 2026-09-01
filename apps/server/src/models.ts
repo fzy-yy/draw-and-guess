@@ -13,6 +13,7 @@ import type {
   RoomVisibility,
   DrawingCommand,
   RoundResult,
+  ScoreDetail,
   VocabularyItem,
 } from '@draw-guess/shared'
 
@@ -78,8 +79,16 @@ export interface GameSecret {
   strokes: DrawingCommand[]
   undoneStrokeIds: string[] // 已撤销命令 ID 栈（先进后出）
   lastSequence: number // 已接受的绘图序号（拒绝旧包）
+  /** 当前回合已累计的绘图点数（含填充按 1 计），用于 maxPointsPerRound 预算。 */
+  strokePointTotal: number
   messages: ChatMessage[] // 回合聊天消息（入队裁剪）
   correctOrder: string[] // 猜中者 ID 按时间排序
+  /**
+   * 猜中当时的得分明细（与入账同一条记录）。
+   * 结算展示必须直接取用本数组：若事后重算，暂停/恢复会重置 phaseStartedAt（使 elapsedMs 变负）、
+   * 成员中途离开会改变可玩人数（使顺序奖归零），导致「展示的分数」与「实际入账的分数」不一致。
+   */
+  correctDetails: ScoreDetail[]
   revealedIndices: Set<number> // 逐步提示已揭示的字符下标
   roundResult?: RoundResult // 回合结算数据
   timer?: NodeJS.Timeout // 主阶段计时器

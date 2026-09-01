@@ -14,7 +14,8 @@ const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 const store = useGameStore()
 
-// 可邀请玩家：空闲且允许接收邀请的在线玩家（排除自己）
+// 可邀请玩家：当前空闲的在线玩家（排除自己）。
+// 「是否允许接收邀请」不在公开资料中下发，由服务端 sendInvite 侧校验并拒绝。
 const availablePlayers = computed(() =>
   store.presence.players.filter(
     (player) => player.id !== store.playerId && player.status === 'idle',
@@ -27,7 +28,7 @@ const availablePlayers = computed(() =>
     :open="props.open"
     width-class="w-[52cqw]"
     labelledby="invite-title"
-    close-aria="strings.room.inviteCloseAria"
+    :close-aria="strings.room.inviteCloseAria"
     @close="emit('close')"
   >
     <template #header>

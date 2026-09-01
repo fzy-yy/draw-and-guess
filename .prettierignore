@@ -2,3 +2,6 @@
 node_modules/
 **/dist/
 .pi/
+
+# 权威词库：必须保持「每个非空行一个词」，禁止被 markdown 段落重排合并
+vocabulary.md

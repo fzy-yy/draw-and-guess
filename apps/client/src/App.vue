@@ -30,7 +30,7 @@ useAudioFeedback()
   <div class="grid h-full w-full place-items-center overflow-hidden bg-[#111827]">
     <!-- 游戏舞台：16:9 容器，全部游戏内容都在此内部 -->
     <section
-      class="relative aspect-[16/9] h-[min(99vh,calc(99vw*9/16))] w-[min(99vw,calc(99vh*16/9))] overflow-hidden rounded-[clamp(6px,1cqh,14px)] border-[max(1px,0.28cqh)] border-slate-700 bg-paper shadow-[0_1.2cqh_5cqh_#0009]"
+      class="game-stage relative aspect-[16/9] h-[min(99vh,calc(99vw*9/16))] w-[min(99vw,calc(99vh*16/9))] overflow-hidden rounded-[clamp(6px,1cqh,14px)] border-[max(1px,0.28cqh)] border-slate-700 bg-paper shadow-[0_1.2cqh_5cqh_#0009]"
       :aria-label="strings.app.stageAriaLabel(store.config.app.name)"
     >
       <!-- 四个页面视图按状态互斥渲染：对局 > 房间 > 设置 > 大厅 > 资料 -->

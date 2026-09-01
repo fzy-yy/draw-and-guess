@@ -31,7 +31,7 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>()
     width-class="w-[40cqw]"
     section-class="items-center gap-[1.4cqh] pt-[3cqh] text-center"
     footer-class="w-full mt-[1cqh]"
-    aria-label="confirm dialog"
+    :aria-label="title"
     @close="emit('cancel')"
   >
     <component

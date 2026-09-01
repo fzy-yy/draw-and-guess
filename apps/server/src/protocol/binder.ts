@@ -108,8 +108,11 @@ export function bindRequest<T extends { requestId: string }, R>(
 
       // 注册 handler 会把 socket 缓存切换到玩家级缓存；因此执行后重新读取当前引用。
       const liveCache = socket.data.requestCache as Map<string, Ack<unknown>> | undefined
-      if (liveCache) {
+      // 只缓存成功结果：失败的请求没有产生副作用，若也缓存，客户端用同一 requestId 重试
+      // 会永远取回旧的 RATE_LIMITED / VERSION_CONFLICT 等瞬时错误而无法自愈。
+      if (liveCache && ack.ok) {
         liveCache.set(cacheKey, ack as Ack<unknown>)
+        // 简单 FIFO 上限，防止长时间连接下幂等缓存无界增长
         if (liveCache.size > 100) liveCache.delete(liveCache.keys().next().value as string)
       }
       respond(ack)

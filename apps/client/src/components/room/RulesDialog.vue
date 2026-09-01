@@ -32,7 +32,7 @@ watch(
     :open="props.open"
     width-class="w-[70cqw]"
     labelledby="rules-title"
-    close-aria="strings.room.settingsCloseAria"
+    :close-aria="strings.room.settingsCloseAria"
     @close="emit('close')"
   >
     <template #header>

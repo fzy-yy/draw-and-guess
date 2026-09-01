@@ -85,7 +85,7 @@ const store = useGameStore()
       class="relative flex h-[6.5cqh] min-w-[7cqw] items-center justify-center gap-[0.3em] overflow-hidden rounded-[0.65em] bg-white/10"
       :class="{ '!bg-[#7f1d1d]': secondsLeft <= 10 && secondsLeft > 0 }"
     >
-      <Clock3 /><b class="text-[1.65em]">{{ secondsLeft }}</b
+      <Clock3 /><b class="text-[1.65em] tabular-nums min-w-[2.4em] text-center">{{ secondsLeft }}</b
       ><span class="text-[0.6em] text-[#bfdbfe]">{{ strings.game.secondsSuffix }}</span
       ><i
         class="absolute bottom-0 left-0 h-[0.45cqh] w-full bg-green [transform-origin:left]"
@@ -101,8 +101,9 @@ const store = useGameStore()
     </div>
     <!-- 右上角操作组：暂停/继续、设置、进入或退出全屏。 -->
     <div class="flex items-center gap-[0.45em]">
+      <!-- 开局倒计时阶段不可暂停（服务端亦不在合法转换白名单内），故不展示无效按钮 -->
       <button
-        v-if="store.room.phase !== 'paused'"
+        v-if="store.room.phase !== 'paused' && store.room.phase !== 'starting'"
         class="grid h-[4.4cqh] w-[4.4cqh] place-items-center rounded-[0.6em] bg-white/10 text-white"
         type="button"
         :aria-label="store.isHost ? strings.game.pauseAriaHost : strings.game.pauseAriaGuest"

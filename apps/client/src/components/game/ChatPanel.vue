@@ -24,12 +24,13 @@ const shouldFollowMessages = ref(true)
 // 消息数据直接读取房间快照中的聊天记录，无需独立 ticker。
 const messages = computed(() => store.room?.game?.messages ?? [])
 
-/** 提交猜词：清空输入框并交由服务端判定正确/接近。 */
+/** 提交猜词：先交由服务端判定，只有成功送达才清空输入框；
+ * 超时或业务失败（如重复猜中）时保留草稿，避免玩家已输入的内容被吞。 */
 async function sendGuess(): Promise<void> {
   const text = guess.value.trim()
   if (!text || !props.canGuess) return
-  guess.value = ''
-  await store.submitGuess(text)
+  const delivered = await store.submitGuess(text)
+  if (delivered) guess.value = ''
 }
 
 /** 用户接近列表底部时跟随新消息；主动上滚后保留阅读位置。 */
@@ -140,7 +141,7 @@ watch(
           id="guess-input"
           ref="guessInput"
           v-model="guess"
-          maxlength="60"
+          :maxlength="store.config.player.chatMaxLength"
           autocomplete="off"
           class="w-full min-w-0 h-[5.2cqh] rounded-l-[0.65em] border-[0.2cqh] border-r-0 border-blue px-[0.8em] outline-0"
           :placeholder="strings.game.guessPlaceholder"

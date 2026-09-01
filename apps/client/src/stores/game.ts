@@ -396,10 +396,13 @@ export const useGameStore = defineStore('game', () => {
     await guarded(request(EVENTS.gameChooseWord, { roundId: room.value.game.roundId, wordId }))
   }
 
-  /** 提交猜词文本（服务端判定正确/接近）。 */
-  async function submitGuess(text: string): Promise<void> {
-    if (!room.value?.game) return
-    await guarded(request(EVENTS.guessSubmit, { roundId: room.value.game.roundId, text }))
+  /** 提交猜词文本（服务端判定正确/接近）；返回是否成功送达，供输入框决定要不要保留草稿。 */
+  async function submitGuess(text: string): Promise<boolean> {
+    if (!room.value?.game) return false
+    const result = await guarded(
+      request(EVENTS.guessSubmit, { roundId: room.value.game.roundId, text }),
+    )
+    return result?.ok ?? false
   }
 
   /** 发送安全预设互动短语。 */
@@ -480,7 +483,7 @@ export const useGameStore = defineStore('game', () => {
    * 注意：绘图增量事件在这里按回合 ID 与序号直接合并进本地历史，无需等待下一次快照。
    */
   /** 注册服务端推送事件：把 socket.ts 的回调桥接回本地 refs（绘图增量合并见 socket.ts 约定）。 */
-  attachSocketListeners({
+  const detachSocketListeners = attachSocketListeners({
     onConnect: () => {
       connected.value = true
       connectionLabel.value = strings.connection.connected
@@ -532,6 +535,9 @@ export const useGameStore = defineStore('game', () => {
       notify(reason, 'warning')
     },
     onSystemNotice: (text) => notify(text, 'warning'),
+    // “很接近”提示：服务端只单播给猜词者本人且不写入聊天流，
+    // 此前客户端未监听该事件，导致房主开启“近似答案提示”规则后玩家得零反馈。
+    onGuessClose: (text) => notify(text, 'warning'),
     onSystemError: (message) => notify(message, 'error'),
     // 笔画增量：按回合 ID 过滤，同笔画 ID 追加点（丢弃旧序号包），新笔画创建命令
     onDrawStrokeBatch: (roundId, stroke) => {
@@ -587,7 +593,19 @@ export const useGameStore = defineStore('game', () => {
   saveSettings()
   // 热刷新或页面重载时 Socket 可能先于 store 完成连接；主动恢复可消除这一竞态。
   if (socket.connected && profile.value.recoveryToken) queueMicrotask(() => void register())
-  window.setInterval(() => void measureLatency(), APP_CONFIG.network.pingIntervalMs)
+  const pingTimer = window.setInterval(
+    () => void measureLatency(),
+    APP_CONFIG.network.pingIntervalMs,
+  )
+
+  // 开发态 HMR：成对清理探测定时器与推送监听。否则 store 闭包会持有已被 dispose 的旧 socket，
+  // 导致服务端推送不再驱动 UI；若 store setup 被重复执行还会出现重复监听与多个定时器。
+  if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+      window.clearInterval(pingTimer)
+      detachSocketListeners()
+    })
+  }
 
   return {
     config: PUBLIC_CONFIG,

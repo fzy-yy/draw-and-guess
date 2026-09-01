@@ -29,6 +29,13 @@ const wordGrid = ref<HTMLElement>() // 虚拟滚动可视容器（也是滚动�
 let searchTimer: number | undefined
 const WORD_GRID_COLUMNS = 6
 
+/**
+ * 全部词条 ID。统一走可选链而非 `store.vocabulary!` 非空断言：
+ * 弹窗现在只按 `showVocabulary` 挂载，若词库拉取尚未完成或失败，
+ * 直接断言会在点击「全选/取消全选/恢复默认」时抛 TypeError。
+ */
+const allWordIds = computed(() => (store.vocabulary?.items ?? []).map((item) => item.id))
+
 // 词面规范化结果仅在词库快照变化时生成一次，避免每次输入重复处理 5000 个字符串。
 const searchableWords = computed(() =>
   (store.vocabulary?.items ?? []).map((item) => ({
@@ -130,7 +137,7 @@ onBeforeUnmount(() => {
     width-class="w-[88cqw]"
     section-class="h-[84cqh]"
     labelledby="vocab-title"
-    close-aria="strings.room.vocabCloseAria"
+    :close-aria="strings.room.vocabCloseAria"
     @close="emit('close')"
   >
     <template #header>
@@ -174,24 +181,14 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="px-[0.8em] text-navy bg-slate-200 rounded-[0.5em] text-[0.72em] font-extrabold"
-          @click="
-            setSelection(
-              store.vocabulary!.items.map((item) => item.id),
-              true,
-            )
-          "
+          @click="setSelection(allWordIds, true)"
         >
           {{ strings.room.selectAll }}
         </button>
         <button
           type="button"
           class="px-[0.8em] text-navy bg-slate-200 rounded-[0.5em] text-[0.72em] font-extrabold"
-          @click="
-            setSelection(
-              store.vocabulary!.items.map((item) => item.id),
-              false,
-            )
-          "
+          @click="setSelection(allWordIds, false)"
         >
           {{ strings.room.deselectAll }}
         </button>
@@ -261,16 +258,7 @@ onBeforeUnmount(() => {
       >
         {{ strings.room.vocabMinHint(store.config.vocabulary.minWords) }}
       </p>
-      <AppButton
-        variant="secondary"
-        type="button"
-        @click="
-          setSelection(
-            store.vocabulary!.items.map((item) => item.id),
-            true,
-          )
-        "
-      >
+      <AppButton variant="secondary" type="button" @click="setSelection(allWordIds, true)">
         {{ strings.room.restoreDefault }}
       </AppButton>
       <AppButton

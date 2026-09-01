@@ -117,4 +117,4 @@ export const FillCommandSchema = z.object({
   sequence: z.number().int().nonnegative(),
 })
 
-/** 将任意合法 HEX 颜色规范化为大写，确保客户端与服务端比较结果一致。 */
+// 注：HEX 颜色的规范化实现位于 `pure.ts` 的 `normalizeHexColor`，此处只保留结构校验。

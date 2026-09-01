@@ -10,12 +10,13 @@ import {
   Settings,
   Users,
   Wifi,
-  X,
 } from 'lucide-vue-next'
 import { clsx } from 'clsx'
 import { strings } from '@draw-guess/strings'
 import type { RoomSettings, RoomVisibility } from '@draw-guess/shared'
+import AppButton from '@/components/AppButton.vue'
 import AvatarImage from '@/components/AvatarImage.vue'
+import BaseDialog from '@/components/BaseDialog.vue'
 import { useGameStore } from '@/stores/game'
 
 const store = useGameStore()
@@ -238,7 +239,9 @@ async function joinPrivateRoom(): Promise<void> {
           :placeholder="strings.lobby.playerFilterPlaceholder"
           :aria-label="strings.lobby.playerFilterAria"
       /></label>
-      <div class="flex min-h-0 flex-1 flex-col gap-[0.7cqh] overflow-hidden">
+      <div
+        class="flex min-h-0 flex-1 flex-col gap-[0.7cqh] overflow-y-auto overscroll-contain [scrollbar-gutter:stable]"
+      >
         <div
           v-for="player in filteredPlayers"
           :key="player.id"
@@ -273,212 +276,150 @@ async function joinPrivateRoom(): Promise<void> {
     </aside>
 
     <!-- 创建房间弹窗：公开/私密为互斥单选，游戏规则保持一致。 -->
-    <Transition name="modal">
-      <div
-        v-if="showCreate"
-        class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="create-title"
-        @keydown.esc="showCreate = false"
-      >
-        <section
-          class="game-dialog flex max-h-[86cqh] w-[58cqw] flex-col overflow-hidden rounded-[1.2em] border-[0.35cqh] border-white bg-paper text-ink shadow-[0_1.4cqh_4cqh_#0007]"
+    <BaseDialog
+      :open="showCreate"
+      width-class="w-[58cqw]"
+      labelledby="create-title"
+      :close-aria="strings.lobby.createDialogCloseAria"
+      @close="showCreate = false"
+    >
+      <template #header>
+        <p class="text-[#93c5fd] font-black tracking-[0.16em] text-[0.72em]">
+          {{ strings.lobby.newRoomLabel }}
+        </p>
+        <h2 id="create-title">{{ strings.lobby.createDialogTitle }}</h2>
+      </template>
+      <div class="grid grid-cols-2 gap-[1.8cqh_1.4em] px-[2em] py-[2.8cqh]">
+        <fieldset class="col-span-full m-0 grid grid-cols-2 gap-[0.8em] border-0 p-0">
+          <legend class="mb-[0.7cqh] font-black">{{ strings.lobby.visibilityField }}</legend>
+          <label
+            class="flex items-center gap-[0.7em] rounded-[0.7em] border-[0.18cqh] border-line bg-white px-[1em] py-[1cqh]"
+          >
+            <input
+              v-model="createForm.visibility"
+              type="radio"
+              value="public"
+              class="h-[2.2cqh] w-[2.2cqh] accent-blue"
+            />
+            <span class="flex flex-col"
+              ><b>{{ strings.lobby.visibilityPublic }}</b
+              ><small class="text-muted text-[0.68em]">{{
+                strings.lobby.visibilityPublicHint
+              }}</small></span
+            >
+          </label>
+          <label
+            class="flex items-center gap-[0.7em] rounded-[0.7em] border-[0.18cqh] border-line bg-white px-[1em] py-[1cqh]"
+          >
+            <input
+              v-model="createForm.visibility"
+              type="radio"
+              value="private"
+              class="h-[2.2cqh] w-[2.2cqh] accent-blue"
+            />
+            <span class="flex flex-col"
+              ><b>{{ strings.lobby.visibilityPrivate }}</b
+              ><small class="text-muted text-[0.68em]">{{
+                strings.lobby.visibilityPrivateHint
+              }}</small></span
+            >
+          </label>
+        </fieldset>
+        <label class="flex flex-col gap-[0.55cqh] font-extrabold"
+          >{{ strings.lobby.roomNameField
+          }}<input
+            v-model="createForm.name"
+            class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink"
+            :maxlength="store.config.player.roomNameMaxLength"
+        /></label>
+        <label class="flex flex-col gap-[0.55cqh] font-extrabold"
+          >{{ strings.lobby.maxPlayersField
+          }}<select
+            v-model="roomSettings.maxPlayers"
+            class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink"
+          >
+            <option
+              v-for="count in store.config.player.maxPlayers - store.config.player.minPlayers + 1"
+              :key="count"
+              :value="count + store.config.player.minPlayers - 1"
+            >
+              {{ strings.common.playersUnit(count + store.config.player.minPlayers - 1) }}
+            </option>
+          </select></label
         >
-          <header
-            class="flex min-h-[9cqh] items-center justify-between bg-navy px-[1.7em] py-[1.3cqh] text-white"
-          >
-            <div>
-              <p class="text-[#93c5fd] font-black tracking-[0.16em] text-[0.72em]">
-                {{ strings.lobby.newRoomLabel }}
-              </p>
-              <h2 id="create-title">{{ strings.lobby.createDialogTitle }}</h2>
-            </div>
-            <button
-              type="button"
-              class="grid h-[4cqh] w-[4cqh] place-items-center rounded-full bg-white/10 text-[1.2em] text-white"
-              :aria-label="strings.lobby.createDialogCloseAria"
-              @click="showCreate = false"
-            >
-              <X />
-            </button>
-          </header>
-          <div class="grid grid-cols-2 gap-[1.8cqh_1.4em] px-[2em] py-[2.8cqh]">
-            <fieldset class="col-span-full m-0 grid grid-cols-2 gap-[0.8em] border-0 p-0">
-              <legend class="mb-[0.7cqh] font-black">{{ strings.lobby.visibilityField }}</legend>
-              <label
-                class="flex items-center gap-[0.7em] rounded-[0.7em] border-[0.18cqh] border-line bg-white px-[1em] py-[1cqh]"
-              >
-                <input
-                  v-model="createForm.visibility"
-                  type="radio"
-                  value="public"
-                  class="h-[2.2cqh] w-[2.2cqh] accent-blue"
-                />
-                <span class="flex flex-col"
-                  ><b>{{ strings.lobby.visibilityPublic }}</b
-                  ><small class="text-muted text-[0.68em]">{{
-                    strings.lobby.visibilityPublicHint
-                  }}</small></span
-                >
-              </label>
-              <label
-                class="flex items-center gap-[0.7em] rounded-[0.7em] border-[0.18cqh] border-line bg-white px-[1em] py-[1cqh]"
-              >
-                <input
-                  v-model="createForm.visibility"
-                  type="radio"
-                  value="private"
-                  class="h-[2.2cqh] w-[2.2cqh] accent-blue"
-                />
-                <span class="flex flex-col"
-                  ><b>{{ strings.lobby.visibilityPrivate }}</b
-                  ><small class="text-muted text-[0.68em]">{{
-                    strings.lobby.visibilityPrivateHint
-                  }}</small></span
-                >
-              </label>
-            </fieldset>
-            <label class="flex flex-col gap-[0.55cqh] font-extrabold"
-              >{{ strings.lobby.roomNameField
-              }}<input
-                v-model="createForm.name"
-                class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink"
-                :maxlength="store.config.player.roomNameMaxLength"
-            /></label>
-            <label class="flex flex-col gap-[0.55cqh] font-extrabold"
-              >{{ strings.lobby.maxPlayersField
-              }}<select
-                v-model="roomSettings.maxPlayers"
-                class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink"
-              >
-                <option
-                  v-for="count in store.config.player.maxPlayers -
-                  store.config.player.minPlayers +
-                  1"
-                  :key="count"
-                  :value="count + store.config.player.minPlayers - 1"
-                >
-                  {{ strings.common.playersUnit(count + store.config.player.minPlayers - 1) }}
-                </option>
-              </select></label
-            >
-            <label class="flex flex-col gap-[0.55cqh] font-extrabold"
-              >{{ strings.common.roundsField
-              }}<input
-                v-model.number="roomSettings.roundsPerPlayer"
-                type="range"
-                :min="store.config.game.roundsPerPlayer.min"
-                :max="store.config.game.roundsPerPlayer.max"
-                :step="store.config.game.roundsPerPlayer.step"
-              /><b>{{ strings.common.roundsUnit(roomSettings.roundsPerPlayer) }}</b></label
-            >
-            <label class="flex flex-col gap-[0.55cqh] font-extrabold"
-              >{{ strings.common.drawTimeField
-              }}<input
-                v-model.number="roomSettings.drawSeconds"
-                type="range"
-                :min="store.config.game.drawSeconds.min"
-                :max="store.config.game.drawSeconds.max"
-                :step="store.config.game.drawSeconds.step"
-              /><b>{{ strings.common.secondsUnit(roomSettings.drawSeconds) }}</b></label
-            >
-            <p class="col-span-full m-0 text-muted text-[0.72em] leading-[1.6]">
-              {{
-                createForm.visibility === 'public'
-                  ? strings.lobby.publicNote
-                  : strings.lobby.privateNote
-              }}
-            </p>
-          </div>
-          <footer
-            class="flex min-h-[8cqh] items-center justify-end gap-[0.8em] bg-slate-200 px-[1.7em] py-[1cqh]"
-          >
-            <button
-              class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-navy bg-white !border !border-[0.18cqh] !border-line"
-              type="button"
-              @click="showCreate = false"
-            >
-              {{ strings.common.cancel }}
-            </button>
-            <button
-              class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-blue shadow-[0_0.4cqh_0_#1e40af]"
-              type="button"
-              :disabled="!createForm.name.trim()"
-              @click="createRoom"
-            >
-              {{ strings.lobby.createAndEnter }}
-            </button>
-          </footer>
-        </section>
+        <label class="flex flex-col gap-[0.55cqh] font-extrabold"
+          >{{ strings.common.roundsField
+          }}<input
+            v-model.number="roomSettings.roundsPerPlayer"
+            type="range"
+            :min="store.config.game.roundsPerPlayer.min"
+            :max="store.config.game.roundsPerPlayer.max"
+            :step="store.config.game.roundsPerPlayer.step"
+          /><b>{{ strings.common.roundsUnit(roomSettings.roundsPerPlayer) }}</b></label
+        >
+        <label class="flex flex-col gap-[0.55cqh] font-extrabold"
+          >{{ strings.common.drawTimeField
+          }}<input
+            v-model.number="roomSettings.drawSeconds"
+            type="range"
+            :min="store.config.game.drawSeconds.min"
+            :max="store.config.game.drawSeconds.max"
+            :step="store.config.game.drawSeconds.step"
+          /><b>{{ strings.common.secondsUnit(roomSettings.drawSeconds) }}</b></label
+        >
+        <p class="col-span-full m-0 text-muted text-[0.72em] leading-[1.6]">
+          {{
+            createForm.visibility === 'public'
+              ? strings.lobby.publicNote
+              : strings.lobby.privateNote
+          }}
+        </p>
       </div>
-    </Transition>
+      <template #footer>
+        <AppButton variant="secondary" type="button" @click="showCreate = false">
+          {{ strings.common.cancel }}
+        </AppButton>
+        <AppButton type="button" :disabled="!createForm.name.trim()" @click="createRoom">
+          {{ strings.lobby.createAndEnter }}
+        </AppButton>
+      </template>
+    </BaseDialog>
 
     <!-- 私密房间码加入弹窗。 -->
-    <Transition name="modal">
-      <div
-        v-if="showJoinPrivate"
-        class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="join-private-title"
-        @keydown.esc="showJoinPrivate = false"
-      >
-        <section
-          class="game-dialog flex max-h-[86cqh] w-[42cqw] flex-col overflow-hidden rounded-[1.2em] border-[0.35cqh] border-white bg-paper text-ink shadow-[0_1.4cqh_4cqh_#0007]"
-        >
-          <header
-            class="flex min-h-[9cqh] items-center justify-between bg-navy px-[1.7em] py-[1.3cqh] text-white"
-          >
-            <div>
-              <p class="text-[#93c5fd] font-black tracking-[0.16em] text-[0.72em]">
-                {{ strings.lobby.privateJoinLabel }}
-              </p>
-              <h2 id="join-private-title">{{ strings.lobby.privateJoinTitle }}</h2>
-            </div>
-            <button
-              type="button"
-              class="grid h-[4cqh] w-[4cqh] place-items-center rounded-full bg-white/10 text-[1.2em] text-white"
-              :aria-label="strings.lobby.privateJoinCloseAria"
-              @click="showJoinPrivate = false"
-            >
-              <X />
-            </button>
-          </header>
-          <div class="grid justify-items-center gap-[1.5cqh] px-[4cqw] py-[4cqh] text-center">
-            <KeyRound class="h-[7cqh] w-[7cqh] text-blue" />
-            <p class="text-muted">{{ strings.lobby.privateJoinBody }}</p>
-            <input
-              v-model="privateCode"
-              class="min-w-0 h-[5.2cqh] w-[22cqw] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] text-center font-black uppercase tracking-[0.3em] leading-none text-ink font-mono text-[1.25em]"
-              :maxlength="store.config.room.privateCodeLength + 2"
-              autocomplete="off"
-              :placeholder="strings.lobby.privateCodePlaceholder"
-              :aria-label="strings.lobby.privateCodeAria"
-              @keydown.enter="joinPrivateRoom"
-            />
-          </div>
-          <footer
-            class="flex min-h-[8cqh] items-center justify-end gap-[0.8em] bg-slate-200 px-[1.7em] py-[1cqh]"
-          >
-            <button
-              class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-navy bg-white !border !border-[0.18cqh] !border-line"
-              type="button"
-              @click="showJoinPrivate = false"
-            >
-              {{ strings.common.cancel }}
-            </button>
-            <button
-              class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-blue shadow-[0_0.4cqh_0_#1e40af]"
-              type="button"
-              :disabled="!privateCodeValid"
-              @click="joinPrivateRoom"
-            >
-              {{ strings.lobby.joinPrivateConfirm }}
-            </button>
-          </footer>
-        </section>
+    <BaseDialog
+      :open="showJoinPrivate"
+      width-class="w-[42cqw]"
+      labelledby="join-private-title"
+      :close-aria="strings.lobby.privateJoinCloseAria"
+      @close="showJoinPrivate = false"
+    >
+      <template #header>
+        <p class="text-[#93c5fd] font-black tracking-[0.16em] text-[0.72em]">
+          {{ strings.lobby.privateJoinLabel }}
+        </p>
+        <h2 id="join-private-title">{{ strings.lobby.privateJoinTitle }}</h2>
+      </template>
+      <div class="grid justify-items-center gap-[1.5cqh] px-[4cqw] py-[4cqh] text-center">
+        <KeyRound class="h-[7cqh] w-[7cqh] text-blue" />
+        <p class="text-muted">{{ strings.lobby.privateJoinBody }}</p>
+        <input
+          v-model="privateCode"
+          class="min-w-0 h-[5.2cqh] w-[22cqw] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] text-center font-black uppercase tracking-[0.3em] leading-none text-ink font-mono text-[1.25em]"
+          :maxlength="store.config.room.privateCodeLength + 2"
+          autocomplete="off"
+          :placeholder="strings.lobby.privateCodePlaceholder"
+          :aria-label="strings.lobby.privateCodeAria"
+          @keydown.enter="joinPrivateRoom"
+        />
       </div>
-    </Transition>
+      <template #footer>
+        <AppButton variant="secondary" type="button" @click="showJoinPrivate = false">
+          {{ strings.common.cancel }}
+        </AppButton>
+        <AppButton type="button" :disabled="!privateCodeValid" @click="joinPrivateRoom">
+          {{ strings.lobby.joinPrivateConfirm }}
+        </AppButton>
+      </template>
+    </BaseDialog>
   </main>
 </template>

@@ -115,7 +115,7 @@ function randomize(): void {
         <input
           id="nickname"
           v-model="store.profile.nickname"
-          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink pr-[3em] text-[1.05em]"
+          class="w-full min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink pr-[3em] text-[1.05em]"
           :maxlength="store.config.player.nicknameMaxLength"
           autocomplete="nickname"
           @keydown.enter="nicknameValid && store.connected && store.register()"

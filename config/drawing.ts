@@ -21,4 +21,9 @@ export const drawing = {
   maxPointsPerBatch: 120,
   maxDrawEventsPerSecond: 45,
   maxHistoryCommands: 1_500,
+  // maxPointsPerStroke：单次按下可累计的点数上限。同一笔画多批次共用 ID，因此
+  //   maxHistoryCommands（只数命令条数）对其完全不生效，需单独限额防止无限追加。
+  // maxPointsPerRound：整回合的总点数预算，直接限定内存与“全量快照/断线重放”的序列化成本。
+  maxPointsPerStroke: 1_200,
+  maxPointsPerRound: 40_000,
 } as const

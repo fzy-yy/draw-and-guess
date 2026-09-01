@@ -41,6 +41,24 @@ const drawing = ref(false) // 是否正在按下画布绘图
 let observer: ResizeObserver | undefined // 画布尺寸监听（窗口缩放重建像素缓冲）
 let sequence = 0 // 本地绘图序号（提交时与权威历史比较取更大值）
 let activeStrokeId = '' // 当前按下动作的笔画 ID（各批次共用）
+/**
+ * 当前笔画的样式快照（按下瞬间锁定）。
+ * 服务端对同一 `strokeId` 只接受首批的 tool/color/width（后续批次仅追加点），
+ * 若各批次沿用实时 props，中途切工具/改色/滚轮改粗细会造成本地预览与其他端权威画面不一致
+ * （例如本地变透明擦除、其他端仍是画笔线）。因此一律以本快照为准。
+ */
+let activeStyle: { tool: 'pen' | 'eraser'; color: string; width: number } | null = null
+
+/** 取在画笔画的样式快照；无活跃笔画时回退到实时 props（防御式，正常不会命中）。 */
+function currentStrokeStyle(): { tool: 'pen' | 'eraser'; color: string; width: number } {
+  return (
+    activeStyle ?? {
+      tool: props.tool === 'eraser' ? 'eraser' : 'pen',
+      color: props.color,
+      width: props.width,
+    }
+  )
+}
 let sentPointCount = 0 // 已发送到服务端的点数（用于切片增量）
 // 批次发送定时器改为由 @vueuse/core 的 useTimeoutFn 管理：start 会先清理旧定时器再重排，
 // isPending 表示当前是否已有待触发的定时器，组件卸载时自动清理（见 onBeforeUnmount）。
@@ -224,9 +242,7 @@ function redraw(): void {
     drawStroke(context, {
       kind: 'stroke',
       id: 'local-preview',
-      tool: props.tool === 'eraser' ? 'eraser' : 'pen',
-      color: props.color,
-      width: props.width,
+      ...currentStrokeStyle(),
       points: activePoints.value,
       sequence,
     })
@@ -236,6 +252,11 @@ function redraw(): void {
   for (const command of visibleCommands.value)
     drawnPoints.set(command.id, command.kind === 'stroke' ? command.points.length : -1)
   committedCount = visibleCommands.value.length
+  // 重新登记“正在画的这条笔画”的已绘点数：否则由缩放/撤销等触发的中途 redraw 之后、
+  // 下一次 pointerMove 之前到达的服务端回显会以 prev=0 从头重绘整条在画笔画，
+  // 造成抗锯齿边缘加深、橡皮路径重复擦除。
+  if (activeStrokeId && activePoints.value.length)
+    drawnPoints.set(activeStrokeId, activePoints.value.length)
   committedUndoLen = props.undoneStrokeIds.length
 }
 
@@ -302,6 +323,12 @@ function pointerDown(event: PointerEvent): void {
   canvas.value?.setPointerCapture(event.pointerId) // 捕获指针，支持在组件外持续绘制
   drawing.value = true
   activeStrokeId = createUuid()
+  // 锁定本笔样式快照，整条笔画（含所有批次与预览重绘）均沿用按下瞬间的 tool/color/width
+  activeStyle = {
+    tool: props.tool === 'eraser' ? 'eraser' : 'pen',
+    color: props.color,
+    width: props.width,
+  }
   sentPointCount = 0
   activePoints.value = [point]
   // 同步登记本地已画点数：服务端回写同 ID 点时按此跳过，防止笔迹加深
@@ -312,9 +339,7 @@ function pointerDown(event: PointerEvent): void {
     drawStroke(context, {
       kind: 'stroke',
       id: 'local-preview',
-      tool: props.tool === 'eraser' ? 'eraser' : 'pen',
-      color: props.color,
-      width: props.width,
+      ...currentStrokeStyle(),
       points: activePoints.value,
       sequence,
     })
@@ -340,9 +365,7 @@ function pointerMove(event: PointerEvent): void {
       {
         kind: 'stroke',
         id: 'local-preview',
-        tool: props.tool === 'eraser' ? 'eraser' : 'pen',
-        color: props.color,
-        width: props.width,
+        ...currentStrokeStyle(),
         points: activePoints.value,
         sequence,
       },
@@ -364,9 +387,7 @@ function flushPointBatch(): void {
     emit('stroke', {
       kind: 'stroke',
       id: activeStrokeId,
-      tool: props.tool === 'eraser' ? 'eraser' : 'pen',
-      color: props.color,
-      width: props.width,
+      ...currentStrokeStyle(),
       points,
       sequence: nextSequence(),
     })
@@ -377,12 +398,17 @@ function flushPointBatch(): void {
 /** 指针抬起或取消时冲刷自由笔画最后一个批次并清除本地预览（已画像素保留在画布）。 */
 function pointerUp(event: PointerEvent): void {
   if (!drawing.value) return
-  canvas.value?.releasePointerCapture(event.pointerId)
+  // 先清理状态再释放捕获：pointercancel 时浏览器已隐式释放捕获（指针也可能已失效），
+  // 无条件调用可能抛 InvalidPointerId/NotFoundError，若放在前面会使 drawing 卡在 true，
+  // 后续 pointerMove 就会不断往这条“幽灵笔画”加点并发批次。
   drawing.value = false
   flushPointBatch()
   activePoints.value = []
   activeStrokeId = ''
+  activeStyle = null
   sentPointCount = 0
+  if (canvas.value?.hasPointerCapture(event.pointerId))
+    canvas.value.releasePointerCapture(event.pointerId)
 }
 
 /** 画笔或橡皮擦位于画板内时，滚轮调整二者共用的连续粗细值。 */
@@ -428,13 +454,8 @@ watch(
   { deep: true },
 )
 
-// 工具/颜色/线宽变化不影响历史像素，仅当存在未完成的本地预览时才重绘预览
-watch(
-  () => [props.tool, props.color, props.width],
-  () => {
-    if (activePoints.value.length) redraw()
-  },
-)
+// 注：不再监听 tool/color/width 去重绘预览。一条笔画的样式在按下时已锁定（见 activeStyle），
+// 中途改工具/颜色/粗细不应改变正在画的这条笔画，否则本地与其他端的权威历史会不一致。
 
 onMounted(() => {
   observer = new ResizeObserver(resizeCanvas)

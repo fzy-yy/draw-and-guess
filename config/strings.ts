@@ -476,6 +476,8 @@ export const serverStrings = {
     INVALID_PHASE_GUESS: '当前不能猜词', // 非作画阶段猜词
     INVALID_PHASE_PRESET: '当前不能发送互动短语', // 非作画阶段发短语
     INVALID_PHASE_RESUME: '游戏当前没有暂停', // 未暂停时恢复
+    INVALID_PHASE_PAUSE: '开局倒计时阶段不能暂停', // starting 不在可暂停白名单内
+    DRAW_BUDGET_EXCEEDED: '本回合画布细节已达上限，请撤销或清空后再继续', // 点数预算超限
     INVALID_PHASE_END_EARLY: '当前没有可提前结束的比赛', // 无对局时提前结束
     INVALID_PHASE_TRANSFER_HOST: '仅等待阶段可以主动移交房主', // 非等待阶段移交
     INVALID_PHASE_RETURN_WAITING: '只有最终结算后才能返回房间', // 非结算阶段返回房间

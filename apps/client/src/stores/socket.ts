@@ -27,6 +27,8 @@ export interface SocketHandlers {
   onRoomClosed(reason: string): void
   onSystemNotice(text: string): void
   onSystemError(message: string): void
+  /** 服务端定向推送给猜词者的“很接近”提示（不进入聊天流，避免刷屏与泄露答案）。 */
+  onGuessClose(text: string): void
   onDrawStrokeBatch(roundId: string, stroke: Stroke): void
   onDrawFillCommit(roundId: string, fill: FillCommand): void
 }
@@ -47,7 +49,7 @@ if (import.meta.hot) {
  * 注册全部服务端推送事件监听（全局唯一的连接生命周期）。
  * 注意：绘图增量事件按回合 ID 与序号直接合并进本地历史，无需等待下一次快照。
  */
-export function attachSocketListeners(handlers: SocketHandlers): void {
+export function attachSocketListeners(handlers: SocketHandlers): () => void {
   socket.on('connect', () => handlers.onConnect())
   socket.on('disconnect', (reason) => handlers.onDisconnect(reason))
   socket.io.on('reconnect_attempt', () => handlers.onReconnectAttempt())
@@ -62,10 +64,35 @@ export function attachSocketListeners(handlers: SocketHandlers): void {
   socket.on(EVENTS.systemError, ({ message }: { message: string }) =>
     handlers.onSystemError(message),
   )
+  socket.on(EVENTS.guessClose, ({ text }: { text: string }) => handlers.onGuessClose(text))
   socket.on(EVENTS.drawStrokeBatch, ({ roundId, stroke }: { roundId: string; stroke: Stroke }) =>
     handlers.onDrawStrokeBatch(roundId, stroke),
   )
   socket.on(EVENTS.drawFillCommit, ({ roundId, fill }: { roundId: string; fill: FillCommand }) =>
     handlers.onDrawFillCommit(roundId, fill),
   )
+
+  /**
+   * 返回解绑函数：开发态 HMR 或 store 销毁时调用，避免同一事件被重复注册
+   * （否则会出现 invites 双推、drawRevision 双增、多个探测定时器）。
+   * 只解绑应用层事件与连接事件，不动 socket.io 内部机制（重连、心跳）。
+   */
+  return () => {
+    for (const event of [
+      'connect',
+      'disconnect',
+      EVENTS.presenceSnapshot,
+      EVENTS.roomListChanged,
+      EVENTS.roomSnapshot,
+      EVENTS.inviteReceived,
+      EVENTS.inviteResolved,
+      EVENTS.roomClosed,
+      EVENTS.systemNotice,
+      EVENTS.systemError,
+      EVENTS.guessClose,
+      EVENTS.drawStrokeBatch,
+      EVENTS.drawFillCommit,
+    ])
+      socket.off(event)
+  }
 }

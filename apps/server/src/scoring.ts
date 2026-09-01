@@ -42,18 +42,19 @@ export function buildDrawerScore(input: {
   room: RoomSecret
   onlinePlayerIds: ReadonlySet<string>
   drawerAbandoned: boolean
-}): { score: number; allCorrect: boolean; allGuessers: MemberState[] } {
+}): { score: number; allCorrect: boolean; roundGuessers: MemberState[] } {
   const { game, room, onlinePlayerIds, drawerAbandoned } = input
-  const allGuessers = room.members.filter(
-    (member) =>
-      member.playerId !== game.drawerId &&
-      !member.spectating &&
-      onlinePlayerIds.has(member.playerId),
+  // 参与本回合的可玩成员全集（含已掉线者）：满员奖励必须“确实每个人都猜中”。
+  // 若仅按在线成员判定，3 人局中 1 人掉线后只要剩下 1 人猜中就会发放满员奖，属虚增。
+  const roundGuessers = room.members.filter(
+    (member) => member.playerId !== game.drawerId && !member.spectating,
   )
-  const allCorrect = allGuessers.length > 0 && allGuessers.every((member) => member.guessedAt)
+  const allCorrect =
+    roundGuessers.length > 0 &&
+    roundGuessers.every((member) => member.guessedAt && onlinePlayerIds.has(member.playerId))
   const score = drawerAbandoned
     ? 0
     : game.correctOrder.length * APP_CONFIG.game.score.drawerPerCorrect +
       (allCorrect ? APP_CONFIG.game.score.drawerAllCorrectBonus : 0)
-  return { score, allCorrect, allGuessers }
+  return { score, allCorrect, roundGuessers }
 }

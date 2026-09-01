@@ -15,7 +15,7 @@ const store = useGameStore()
 // 席位展示：按最大人数生成槽位，空位填空（undefined）
 const slots = computed(() =>
   Array.from(
-    { length: store.room?.settings.maxPlayers ?? 6 },
+    { length: store.room?.settings.maxPlayers ?? store.config.player.defaultMaxPlayers },
     (_, index) => store.room?.members[index],
   ),
 )
@@ -36,7 +36,7 @@ const slots = computed(() =>
         {{
           strings.room.seatCount(
             store.room?.members.length ?? 0,
-            store.room?.settings.maxPlayers ?? 6,
+            store.room?.settings.maxPlayers ?? store.config.player.defaultMaxPlayers,
           )
         }}</span
       >
@@ -46,11 +46,11 @@ const slots = computed(() =>
       <article
         v-for="(member, index) in slots"
         :key="member?.id ?? index"
-        class="relative flex min-w-0 flex-col items-center justify-center rounded-[1em] border-[0.24cqh] border-[#cbd5e1] border-b-[0.6cqh] bg-white border-b-slate-400 transition-[transform,box-shadow,border-color,background-color,color,opacity] duration-[160ms] hover:border-[#93c5fd] hover:shadow-[0_0.6cqh_1.6cqh_#17255418]"
+        class="relative flex min-w-0 flex-col items-center justify-center rounded-[1em] border-[0.24cqh] border-[#cbd5e1] border-b-[0.6cqh] bg-white border-b-slate-400 transition-[transform,box-shadow,border-color,background-color,color,opacity] duration-[160ms] hover:shadow-[0_0.6cqh_1.6cqh_#17255418]"
         :class="[
           !member ? 'border-dashed !bg-slate-50 !text-slate-400' : '',
-          member?.ready ? '!border-[#86efac] !border-b-green' : '',
-          member?.id === store.playerId ? 'shadow-[inset_0_0_0_0.3cqh_#2563eb]' : '',
+          member?.ready && member.id !== store.playerId ? '!border-[#86efac] !border-b-green' : '',
+          member?.id === store.playerId ? '!border-blue !border-b-blue' : '',
         ]"
       >
         <template v-if="member">
