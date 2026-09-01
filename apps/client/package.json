@@ -11,7 +11,11 @@
   "dependencies": {
     "@draw-guess/shared": "workspace:*",
     "@tailwindcss/vite": "^4.1.14",
+    "@tanstack/vue-virtual": "^3.13.36",
+    "@vueuse/core": "^14.4.0",
+    "clsx": "^2.1.1",
     "lucide-vue-next": "^0.548.0",
+    "nanoid": "^6.0.1",
     "pinia": "^3.0.3",
     "socket.io-client": "^4.8.1",
     "tailwindcss": "^4.1.14",

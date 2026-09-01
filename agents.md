@@ -1,7 +1,7 @@
 # AGENTS.md
 
-> 本文件是所有后续开发（人工或 AI）的**第一入口**。下列内容以**当前代码为准**；`需求文档.md` 可能过时，若与本文件或代码冲突，一律以代码与本文件为准。
-> 仓库内其它中文文档：`README.md`（项目总览/十分钟启动）、`需求文档.md`（原始需求，可能过时）、`代码审查与问题清单.md`、`开发建议.md`、`样式重构与代码审查报告.md`。根级 `docs/` 目录**已删除**（要点已并入本文件与 README）。
+> 本文件是所有后续开发（人工或 AI）的**第一入口**。下列内容以**当前代码为准**；原始需求文档已删除，若与本文件或代码冲突，一律以代码与本文件为准。
+> 仓库内其它中文文档：`README.md`（项目总览/十分钟启动）、`开发建议.md`、`样式重构与代码审查报告.md`。原始需求文档（`需求文档.md`）与旧问题清单（`代码审查与问题清单.md`）**已删除**，不再维护；要点已并入本文件与 README。根级 `docs/` 目录**已删除**。
 
 ---
 
@@ -21,7 +21,7 @@
 - Node.js 当前维护中的 LTS（建议 22 或 24）、pnpm 10+、pnpm workspace 单仓库。
 - 现代 Chromium / Edge / Firefox（支持 CSS `container queries`，因为整屏缩放依赖 `cqh/cqw`）。
 - 后端子包：`express@5`、`socket.io`、`zod`、`pino`、`tsx`、`helmet`、`cors`。
-- 前端子包：`vue@3`、`pinia`、`socket.io-client`、`tailwindcss@4`（`@tailwindcss/vite`）、`lucide-vue-next`。
+- 前端子包：`vue@3`、`pinia`、`socket.io-client`、`tailwindcss@4`（`@tailwindcss/vite`）、`lucide-vue-next`，以及 `@tanstack/vue-virtual`（虚拟列表）、`@vueuse/core`（组合式工具）、`nanoid`（短 ID）、`clsx`（类名合并）。
 
 ---
 
@@ -52,8 +52,6 @@ draw_and_guess/
 ├── vocabulary.md                 # ★唯一权威词库：每个非空行一个词/短语（禁止标题/列表符号/编号/注释）
 ├── README.md                     # 项目总览、十分钟启动、命令与续开发入口
 ├── AGENTS.md                     # 本文件：导读、硬性限制、启动方法、编码/测试/提交流程
-├── 需求文档.md                    # 原始需求（可能过时，冲突以代码为准）
-├── 代码审查与问题清单.md          # 待处理问题（当前仅剩 B1/B3/F4 三项低优项）
 ├── 开发建议.md                    # 开发计划/新功能/优化/模块拆分（M0-M3 里程碑）
 ├── 样式重构与代码审查报告.md      # 最近一次全量样式重构（原生 CSS → 行内 Tailwind）的报告与审查结论
 │
@@ -88,7 +86,7 @@ draw_and_guess/
 │           └── draw.ts            # 笔画批次/填充/撤销/重做/清空（跳过通用限频）
 │
 ├── apps/client/                   # 客户端（Vue 3 + Pinia + Vite + Tailwind4 + Socket.IO）
-│   ├── package.json               # 依赖（vue/pinia/socket.io-client/lucide-vue-next/tailwindcss）
+│   ├── package.json               # 依赖（vue/pinia/socket.io-client/tailwindcss/lucide-vue-next/@tanstack/vue-virtual/@vueuse/core/nanoid/clsx）
 │   ├── tsconfig.json              # 继承根配置 + DOM/vite 类型
 │   ├── vite.config.ts             # Vite 配置：@draw-guess/config 虚拟公开模块裁剪、/@ alias、开发代理
 │   ├── index.html                 # 入口 HTML（#app 挂载点，移动端缩放/主题色）
@@ -96,7 +94,7 @@ draw_and_guess/
 │       ├── main.ts                # 客户端入口：创建 App 并挂载 #app；仅引入 ./style/index.css
 │       ├── App.vue                # 根舞台：页面互斥渲染（对局>房间>设置>大厅>资料）、Toast、邀请横幅、竖屏提示
 │       ├── style/
-│       │   └── index.css          # ★唯一全局样式文件：@import tailwindcss + @theme 令牌 + @layer base（reset/舞台上下文/交互反馈/Vue 过渡钩子/关键帧/竖屏与减少动效）
+│       │   └── index.css          # ★唯一全局样式文件：@import tailwindcss + @theme 令牌 + @layer base（reset/舞台上下文/交互反馈/Vue 过渡钩子/关键帧/竖屏与减少动效）+ @layer components（共享组件类 .btn/.dialog-shell/.field-input/.eyebrow 等，用 @apply 收敛重复行内类）
 │       ├── stores/
 │       │   ├── game.ts            # Pinia store：本地资料/设置、房间与对局状态、业务操作请求（发送方）
 │       │   ├── socket.ts          # Socket 单例 + 推送事件桥接（HMR dispose）
@@ -106,10 +104,15 @@ draw_and_guess/
 │       │   ├── useGameHud.ts      # 对局 HUD 计算：剩余时间/进度/猜词权限/阶段标签/排行
 │       │   └── useShortcuts.ts    # 画板快捷键：自定义单键切换工具、撤销/重做组合键
 │       ├── components/
+│       │   ├── AppButton.vue      # 统一动作按钮（primary/secondary/danger），收敛三色动作长串
+│       │   ├── BaseDialog.vue     # 通用弹窗外壳（遮罩+卡片+可选标题栏/底部），含 <Transition name="modal"> 过渡 + Esc 关闭
+│       │   ├── ConfirmDialog.vue  # 通用确认弹窗（复用 BaseDialog，红色 danger 确认钮）
 │       │   ├── AvatarImage.vue    # 内置 SVG 头像统一安全展示（只接收白名单编号；尺寸由调用处传入）
 │       │   ├── AvatarPickerDialog.vue # 40 个 SVG 头像选择模态框
-│       │   ├── GameSettingsDialog.vue # 对局内不离场的快速设置模态框
-│       │   └── GameCanvas.vue     # 高 DPI 实时画板：增量绘制、橡皮擦/destination-out、洪泛填充、滚轮线宽
+│       │   ├── GameCanvas.vue     # 高 DPI 实时画板：增量绘制、橡皮擦/destination-out、洪泛填充、滚轮线宽
+│       │   ├── game/              # 对局组件：GameHud / ChatPanel / DrawingToolbar / PhaseOverlay / ScoreStrip
+│       │   ├── room/              # 房间组件：SeatGrid / RuleSummary / RulesDialog / InviteDialog / VocabularyDialog
+│       │   └── settings/          # 设置页组件：AudioTab / ShortcutsTab / AccessibilityTab / DiagnosticsTab / SettingSliderRow / SettingSwitchRow
 │       ├── views/
 │       │   ├── ProfileView.vue    # 资料确认页（随机昵称/内置 SVG 头像选择，无上传）
 │       │   ├── LobbyView.vue      # 在线大厅（公开列表/公私建房/私密短码加入/可发现玩家）
@@ -123,7 +126,7 @@ draw_and_guess/
 └── docs/                          # ❌ 已删除（内容要点已并入 README/AGENTS.md）
 ```
 
-> **关于客户端样式**：自「样式重构与代码审查报告.md」所述重构后，`apps/client/src/style/` 仅剩 `index.css` 一个文件。它是 **Tailwind 全局配置**（`@theme` 语义色令牌 + `@layer base` 全局 reset、舞台上下文、交互动效、Vue 过渡钩子、关键帧、竖屏/减少动效），**不含任何元素级视觉样式**。所有组件/页面的视觉样式一律写成 **Vue 模板内的行内 Tailwind 类**（依赖 `cqh/cqw` 容器单位 + 语义色 `bg-navy`/`text-muted`/`border-line` 等）。新增样式时请直接写在对应 `.vue` 模板，不要新建 CSS 文件。
+> **关于客户端样式**：自「样式重构与代码审查报告.md」所述重构后，`apps/client/src/style/` 仅剩 `index.css` 一个文件。它是 **Tailwind 全局配置**（`@theme` 语义色令牌 + `@layer base` 全局 reset、舞台上下文、交互动效、Vue 过渡钩子、关键帧、竖屏/减少动效 + `@layer components` 共享组件类 `AppButton`/`BaseDialog`/`ConfirmDialog` 对应的 `.btn`/`.dialog-shell`/`.field-input`/`.eyebrow` 等，用 `@apply` 收敛重复行内类）。**组件/页面自身视觉样式一律写成 Vue 模板内的行内 Tailwind 类**（依赖 `cqh/cqw` 容器单位 + 语义色 `bg-navy`/`text-muted`/`border-line` 等），长串可复用共享组件或 `@layer components` 类。新增样式时不要新建 CSS 文件、不要写 `@layer components` 之外的原生 CSS 类选择器。
 
 ---
 
@@ -197,7 +200,7 @@ pnpm format:check  # 仅检查格式
 - **错误处理**：服务端用 `GameError` + `errors.ts` 统一错误码与中文文案；客户端经 `request.ts` 统一超时 + ack + 错误翻译 + `quiet` 静默降级。
 - **日志**：服务端用 `pino`（结构化内存 logger），不写日志文件；级别经 `LOG_LEVEL` 控制。
 - **UI 文案**：**严禁在组件/业务代码里硬编码展示字符**；一律从 `config/strings.ts` 的 `strings`（客户端）或 `serverStrings`（服务端）导入。
-- **样式**：一律用**行内 Tailwind 类**写在 Vue 模板；不要新建 CSS 文件、不要写原生 CSS 类选择器。语义色用 `@theme` 令牌（`bg-navy`/`text-muted`/`border-line` 等）；容器单位 `cqh/cqw` 用任意值（内部空格用 `_`，如 `shadow-[0_1.2cqh_5cqh_#0009]`）。
+- **样式**：组件/页面视觉一律用**行内 Tailwind 类**写在 Vue 模板；重复的长串收敛到共享组件（`AppButton`/`BaseDialog`/`ConfirmDialog`）或 `style/index.css` 的 `@layer components` 共享类（`.btn`/`.dialog-shell`/`.field-input`/`.eyebrow`）。不要新建 CSS 文件、不要写 `@layer components` 之外的原生 CSS 类选择器。语义色用 `@theme` 令牌（`bg-navy`/`text-muted`/`border-line` 等）；容器单位 `cqh/cqw` 用任意值（内部空格用 `_`，如 `shadow-[0_1.2cqh_5cqh_#0009]`）。
 
 ---
 
@@ -225,7 +228,7 @@ pnpm format:check  # 仅检查格式
 1. 通读本文件「约束与禁止事项」，确认改动不违反硬性限制。
 2. 定位改动归属：业务规则 → `config/`；协议/事件 → `packages/shared/`；服务端权威领域 → `apps/server/src/`；客户端视图 → `apps/client/src/`。
 3. 若改动会改变公共接口 / 事件名 / DTO，先更新 `types.ts`/`schemas.ts`/`events.ts` 并同步前后端；`protocolVersion` 变更属不兼容变更，必须与客户端同步 `+1`。
-4. 查阅 `代码审查与问题清单.md`、`开发建议.md`，确认是否与既有待办冲突。
+4. 查阅 `开发建议.md`，确认是否与既有待办/计划冲突。
 
 ### 各类改动的流程
 
@@ -276,7 +279,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 7. **工程约束**
    - 提交前必须通过：`pnpm format` → `pnpm lint`（--max-warnings=0）→ `pnpm typecheck` → `pnpm build`。
    - 目录职责保持现状：shared（协议/纯函数）、server（权威领域）、client（视图）；不要在 client 中裁决游戏逻辑。
-   - **不要**新建分片 CSS 文件；组件样式一律行内 Tailwind。全局层（reset、Vue 过渡钩子、关键帧、容器单位上下文、竖屏/减少动效）保留在 `apps/client/src/style/index.css`。
+   - **不要**新建分片 CSS 文件；组件/页面样式一律行内 Tailwind，重复长串收敛到共享组件或 `@layer components` 共享类。全局层（reset、Vue 过渡钩子、关键帧、容器单位上下文、竖屏/减少动效、组件类）保留在 `apps/client/src/style/index.css`。
 
 ---
 
@@ -336,7 +339,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 - **修改范围控制**：只改当前任务相关的文件；不要顺手格式化无关文件、不要改动 `pnpm-lock.yaml`、`.pi/`、`dist/`、`node_modules/`。
 - **如何验证修改正确**：改完运行 `pnpm format && pnpm lint && pnpm typecheck && pnpm build`；涉及界面改动可用浏览器手动/Playwright 验证。
 - **遇到不确定事项**：
-  - 以**代码与当前配置为准**，不被过时的 `需求文档.md` 带偏；冲突时向用户确认。
+  - 以**代码与当前配置为准**，不被过时的需求文档带偏；冲突时向用户确认。
   - 涉及「约束与禁止事项」里明确禁止/限制的改动时，先向用户说明理由并获得确认，不要擅自引入数据库、私密房逻辑外的访问方式、图片头像、公网暴露或客户端裁决。
   - 一些默认行为（如成员加入即重置全员准备、词库弹窗缺少 `Esc` 关闭、模板中自闭合组件后残留字面 `>` 字符）在 `样式重构与代码审查报告.md` 的 P1/P2/P3 中有记录，属已知问题，改动前先确认是否应一并修复。
 - **快速定位速查**：
@@ -356,4 +359,4 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 
 ---
 
-以「服务端权威 + 角色裁剪快照 + 幂等 ack + 增量绘图」为核心原则开发。除非需求文档/清单明确要求且经得起「约束与禁止事项」核对，否则不要引入数据库、私密房、图片头像、公网暴露或客户端裁决。
+以「服务端权威 + 角色裁剪快照 + 幂等 ack + 增量绘图」为核心原则开发。除非需求/清单明确要求且经得起「约束与禁止事项」核对，否则不要引入数据库、私密房、图片头像、公网暴露或客户端裁决。

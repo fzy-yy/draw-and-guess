@@ -12,6 +12,7 @@ import {
   Wifi,
   X,
 } from 'lucide-vue-next'
+import { clsx } from 'clsx'
 import { strings } from '@draw-guess/strings'
 import type { RoomSettings, RoomVisibility } from '@draw-guess/shared'
 import AvatarImage from '@/components/AvatarImage.vue'
@@ -252,7 +253,7 @@ async function joinPrivateRoom(): Promise<void> {
             <b class="truncate">{{ player.nickname }}</b
             ><span
               class="text-muted text-[0.66em]"
-              :class="player.status === 'idle' ? '!text-green' : ''"
+              :class="clsx(player.status === 'idle' && '!text-green')"
               >{{ statusText[player.status] }}</span
             >
           </div>

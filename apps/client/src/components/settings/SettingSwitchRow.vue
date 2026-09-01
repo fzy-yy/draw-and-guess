@@ -1,0 +1,41 @@
+<!--
+  可复用的开关设置行：标题 + 说明 + 复选框。
+  通过 v-model（modelValue + update:modelValue）双向绑定布尔值，切换时发出 save 由父级持久化。
+  额外的外观类（如左侧描边颜色/宽度）由调用处通过 class 传入，自动与内置类合并。
+-->
+<script setup lang="ts">
+defineProps<{
+  title: string
+  hint: string
+  modelValue: boolean
+}>()
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  save: []
+}>()
+
+/** 切换复选框：更新 v-model 绑定的布尔值，并触发一次保存。 */
+function onToggle(event: Event): void {
+  emit('update:modelValue', (event.target as HTMLInputElement).checked)
+  emit('save')
+}
+</script>
+
+<template>
+  <!-- v-bind="$attrs" 让调用处的 class 透传并自动与内置类合并 -->
+  <label
+    class="flex min-h-[8cqh] items-center gap-[1em] bg-white px-[1.2em] py-[1cqh]"
+    v-bind="$attrs"
+  >
+    <span class="flex flex-1 flex-col">
+      <b>{{ title }}</b>
+      <small class="text-muted text-[0.68em]">{{ hint }}</small>
+    </span>
+    <input
+      type="checkbox"
+      class="h-[2.6cqh] w-[2.6cqh] accent-blue"
+      :checked="modelValue"
+      @change="onToggle"
+    />
+  </label>
+</template>

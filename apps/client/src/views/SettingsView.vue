@@ -3,23 +3,22 @@
 import { computed, ref } from 'vue'
 import {
   ArrowLeft,
-  Clipboard,
   Brush,
   Eraser,
   Eye,
   Keyboard,
-  Music2,
   PaintBucket,
-  RotateCcw,
   ShieldCheck,
   SlidersHorizontal,
-  Trash2,
   Volume2,
 } from 'lucide-vue-next'
+import { useClipboard } from '@vueuse/core'
 import { strings } from '@draw-guess/strings'
-import AvatarImage from '@/components/AvatarImage.vue'
-import AvatarPickerDialog from '@/components/AvatarPickerDialog.vue'
 import { useGameStore } from '@/stores/game'
+import AudioTab from '@/components/settings/AudioTab.vue'
+import AccessibilityTab from '@/components/settings/AccessibilityTab.vue'
+import ShortcutsTab from '@/components/settings/ShortcutsTab.vue'
+import DiagnosticsTab from '@/components/settings/DiagnosticsTab.vue'
 
 const store = useGameStore()
 // 当前激活的设置分类标签
@@ -75,36 +74,21 @@ const diagnostic = computed(() =>
   ].join('\n'),
 )
 
+// 剪切板写入交给 @vueuse/core 的 useClipboard 统一处理：优先原生 API，失败后自动走 execCommand 降级（legacy）。
+const { copy: copyToClipboard } = useClipboard({ legacy: true })
+
 /**
  * 复制脱敏后的诊断信息到剪贴板。
- * 局域网 HTTP 属非安全上下文，navigator.clipboard 可能不存在，需降级到 execCommand。
+ * useClipboard 内置 execCommand 降级（legacy），无需再手写 textarea 分支；
+ * 其 copy 在完成写入后标记成功，能力缺失时不产生副作用，据此判断成功与否并提示。
  */
 async function copyDiagnostics(): Promise<void> {
-  const text = diagnostic.value
   let copied = false
-  if (typeof navigator.clipboard?.writeText === 'function') {
-    try {
-      await navigator.clipboard.writeText(text)
-      copied = true
-    } catch {
-      // 安全上下文内也可能因权限被拒，继续走降级方案
-    }
-  }
-  if (!copied) {
-    // 非安全上下文降级：隐藏 textarea + execCommand('copy')
-    const textarea = document.createElement('textarea')
-    textarea.value = text
-    textarea.setAttribute('readonly', '')
-    textarea.style.position = 'fixed'
-    textarea.style.opacity = '0'
-    document.body.appendChild(textarea)
-    textarea.select()
-    try {
-      copied = document.execCommand('copy')
-    } catch {
-      copied = false
-    }
-    document.body.removeChild(textarea)
+  try {
+    await copyToClipboard(diagnostic.value)
+    copied = true
+  } catch {
+    copied = false
   }
   store.notify(
     copied ? strings.settings.copied : strings.settings.copyFailed,
@@ -195,266 +179,25 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
       </button>
     </nav>
 
-    <!-- 声音设置：主音量 / 音效音量 / 背景音乐 / 全部静音 -->
-    <section v-if="tab === 'audio'" class="min-h-0 px-[9cqw] py-[3cqh]">
-      <div class="flex items-center gap-[1.2em] mb-[2.5cqh]">
-        <Music2 class="h-[6cqh] w-[6cqh] rounded-[0.8em] bg-blue p-[1.2cqh] text-white" />
-        <div>
-          <h2>{{ strings.settings.audioTitle }}</h2>
-          <p class="mt-[0.5cqh] text-muted text-[0.72em]">{{ strings.settings.audioIntro }}</p>
-        </div>
-      </div>
-      <div class="flex flex-col gap-[1.2cqh]">
-        <label
-          class="grid min-h-[8cqh] grid-cols-[1.2fr_1.8fr_auto] items-center gap-[1em] border-l-[0.4cqh] border-blue bg-white px-[1.2em] py-[1cqh]"
-          ><span class="flex flex-col"
-            ><b>{{ strings.settings.masterVolume }}</b
-            ><small class="text-muted text-[0.7em]">{{
-              strings.settings.masterVolumeHint
-            }}</small></span
-          ><input
-            v-model.number="store.settings.masterVolume"
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            class="accent-blue"
-            @change="store.saveSettings"
-          /><strong>{{ Math.round(store.settings.masterVolume * 100) }}%</strong></label
-        >
-        <label
-          class="grid min-h-[8cqh] grid-cols-[1.2fr_1.8fr_auto] items-center gap-[1em] border-l-[0.4cqh] border-blue bg-white px-[1.2em] py-[1cqh]"
-          ><span class="flex flex-col"
-            ><b>{{ strings.settings.soundVolume }}</b
-            ><small class="text-muted text-[0.7em]">{{
-              strings.settings.soundVolumeHint
-            }}</small></span
-          ><input
-            v-model.number="store.settings.soundVolume"
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            class="accent-blue"
-            @change="store.saveSettings"
-          /><strong>{{ Math.round(store.settings.soundVolume * 100) }}%</strong></label
-        >
-        <label
-          class="grid min-h-[8cqh] grid-cols-[1.2fr_1.8fr_auto] items-center gap-[1em] border-l-[0.4cqh] border-blue bg-white px-[1.2em] py-[1cqh]"
-          ><span class="flex flex-col"
-            ><b>{{ strings.settings.musicVolume }}</b
-            ><small class="text-muted text-[0.7em]">{{
-              strings.settings.musicVolumeHint
-            }}</small></span
-          ><input
-            v-model.number="store.settings.musicVolume"
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            class="accent-blue"
-            @change="store.saveSettings"
-          /><strong>{{ Math.round(store.settings.musicVolume * 100) }}%</strong></label
-        >
-        <label
-          class="grid min-h-[8cqh] grid-cols-[1fr_auto] items-center gap-[1em] border-l-[0.4cqh] border-blue bg-white px-[1.2em] py-[1cqh]"
-          ><span class="flex flex-col"
-            ><b>{{ strings.settings.muted }}</b
-            ><small class="text-muted text-[0.7em]">{{ strings.settings.mutedHint }}</small></span
-          ><input
-            v-model="store.settings.muted"
-            type="checkbox"
-            class="h-[2.6cqh] w-[2.6cqh] accent-blue"
-            @change="store.saveSettings"
-        /></label>
-      </div>
-    </section>
-
-    <!-- 显示与操作设置：动画 / 快捷键提示 / 自动聚焦 / 发现与邀请开关 -->
-    <section v-else-if="tab === 'accessibility'" class="min-h-0 px-[9cqw] py-[3cqh]">
-      <div class="flex items-center gap-[1.2em] mb-[2.5cqh]">
-        <Eye class="h-[6cqh] w-[6cqh] rounded-[0.8em] bg-blue p-[1.2cqh] text-white" />
-        <div>
-          <h2>{{ strings.settings.accessibilityTitle }}</h2>
-          <p class="mt-[0.5cqh] text-muted text-[0.72em]">
-            {{ strings.settings.accessibilityIntro }}
-          </p>
-        </div>
-      </div>
-      <div class="grid grid-cols-2 gap-[1.2cqh_1em]">
-        <label
-          class="flex min-h-[8cqh] items-center gap-[1em] border-l-[0.35cqh] border-slate-400 bg-white px-[1.2em] py-[1cqh]"
-          ><span class="flex flex-1 flex-col"
-            ><b>{{ strings.settings.animations }}</b
-            ><small class="text-muted text-[0.68em]">{{
-              strings.settings.animationsHint
-            }}</small></span
-          ><input
-            v-model="store.settings.animationsEnabled"
-            type="checkbox"
-            class="h-[2.6cqh] w-[2.6cqh] accent-blue"
-            @change="store.saveSettings"
-        /></label>
-        <label
-          class="flex min-h-[8cqh] items-center gap-[1em] border-l-[0.35cqh] border-slate-400 bg-white px-[1.2em] py-[1cqh]"
-          ><span class="flex flex-1 flex-col"
-            ><b>{{ strings.settings.showShortcuts }}</b
-            ><small class="text-muted text-[0.68em]">{{
-              strings.settings.showShortcutsHint
-            }}</small></span
-          ><input
-            v-model="store.settings.showShortcuts"
-            type="checkbox"
-            class="h-[2.6cqh] w-[2.6cqh] accent-blue"
-            @change="store.saveSettings"
-        /></label>
-        <label
-          class="flex min-h-[8cqh] items-center gap-[1em] border-l-[0.35cqh] border-slate-400 bg-white px-[1.2em] py-[1cqh]"
-          ><span class="flex flex-1 flex-col"
-            ><b>{{ strings.settings.autoFocus }}</b
-            ><small class="text-muted text-[0.68em]">{{
-              strings.settings.autoFocusHint
-            }}</small></span
-          ><input
-            v-model="store.settings.autoFocusGuess"
-            type="checkbox"
-            class="h-[2.6cqh] w-[2.6cqh] accent-blue"
-            @change="store.saveSettings"
-        /></label>
-        <label
-          class="flex min-h-[8cqh] items-center gap-[1em] border-l-[0.35cqh] border-slate-400 bg-white px-[1.2em] py-[1cqh]"
-          ><span class="flex flex-1 flex-col"
-            ><b>{{ strings.settings.discoverable }}</b
-            ><small class="text-muted text-[0.68em]">{{
-              strings.settings.discoverableHint
-            }}</small></span
-          ><input
-            v-model="store.settings.discoverable"
-            type="checkbox"
-            class="h-[2.6cqh] w-[2.6cqh] accent-blue"
-            @change="store.saveSettings"
-        /></label>
-        <label
-          class="flex min-h-[8cqh] items-center gap-[1em] border-l-[0.35cqh] border-slate-400 bg-white px-[1.2em] py-[1cqh]"
-          ><span class="flex flex-1 flex-col"
-            ><b>{{ strings.settings.acceptsInvites }}</b
-            ><small class="text-muted text-[0.68em]">{{
-              strings.settings.acceptsInvitesHint
-            }}</small></span
-          ><input
-            v-model="store.settings.acceptsInvites"
-            type="checkbox"
-            class="h-[2.6cqh] w-[2.6cqh] accent-blue"
-            @change="store.saveSettings"
-        /></label>
-      </div>
-    </section>
-
-    <!-- 快捷键设置：三个工具各自捕获一个单键，重复键会报错 -->
-    <section v-else-if="tab === 'shortcuts'" class="min-h-0 px-[9cqw] py-[3cqh]">
-      <div class="flex items-center gap-[1.2em] mb-[2.5cqh]">
-        <Keyboard class="h-[6cqh] w-[6cqh] rounded-[0.8em] bg-blue p-[1.2cqh] text-white" />
-        <div>
-          <h2>{{ strings.settings.shortcutsTitle }}</h2>
-          <p class="mt-[0.5cqh] text-muted text-[0.72em]">{{ strings.settings.shortcutsIntro }}</p>
-        </div>
-      </div>
-      <div class="grid grid-cols-3 gap-[1em]">
-        <label
-          v-for="row in shortcutRows"
-          :key="row.setting"
-          class="grid min-h-[12cqh] grid-cols-[auto_1fr_auto] items-center gap-[0.8em] rounded-[0.8em] border-[0.18cqh] border-line bg-white p-[1.2em]"
-        >
-          <component :is="row.icon" class="w-[3.6cqh] text-blue" />
-          <span class="flex flex-col gap-[0.25em]"
-            ><b>{{ row.name }}</b
-            ><small class="text-muted text-[0.68em]">{{ row.detail }}</small></span
-          >
-          <input
-            :value="store.settings[row.setting]"
-            type="text"
-            readonly
-            class="h-[3.2em] w-[3.2em] rounded-[0.55em] bg-blue text-center text-white uppercase font-mono font-black leading-none cursor-pointer [text-transform:uppercase] focus:outline-[0.3cqh] focus:outline-yellow focus:outline-offset-[0.2cqh]"
-            :aria-label="strings.settings.setShortcutAria(row.name)"
-            @keydown.prevent="captureShortcut(row.setting, $event)"
-          />
-        </label>
-      </div>
-      <p v-if="shortcutError" class="mt-[1.2cqh] text-red font-extrabold" role="alert">
-        {{ shortcutError }}
-      </p>
-      <p class="mt-[1.2cqh] text-muted text-[0.68em]">{{ strings.settings.shortcutNote }}</p>
-    </section>
-
-    <!-- 资料与诊断：修改大厅资料 / 查看诊断 / 恢复默认与清除资料 -->
-    <section
+    <!-- 声音设置 -->
+    <AudioTab v-if="tab === 'audio'" />
+    <!-- 显示与操作设置 -->
+    <AccessibilityTab v-else-if="tab === 'accessibility'" />
+    <!-- 快捷键设置 -->
+    <ShortcutsTab
+      v-else-if="tab === 'shortcuts'"
+      :rows="shortcutRows"
+      :error="shortcutError"
+      @capture="captureShortcut"
+    />
+    <!-- 资料与诊断 -->
+    <DiagnosticsTab
       v-else
-      class="min-h-0 px-[9cqw] py-[3cqh] grid grid-cols-[1fr_1.3fr] grid-rows-[1fr_auto] gap-[2cqh_2cqw]"
-    >
-      <div
-        class="grid grid-cols-[auto_1fr] items-center gap-[1.5cqh_1em] border-t-[0.4cqh] border-blue bg-white p-[2cqh_1.5em]"
-      >
-        <button
-          type="button"
-          class="row-span-2 flex flex-col items-center gap-[0.7cqh] text-blue bg-transparent text-[0.72em] font-black"
-          :aria-label="strings.profile.changeAvatarAria"
-          @click="showAvatarPicker = true"
-        >
-          <AvatarImage
-            :avatar-id="store.profile.avatarId"
-            :label="strings.common.myAvatarAria"
-            class="h-[14cqh] w-[14cqh]"
-          />
-          <span>{{ strings.settings.avatarField }}</span>
-        </button>
-        <label class="flex flex-col gap-[0.6cqh] font-extrabold"
-          >{{ strings.settings.nicknameField
-          }}<input
-            v-model="store.profile.nickname"
-            :maxlength="store.config.player.nicknameMaxLength"
-            class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink" /></label
-        ><button
-          class="col-start-2 inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-blue shadow-[0_0.4cqh_0_#1e40af]"
-          type="button"
-          @click="store.updateProfile"
-        >
-          {{ strings.settings.saveProfile }}
-        </button>
-      </div>
-      <div class="border-t-[0.4cqh] border-blue bg-white p-[2cqh_1.5em]">
-        <h2>{{ strings.settings.diagnosticsTitle }}</h2>
-        <pre
-          class="my-[1.4cqh] rounded-[0.6em] bg-navy p-[1.2cqh_1em] text-[#dbeafe] font-mono text-[0.7em] leading-[1.5] whitespace-pre-wrap"
-          >{{ diagnostic }}</pre>
-        <button
-          class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-navy bg-white !border !border-[0.18cqh] !border-line"
-          type="button"
-          @click="copyDiagnostics"
-        >
-          <Clipboard />{{ strings.settings.copyDiagnostics }}
-        </button>
-      </div>
-      <div class="col-span-full flex justify-end gap-[0.8em]">
-        <button
-          type="button"
-          class="flex min-h-[5cqh] items-center gap-[0.5em] rounded-[0.6em] px-[1em] text-navy bg-white border-[0.18cqh] border-line"
-          @click="store.resetSettings"
-        >
-          <RotateCcw />{{ strings.settings.resetSettings }}</button
-        ><button
-          type="button"
-          class="flex min-h-[5cqh] items-center justify-center gap-[0.5em] rounded-[0.6em] px-[1em] font-black text-white bg-red"
-          @click="store.clearProfile"
-        >
-          <Trash2 />{{ strings.settings.clearProfile }}
-        </button>
-      </div>
-    </section>
-
-    <AvatarPickerDialog
-      v-model="store.profile.avatarId"
-      :open="showAvatarPicker"
-      @close="showAvatarPicker = false"
+      :diagnostic="diagnostic"
+      :server-address="serverAddress"
+      :show-avatar-picker="showAvatarPicker"
+      @update:show-avatar-picker="showAvatarPicker = $event"
+      @copy="copyDiagnostics"
     />
   </main>
 </template>

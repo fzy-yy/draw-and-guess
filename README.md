@@ -8,6 +8,8 @@
 - pnpm 10+
 - Chromium、Edge、Chrome 或 Firefox 的现代版本
 
+前端已引入并可直接使用：`@tanstack/vue-virtual`（虚拟列表）、`@vueuse/core`（组合式工具）、`nanoid`（短 ID）、`clsx`（类名合并）；UI 图标来自 `lucide-vue-next`，样式基于 Tailwind CSS v4（容器单位 `cqh/cqw` 整屏缩放）。
+
 ## 十分钟启动
 
 ```bash
@@ -49,11 +51,15 @@ pnpm format:check  # 检查格式
 
 ```text
 apps/client/       Vue 3 游戏舞台、内置 SVG 头像、Pinia 状态与 Canvas 实时画板
+  └─ src/components/  # 按领域拆分：game/ 对局、room/ 房间、settings/ 设置；
+                      # 共享组件 AppButton / BaseDialog / ConfirmDialog 放在 components/ 根目录
 apps/server/       Express、Socket.IO 与权威内存领域状态
 packages/shared/   DTO、Zod schema、事件名和领域纯函数
 config.ts          唯一业务配置中心（按领域聚合 config/ 目录）
 vocabulary.md      唯一权威词库正文
 ```
+
+客户端样式采用「单一 `apps/client/src/style/index.css`（Tailwind `@theme` 令牌 + `@layer base` 全局层与 `@layer components` 共享组件类）+ 组件内行内 Tailwind 类」的约定，不新建分片 CSS 文件。
 
 > 完整文件职责逐行说明与项目约定，见根级 [AGENTS.md](AGENTS.md)（面向后续开发者/AI）。
 
@@ -75,7 +81,7 @@ vocabulary.md      唯一权威词库正文
 ## 继续开发
 
 - 完整目录职责与项目硬性限制：[AGENTS.md](AGENTS.md)
-- 待办与风险/问题清单（人工确认后处理）：[代码审查与问题清单.md](代码审查与问题清单.md)
 - 开发计划与模块建议：[开发建议.md](开发建议.md)
+- 样式重构与代码审查结论：[样式重构与代码审查报告.md](样式重构与代码审查报告.md)
 
 提交前应依次运行 `pnpm format`、`pnpm lint`、`pnpm typecheck` 和 `pnpm build`。

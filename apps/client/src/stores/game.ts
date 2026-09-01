@@ -21,7 +21,7 @@ import {
 } from '@draw-guess/shared'
 import { createUuid } from '@/utils/createUuid'
 import { attachSocketListeners, socket } from './socket.ts'
-import { createRequester } from './request.ts'
+import { createRequester, type RequestResult } from './request.ts'
 
 /** 连接状态文案类型：与 config/strings.ts 的 strings.connection 保持同一来源，改动文案无需另改类型。 */
 export type ConnectionLabel = (typeof strings.connection)[keyof typeof strings.connection]
@@ -210,8 +210,11 @@ export const useGameStore = defineStore('game', () => {
   /**
    * 执行不带向上传播的请求：失败时 request 已弹出错误 Toast，这里静默吞掉，
    * 避免 Vue 事件处理器收到未捕获 rejection 而产生页面级错误（pageerror）。
+   * request 层现已不抛错（返回可判别结果），guarded 仅作为极端意外故障的兜底。
    */
-  async function guarded<T>(promise: Promise<T>): Promise<T | undefined> {
+  async function guarded<T>(
+    promise: Promise<RequestResult<T>>,
+  ): Promise<RequestResult<T> | undefined> {
     try {
       return await promise
     } catch {
@@ -243,18 +246,18 @@ export const useGameStore = defineStore('game', () => {
         }),
       )
       // 注册失败时 request 已弹错误 Toast，直接终止本次流程。
-      if (!result) return
-      playerId.value = result.player.id
+      if (!result?.ok) return
+      playerId.value = result.data.player.id
       profile.value = {
         ...profile.value,
-        nickname: result.player.nickname,
-        avatarId: result.player.avatarId,
-        recoveryToken: result.recoveryToken,
+        nickname: result.data.player.nickname,
+        avatarId: result.data.player.avatarId,
+        recoveryToken: result.data.recoveryToken,
         recoveryTokenExpiresAt: Date.now() + PUBLIC_CONFIG.network.recoveryTokenLifetimeMs,
       }
       saveProfile()
       page.value = 'lobby'
-      notify(result.restored ? strings.store.restored : strings.store.enteredLobby)
+      notify(result.data.restored ? strings.store.restored : strings.store.enteredLobby)
     } finally {
       busy.value = false
     }
@@ -311,8 +314,8 @@ export const useGameStore = defineStore('game', () => {
         profile: { nickname: profile.value.nickname, avatarId: profile.value.avatarId },
       }),
     )
-    if (!result) return // 失败已提示，不覆盖本地资料
-    profile.value = { ...profile.value, ...result }
+    if (!result?.ok) return // 失败已提示，不覆盖本地资料
+    profile.value = { ...profile.value, ...result.data }
     saveProfile()
     notify(strings.store.profileUpdated)
   }
@@ -324,31 +327,25 @@ export const useGameStore = defineStore('game', () => {
     settings: RoomSettings
   }): Promise<void> {
     const snapshot = await guarded<RoomSnapshot>(request(EVENTS.roomCreate, input))
-    if (snapshot) room.value = snapshot
+    if (snapshot?.ok) room.value = snapshot.data
   }
   /** 加入大厅中的公开房间。 */
   async function joinRoom(roomId: string): Promise<void> {
     const snapshot = await guarded<RoomSnapshot>(request(EVENTS.roomJoin, { roomId }))
-    if (snapshot) room.value = snapshot
+    if (snapshot?.ok) room.value = snapshot.data
   }
 
   /** 使用服务端生成的短码加入私密房；失败时保留弹窗和输入供重试。 */
   async function joinPrivateRoom(code: string): Promise<void> {
     const snapshot = await guarded<RoomSnapshot>(request(EVENTS.roomJoinPrivate, { code }))
-    if (snapshot) room.value = snapshot
+    if (snapshot?.ok) room.value = snapshot.data
   }
 
   /** 退出当前房间并清理本地对局/词库状态。 */
   async function leaveRoom(): Promise<void> {
-    // roomLeave 成功时服务端返回空 data，改用哨兵区分“请求失败”与“成功但无数据”。
-    let succeeded = false
-    await guarded(
-      request<undefined>(EVENTS.roomLeave).then((data) => {
-        succeeded = true
-        return data
-      }),
-    )
-    if (!succeeded) return
+    // roomLeave 成功时服务端返回空 data，用 result.ok 区分“请求失败”与“成功但无数据”。
+    const result = await guarded<undefined>(request(EVENTS.roomLeave))
+    if (!result?.ok) return
     room.value = undefined
     vocabulary.value = undefined
     notify(strings.store.roomLeft)
@@ -370,7 +367,7 @@ export const useGameStore = defineStore('game', () => {
   /** 房主拉取词库快照。 */
   async function loadVocabulary(): Promise<void> {
     const snapshot = await guarded<VocabularySnapshot>(request(EVENTS.roomGetVocabulary))
-    if (snapshot) vocabulary.value = snapshot
+    if (snapshot?.ok) vocabulary.value = snapshot.data
   }
 
   /** 房主保存本局词库选择（带版本号，失败会提示重新确认）。 */
@@ -382,8 +379,8 @@ export const useGameStore = defineStore('game', () => {
         expectedVersion: room.value.stateVersion,
       }),
     )
-    if (!snapshot) return
-    vocabulary.value = snapshot
+    if (!snapshot?.ok) return
+    vocabulary.value = snapshot.data
     notify(strings.store.vocabularyUpdated)
   }
 
@@ -459,33 +456,23 @@ export const useGameStore = defineStore('game', () => {
 
   /** 向指定在线玩家发送定向房间邀请。 */
   async function invite(targetId: string): Promise<void> {
-    let succeeded = false
-    await guarded(
-      request<Invite>(EVENTS.inviteSend, { targetId }).then((data) => {
-        succeeded = true
-        return data
-      }),
-    )
-    if (!succeeded) return
+    const result = await guarded<Invite>(request(EVENTS.inviteSend, { targetId }))
+    if (!result?.ok) return
     notify(strings.store.inviteSent)
   }
 
   /** 接受/拒绝邀请；接受成功后切换到受邀房间。 */
   async function respondInvite(inviteId: string, accept: boolean): Promise<void> {
-    // 拒绝时服务端返回 undefined 仍属成功，用哨兵区分失败与成功但无数据。
-    let succeeded = false
+    // 拒绝时服务端返回 undefined 仍属成功，用 result.ok 区分失败与成功但无数据。
     const joined = await guarded<RoomSnapshot | undefined>(
       request<RoomSnapshot | undefined>(EVENTS.inviteRespond, {
         inviteId,
         accept,
-      }).then((data) => {
-        succeeded = true
-        return data
       }),
     )
-    if (!succeeded) return
+    if (!joined?.ok) return
     invites.value = invites.value.filter((invite) => invite.id !== inviteId)
-    if (joined) room.value = joined
+    if (joined.data) room.value = joined.data
   }
 
   /**
@@ -522,8 +509,9 @@ export const useGameStore = defineStore('game', () => {
         )
         if (localMaxSequence < snapshot.game.lastSequence) {
           // 中途丢过笔画增量：请求全量画布历史（stateResync 服务端会强制全量下发）
+          // 失败时保留当前 room（服务端已弹错误提示），避免画布状态不一致却无任何反馈。
           void guarded<RoomSnapshot | undefined>(request(EVENTS.stateResync, {})).then((full) => {
-            if (full?.game) room.value = full
+            if (full?.ok) room.value = full.data
           })
           return // 修正结果以全量快照为准，不再沿用残缺本地历史
         }
@@ -583,18 +571,16 @@ export const useGameStore = defineStore('game', () => {
   async function measureLatency(): Promise<void> {
     if (!playerId.value) return
     const started = Date.now()
-    try {
-      const result = await request<{ clientTime: number; serverTime: number }>(
-        EVENTS.networkPing,
-        { clientTime: started },
-        { quiet: true },
-      )
-      const rtt = Date.now() - started
-      latency.value = Math.max(0, rtt)
-      clockOffset.value = result.serverTime - (started + rtt / 2)
-    } catch {
-      // 网络抖动时静默忽略，沿用上一次估算值
-    }
+    const result = await request<{ clientTime: number; serverTime: number }>(
+      EVENTS.networkPing,
+      { clientTime: started },
+      { quiet: true },
+    )
+    // 网络抖动或超时失败时静默忽略（quiet 请求不弹 Toast），沿用上一次估算值
+    if (!result.ok) return
+    const rtt = Date.now() - started
+    latency.value = Math.max(0, rtt)
+    clockOffset.value = result.data.serverTime - (started + rtt / 2)
   }
 
   // store 初始化：注册监听、应用本地设置、消除热刷新注册竞态、启动延迟探测定时器

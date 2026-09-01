@@ -16,7 +16,14 @@ export interface RequestOptions {
 /** 通知回调用类型（与 store.notify 对齐）。 */
 export type NotifyFn = (text: string, type?: 'success' | 'warning' | 'error') => void
 
-/** 创建带统一错误翻译的请求函数。 */
+/**
+ * 可失败请求的可判别结果：调用方用 `result.ok` 明确区分成功与失败，
+ * 不再依赖“失败抛错”的隐式约定。timeout 用于标记请求是否因超时失败。
+ */
+export type RequestResult<T> =
+  { ok: true; data: T; timeout?: false } | { ok: false; error: string; timeout?: boolean }
+
+/** 创建带统一错误翻译的请求函数：不抛错，返回可判别结果对象。 */
 export function createRequester(options: {
   socket: Socket
   notify: NotifyFn
@@ -24,29 +31,29 @@ export function createRequester(options: {
   event: string,
   payload?: Record<string, unknown>,
   requestOptions?: RequestOptions,
-) => Promise<T> {
+) => Promise<RequestResult<T>> {
   const { socket, notify } = options
   return async function request<T>(
     event: string,
     payload: Record<string, unknown> = {},
     requestOptions: RequestOptions = {},
-  ): Promise<T> {
+  ): Promise<RequestResult<T>> {
     const requestId = createUuid()
     try {
       const ack = (await socket
         .timeout(APP_CONFIG.network.requestTimeoutMs)
         .emitWithAck(event, { ...payload, requestId })) as Ack<T>
       if (!ack.ok) throw new Error(ack.error.message)
-      return ack.data
+      return { ok: true, data: ack.data }
     } catch (error) {
       // 统一兜底与超时翻译来自 config/strings.ts，保持错误文案单一来源
       const message = error instanceof Error ? error.message : strings.request.genericFailure
-      const timeoutMessage = message.includes('operation has timed out')
-        ? strings.request.timeoutMessage
-        : message
+      // 超时识别：socket.io 在 ack 超时后回传的错误信息固定为 “operation has timed out”
+      const isTimeout = message.includes('operation has timed out')
+      const timeoutMessage = isTimeout ? strings.request.timeoutMessage : message
       // 绘图等高频事件失败时静默降级（本地画面由下一次权威快照校准），避免连续错误 Toast 刷屏
       if (!requestOptions.quiet) notify(timeoutMessage, 'error')
-      throw error
+      return { ok: false, error: timeoutMessage, timeout: isTimeout }
     }
   }
 }

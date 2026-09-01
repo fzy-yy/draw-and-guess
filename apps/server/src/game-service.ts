@@ -299,7 +299,14 @@ export class GameService {
     this.logger.info({ roomId: room.id, playerId: player.id, source }, '玩家已加入房间')
     player.roomId = room.id
     player.socket?.join(room.id)
-    this.invalidateReady(room, serverStrings.notices.joinedReadyReset(player.profile.nickname))
+    // P3：仅当房间已存在其它非房主（可玩）成员时才重置全员准备，避免加入只有房主的空房时
+    // 产生无意义的「所有人需要重新准备」提示；房主准备位本就为隐式就绪，无需重复确认。
+    const hasPeerMembers = room.members.some(
+      (member) =>
+        member.playerId !== player.id && member.playerId !== room.hostId && !member.spectating,
+    )
+    if (hasPeerMembers)
+      this.invalidateReady(room, serverStrings.notices.joinedReadyReset(player.profile.nickname))
     this.emitRoom(room.id)
     this.broadcastPresence()
     return this.snapshotter.snapshot(room, player.id)

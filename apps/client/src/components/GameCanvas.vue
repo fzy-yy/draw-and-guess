@@ -5,6 +5,7 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useTimeoutFn } from '@vueuse/core'
 import {
   type DrawingCommand,
   type DrawPoint,
@@ -41,7 +42,13 @@ let observer: ResizeObserver | undefined // 画布尺寸监听（窗口缩放重
 let sequence = 0 // 本地绘图序号（提交时与权威历史比较取更大值）
 let activeStrokeId = '' // 当前按下动作的笔画 ID（各批次共用）
 let sentPointCount = 0 // 已发送到服务端的点数（用于切片增量）
-let batchTimer = 0 // 批次发送定时器句柄
+// 批次发送定时器改为由 @vueuse/core 的 useTimeoutFn 管理：start 会先清理旧定时器再重排，
+// isPending 表示当前是否已有待触发的定时器，组件卸载时自动清理（见 onBeforeUnmount）。
+const {
+  isPending: batchPending,
+  start: startBatchTimer,
+  stop: stopBatchTimer,
+} = useTimeoutFn(flushPointBatch, APP_CONFIG.drawing.batchIntervalMs, { immediate: false })
 
 /** 过滤掉已撤销的命令，得到实际应重绘的可见历史。 */
 const visibleCommands = computed(() =>
@@ -312,7 +319,7 @@ function pointerDown(event: PointerEvent): void {
       sequence,
     })
   // 启动批次发送周期：按下后定期把新采样点批量上传
-  batchTimer = window.setTimeout(flushPointBatch, APP_CONFIG.drawing.batchIntervalMs)
+  startBatchTimer()
 }
 
 /** 指针移动时为自由笔画追加经过距离去抖的采样点，并增量绘制新增点段。 */
@@ -341,15 +348,13 @@ function pointerMove(event: PointerEvent): void {
       },
       from,
     )
-  // 批次周期外的新点也触发一次批次发送
-  if (!batchTimer)
-    batchTimer = window.setTimeout(flushPointBatch, APP_CONFIG.drawing.batchIntervalMs)
+  // 批次周期外的新点也触发一次批次发送（仅在无待触发定时器时重排，避免每次移动重置倒计时）
+  if (!batchPending.value) startBatchTimer()
 }
 
 /** 每个配置批处理周期仅发送自由笔画新增点，既保证实时性也限制网络事件量。 */
 function flushPointBatch(): void {
-  window.clearTimeout(batchTimer)
-  batchTimer = 0
+  // useTimeoutFn 在定时器触发后已自动将 isPending 置为 false 并清除句柄，无需手动清理
   if (!activeStrokeId || sentPointCount >= activePoints.value.length) return
   const start = Math.max(0, sentPointCount - (sentPointCount > 0 ? 1 : 0))
   const unsent = activePoints.value.slice(start)
@@ -438,7 +443,8 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   observer?.disconnect()
-  window.clearTimeout(batchTimer)
+  // useTimeoutFn 已在组件卸载时自动清理定时器，这里显式调用（幂等）以保持原有清理语义
+  stopBatchTimer()
 })
 </script>
 

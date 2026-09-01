@@ -9,6 +9,9 @@ import type { useGameStore } from '@/stores/game'
 
 type GameStore = ReturnType<typeof useGameStore>
 
+/** 带同名次排位的成员视图：在公开成员信息基础上叠加并排位次。 */
+export type RankedMember = RoomMember & { rank: number }
+
 /** 从对局快照派生 HUD 计算属性，并启动/清理时间刷新定时器。 */
 export function useGameHud(store: GameStore) {
   const now = ref(Date.now())
@@ -63,7 +66,7 @@ export function useGameHud(store: GameStore) {
     store.room?.members.find((member) => member.id === game.value?.drawerId),
   )
   // 最终排行：按分数降序并计算同名次（同分并列）
-  const rankings = computed(() => {
+  const rankings = computed<RankedMember[]>(() => {
     const members = [...(store.room?.members ?? [])].sort((a, b) => b.score - a.score)
     let previous = -1
     let rank = 0

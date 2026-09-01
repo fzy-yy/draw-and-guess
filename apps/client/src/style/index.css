@@ -27,6 +27,39 @@
   --color-line: #cbd5e1;
 }
 
+/* ===== 共享「组件类」：用 @apply 收敛重复的行内 Tailwind 长串，供各视图引用。
+   仅定义新增、语义值与现有组件/模板中的行内类保持一致；当前代码尚未迁移使用，先作为公共样式约定存在。
+   注意：这些类未在各 .vue 中使用（避免与本任务其它改动冲突），引用时应与既有行内类等价。 ===== */
+@layer components {
+  /* 动作按钮底座：与 AppButton 组件的 base 串一致。
+     .btn-primary/.btn-secondary/.btn-danger 分别对应 primary/secondary/danger 变体色。 */
+  .btn {
+    @apply inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black;
+  }
+  .btn-primary {
+    @apply text-white bg-blue shadow-[0_0.4cqh_0_#1e40af];
+  }
+  .btn-secondary {
+    /* 注意：按钮在 .game-stage 内有基础 border:0，须用 !border 以重要声明覆盖。 */
+    @apply text-navy bg-white !border !border-[0.18cqh] !border-line;
+  }
+  .btn-danger {
+    @apply text-white bg-red;
+  }
+  /* 弹窗卡片骨架：与 BaseDialog 组件 .game-dialog 一致。 */
+  .dialog-shell {
+    @apply flex max-h-[86cqh] flex-col overflow-hidden rounded-[1.2em] border-[0.35cqh] border-white bg-paper text-ink shadow-[0_1.4cqh_4cqh_#0007];
+  }
+  /* 输入框/搜索框外壳：与词库弹窗搜索框一致。 */
+  .field-input {
+    @apply flex h-[4.8cqh] items-center gap-[0.6em] rounded-[0.65em] border-[0.18cqh] border-line bg-white px-[0.75em];
+  }
+  /* 眉题：分区小标题（如词库弹窗标题上方的标签）。 */
+  .eyebrow {
+    @apply text-blue font-black tracking-[0.16em] text-[0.72em];
+  }
+}
+
 /* ===== 全局 base：只能作为全局层存在，无法行内 ===== */
 @layer base {
   /* 统一盒模型：所有元素按 border-box 计算宽高，避免内边距撑破布局。 */
