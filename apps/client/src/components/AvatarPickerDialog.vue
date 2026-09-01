@@ -27,20 +27,27 @@ function selectAvatar(avatarId: AvatarId): void {
   <Transition name="modal">
     <div
       v-if="props.open"
-      class="stage-overlay"
+      class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
       role="dialog"
       aria-modal="true"
       aria-labelledby="avatar-picker-title"
       @keydown.esc="emit('close')"
     >
-      <section class="game-dialog avatar-picker-dialog">
-        <header>
+      <section
+        class="game-dialog flex max-h-[86cqh] w-[64cqw] flex-col overflow-hidden rounded-[1.2em] border-[0.35cqh] border-white bg-paper text-ink shadow-[0_1.4cqh_4cqh_#0007]"
+      >
+        <header
+          class="flex min-h-[9cqh] items-center justify-between bg-navy px-[1.7em] py-[1.3cqh] text-white"
+        >
           <div>
-            <p class="step-label">{{ strings.profile.avatarPickerLabel }}</p>
+            <p class="text-blue font-black tracking-[0.16em] text-[0.72em]">
+              {{ strings.profile.avatarPickerLabel }}
+            </p>
             <h2 id="avatar-picker-title">{{ strings.profile.avatarPickerTitle }}</h2>
           </div>
           <button
             type="button"
+            class="grid h-[4cqh] w-[4cqh] place-items-center rounded-full bg-white/10 text-white text-[1.2em]"
             :aria-label="strings.profile.avatarPickerCloseAria"
             @click="emit('close')"
           >
@@ -48,7 +55,7 @@ function selectAvatar(avatarId: AvatarId): void {
           </button>
         </header>
         <div
-          class="avatar-picker-grid"
+          class="grid min-h-0 grid-cols-[repeat(8,minmax(0,1fr))] gap-[1.4cqh_1cqw] overflow-y-auto px-[2cqw] py-[2.5cqh] [overscroll-behavior:contain]"
           role="radiogroup"
           :aria-label="strings.profile.avatarPickerAria"
         >
@@ -57,7 +64,10 @@ function selectAvatar(avatarId: AvatarId): void {
             :key="avatarId"
             type="button"
             role="radio"
-            :class="{ selected: props.modelValue === avatarId }"
+            class="grid aspect-square place-items-center rounded-full border-[0.22cqh] border-line bg-white p-[0.7cqh]"
+            :class="{
+              '!border-navy shadow-[0_0_0_0.45cqh_#facc15]': props.modelValue === avatarId,
+            }"
             :aria-checked="props.modelValue === avatarId"
             :aria-label="strings.profile.avatarOptionAria(avatarId)"
             @click="selectAvatar(avatarId)"
@@ -65,6 +75,7 @@ function selectAvatar(avatarId: AvatarId): void {
             <AvatarImage
               :avatar-id="avatarId"
               :label="strings.profile.avatarOptionAria(avatarId)"
+              class="h-full w-full !border-0 !shadow-none"
             />
           </button>
         </div>

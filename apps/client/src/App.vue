@@ -27,9 +27,12 @@ useAudioFeedback()
 
 <template>
   <!-- 视口外壳：把舞台整体居中在屏幕中央 -->
-  <div class="viewport-shell">
+  <div class="grid h-full w-full place-items-center overflow-hidden bg-[#111827]">
     <!-- 游戏舞台：16:9 容器，全部游戏内容都在此内部 -->
-    <section class="game-stage" :aria-label="strings.app.stageAriaLabel(store.config.app.name)">
+    <section
+      class="relative aspect-[16/9] h-[min(99vh,calc(99vw*9/16))] w-[min(99vw,calc(99vh*16/9))] overflow-hidden rounded-[clamp(6px,1cqh,14px)] border-[max(1px,0.28cqh)] border-slate-700 bg-paper shadow-[0_1.2cqh_5cqh_#0009]"
+      :aria-label="strings.app.stageAriaLabel(store.config.app.name)"
+    >
       <!-- 四个页面视图按状态互斥渲染：对局 > 房间 > 设置 > 大厅 > 资料 -->
       <GameView v-if="store.room && store.room.phase !== 'waiting'" />
       <RoomView v-else-if="store.room" />
@@ -41,15 +44,25 @@ useAudioFeedback()
       <TransitionGroup
         name="toast"
         tag="div"
-        class="toast-stack"
+        class="absolute right-[1.2cqw] top-[12cqh] z-[70] flex w-[28cqw] flex-col gap-[0.8cqh] pointer-events-none"
         aria-live="polite"
         :aria-label="strings.app.toastStackAria"
       >
         <div
           v-for="toast in store.toasts"
           :key="toast.id"
-          class="toast"
-          :class="[toast.type, { repeated: toast.repeated }]"
+          class="grid grid-cols-[auto_1fr_auto] items-center gap-[0.7em] border-l-[0.45cqh] px-[0.9em] py-[1.1cqh] text-[0.75em] font-extrabold shadow-[0_0.6cqh_2cqh_#0f172a44] pointer-events-auto"
+          :class="[
+            toast.type === 'warning'
+              ? 'text-[#713f12] bg-[#fef3c7] border-l-[#ca8a04]'
+              : toast.type === 'error'
+                ? 'text-[#7f1d1d] bg-[#fee2e2] border-l-red'
+                : 'text-[#14532d] bg-[#dcfce7] border-l-green',
+            {
+              repeated:
+                'text-[#0c4a6e] bg-[#e0f2fe] border-l-[#0284c7] animate-[toast-pulse_0.5s_ease-in-out_2]',
+            },
+          ]"
         >
           <!-- 成功用对勾图标，其余用警示图标 -->
           <CheckCircle2 v-if="toast.type === 'success'" />
@@ -58,6 +71,7 @@ useAudioFeedback()
           <!-- 手动关闭按钮：从 toasts 数组移除该条（store 内做 index 边界保护） -->
           <button
             type="button"
+            class="grid place-items-center bg-transparent text-current"
             :aria-label="strings.app.toastDismissAria"
             @click="store.dismissToast(toast.id)"
           >
@@ -70,7 +84,7 @@ useAudioFeedback()
       <Transition name="banner">
         <div
           v-if="store.invites.length && !store.room"
-          class="invite-banner"
+          class="absolute bottom-[3cqh] left-1/2 z-[50] grid min-h-[10cqh] w-[66cqw] grid-cols-[auto_1fr_auto_auto] items-center gap-[1em] border-[0.3cqh] border-blue border-l-[1cqh] bg-white px-[1em] py-[1cqh] shadow-[0_1cqh_3cqh_#0f172a55] -translate-x-1/2"
           role="dialog"
           :aria-label="strings.app.inviteDialogAria"
         >
@@ -78,9 +92,10 @@ useAudioFeedback()
           <AvatarImage
             :avatar-id="store.invites[0]?.from.avatarId"
             :label="strings.app.inviterAvatarAria"
+            class="h-[6.5cqh] w-[6.5cqh]"
           />
-          <div>
-            <span>{{ strings.app.inviteHeading }}</span
+          <div class="flex flex-col">
+            <span class="text-blue text-[0.65em]">{{ strings.app.inviteHeading }}</span
             ><b>{{
               strings.app.inviteReceived(
                 store.invites[0]?.from.nickname ?? '',
@@ -89,14 +104,14 @@ useAudioFeedback()
             }}</b>
           </div>
           <button
-            class="secondary-action"
+            class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-navy bg-white !border !border-[0.18cqh] !border-line"
             type="button"
             @click="store.respondInvite(store.invites[0]!.id, false)"
           >
             {{ strings.common.decline }}
           </button>
           <button
-            class="primary-action"
+            class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-blue shadow-[0_0.4cqh_0_#1e40af]"
             type="button"
             @click="store.respondInvite(store.invites[0]!.id, true)"
           >
@@ -105,7 +120,7 @@ useAudioFeedback()
         </div>
       </Transition>
 
-      <!-- 竖屏警告：手机竖屏时全屏提示旋转设备（见 style.css） -->
+      <!-- 竖屏警告：手机竖屏时全屏提示旋转设备（见 index.css） -->
       <div class="portrait-warning">
         <RotateCw />
         <h2>{{ strings.app.portraitTitle }}</h2>

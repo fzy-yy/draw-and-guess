@@ -158,6 +158,8 @@ export const useGameStore = defineStore('game', () => {
   const room = ref<RoomSnapshot>() // 当前房间快照（含对局视图）
   const vocabulary = ref<VocabularySnapshot>() // 词库快照（仅房主）
   const invites = ref<Invite[]>([]) // 收到的邀请列表
+  /** 画布渲染代次：每次收到笔画追加/新命令时递增，供画布组件可靠触发增量绘制。 */
+  const drawRevision = ref(0)
   // Toast 队列：timer 为自动移除定时器句柄；repeated 标记“同内容被多次触发”以做防抖变色
   const toasts = ref<
     Array<{
@@ -559,6 +561,9 @@ export const useGameStore = defineStore('game', () => {
         // 与服务端权威历史对齐：命令数同样截断，避免本地历史无限增长（内存有界）
         if (game.strokes.length > APP_CONFIG.drawing.maxHistoryCommands) game.strokes.shift()
       }
+      // 同 ID 追加不改变命令数组长度/撤销状态，普通 watch 不会触发；
+      // 用显式绘制代次让画布组件可靠增量绘制长笔画的后续批次。
+      drawRevision.value += 1
     },
     // 填充增量：按回合 ID 与命令 ID 去重后追加；同样执行历史上限截断
     onDrawFillCommit: (roundId, fill) => {
@@ -567,6 +572,7 @@ export const useGameStore = defineStore('game', () => {
         return
       game.strokes.push(fill)
       if (game.strokes.length > APP_CONFIG.drawing.maxHistoryCommands) game.strokes.shift()
+      drawRevision.value += 1
     },
   })
 
@@ -611,6 +617,7 @@ export const useGameStore = defineStore('game', () => {
     room,
     vocabulary,
     invites,
+    drawRevision,
     toasts,
     busy,
     me,

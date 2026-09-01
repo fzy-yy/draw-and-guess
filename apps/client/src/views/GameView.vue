@@ -119,50 +119,69 @@ watch(
 
 <template>
   <!-- 对局主骨架：仅在房间存在且对局未结束时渲染 -->
-  <main v-if="store.room && game" class="game-layout">
+  <main
+    v-if="store.room && game"
+    class="grid h-full grid-cols-[17%_minmax(0,61%)_22%] grid-rows-[11%_minmax(0,76%)_13%] bg-[#cbd5e1]"
+  >
     <!-- 顶栏 HUD：回合数、当前画家、答案、计时器、网络状态与暂停按钮 -->
-    <header class="game-hud">
+    <header
+      class="col-span-full grid grid-cols-[auto_minmax(0,1fr)_minmax(12cqw,2fr)_auto_auto_auto] items-center gap-[1.3em] border-b-[0.45cqh] border-yellow bg-navy px-[1.2cqw] text-white"
+    >
       <!-- 回合指示：当前回合/总回合 -->
-      <div class="round-indicator">
+      <div class="flex flex-col text-[#93c5fd] text-[0.65em]">
         <span>{{ strings.game.roundLabel }}</span
-        ><b
-          >{{ game.currentRound }} <small>/ {{ game.totalRounds }}</small></b
+        ><b class="text-white text-[2em]"
+          >{{ game.currentRound }}
+          <small class="text-[0.55em] text-[#bfdbfe]">/ {{ game.totalRounds }}</small></b
         >
       </div>
       <!-- 当前画家指示：头像 + 昵称 -->
-      <div class="drawer-indicator">
-        <AvatarImage :avatar-id="drawer?.avatarId" :label="strings.game.drawerAvatarAria" />
-        ><span
+      <div class="flex items-center gap-[0.55em] min-w-0">
+        <AvatarImage
+          class="h-[5.2cqh] w-[5.2cqh]"
+          :avatar-id="drawer?.avatarId"
+          :label="strings.game.drawerAvatarAria"
+        />
+        ><span class="min-w-0 flex flex-col text-[#93c5fd] text-[0.62em]"
           >{{ strings.game.drawerLabel
-          }}<b>{{ drawer?.nickname || strings.game.drawerPending }}</b></span
+          }}<b class="overflow-hidden text-ellipsis whitespace-nowrap text-white text-[1.5em]">{{
+            drawer?.nickname || strings.game.drawerPending
+          }}</b></span
         >
       </div>
       <!-- 答案展示：画家看自己的题目，猜词者看遮罩 -->
-      <div class="answer-hud">
-        <span>{{
+      <div class="justify-self-center min-w-[16cqw] flex flex-col items-center">
+        <span class="text-[#93c5fd] text-[0.6em]">{{
           store.isDrawer && game.answer ? strings.game.yourWord : strings.game.guessPrompt
         }}</span
-        ><b>{{
+        ><b class="min-h-[3.8cqh] flex items-center text-yellow text-[1.45em] tracking-[0.16em]">{{
           store.isDrawer && game.answer ? game.answer : game.answerMask || strings.game.awaitingWord
         }}</b>
       </div>
       <!-- 计时器：剩余秒数 + 进度条；最后 10 秒进入紧急样式 -->
-      <div class="timer-hud" :class="{ urgent: secondsLeft <= 10 && secondsLeft > 0 }">
-        <Clock3 /><b>{{ secondsLeft }}</b
-        ><span>{{ strings.game.secondsSuffix }}</span
-        ><i :style="{ transform: `scaleX(${progress})` }"></i>
+      <div
+        class="relative flex h-[6.5cqh] min-w-[7cqw] items-center justify-center gap-[0.3em] overflow-hidden rounded-[0.65em] bg-white/10"
+        :class="{ '!bg-[#7f1d1d]': secondsLeft <= 10 && secondsLeft > 0 }"
+      >
+        <Clock3 /><b class="text-[1.65em]">{{ secondsLeft }}</b
+        ><span class="text-[0.6em] text-[#bfdbfe]">{{ strings.game.secondsSuffix }}</span
+        ><i
+          class="absolute bottom-0 left-0 h-[0.45cqh] w-full bg-green [transform-origin:left]"
+          :class="{ '!bg-yellow': secondsLeft <= 10 && secondsLeft > 0 }"
+          :style="{ transform: `scaleX(${progress})` }"
+        ></i>
       </div>
       <!-- 网络状态：连接标签 + 延迟 -->
-      <div class="game-network">
-        <Wifi /><span
+      <div class="flex items-center gap-[0.45em] text-[#bfdbfe] text-[0.7em]">
+        <Wifi /><span class="flex flex-col"
           >{{ store.connectionLabel }}<small>{{ store.latency || '—' }} ms</small></span
         >
       </div>
       <!-- 右上角操作组：暂停/继续、设置、进入或退出全屏。 -->
-      <div class="hud-actions-group">
+      <div class="flex items-center gap-[0.45em]">
         <button
           v-if="store.room.phase !== 'paused'"
-          class="hud-square"
+          class="grid h-[4.4cqh] w-[4.4cqh] place-items-center rounded-[0.6em] bg-white/10 text-white"
           type="button"
           :aria-label="store.isHost ? strings.game.pauseAriaHost : strings.game.pauseAriaGuest"
           @click="
@@ -173,7 +192,7 @@ watch(
         </button>
         <button
           v-if="store.isHost && store.room.phase === 'paused'"
-          class="hud-square"
+          class="grid h-[4.4cqh] w-[4.4cqh] place-items-center rounded-[0.6em] bg-white/10 text-white"
           type="button"
           :aria-label="strings.game.resumeAria"
           @click="store.resume"
@@ -181,7 +200,7 @@ watch(
           <CirclePlay />
         </button>
         <button
-          class="hud-square"
+          class="grid h-[4.4cqh] w-[4.4cqh] place-items-center rounded-[0.6em] bg-white/10 text-white"
           type="button"
           :aria-label="strings.game.settingsAria"
           @click="showGameSettings = true"
@@ -189,7 +208,7 @@ watch(
           <Settings />
         </button>
         <button
-          class="hud-square"
+          class="grid h-[4.4cqh] w-[4.4cqh] place-items-center rounded-[0.6em] bg-white/10 text-white"
           type="button"
           :aria-label="
             isFullscreen ? strings.game.exitFullscreenAria : strings.game.enterFullscreenAria
@@ -202,33 +221,54 @@ watch(
     </header>
 
     <!-- 左侧玩家得分条：列出全部成员、得分与画家/猜中标记 -->
-    <aside class="score-strip" :aria-label="strings.game.scoreStripAria">
+    <aside
+      class="flex min-w-0 flex-col gap-[0.8cqh] border-r-[0.2cqh] border-slate-400 bg-slate-100 px-[0.8cqw] py-[1.7cqh]"
+      :aria-label="strings.game.scoreStripAria"
+    >
       <article
         v-for="member in store.room.members"
         :key="member.id"
+        class="grid min-h-[8.5cqh] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[0.55em] border-l-[0.35cqh] border-slate-400 bg-white px-[0.5em] py-[0.55cqh]"
         :class="{
-          active: member.isDrawer,
-          guessed: member.guessed,
-          offline: member.connection === 'reconnecting',
+          '!border-l-orange !bg-[#fff7ed]': member.isDrawer,
+          '!border-l-green !bg-[#f0fdf4]': member.guessed,
+          'opacity-55 border-dashed': member.connection === 'reconnecting',
         }"
       >
-        <div class="score-avatar">
+        <div class="relative">
           <AvatarImage
+            class="h-[5.8cqh] w-[5.8cqh]"
             :avatar-id="member.avatarId"
             :label="strings.common.playerAvatarAria(member.nickname)"
           />
-          ><Brush v-if="member.isDrawer" /><Eye v-else-if="member.guessed" />
+          ><Brush
+            v-if="member.isDrawer"
+            class="absolute -right-[0.3cqh] -bottom-[0.2cqh] h-[2.4cqh] w-[2.4cqh] p-[0.35cqh] text-white bg-blue rounded-full"
+          /><Eye
+            v-else-if="member.guessed"
+            class="absolute -right-[0.3cqh] -bottom-[0.2cqh] h-[2.4cqh] w-[2.4cqh] p-[0.35cqh] text-white bg-blue rounded-full"
+          />
         </div>
-        <div>
-          <b>{{ member.nickname }}</b
-          ><span>{{ strings.common.scoreUnit(member.score) }}</span>
+        <div class="min-w-0 flex flex-col">
+          <b class="overflow-hidden text-ellipsis whitespace-nowrap text-[0.75em]">{{
+            member.nickname
+          }}</b
+          ><span class="text-blue text-[0.7em] font-black">{{
+            strings.common.scoreUnit(member.score)
+          }}</span>
         </div>
-        <Crown v-if="member.isHost" :aria-label="strings.game.hostMarkAria" />
+        <Crown
+          v-if="member.isHost"
+          class="text-[#a16207]"
+          :aria-label="strings.game.hostMarkAria"
+        />
       </article>
     </aside>
 
     <!-- 中央画布区：实时画板 + 非作画阶段的状态提示遮罩 -->
-    <section class="canvas-zone">
+    <section
+      class="relative min-w-0 min-h-0 m-[1.5cqh_1cqw] overflow-hidden border-[0.3cqh] border-slate-600 bg-white shadow-[0.5cqh_0.5cqh_0_#94a3b8]"
+    >
       <GameCanvas
         :strokes="game.strokes"
         :undone-stroke-ids="game.undoneStrokeIds"
@@ -237,63 +277,102 @@ watch(
         :tool="tool"
         :color="color"
         :width="width"
+        :revision="store.drawRevision"
         @stroke="submitStroke"
         @fill="submitFill"
         @width-change="width = $event"
       />
       <!-- 画布状态遮罩：选词/结算/暂停等非作画阶段覆盖在画布上 -->
-      <div v-if="store.room.phase !== 'drawing'" class="canvas-status">
-        <Brush /><b>{{ phaseLabel }}</b
-        ><span v-if="store.room.phase === 'choosing_word' && !store.isDrawer">{{
-          strings.game.choosingHint
-        }}</span>
+      <div
+        v-if="store.room.phase !== 'drawing'"
+        class="absolute inset-0 flex flex-col items-center justify-center gap-[0.6cqh] bg-[#f8fafce8] text-slate-600 pointer-events-none"
+      >
+        <Brush class="h-[7cqh] w-[7cqh] text-blue" /><b class="text-[1.35em]">{{ phaseLabel }}</b
+        ><span
+          v-if="store.room.phase === 'choosing_word' && !store.isDrawer"
+          class="text-[0.75em]"
+          >{{ strings.game.choosingHint }}</span
+        >
       </div>
     </section>
 
     <!-- 右侧聊天区：消息列表 + 猜词输入 / 安全预设短语 -->
-    <aside class="chat-zone">
-      <header>
+    <aside
+      class="flex min-w-0 flex-col border-l-[0.2cqh] border-slate-400 bg-paper px-[0.9cqw] py-[1.5cqh]"
+    >
+      <header class="flex items-center justify-between border-b-[0.18cqh] border-line pb-[1cqh]">
         <div>
-          <span>{{ strings.game.liveChatLabel }}</span>
-          <h2>{{ strings.game.chatTitle }}</h2>
+          <span class="text-blue text-[0.56em] tracking-[0.15em]">{{
+            strings.game.liveChatLabel
+          }}</span>
+          <h2 class="text-[1.05em]">{{ strings.game.chatTitle }}</h2>
         </div>
         <!-- 当前角色标签：观战中 / 已猜中 / 作画中 / 猜词中 -->
-        <span>{{
-          store.me?.spectating
-            ? strings.status.roleSpectating
-            : store.me?.guessed
-              ? strings.status.roleGuessed
-              : store.isDrawer
-                ? strings.status.roleDrawing
-                : strings.status.roleGuessing
-        }}</span>
+        <span
+          class="bg-sky px-[0.6em] py-[0.35cqh] text-[#1e3a8a] rounded-[99em] text-[0.62em] font-extrabold"
+          >{{
+            store.me?.spectating
+              ? strings.status.roleSpectating
+              : store.me?.guessed
+                ? strings.status.roleGuessed
+                : store.isDrawer
+                  ? strings.status.roleDrawing
+                  : strings.status.roleGuessing
+          }}</span
+        >
       </header>
       <!-- 消息列表：猜词、系统、猜中、预设等类型分别高亮 -->
-      <div ref="messageList" class="message-list" aria-live="polite" @scroll="handleMessageScroll">
-        <div v-for="message in game.messages" :key="message.id" :class="`message ${message.type}`">
+      <div
+        ref="messageList"
+        class="flex min-h-0 flex-1 flex-col gap-[0.6cqh] overflow-y-auto overflow-x-hidden py-[1cqh] pl-0 pr-[0.35em] [overscroll-behavior:contain] [scrollbar-gutter:stable]"
+        aria-live="polite"
+        @scroll="handleMessageScroll"
+      >
+        <div
+          v-for="message in game.messages"
+          :key="message.id"
+          :class="[
+            'flex flex-wrap gap-[0.35em] border-l-[0.3cqh] border-slate-400 bg-white px-[0.65em] py-[0.6cqh] text-[0.72em] leading-[1.35] text-slate-700 first:mt-auto transition-[transform,box-shadow,border-color,background-color,color,opacity] duration-[160ms]',
+            message.type === 'correct' &&
+              '!text-[#14532d] !bg-green-100 !border-l-green font-extrabold',
+            message.type === 'system' && '!text-[#1e3a8a] !bg-sky !border-l-blue',
+            message.type === 'preset' && '!text-[#7c2d12] !bg-[#ffedd5] !border-l-orange',
+          ]"
+        >
           <!-- 玩家消息显示发送者昵称 -->
           <b v-if="message.playerId">{{
             store.room.members.find((member) => member.id === message.playerId)?.nickname
           }}</b>
           <span>{{ message.text }}</span>
         </div>
-        <div v-if="!game.messages.length" class="no-messages">
-          <Send /><span>{{ strings.game.noMessages }}</span>
+        <div
+          v-if="!game.messages.length"
+          class="m-auto flex flex-col items-center text-slate-400 text-[0.7em]"
+        >
+          <Send class="h-[4cqh] w-[4cqh]" /><span>{{ strings.game.noMessages }}</span>
         </div>
       </div>
       <!-- 猜词输入表单：仅可猜词的玩家显示 -->
-      <form v-if="canGuess" class="guess-form" @submit.prevent="sendGuess">
-        <label for="guess-input">{{ strings.game.guessLabel }}</label>
-        <div>
+      <form
+        v-if="canGuess"
+        class="border-t-[0.18cqh] border-line pt-[0.8cqh]"
+        @submit.prevent="sendGuess"
+      >
+        <label for="guess-input" class="text-muted text-[0.65em]">{{
+          strings.game.guessLabel
+        }}</label>
+        <div class="flex mt-[0.45cqh]">
           <input
             id="guess-input"
             ref="guessInput"
             v-model="guess"
             maxlength="60"
             autocomplete="off"
+            class="w-full min-w-0 h-[5.2cqh] rounded-l-[0.65em] border-[0.2cqh] border-r-0 border-blue px-[0.8em] outline-0"
             :placeholder="strings.game.guessPlaceholder"
           /><button
             type="submit"
+            class="grid h-[5cqh] w-[5cqh] place-items-center rounded-r-[0.65em] bg-blue text-white"
             :disabled="!guess.trim()"
             :aria-label="strings.game.sendGuessAria"
           >
@@ -302,8 +381,8 @@ watch(
         </div>
       </form>
       <!-- 安全短语区：画家 / 已猜中者 / 观战者不能发送文字 -->
-      <div v-else class="preset-zone">
-        <p>
+      <div v-else class="border-t-[0.18cqh] border-line pt-[0.8cqh]">
+        <p class="text-muted text-[0.62em] leading-[1.3]">
           {{
             store.isDrawer
               ? strings.game.drawerChatHint
@@ -314,11 +393,12 @@ watch(
                   : strings.game.waitingChatHint
           }}
         </p>
-        <div>
+        <div class="mt-[0.5cqh] grid grid-cols-2 gap-[0.4cqh_0.4em]">
           <button
             v-for="preset in store.config.presets.safeChat"
             :key="preset"
             type="button"
+            class="bg-[#ffedd5] px-[0.3em] py-[0.45cqh] text-[#7c2d12] rounded-[0.45em] text-[0.58em]"
             :disabled="store.room.phase !== 'drawing' || store.me?.spectating"
             @click="store.sendPreset(preset)"
           >
@@ -330,71 +410,100 @@ watch(
 
     <!-- 底部绘图工具栏：工具 / 颜色 / 线宽 / 历史操作（非画家时整条禁用） -->
     <footer
-      class="drawing-toolbar"
-      :class="{ disabled: !store.isDrawer || store.room.phase !== 'drawing' }"
+      class="col-span-full grid grid-cols-[1.35fr_1fr_0.8fr_auto] items-center gap-[1.2em] border-t-[0.25cqh] border-slate-600 bg-paper px-[1.4cqw]"
+      :class="{ 'text-slate-400': !store.isDrawer || store.room.phase !== 'drawing' }"
     >
       <!-- 工具组：画笔 / 橡皮擦 / 填充，可自定义快捷键 -->
-      <div class="tool-group">
-        <span>{{ strings.game.toolGroup }}</span>
+      <div class="flex items-center gap-[0.45em]">
+        <span class="mr-[0.3em] text-muted text-[0.62em] font-extrabold">{{
+          strings.game.toolGroup
+        }}</span>
         <button
           type="button"
-          :class="{ selected: tool === 'pen' }"
+          class="flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] bg-slate-200 px-[0.7em] text-[0.72em] text-slate-700 font-extrabold"
+          :class="{ '!text-white !bg-blue': tool === 'pen' }"
           :disabled="!store.isDrawer"
           :aria-label="strings.game.penAria(store.settings.penShortcut)"
           @click="tool = 'pen'"
         >
           <Brush />{{ strings.game.penTool
-          }}<kbd v-if="store.settings.showShortcuts">{{ store.settings.penShortcut }}</kbd>
+          }}<kbd
+            v-if="store.settings.showShortcuts"
+            class="bg-white px-[0.35em] py-[0.1em] min-w-[1.6em] rounded-[0.35em] border-[0.12em] text-navy text-[0.82em] uppercase [font-family:ui-monospace,SFMono-Regular,Consolas,monospace]"
+            >{{ store.settings.penShortcut }}</kbd
+          >
         </button>
         <button
           type="button"
-          :class="{ selected: tool === 'eraser' }"
+          class="flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] bg-slate-200 px-[0.7em] text-[0.72em] text-slate-700 font-extrabold"
+          :class="{ '!text-white !bg-blue': tool === 'eraser' }"
           :disabled="!store.isDrawer"
           :aria-label="strings.game.eraserAria(store.settings.eraserShortcut)"
           @click="tool = 'eraser'"
         >
           <Eraser />{{ strings.game.eraserTool
-          }}<kbd v-if="store.settings.showShortcuts">{{ store.settings.eraserShortcut }}</kbd>
+          }}<kbd
+            v-if="store.settings.showShortcuts"
+            class="bg-white px-[0.35em] py-[0.1em] min-w-[1.6em] rounded-[0.35em] border-[0.12em] text-navy text-[0.82em] uppercase [font-family:ui-monospace,SFMono-Regular,Consolas,monospace]"
+            >{{ store.settings.eraserShortcut }}</kbd
+          >
         </button>
         <button
           type="button"
-          :class="{ selected: tool === 'fill' }"
+          class="flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] bg-slate-200 px-[0.7em] text-[0.72em] text-slate-700 font-extrabold"
+          :class="{ '!text-white !bg-blue': tool === 'fill' }"
           :disabled="!store.isDrawer"
           :aria-label="strings.game.fillAria(store.settings.fillShortcut)"
           @click="tool = 'fill'"
         >
           <PaintBucket />{{ strings.game.fillTool
-          }}<kbd v-if="store.settings.showShortcuts">{{ store.settings.fillShortcut }}</kbd>
+          }}<kbd
+            v-if="store.settings.showShortcuts"
+            class="bg-white px-[0.35em] py-[0.1em] min-w-[1.6em] rounded-[0.35em] border-[0.12em] text-navy text-[0.82em] uppercase [font-family:ui-monospace,SFMono-Regular,Consolas,monospace]"
+            >{{ store.settings.fillShortcut }}</kbd
+          >
         </button>
       </div>
       <!-- 颜色组：预设色块 + 任意颜色选择器 -->
-      <div class="color-group">
-        <span>{{ strings.game.colorGroup }}</span>
+      <div class="flex items-center justify-center gap-[0.45em]">
+        <span class="mr-[0.3em] text-muted text-[0.62em] font-extrabold">{{
+          strings.game.colorGroup
+        }}</span>
         <button
           v-for="paint in store.config.drawing.colors"
           :key="paint"
           type="button"
-          :class="{ selected: color.toUpperCase() === paint }"
+          class="h-[3.5cqh] w-[3.5cqh] rounded-full border-[0.2cqh] border-slate-400 bg-[var(--paint)]"
+          :class="{
+            'shadow-[0_0_0_0.3cqh_#facc15,0_0_0_0.5cqh_#172554]': color.toUpperCase() === paint,
+          }"
           :style="{ '--paint': paint }"
           :aria-label="strings.game.presetColorAria(paint)"
           :disabled="!store.isDrawer"
           @click="color = paint"
         ></button>
-        <label class="custom-paint" :title="strings.game.customColorTitle">
+        <label
+          class="relative h-[3.8cqh] w-[3.8cqh] overflow-hidden rounded-full border-[0.2cqh] border-slate-400"
+          :title="strings.game.customColorTitle"
+        >
           <input
             v-model="color"
             type="color"
+            class="absolute -inset-[1cqh] h-[6cqh] w-[6cqh] border-0 p-0"
             :disabled="!store.isDrawer"
             :aria-label="strings.game.customColorAria"
           />
         </label>
       </div>
       <!-- 线宽滑块：画笔与橡皮擦共用；填充工具下禁用 -->
-      <label class="width-group">
-        <span>{{ strings.game.widthLabel(width) }}</span>
+      <label class="flex items-center gap-[0.45em]">
+        <span class="mr-[0.3em] text-muted text-[0.62em] font-extrabold">{{
+          strings.game.widthLabel(width)
+        }}</span>
         <input
           v-model.number="width"
           type="range"
+          class="w-[10cqw] accent-blue"
           :min="store.config.drawing.width.min"
           :max="store.config.drawing.width.max"
           :step="store.config.drawing.width.step"
@@ -402,14 +511,15 @@ watch(
           :aria-label="strings.game.widthAria"
         />
         <i
-          class="width-preview"
+          class="block max-h-[2.5cqh] max-w-[2.5cqh] rounded-full bg-ink"
           :style="{ width: `${Math.min(width, 20)}px`, height: `${Math.min(width, 20)}px` }"
         ></i>
       </label>
       <!-- 历史操作组：撤销 / 重做 / 清空 -->
-      <div class="history-group">
+      <div class="flex items-center gap-[0.45em]">
         <button
           type="button"
+          class="flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] bg-slate-200 px-[0.7em] text-[0.72em] text-slate-700 font-extrabold"
           :disabled="!store.isDrawer"
           :aria-label="strings.game.undoAria"
           @click="store.drawAction(EVENTS.drawUndo)"
@@ -417,6 +527,7 @@ watch(
           <RotateCcw /> {{ strings.game.undo }}</button
         ><button
           type="button"
+          class="flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] bg-slate-200 px-[0.7em] text-[0.72em] text-slate-700 font-extrabold"
           :disabled="!store.isDrawer"
           :aria-label="strings.game.redoAria"
           @click="store.drawAction(EVENTS.drawRedo)"
@@ -424,6 +535,7 @@ watch(
           <RotateCw /> {{ strings.game.redo }}</button
         ><button
           type="button"
+          class="flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] bg-slate-200 px-[0.7em] text-[0.72em] text-slate-700 font-extrabold"
           :disabled="!store.isDrawer"
           :aria-label="strings.game.clearAria"
           @click="showClearConfirm = true"
@@ -437,22 +549,34 @@ watch(
     <GameSettingsDialog :open="showGameSettings" @close="showGameSettings = false" />
 
     <!-- 阶段遮罩：开局倒计时 -->
-    <div v-if="store.room.phase === 'starting'" class="stage-overlay countdown-overlay">
+    <div
+      v-if="store.room.phase === 'starting'"
+      class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh] text-white"
+    >
       <span>{{ strings.game.countdownTitle }}</span
-      ><b>{{ secondsLeft }}</b>
+      ><b
+        class="grid place-items-center h-[20cqh] w-[20cqh] my-[2cqh] bg-yellow text-navy rounded-full text-[6em]"
+        >{{ secondsLeft }}</b
+      >
       <p>{{ strings.game.countdownHint }}</p>
     </div>
     <!-- 阶段遮罩：画家选词（只有画家可见候选词按钮） -->
-    <div v-if="store.room.phase === 'choosing_word' && store.isDrawer" class="stage-overlay">
-      <section class="word-choice">
-        <Brush />
+    <div
+      v-if="store.room.phase === 'choosing_word' && store.isDrawer"
+      class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
+    >
+      <section
+        class="flex min-w-[50cqw] flex-col items-center gap-[1.2cqh] rounded-[1.2em] border-[0.35cqh] border-white bg-paper px-[4cqw] py-[4cqh] text-center"
+      >
+        <Brush class="h-[8cqh] w-[8cqh] bg-blue p-[1.4cqh] text-white rounded-full" />
         <p>{{ strings.game.yourTurn }}</p>
         <h2>{{ strings.game.chooseWordTitle }}</h2>
-        <div>
+        <div class="flex gap-[1em] my-[2cqh]">
           <button
             v-for="option in game.wordOptions"
             :key="option.id"
             type="button"
+            class="min-h-[7cqh] min-w-[12cqw] rounded-[0.7em] bg-yellow border-b-[0.6cqh] border-[#ca8a04] text-navy px-[1em] text-[1.25em] font-[1000]"
             @click="store.chooseWord(option.id)"
           >
             {{ option.text }}
@@ -462,33 +586,57 @@ watch(
       </section>
     </div>
     <!-- 阶段遮罩：游戏暂停（房主可继续或提前结束） -->
-    <div v-if="store.room.phase === 'paused'" class="stage-overlay">
-      <section class="pause-panel">
-        <CirclePause />
+    <div
+      v-if="store.room.phase === 'paused'"
+      class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
+    >
+      <section
+        class="flex min-w-[50cqw] flex-col items-center gap-[1.2cqh] rounded-[1.2em] border-[0.35cqh] border-white bg-paper px-[4cqw] py-[4cqh] text-center"
+      >
+        <CirclePause class="h-[8cqh] w-[8cqh] bg-blue p-[1.4cqh] text-white rounded-full" />
         <p>{{ strings.game.pausedTitle }}</p>
         <h2>{{ strings.game.pausedSubtitle }}</h2>
         <span>{{ strings.game.pausedHint }}</span>
-        <div v-if="store.isHost">
-          <button class="primary-action" type="button" @click="store.resume">
+        <div v-if="store.isHost" class="flex gap-[0.8em] mt-[1.5cqh]">
+          <button
+            class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-blue shadow-[0_0.4cqh_0_#1e40af]"
+            type="button"
+            @click="store.resume"
+          >
             <CirclePlay />{{ strings.game.resumeGame }}</button
-          ><button class="danger-action" type="button" @click="showEndConfirm = true">
+          ><button
+            class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-red"
+            type="button"
+            @click="showEndConfirm = true"
+          >
             {{ strings.game.endEarly }}
           </button>
         </div>
       </section>
     </div>
     <!-- 阶段遮罩：回合结算（答案、得分明细） -->
-    <div v-if="store.room.phase === 'round_result' && game.roundResult" class="stage-overlay">
-      <section class="round-result-panel">
+    <div
+      v-if="store.room.phase === 'round_result' && game.roundResult"
+      class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
+    >
+      <section
+        class="flex min-w-[50cqw] flex-col items-center gap-[1.2cqh] rounded-[1.2em] border-[0.35cqh] border-white bg-paper px-[4cqw] py-[4cqh] text-center"
+      >
         <p>{{ strings.game.roundAnswerLabel }}</p>
         <h2>{{ game.roundResult.answer }}</h2>
-        <div class="score-details">
-          <article v-for="detail in game.roundResult.details" :key="detail.playerId">
+        <div class="my-[1.5cqh] flex w-full flex-col gap-[0.6cqh]">
+          <article
+            v-for="detail in game.roundResult.details"
+            :key="detail.playerId"
+            class="grid grid-cols-[1.5fr_repeat(4,1fr)] items-center bg-slate-200 px-[0.8em] py-[0.8cqh] text-left text-[0.72em]"
+          >
             <b>{{ store.room.members.find((member) => member.id === detail.playerId)?.nickname }}</b
             ><span>{{ strings.game.scoreBase(detail.base) }}</span
             ><span>{{ strings.game.scoreSpeed(detail.speed) }}</span
             ><span>{{ strings.game.scoreOrder(detail.order) }}</span
-            ><strong>{{ strings.game.scoreTotal(detail.total) }}</strong>
+            ><strong class="text-blue text-[1.2em]">{{
+              strings.game.scoreTotal(detail.total)
+            }}</strong>
           </article>
           <p v-if="!game.roundResult.details.length">{{ strings.game.noGuesses }}</p>
         </div>
@@ -496,25 +644,32 @@ watch(
       </section>
     </div>
     <!-- 阶段遮罩：最终结算（排行榜、统计） -->
-    <div v-if="store.room.phase === 'game_result'" class="stage-overlay">
-      <section class="final-result-panel">
-        <Trophy />
+    <div
+      v-if="store.room.phase === 'game_result'"
+      class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
+    >
+      <section
+        class="flex min-w-[55cqw] flex-col items-center gap-[1.2cqh] rounded-[1.2em] border-[0.35cqh] border-white bg-paper px-[4cqw] pt-[2.5cqh] pb-[4cqh] text-center"
+      >
+        <Trophy class="h-[8cqh] w-[8cqh] bg-yellow p-[1.4cqh] text-[#854d0e] rounded-full" />
         <p>{{ strings.game.gameResultLabel }}</p>
         <h2>{{ strings.game.finalRanking }}</h2>
-        <div class="ranking-list">
+        <div class="my-[1cqh] flex w-full flex-col gap-[0.6cqh]">
           <article
             v-for="member in rankings"
             :key="member.id"
-            :class="{ winner: member.rank === 1 }"
+            class="grid grid-cols-[3em_auto_1fr_auto] items-center gap-[0.8em] bg-slate-200 px-[1em] py-[0.6cqh] text-left"
+            :class="{ '!text-[#713f12] !bg-amber-100': member.rank === 1 }"
           >
             <b>#{{ member.rank }}</b
             ><AvatarImage
+              class="h-[4.5cqh] w-[4.5cqh]"
               :avatar-id="member.avatarId"
               :label="strings.common.playerAvatarAria(member.nickname)"
             />
-            ><span
+            ><span class="flex flex-col font-extrabold"
               >{{ member.nickname
-              }}<small>{{
+              }}<small class="text-muted text-[0.62em] font-semibold">{{
                 strings.game.playerStats(
                   member.stats.correctCount,
                   member.stats.correctCount
@@ -526,15 +681,19 @@ watch(
             ><strong>{{ strings.common.scoreUnit(member.score) }}</strong>
           </article>
         </div>
-        <div>
+        <div class="flex gap-[0.8em] mt-[1.5cqh]">
           <button
             v-if="store.isHost"
-            class="primary-action"
+            class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-blue shadow-[0_0.4cqh_0_#1e40af]"
             type="button"
             @click="store.returnWaiting"
           >
             {{ strings.game.backToRoom }}</button
-          ><button class="secondary-action" type="button" @click="store.leaveRoom">
+          ><button
+            class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-navy bg-white !border !border-[0.18cqh] !border-line"
+            type="button"
+            @click="store.leaveRoom"
+          >
             {{ strings.game.leaveRoom }}
           </button>
         </div>
@@ -543,15 +702,30 @@ watch(
 
     <!-- 确认弹窗：清空画板 -->
     <Transition name="modal">
-      <div v-if="showClearConfirm" class="stage-overlay">
-        <section class="game-dialog confirm-dialog">
-          <Trash2 />
+      <div
+        v-if="showClearConfirm"
+        class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
+      >
+        <section
+          class="game-dialog flex max-h-[86cqh] w-[40cqw] flex-col items-center gap-[1.4cqh] overflow-hidden rounded-[1.2em] border-[0.35cqh] border-white bg-paper pt-[3cqh] text-center text-ink shadow-[0_1.4cqh_4cqh_#0007]"
+        >
+          <Trash2 class="h-[7cqh] w-[7cqh] p-[1.4cqh] rounded-full bg-red-100 text-[#991b1b]" />
           <h2>{{ strings.game.clearCanvasTitle }}</h2>
-          <p>{{ strings.game.clearCanvasBody }}</p>
-          <footer>
-            <button class="secondary-action" type="button" @click="showClearConfirm = false">
+          <p class="max-w-[30em] text-muted leading-[1.6]">{{ strings.game.clearCanvasBody }}</p>
+          <footer
+            class="mt-[1cqh] flex min-h-[8cqh] w-full items-center justify-end gap-[0.8em] bg-slate-200 px-[1.7em] py-[1cqh]"
+          >
+            <button
+              class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-navy bg-white !border !border-[0.18cqh] !border-line"
+              type="button"
+              @click="showClearConfirm = false"
+            >
               {{ strings.common.cancel }}</button
-            ><button class="danger-action" type="button" @click="clearDrawing">
+            ><button
+              class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-red"
+              type="button"
+              @click="clearDrawing"
+            >
               {{ strings.game.confirmClear }}
             </button>
           </footer>
@@ -560,15 +734,30 @@ watch(
     </Transition>
     <!-- 确认弹窗：提前结束本局 -->
     <Transition name="modal">
-      <div v-if="showEndConfirm" class="stage-overlay">
-        <section class="game-dialog confirm-dialog">
-          <X />
+      <div
+        v-if="showEndConfirm"
+        class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
+      >
+        <section
+          class="game-dialog flex max-h-[86cqh] w-[40cqw] flex-col items-center gap-[1.4cqh] overflow-hidden rounded-[1.2em] border-[0.35cqh] border-white bg-paper pt-[3cqh] text-center text-ink shadow-[0_1.4cqh_4cqh_#0007]"
+        >
+          <X class="h-[7cqh] w-[7cqh] p-[1.4cqh] rounded-full bg-red-100 text-[#991b1b]" />
           <h2>{{ strings.game.endGameTitle }}</h2>
-          <p>{{ strings.game.endGameBody }}</p>
-          <footer>
-            <button class="secondary-action" type="button" @click="showEndConfirm = false">
+          <p class="max-w-[30em] text-muted leading-[1.6]">{{ strings.game.endGameBody }}</p>
+          <footer
+            class="mt-[1cqh] flex min-h-[8cqh] w-full items-center justify-end gap-[0.8em] bg-slate-200 px-[1.7em] py-[1cqh]"
+          >
+            <button
+              class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-navy bg-white !border !border-[0.18cqh] !border-line"
+              type="button"
+              @click="showEndConfirm = false"
+            >
               {{ strings.common.cancel }}</button
-            ><button class="danger-action" type="button" @click="store.endEarly">
+            ><button
+              class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-red"
+              type="button"
+              @click="store.endEarly"
+            >
               {{ strings.game.confirmEnd }}
             </button>
           </footer>

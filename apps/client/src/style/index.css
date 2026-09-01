@@ -1,14 +1,255 @@
 /*
- * 全局游戏舞台与视觉系统（拆分入口）。
- * 保持原 style.css 的书写顺序以避免层叠覆盖变化；视觉令牌与基础 reset 见 base.css。
+ * 全局视觉配置 —— 单一样式入口。
+ *
+ * 本文件只保留「无法以行内 Tailwind 类实现」的全局设置：
+ *   1. @import tailwindcss + @theme 设计令牌（字体、品牌配色）
+ *   2. @layer base 全局 reset、舞台外壳与容器单位上下文、基础控件状态、全局交互动效
+ *   3. Vue Transition 钩子与关键帧（Vue 运行期动态切换类名，无法行内化）
+ *   4. 竖屏媒体查询与「减少动态效果」系统偏好
+ *
+ * 所有页面 / 组件元素样式一律改为行内 Tailwind 类，见各 .vue 模板。
  */
 @import 'tailwindcss';
-@import './base.css';
-@import './profile.css';
-@import './lobby.css';
-@import './dialog.css';
-@import './room.css';
-@import './game.css';
-@import './settings.css';
-@import './toast.css';
-@import './motion.css';
+
+/* ===== 设计令牌：行内 Tailwind 类据此生成语义化颜色 / 字体 ===== */
+@theme {
+  --font-sans: Inter, ui-rounded, 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+  --color-navy: #172554;
+  --color-blue: #2563eb;
+  --color-sky: #dbeafe;
+  --color-yellow: #facc15;
+  --color-orange: #f97316;
+  --color-green: #16a34a;
+  --color-red: #dc2626;
+  --color-ink: #172033;
+  --color-muted: #64748b;
+  --color-paper: #f8fafc;
+  --color-line: #cbd5e1;
+}
+
+/* ===== 全局 base：只能作为全局层存在，无法行内 ===== */
+@layer base {
+  /* 统一盒模型：所有元素按 border-box 计算宽高，避免内边距撑破布局。 */
+  * {
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  /* 只有可编辑控件恢复文本选择；其余游戏文字不可拖选。 */
+  input,
+  textarea {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  /* 页面与根节点铺满视口，禁止出现滚动条。 */
+  html,
+  body,
+  #app {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+  /* 表单控件继承全局字体设置。 */
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+  /* 可点击按钮显示手型光标。 */
+  button {
+    cursor: pointer;
+  }
+  /* 禁用态：禁止点击并降低视觉权重，避免误认为可操作。 */
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.42;
+  }
+  /* 键盘聚焦高亮：保证纯键盘用户能看清当前焦点。 */
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible {
+    outline: 0.35cqh solid #facc15;
+    outline-offset: 0.25cqh;
+  }
+  /* 图标默认尺寸：基于 em 缩放，并阻止其在弹性布局中被压缩。 */
+  svg {
+    width: 1.1em;
+    height: 1.1em;
+    stroke-width: 2.2;
+    flex: 0 0 auto;
+  }
+
+  /* 舞台基础上下文：container-type 供 cqh/cqw 整体缩放，随视口缩放的基准字号。 */
+  .game-stage {
+    container-type: size;
+    font-size: clamp(8px, 2cqh, 18px);
+  }
+  /* 舞台内标题与段落：去除浏览器默认外边距，统一由布局容器控制间距。 */
+  .game-stage h1,
+  .game-stage h2,
+  .game-stage p {
+    margin: 0;
+  }
+  /* 舞台一级标题：游戏名等大号标题（各视图可覆盖）。 */
+  .game-stage h1 {
+    font-size: 2.8em;
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+  }
+  /* 舞台二级标题：面板/分区标题（各视图可覆盖）。 */
+  .game-stage h2 {
+    font-size: 1.45em;
+    line-height: 1.15;
+  }
+  /* 舞台内按钮去掉默认边框，由各按钮样式自行定义。 */
+  .game-stage button {
+    border: 0;
+  }
+  /* 浏览器全屏时舞台铺满屏幕，并移除窗口模式装饰。 */
+  .game-stage:fullscreen {
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+/* ===== 全局交互反馈：跨组件统一的手感（仅用通用元素选择器；卡片级 hover 由组件行内类实现） ===== */
+@layer base {
+  .game-stage button,
+  .game-stage input,
+  .game-stage select {
+    transition:
+      transform 160ms ease,
+      box-shadow 160ms ease,
+      border-color 160ms ease,
+      background-color 160ms ease,
+      color 160ms ease,
+      opacity 160ms ease;
+  }
+  /* 所有可用按钮都有轻微抬起与按下缩放反馈，不改变禁用控件。 */
+  .game-stage button:not(:disabled):hover {
+    transform: translateY(-0.16cqh);
+    filter: brightness(1.03);
+  }
+  .game-stage button:not(:disabled):active {
+    transform: scale(0.96);
+  }
+}
+
+/* ===== Vue 运行时过渡钩子：Vue 动态切换类名，无法行内化 ===== */
+@layer base {
+  /* 遮罩淡入淡出，对话框同步执行缩放。 */
+  .modal-enter-active,
+  .modal-leave-active {
+    transition: opacity 180ms ease;
+  }
+  .modal-enter-active .game-dialog,
+  .modal-leave-active .game-dialog {
+    transition:
+      transform 180ms ease,
+      opacity 180ms ease;
+  }
+  .modal-enter-from,
+  .modal-leave-to {
+    opacity: 0;
+  }
+  .modal-enter-from .game-dialog,
+  .modal-leave-to .game-dialog {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+
+  /* Toast 与邀请横幅的进入/离开动画。 */
+  .toast-enter-active,
+  .toast-leave-active {
+    transition:
+      transform 180ms ease,
+      opacity 180ms ease;
+  }
+  .toast-enter-from,
+  .toast-leave-to {
+    opacity: 0;
+    transform: translateX(2cqw) scale(0.96);
+  }
+  .banner-enter-active,
+  .banner-leave-active {
+    transition:
+      opacity 180ms ease,
+      transform 180ms ease;
+  }
+  .banner-enter-from,
+  .banner-leave-to {
+    opacity: 0;
+    transform: translate(-50%, 2cqh) scale(0.96);
+  }
+}
+
+/* ===== 关键帧：重复 Toast 的轻微脉动 ===== */
+@keyframes toast-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+}
+
+/* ===== 竖屏警告：默认隐藏，仅竖屏时显示全屏提示 ===== */
+@layer base {
+  .portrait-warning {
+    display: none;
+  }
+  @media (orientation: portrait) {
+    /* 竖屏时隐藏舞台其他内容，只保留旋转提示。 */
+    .game-stage > *:not(.portrait-warning) {
+      visibility: hidden;
+    }
+    .portrait-warning {
+      position: absolute;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.2cqh;
+      color: white;
+      background: var(--color-navy);
+      text-align: center;
+      visibility: visible;
+    }
+    /* 竖屏警告内的旋转提示图标。 */
+    .portrait-warning svg {
+      width: 10cqh;
+      height: 10cqh;
+      color: var(--color-yellow);
+    }
+  }
+}
+
+/* ===== 减少动态效果：把非必要过渡压缩为瞬时 ===== */
+@layer base {
+  .motion-disabled .game-stage *,
+  .motion-disabled .game-stage *::before,
+  .motion-disabled .game-stage *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .game-stage *,
+    .game-stage *::before,
+    .game-stage *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}

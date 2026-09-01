@@ -75,63 +75,100 @@ async function joinPrivateRoom(): Promise<void> {
 </script>
 
 <template>
-  <main class="lobby-layout">
-    <header class="lobby-hud">
-      <div class="identity-block">
-        <AvatarImage :avatar-id="store.profile.avatarId" :label="strings.common.myAvatarAria" />
-        <div>
-          <strong>{{ store.profile.nickname }}</strong
-          ><span><Wifi /> {{ store.connectionLabel }} · {{ store.latency || '—' }} ms</span>
+  <main class="grid h-full grid-cols-[minmax(0,1fr)_28%] grid-rows-[11%_89%] bg-[#eef2ff]">
+    <header
+      class="col-span-full grid grid-cols-[1fr_auto_1fr] items-center border-b-[0.5cqh] border-yellow bg-navy px-[2cqw] text-white"
+    >
+      <div class="flex min-w-0 items-center gap-[0.8em]">
+        <AvatarImage
+          :avatar-id="store.profile.avatarId"
+          :label="strings.common.myAvatarAria"
+          class="h-[6cqh] w-[6cqh] !border-[#93c5fd]"
+        />
+        <div class="flex min-w-0 flex-col">
+          <strong class="truncate">{{ store.profile.nickname }}</strong
+          ><span class="flex items-center gap-[0.35em] text-[#bfdbfe] text-[0.67em]"
+            ><Wifi /> {{ store.connectionLabel }} · {{ store.latency || '—' }} ms</span
+          >
         </div>
       </div>
-      <div class="lobby-title">
-        <Gamepad2 />
-        <div>
-          <b>{{ store.config.app.name }}</b
-          ><span>{{ strings.lobby.lobbyEnglishTitle }}</span>
+      <div class="flex items-center gap-[0.6em]">
+        <Gamepad2 class="h-[4.2cqh] w-[4.2cqh] text-yellow" />
+        <div class="flex flex-col leading-[1.05]">
+          <b class="text-[1.2em]">{{ store.config.app.name }}</b
+          ><span class="text-[#93c5fd] text-[0.58em] tracking-[0.18em]">{{
+            strings.lobby.lobbyEnglishTitle
+          }}</span>
         </div>
       </div>
-      <nav class="hud-actions" :aria-label="strings.lobby.navAria">
-        <button type="button" @click="store.page = 'settings'">
+      <nav class="flex justify-self-end gap-[0.7em]" :aria-label="strings.lobby.navAria">
+        <button
+          type="button"
+          class="flex items-center gap-[0.4em] rounded-[0.55em] bg-[#ffffff0d] px-[0.8em] py-[0.8cqh] text-[#dbeafe]"
+          @click="store.page = 'settings'"
+        >
           <Settings /> {{ strings.lobby.settingsEntry }}
         </button>
       </nav>
     </header>
 
-    <section class="room-zone">
-      <div class="room-zone-head">
+    <section class="min-w-0 border-r-[0.2cqh] border-line px-[2cqw] py-[3cqh]">
+      <div class="flex items-end justify-between">
         <div>
-          <p class="step-label">{{ strings.lobby.roomsLabel }}</p>
+          <p class="text-blue font-black tracking-[0.16em] text-[0.72em]">
+            {{ strings.lobby.roomsLabel }}
+          </p>
           <h2>{{ strings.lobby.roomsTitle }}</h2>
         </div>
-        <span>{{ strings.lobby.roomCount(store.presence.rooms.length) }}</span>
+        <span class="text-muted text-[0.78em]">{{
+          strings.lobby.roomCount(store.presence.rooms.length)
+        }}</span>
       </div>
       <!-- 原单个大按钮拆成左右两个等宽入口。 -->
-      <div class="quick-actions">
-        <button class="create-room-button" type="button" @click="showCreate = true">
-          <CirclePlus /><span
-            ><b>{{ strings.lobby.createRoomTitle }}</b
-            ><small>{{ strings.lobby.createRoomHint }}</small></span
-          ><ChevronRight />
+      <div class="my-[2cqh] grid grid-cols-2 gap-[1.3cqw]">
+        <button
+          type="button"
+          class="flex h-[12cqh] items-center gap-[1em] rounded-[0.9em] bg-blue px-[1.4em] text-left text-white shadow-[0_0.55cqh_0_#1e40af]"
+          @click="showCreate = true"
+        >
+          <CirclePlus class="first:h-[4.5cqh] first:w-[4.5cqh] first:text-yellow" /><span
+            class="flex flex-col"
+            ><b class="text-[1.2em]">{{ strings.lobby.createRoomTitle }}</b
+            ><small class="mt-[0.35cqh] text-[#dbeafe]">{{
+              strings.lobby.createRoomHint
+            }}</small></span
+          ><ChevronRight class="last:ml-auto" />
         </button>
         <button
-          class="create-room-button private-entry"
           type="button"
+          class="flex h-[12cqh] items-center gap-[1em] rounded-[0.9em] bg-navy px-[1.4em] text-left text-white shadow-[0_0.55cqh_0_#0f172a]"
           @click="showJoinPrivate = true"
         >
-          <KeyRound /><span
-            ><b>{{ strings.lobby.joinPrivateTitle }}</b
-            ><small>{{ strings.lobby.joinPrivateHint }}</small></span
-          ><ChevronRight />
+          <KeyRound class="first:h-[4.5cqh] first:w-[4.5cqh] first:text-yellow" /><span
+            class="flex flex-col"
+            ><b class="text-[1.2em]">{{ strings.lobby.joinPrivateTitle }}</b
+            ><small class="mt-[0.35cqh] text-[#dbeafe]">{{
+              strings.lobby.joinPrivateHint
+            }}</small></span
+          ><ChevronRight class="last:ml-auto" />
         </button>
       </div>
 
-      <div class="public-room-list" :aria-label="strings.lobby.roomListAria">
-        <article v-for="publicRoom in store.presence.rooms" :key="publicRoom.id" class="room-row">
-          <div class="room-emblem"><Gamepad2 /></div>
-          <div class="room-main">
-            <b>{{ publicRoom.name }}</b
-            ><span>{{
+      <div
+        class="flex h-[49cqh] flex-col gap-[0.85cqh] overflow-y-auto overscroll-contain"
+        :aria-label="strings.lobby.roomListAria"
+      >
+        <article
+          v-for="publicRoom in store.presence.rooms"
+          :key="publicRoom.id"
+          class="grid min-h-[7.8cqh] grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] items-center gap-[0.9em] border-b-[0.16cqh] border-l-[0.45cqh] border-b-line border-l-blue bg-white px-[0.9em] py-[0.6cqh] transition-[transform,box-shadow,border-color,background-color,color,opacity] duration-[160ms] hover:border-[#93c5fd] hover:shadow-[0_0.6cqh_1.6cqh_#17255418]"
+        >
+          <div class="grid h-[5cqh] w-[5cqh] place-items-center rounded-[0.6em] bg-sky text-blue">
+            <Gamepad2 />
+          </div>
+          <div class="flex min-w-0 flex-col">
+            <b class="truncate">{{ publicRoom.name }}</b
+            ><span class="text-muted text-[0.68em]">{{
               strings.lobby.roomMeta(
                 publicRoom.hostName,
                 publicRoom.roundsPerPlayer,
@@ -139,7 +176,7 @@ async function joinPrivateRoom(): Promise<void> {
               )
             }}</span>
           </div>
-          <span class="room-phase">{{
+          <span class="text-muted text-[0.68em]">{{
             strings.status[
               publicRoom.phase === 'waiting'
                 ? 'roomWaiting'
@@ -148,11 +185,12 @@ async function joinPrivateRoom(): Promise<void> {
                   : 'roomInProgress'
             ]
           }}</span>
-          <span class="room-count"
+          <span class="flex items-center gap-[0.35em] font-extrabold"
             ><Users /> {{ publicRoom.playerCount }}/{{ publicRoom.maxPlayers }}</span
           >
           <button
             type="button"
+            class="rounded-[0.5em] bg-blue px-[1em] py-[0.75cqh] font-extrabold text-white"
             :disabled="
               publicRoom.playerCount >= publicRoom.maxPlayers ||
               (publicRoom.phase !== 'waiting' && publicRoom.joinPolicy !== 'spectate')
@@ -166,44 +204,67 @@ async function joinPrivateRoom(): Promise<void> {
             }}
           </button>
         </article>
-        <div v-if="!store.presence.rooms.length" class="empty-stage">
-          <Gamepad2 /><b>{{ strings.lobby.emptyRoomsTitle }}</b
+        <div
+          v-if="!store.presence.rooms.length"
+          class="grid h-full place-content-center gap-[0.8cqh] justify-items-center border-[0.2cqh] border-dashed border-slate-400 text-muted"
+        >
+          <Gamepad2 class="h-[6cqh] w-[6cqh] text-slate-400" /><b>{{
+            strings.lobby.emptyRoomsTitle
+          }}</b
           ><span>{{ strings.lobby.emptyRoomsHint }}</span>
         </div>
       </div>
     </section>
 
-    <aside class="online-zone">
-      <div class="online-head">
+    <aside class="flex min-w-0 flex-col bg-slate-50 px-[1.6cqw] pb-[2cqh] pt-[3cqh]">
+      <div class="flex items-end justify-between">
         <div>
-          <p class="step-label">{{ strings.lobby.playersLabel }}</p>
-          <h2>{{ strings.lobby.playersTitle }}</h2>
+          <p class="text-blue font-black tracking-[0.16em] text-[0.72em]">
+            {{ strings.lobby.playersLabel }}
+          </p>
+          <h2 class="mt-[0.3cqh]">{{ strings.lobby.playersTitle }}</h2>
         </div>
-        <span>{{ store.presence.players.length }}</span>
+        <span
+          class="grid h-[3cqh] w-[3cqh] place-items-center rounded-full bg-green text-white text-[0.78em]"
+          >{{ store.presence.players.length }}</span
+        >
       </div>
-      <label class="search-field"
+      <label
+        class="mt-[1.6cqh] mb-[1.2cqh] flex h-[4.8cqh] items-center gap-[0.6em] rounded-[0.65em] border-[0.18cqh] border-line bg-white px-[0.75em]"
         ><Search /><input
           v-model="playerFilter"
+          class="w-full min-w-0 border-0 outline-0 bg-transparent"
           :placeholder="strings.lobby.playerFilterPlaceholder"
           :aria-label="strings.lobby.playerFilterAria"
       /></label>
-      <div class="player-discovery-list">
-        <div v-for="player in filteredPlayers" :key="player.id" class="discovery-player">
+      <div class="flex min-h-0 flex-1 flex-col gap-[0.7cqh] overflow-hidden">
+        <div
+          v-for="player in filteredPlayers"
+          :key="player.id"
+          class="flex items-center gap-[0.7em] border-b-[0.14cqh] border-slate-200 px-[0.5em] py-[0.55cqh] hover:border-[#93c5fd] hover:shadow-[0_0.6cqh_1.6cqh_#17255418]"
+        >
           <AvatarImage
             :avatar-id="player.avatarId"
             :label="strings.common.playerAvatarAria(player.nickname)"
+            class="h-[4.8cqh] w-[4.8cqh]"
           />
-          <div>
-            <b>{{ player.nickname }}</b
-            ><span :class="player.status">{{ statusText[player.status] }}</span>
+          <div class="flex min-w-0 flex-col">
+            <b class="truncate">{{ player.nickname }}</b
+            ><span
+              class="text-muted text-[0.66em]"
+              :class="player.status === 'idle' ? '!text-green' : ''"
+              >{{ statusText[player.status] }}</span
+            >
           </div>
         </div>
-        <p v-if="!filteredPlayers.length" class="discovery-note">
+        <p v-if="!filteredPlayers.length" class="text-muted text-[0.72em] leading-[1.6]">
           {{ strings.lobby.discoveryEmpty }}
         </p>
       </div>
-      <footer class="lan-tip">
-        <Wifi /><span
+      <footer
+        class="flex items-start gap-[0.65em] border-l-[0.35cqh] border-l-blue bg-sky px-[0.75em] py-[1.1cqh] text-[0.68em] text-[#1e3a8a]"
+      >
+        <Wifi /><span class="flex flex-col leading-[1.45]"
           ><b>{{ strings.lobby.lanTipTitle }}</b
           >{{ strings.lobby.lanTipBody }}</span
         >
@@ -214,54 +275,82 @@ async function joinPrivateRoom(): Promise<void> {
     <Transition name="modal">
       <div
         v-if="showCreate"
-        class="stage-overlay"
+        class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-title"
         @keydown.esc="showCreate = false"
       >
-        <section class="game-dialog create-dialog">
-          <header>
+        <section
+          class="game-dialog flex max-h-[86cqh] w-[58cqw] flex-col overflow-hidden rounded-[1.2em] border-[0.35cqh] border-white bg-paper text-ink shadow-[0_1.4cqh_4cqh_#0007]"
+        >
+          <header
+            class="flex min-h-[9cqh] items-center justify-between bg-navy px-[1.7em] py-[1.3cqh] text-white"
+          >
             <div>
-              <p class="step-label">{{ strings.lobby.newRoomLabel }}</p>
+              <p class="text-[#93c5fd] font-black tracking-[0.16em] text-[0.72em]">
+                {{ strings.lobby.newRoomLabel }}
+              </p>
               <h2 id="create-title">{{ strings.lobby.createDialogTitle }}</h2>
             </div>
             <button
               type="button"
+              class="grid h-[4cqh] w-[4cqh] place-items-center rounded-full bg-white/10 text-[1.2em] text-white"
               :aria-label="strings.lobby.createDialogCloseAria"
               @click="showCreate = false"
             >
               <X />
             </button>
           </header>
-          <div class="create-grid">
-            <fieldset class="wide-field visibility-options">
-              <legend>{{ strings.lobby.visibilityField }}</legend>
-              <label>
-                <input v-model="createForm.visibility" type="radio" value="public" />
-                <span
+          <div class="grid grid-cols-2 gap-[1.8cqh_1.4em] px-[2em] py-[2.8cqh]">
+            <fieldset class="col-span-full m-0 grid grid-cols-2 gap-[0.8em] border-0 p-0">
+              <legend class="mb-[0.7cqh] font-black">{{ strings.lobby.visibilityField }}</legend>
+              <label
+                class="flex items-center gap-[0.7em] rounded-[0.7em] border-[0.18cqh] border-line bg-white px-[1em] py-[1cqh]"
+              >
+                <input
+                  v-model="createForm.visibility"
+                  type="radio"
+                  value="public"
+                  class="h-[2.2cqh] w-[2.2cqh] accent-blue"
+                />
+                <span class="flex flex-col"
                   ><b>{{ strings.lobby.visibilityPublic }}</b
-                  ><small>{{ strings.lobby.visibilityPublicHint }}</small></span
+                  ><small class="text-muted text-[0.68em]">{{
+                    strings.lobby.visibilityPublicHint
+                  }}</small></span
                 >
               </label>
-              <label>
-                <input v-model="createForm.visibility" type="radio" value="private" />
-                <span
+              <label
+                class="flex items-center gap-[0.7em] rounded-[0.7em] border-[0.18cqh] border-line bg-white px-[1em] py-[1cqh]"
+              >
+                <input
+                  v-model="createForm.visibility"
+                  type="radio"
+                  value="private"
+                  class="h-[2.2cqh] w-[2.2cqh] accent-blue"
+                />
+                <span class="flex flex-col"
                   ><b>{{ strings.lobby.visibilityPrivate }}</b
-                  ><small>{{ strings.lobby.visibilityPrivateHint }}</small></span
+                  ><small class="text-muted text-[0.68em]">{{
+                    strings.lobby.visibilityPrivateHint
+                  }}</small></span
                 >
               </label>
             </fieldset>
-            <label
+            <label class="flex flex-col gap-[0.55cqh] font-extrabold"
               >{{ strings.lobby.roomNameField
               }}<input
                 v-model="createForm.name"
-                class="game-input"
+                class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink"
                 :maxlength="store.config.player.roomNameMaxLength"
             /></label>
-            <label
+            <label class="flex flex-col gap-[0.55cqh] font-extrabold"
               >{{ strings.lobby.maxPlayersField
-              }}<select v-model="roomSettings.maxPlayers">
+              }}<select
+                v-model="roomSettings.maxPlayers"
+                class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink"
+              >
                 <option
                   v-for="count in store.config.player.maxPlayers -
                   store.config.player.minPlayers +
@@ -273,7 +362,7 @@ async function joinPrivateRoom(): Promise<void> {
                 </option>
               </select></label
             >
-            <label
+            <label class="flex flex-col gap-[0.55cqh] font-extrabold"
               >{{ strings.common.roundsField
               }}<input
                 v-model.number="roomSettings.roundsPerPlayer"
@@ -283,7 +372,7 @@ async function joinPrivateRoom(): Promise<void> {
                 :step="store.config.game.roundsPerPlayer.step"
               /><b>{{ strings.common.roundsUnit(roomSettings.roundsPerPlayer) }}</b></label
             >
-            <label
+            <label class="flex flex-col gap-[0.55cqh] font-extrabold"
               >{{ strings.common.drawTimeField
               }}<input
                 v-model.number="roomSettings.drawSeconds"
@@ -293,7 +382,7 @@ async function joinPrivateRoom(): Promise<void> {
                 :step="store.config.game.drawSeconds.step"
               /><b>{{ strings.common.secondsUnit(roomSettings.drawSeconds) }}</b></label
             >
-            <p class="wide-field room-public-note">
+            <p class="col-span-full m-0 text-muted text-[0.72em] leading-[1.6]">
               {{
                 createForm.visibility === 'public'
                   ? strings.lobby.publicNote
@@ -301,12 +390,18 @@ async function joinPrivateRoom(): Promise<void> {
               }}
             </p>
           </div>
-          <footer>
-            <button class="secondary-action" type="button" @click="showCreate = false">
+          <footer
+            class="flex min-h-[8cqh] items-center justify-end gap-[0.8em] bg-slate-200 px-[1.7em] py-[1cqh]"
+          >
+            <button
+              class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-navy bg-white !border !border-[0.18cqh] !border-line"
+              type="button"
+              @click="showCreate = false"
+            >
               {{ strings.common.cancel }}
             </button>
             <button
-              class="primary-action"
+              class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-blue shadow-[0_0.4cqh_0_#1e40af]"
               type="button"
               :disabled="!createForm.name.trim()"
               @click="createRoom"
@@ -322,32 +417,39 @@ async function joinPrivateRoom(): Promise<void> {
     <Transition name="modal">
       <div
         v-if="showJoinPrivate"
-        class="stage-overlay"
+        class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="join-private-title"
         @keydown.esc="showJoinPrivate = false"
       >
-        <section class="game-dialog private-join-dialog">
-          <header>
+        <section
+          class="game-dialog flex max-h-[86cqh] w-[42cqw] flex-col overflow-hidden rounded-[1.2em] border-[0.35cqh] border-white bg-paper text-ink shadow-[0_1.4cqh_4cqh_#0007]"
+        >
+          <header
+            class="flex min-h-[9cqh] items-center justify-between bg-navy px-[1.7em] py-[1.3cqh] text-white"
+          >
             <div>
-              <p class="step-label">{{ strings.lobby.privateJoinLabel }}</p>
+              <p class="text-[#93c5fd] font-black tracking-[0.16em] text-[0.72em]">
+                {{ strings.lobby.privateJoinLabel }}
+              </p>
               <h2 id="join-private-title">{{ strings.lobby.privateJoinTitle }}</h2>
             </div>
             <button
               type="button"
+              class="grid h-[4cqh] w-[4cqh] place-items-center rounded-full bg-white/10 text-[1.2em] text-white"
               :aria-label="strings.lobby.privateJoinCloseAria"
               @click="showJoinPrivate = false"
             >
               <X />
             </button>
           </header>
-          <div class="private-join-content">
-            <KeyRound />
-            <p>{{ strings.lobby.privateJoinBody }}</p>
+          <div class="grid justify-items-center gap-[1.5cqh] px-[4cqw] py-[4cqh] text-center">
+            <KeyRound class="h-[7cqh] w-[7cqh] text-blue" />
+            <p class="text-muted">{{ strings.lobby.privateJoinBody }}</p>
             <input
               v-model="privateCode"
-              class="game-input private-code-input"
+              class="min-w-0 h-[5.2cqh] w-[22cqw] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] text-center font-black uppercase tracking-[0.3em] leading-none text-ink font-mono text-[1.25em]"
               :maxlength="store.config.room.privateCodeLength + 2"
               autocomplete="off"
               :placeholder="strings.lobby.privateCodePlaceholder"
@@ -355,12 +457,18 @@ async function joinPrivateRoom(): Promise<void> {
               @keydown.enter="joinPrivateRoom"
             />
           </div>
-          <footer>
-            <button class="secondary-action" type="button" @click="showJoinPrivate = false">
+          <footer
+            class="flex min-h-[8cqh] items-center justify-end gap-[0.8em] bg-slate-200 px-[1.7em] py-[1cqh]"
+          >
+            <button
+              class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-navy bg-white !border !border-[0.18cqh] !border-line"
+              type="button"
+              @click="showJoinPrivate = false"
+            >
               {{ strings.common.cancel }}
             </button>
             <button
-              class="primary-action"
+              class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-blue shadow-[0_0.4cqh_0_#1e40af]"
               type="button"
               :disabled="!privateCodeValid"
               @click="joinPrivateRoom"

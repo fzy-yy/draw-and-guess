@@ -25,6 +25,8 @@ const props = defineProps<{
   tool: ToolKind
   color: string
   width: number
+  /** 画布渲染代次：同 ID 笔画追加点不会改变命令数组长度，由该代次触发增量绘制。 */
+  revision?: number
 }>()
 const emit = defineEmits<{
   stroke: [stroke: Stroke]
@@ -232,34 +234,26 @@ function redraw(): void {
 
 /**
  * 增量绘制服务端新到达的命令或同 ID 追加点。
+ * 遍历全部可见命令，按“服务端点数 > 本画布已绘点数”判断是否需要补画：
+ * - 新命令：fromIndex=0 全量绘制；
+ * - 同 ID 追加（含交错笔画）：从已绘点数起补画新增段，保证长笔画分批到达也不会缺段。
  * 跳过本地预览已覆盖的点（画家本地画的点数 ≥ 服务端确认点数），避免笔迹重复加深。
  */
 function drawIncoming(context: CanvasRenderingContext2D): void {
   const visible = visibleCommands.value
-  // 1. 新命令（从已绘制游标起）
-  for (let index = committedCount; index < visible.length; index += 1) {
-    const command = visible[index]!
-    if (command.kind === 'stroke') {
-      const prev = drawnPoints.get(command.id) ?? 0
-      if (command.points.length > prev) {
-        drawStroke(context, command, prev)
-        drawnPoints.set(command.id, command.points.length)
-      }
-    } else if (!drawnPoints.has(command.id)) {
+  for (const command of visible) {
+    if (command.kind === 'fill') {
+      if (drawnPoints.has(command.id)) continue
       drawFill(context, command)
       drawnPoints.set(command.id, -1)
+      continue
+    }
+    const prev = drawnPoints.get(command.id) ?? 0
+    if (command.points.length > prev) {
+      drawStroke(context, command, prev)
+      drawnPoints.set(command.id, command.points.length)
     }
   }
-  // 2. 最后一条命令的追加点（同 ID 分批到达时 visible.length 不变但点数增长）
-  const last = visible[visible.length - 1]
-  if (last && last.kind === 'stroke') {
-    const prev = drawnPoints.get(last.id) ?? 0
-    if (last.points.length > prev) {
-      drawStroke(context, last, prev)
-      drawnPoints.set(last.id, last.points.length)
-    }
-  }
-  committedCount = visible.length
 }
 
 /** 将指针事件坐标裁剪并归一化到 0～1。 */
@@ -404,13 +398,21 @@ function wheelWidth(event: WheelEvent): void {
 /**
  * 权威历史变化监听：
  * - 撤销栈长度变化 / 命令数减少（撤销、清空、回合切换）→ 全量重绘并重建游标；
- * - 其余情况（笔画批次、同 ID 追加点）→ 增量绘制，避免每帧全量重绘历史。
+ * - 其余情况（笔画批次、同 ID 追加点、填充）→ 增量绘制，避免每帧全量重绘历史。
+ * revision 代次保证同 ID 追加点也能可靠触发（命令数组长度不变时普通 watch 不会触发）。
  */
 watch(
-  () => [props.strokes.length, props.undoneStrokeIds.length, props.undoneStrokeIds.at(-1)],
+  () => [
+    props.strokes.length,
+    props.revision ?? 0,
+    props.undoneStrokeIds.length,
+    props.undoneStrokeIds.at(-1),
+  ],
   () => {
-    const visibleLen = visibleCommands.value.length
-    if (props.undoneStrokeIds.length !== committedUndoLen || visibleLen < committedCount) {
+    if (
+      props.undoneStrokeIds.length !== committedUndoLen ||
+      props.strokes.length < committedCount
+    ) {
       redraw()
       return
     }
@@ -444,8 +446,12 @@ onBeforeUnmount(() => {
   <!-- 画布元素：绑定指针/滚轮事件；canDraw 时显示不同光标（绘画/橡皮/填充） -->
   <canvas
     ref="canvas"
-    class="drawing-canvas"
-    :class="{ drawable: canDraw, erasing: tool === 'eraser', filling: tool === 'fill' }"
+    class="block h-full w-full bg-white [touch-action:none]"
+    :class="{
+      'cursor-crosshair': canDraw && tool !== 'eraser' && tool !== 'fill',
+      'cursor-cell': canDraw && tool === 'eraser',
+      'cursor-copy': canDraw && tool === 'fill',
+    }"
     :aria-label="canDraw ? strings.canvas.drawingAria : strings.canvas.watchingAria"
     @pointerdown="pointerDown"
     @pointermove="pointerMove"
