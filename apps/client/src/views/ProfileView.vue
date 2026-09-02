@@ -101,7 +101,7 @@ function randomize(): void {
           <AvatarImage
             :avatar-id="store.profile.avatarId"
             :label="strings.common.myAvatarAria"
-            class="h-[15cqh] w-[15cqh] shadow-[0_0_0_0.35cqh_white,0_0_0_0.55cqh_#cbd5e1,0_1cqh_2.5cqh_#17255422]"
+            class="h-[15cqh] w-[15cqh]"
           />
           <span>{{ strings.profile.changeAvatar }}</span>
         </button>
@@ -136,10 +136,10 @@ function randomize(): void {
       </p>
 
       <button
-        class="mt-[2.5cqh] inline-flex min-h-[5.2cqh] w-full items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-blue shadow-[0_0.4cqh_0_#1e40af]"
+        class="mt-[2.5cqh] inline-flex min-h-[5.2cqh] w-full items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-blue"
         type="button"
         :disabled="!nicknameValid || !store.connected || store.busy"
-        @click="store.register"
+        @click="store.register()"
       >
         {{ store.busy ? strings.profile.busy : strings.profile.enterLobby }}<ArrowRight />
       </button>

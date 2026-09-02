@@ -4,14 +4,15 @@
   这里仅保留画布区、弹窗编排与浏览器级状态（全屏/弹窗开关/颜色线宽工具）。
 -->
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { Brush, Trash2, X } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { useFullscreen } from '@vueuse/core'
+import { Brush, LogOut, Trash2, X } from 'lucide-vue-next'
 import { APP_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import { EVENTS, type FillCommand, type Stroke } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
 import GameCanvas from '@/components/GameCanvas.vue'
-import GameSettingsDialog from '@/components/GameSettingsDialog.vue'
+import SettingsView from '@/views/SettingsView.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import GameHud from '@/components/game/GameHud.vue'
 import ScoreStrip from '@/components/game/ScoreStrip.vue'
@@ -24,7 +25,7 @@ import { useShortcuts } from '@/composables/useShortcuts'
 const store = useGameStore()
 // ---- 对局 HUD（计时/进度/权限/排行等，含 ticker 生命周期，见 composables/useGameHud.ts）----
 // 整局只在此处调用一次 useGameHud，把派生值（剩余秒数/进度/画家/排位）作为 props 下发给
-// GameHud/PhaseOverlay 等子组件，避免各组件各自开启 200ms ticker 造成重复刷新。
+// GameHud/PhaseOverlay 等子组件，避免各组件各自开启 ticker 造成重复刷新。
 const { game, secondsLeft, progress, drawer, rankings, phaseLabel, canGuess } = useGameHud(store)
 // ---- 画板快捷键与工具切换（含 keydown 监听生命周期，见 composables/useShortcuts.ts）----
 const { tool } = useShortcuts(store)
@@ -34,8 +35,17 @@ const color = ref<string>(APP_CONFIG.drawing.defaultColor) // 当前画笔/填�
 const width = ref<number>(APP_CONFIG.drawing.width.default) // 当前线宽
 const showClearConfirm = ref(false) // 清空确认弹窗
 const showEndConfirm = ref(false) // 提前结束确认弹窗
+const showLeaveGameConfirm = ref(false) // 设置页退出对局确认弹窗
 const showGameSettings = ref(false) // 对局内设置弹窗
-const isFullscreen = ref(Boolean(document.fullscreenElement))
+
+// 全屏以根游戏舞台为目标，确保 Toast、弹窗和竖屏提示仍包含在全屏上下文中。
+// 目标元素用 computed 从 DOM 实时取 .game-stage（它位于 App.vue 根舞台，非本组件根元素），
+// useFullscreen 支持传入元素/ref/computed，其内部管理请求/退出全屏与 isFullscreen 同步，
+// 并在组件卸载时清理事件监听，替代手写 querySelector + fullscreenchange。
+const fullscreenTarget = computed<HTMLElement | null>(() =>
+  document.querySelector<HTMLElement>('.game-stage'),
+)
+const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(fullscreenTarget)
 
 function submitStroke(stroke: Stroke): void {
   // 本地 Canvas 已即时显示笔画；网络失败时下一个权威快照会纠正画面。
@@ -51,23 +61,24 @@ async function clearDrawing(): Promise<void> {
   showClearConfirm.value = false
 }
 
-/** 全屏目标为根游戏舞台，确保 Toast、弹窗和竖屏提示仍包含在全屏上下文中。 */
-async function toggleFullscreen(): Promise<void> {
-  const stage = document.querySelector<HTMLElement>('.game-stage')
-  if (!stage) return
-  try {
-    if (document.fullscreenElement) await document.exitFullscreen()
-    else await stage.requestFullscreen()
-  } catch {
-    store.notify(strings.game.fullscreenFailed, 'warning')
-  }
+/** 先收起确认框再提交，避免进入最终结算后弹窗仍遮住页面。 */
+async function endGameEarly(): Promise<void> {
+  showEndConfirm.value = false
+  await store.endEarly()
 }
 
-function handleFullscreenChange(): void {
-  isFullscreen.value = Boolean(document.fullscreenElement)
+/** 设置页中确认退出本局；请求失败时保留设置页并由统一 Toast 提示。 */
+async function leaveGame(): Promise<void> {
+  showLeaveGameConfirm.value = false
+  await store.leaveGame()
 }
-onMounted(() => document.addEventListener('fullscreenchange', handleFullscreenChange))
-onBeforeUnmount(() => document.removeEventListener('fullscreenchange', handleFullscreenChange))
+
+/** 切换到全屏失败时给出统一提示（useFullscreen 内部已处理浏览器兼容，这里只兜底失败反馈）。 */
+function handleFullscreenToggle(): void {
+  void toggleFullscreen().catch(() => {
+    store.notify(strings.game.fullscreenFailed, 'warning')
+  })
+}
 </script>
 
 <template>
@@ -84,7 +95,7 @@ onBeforeUnmount(() => document.removeEventListener('fullscreenchange', handleFul
       :progress="progress"
       :drawer="drawer"
       @settings="showGameSettings = true"
-      @toggle-fullscreen="toggleFullscreen"
+      @toggle-fullscreen="handleFullscreenToggle"
     />
 
     <!-- 左侧玩家得分条：列出全部成员、得分与画家/猜中标记 -->
@@ -95,6 +106,7 @@ onBeforeUnmount(() => document.removeEventListener('fullscreenchange', handleFul
       class="relative min-w-0 min-h-0 m-[1.5cqh_1cqw] overflow-hidden border-[0.3cqh] border-slate-600 bg-white shadow-[0.5cqh_0.5cqh_0_#94a3b8]"
     >
       <GameCanvas
+        :round-id="game.roundId"
         :strokes="game.strokes"
         :undone-stroke-ids="game.undoneStrokeIds"
         :last-sequence="game.lastSequence"
@@ -145,8 +157,37 @@ onBeforeUnmount(() => document.removeEventListener('fullscreenchange', handleFul
       @leave-room="store.leaveRoom"
     />
 
-    <!-- 对局内设置使用舞台模态框，不离开当前游戏视图。 -->
-    <GameSettingsDialog :open="showGameSettings" @close="showGameSettings = false" />
+    <!-- 对局内直接复用完整设置页；顶栏插槽追加退出游戏，资料编辑能力按场景禁用。 -->
+    <div v-if="showGameSettings" class="absolute inset-0 z-40">
+      <SettingsView
+        :back-label="strings.settings.backToGame"
+        :profile-editing-disabled="true"
+        @back="showGameSettings = false"
+      >
+        <template #header-actions>
+          <button
+            type="button"
+            class="flex items-center gap-[0.45em] rounded-[0.55em] bg-red px-[0.8em] py-[0.8cqh] text-white"
+            @click="showLeaveGameConfirm = true"
+          >
+            <LogOut />{{ strings.game.leaveGame }}
+          </button>
+        </template>
+      </SettingsView>
+    </div>
+
+    <!-- 确认弹窗：从对局设置页退出本局，层级高于设置页。 -->
+    <ConfirmDialog
+      :open="showLeaveGameConfirm"
+      :title="strings.game.leaveGameTitle"
+      :body="strings.game.leaveGameBody"
+      :confirm-label="strings.game.confirmLeaveGame"
+      :cancel-label="strings.common.cancel"
+      :icon="LogOut"
+      overlay-class="z-50"
+      @cancel="showLeaveGameConfirm = false"
+      @confirm="leaveGame"
+    />
 
     <!-- 确认弹窗：清空画板 -->
     <ConfirmDialog
@@ -168,7 +209,7 @@ onBeforeUnmount(() => document.removeEventListener('fullscreenchange', handleFul
       :cancel-label="strings.common.cancel"
       :icon="X"
       @cancel="showEndConfirm = false"
-      @confirm="store.endEarly"
+      @confirm="endGameEarly"
     />
   </main>
 </template>

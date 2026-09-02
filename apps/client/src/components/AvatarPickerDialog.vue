@@ -50,7 +50,8 @@ function selectAvatar(avatarId: AvatarId): void {
         role="radio"
         class="grid aspect-square place-items-center rounded-full border-[0.22cqh] border-line bg-white p-[0.7cqh]"
         :class="{
-          '!border-navy shadow-[0_0_0_0.45cqh_#facc15]': props.modelValue === avatarId,
+          '!border-navy outline-[0.45cqh] outline-yellow outline-offset-[0.1cqh]':
+            props.modelValue === avatarId,
         }"
         :aria-checked="props.modelValue === avatarId"
         :aria-label="strings.profile.avatarOptionAria(avatarId)"

@@ -26,3 +26,8 @@ dist-ssr
 
 # Playwright MCP 浏览器输出目录
 .playwright-mcp/
+
+# SQLite 数据库（运行期生成，不入库）
+apps/server/data/*.db
+apps/server/data/*.db-wal
+apps/server/data/*.db-shm

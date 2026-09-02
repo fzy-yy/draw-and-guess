@@ -116,7 +116,8 @@ function clearCanvas(): void {
         type="button"
         class="h-[3.5cqh] w-[3.5cqh] rounded-full border-[0.2cqh] border-slate-400 bg-[var(--paint)]"
         :class="{
-          'shadow-[0_0_0_0.3cqh_#facc15,0_0_0_0.5cqh_#172554]': color.toUpperCase() === paint,
+          'outline-[0.3cqh] outline-yellow outline-offset-[0.15cqh] !border-navy':
+            color.toUpperCase() === paint,
         }"
         :style="{ '--paint': paint }"
         :aria-label="strings.game.presetColorAria(paint)"

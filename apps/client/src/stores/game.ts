@@ -9,28 +9,32 @@ import { APP_CONFIG, PUBLIC_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import {
   EVENTS,
+  RecoveryTokenSchema,
   type FillCommand,
   type Invite,
+  type MemberConnectionChange,
   type PresenceSnapshot,
   type Profile,
   type RoomSettings,
   type RoomSnapshot,
   type RoomVisibility,
+  type SessionRegistration,
   type Stroke,
   type VocabularySnapshot,
 } from '@draw-guess/shared'
-import { createUuid } from '@/utils/createUuid'
+import { toast } from 'vue-sonner'
 import { attachSocketListeners, socket } from './socket.ts'
 import { createRequester, type RequestResult } from './request.ts'
 
 /** 连接状态文案类型：与 config/strings.ts 的 strings.connection 保持同一来源，改动文案无需另改类型。 */
 export type ConnectionLabel = (typeof strings.connection)[keyof typeof strings.connection]
 export type ShellPage = 'profile' | 'lobby' | 'settings'
+/** 传输连接与应用会话分离：Socket 已连接不代表身份/房间/画布已恢复完成。 */
+export type SessionState = 'idle' | 'ready' | 'disconnected' | 'restoring'
 
 interface StoredProfile extends Profile {
-  /** 只有服务端签发且不会公开的恢复令牌可用于接管既有身份。 */
+  /** 只有服务端签发且不会公开的恢复令牌可用于接管既有 UUID 身份。 */
   recoveryToken?: string
-  recoveryTokenExpiresAt?: number
 }
 
 /** 将只读配置默认值拓宽为可编辑的本地设置类型，允许用户自定义快捷键字符。 */
@@ -65,15 +69,10 @@ function loadProfile(): StoredProfile {
         : randomItem(APP_CONFIG.player.avatarIds)
       if (typeof parsed.nickname === 'string') {
         const base = { nickname: parsed.nickname, avatarId }
-        return parsed.recoveryToken &&
-          parsed.recoveryTokenExpiresAt &&
-          parsed.recoveryTokenExpiresAt > Date.now()
-          ? {
-              ...base,
-              recoveryToken: parsed.recoveryToken,
-              recoveryTokenExpiresAt: parsed.recoveryTokenExpiresAt,
-            }
-          : base
+        // 恢复令牌的有效窗口从「实际断线时刻」起由服务端权威计算，客户端不能按签发时间自作主张删除。
+        // 仅复用共享 schema 排除损坏存储；旧版 recoveryTokenExpiresAt 字段会在下次保存时自动迁移掉。
+        const token = RecoveryTokenSchema.safeParse(parsed.recoveryToken)
+        return token.success ? { ...base, recoveryToken: token.data } : base
       }
     }
   } catch {
@@ -149,7 +148,8 @@ export const useGameStore = defineStore('game', () => {
   // ---- 会话与连接状态 ----
   const playerId = ref('') // 服务端签发的玩家 ID（登录后才有）
   const page = ref<ShellPage>('profile') // 当前页面：资料/大厅/设置
-  const connected = ref(socket.connected) // 是否已连接
+  const connected = ref(socket.connected) // Socket 传输层是否已连接
+  const sessionState = ref<SessionState>(profile.value.recoveryToken ? 'restoring' : 'idle') // 应用会话是否完成身份与权威房间同步
   const connectionLabel = ref<ConnectionLabel>(strings.connection.connecting) // 连接状态文案
   const latency = ref(0) // 最近一次往返延迟（毫秒）
   const clockOffset = ref(0) // 客户端与服务端时钟偏移（ms，服务端时间 - 本地时间），用于倒计时校正
@@ -160,48 +160,30 @@ export const useGameStore = defineStore('game', () => {
   const invites = ref<Invite[]>([]) // 收到的邀请列表
   /** 画布渲染代次：每次收到笔画追加/新命令时递增，供画布组件可靠触发增量绘制。 */
   const drawRevision = ref(0)
-  // Toast 队列：timer 为自动移除定时器句柄；repeated 标记“同内容被多次触发”以做防抖变色
-  const toasts = ref<
-    Array<{
-      id: string
-      type: 'success' | 'warning' | 'error'
-      text: string
-      repeated?: boolean
-      timer?: number
-    }>
-  >([]) // Toast 通知队列
   const busy = ref(false) // 注册/请求进行中的忙碌标记
+  let restoreRetryTimer: number | undefined
 
   // 派生状态：便捷读取当前玩家在房间中的角色
   const me = computed(() => room.value?.members.find((member) => member.id === playerId.value))
   const isHost = computed(() => room.value?.hostId === playerId.value)
   const isDrawer = computed(() => room.value?.game?.drawerId === playerId.value)
 
-  /** 弹出 Toast 通知，指定时长后自动移除；同内容未消失时防抖合并：仅延长停留并轻度变色。 */
+  /**
+   * 弹出 Toast 通知。
+   * 由 vue-sonner 接管渲染（App.vue 挂载 <Toaster/>），store 只保留统一的 `notify` 入口，
+   * 把类型映射到 toast.success/error/warning，并保留「同内容防抖合并」语义：
+   * 以内容+类型为稳定 id 复用同一条 toast（vue-sonner 会就地更新而非重复堆叠）。
+   */
   function notify(text: string, type: 'success' | 'warning' | 'error' = 'success'): void {
-    const same = toasts.value.find((toast) => toast.text === text && toast.type === type)
-    if (same) {
-      // 防抖：同一通知再次触发时不清除已有条目，仅重排移除时间并标记变色（轻微提示）
-      same.repeated = true
-      window.clearTimeout(same.timer)
-      same.timer = window.setTimeout(() => removeToast(same.id), APP_CONFIG.ui.toastDurationMs)
-      return
-    }
-    const id = createUuid()
-    const timer = window.setTimeout(() => removeToast(id), APP_CONFIG.ui.toastDurationMs)
-    toasts.value.push({ id, type, text, repeated: false, timer })
+    const id = `${type}:${text}` // 稳定 id：同内容+类型复用同一条，实现防抖合并
+    // 映射业务类型到 vue-sonner 的方法；默认成功。
+    const push = type === 'error' ? toast.error : type === 'warning' ? toast.warning : toast.success
+    push(text, { id, duration: APP_CONFIG.ui.toastDurationMs })
   }
 
-  /** 按 id 移除 Toast（幂等：已被定时器移除时安全忽略）。 */
-  function removeToast(id: string): void {
-    toasts.value = toasts.value.filter((toast) => toast.id !== id)
-  }
-
-  /** 手动关闭指定 Toast；竞态下若该条已超时移除则安全忽略（避免 splice(-1)）。 */
+  /** 手动关闭指定 Toast；vue-sonner 的 id 即上面 notify 生成的稳定 id，直接 dismiss。 */
   function dismissToast(id: string): void {
-    const toast = toasts.value.find((item) => item.id === id)
-    if (toast) window.clearTimeout(toast.timer) // 手动关闭后取消自动移除，避免残留
-    removeToast(id)
+    toast.dismiss(id)
   }
 
   /** 所有可失败请求使用 timeout + ack，并在这里统一翻译网络失败（实现见 stores/request.ts）。 */
@@ -222,42 +204,85 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
-  async function register(): Promise<void> {
+  /** 清除尚未执行的会话恢复重试，保证同一时刻最多只有一次注册请求。 */
+  function clearRestoreRetry(): void {
+    window.clearTimeout(restoreRetryTimer)
+    restoreRetryTimer = undefined
+  }
+
+  /**
+   * 传输已连接但注册 ack 超时/失败时静默重试。
+   * Socket.IO 此时不会再触发 connect，因此若不主动重试，页面会永久停在恢复遮罩或资料页。
+   */
+  function scheduleRestoreRetry(): void {
+    clearRestoreRetry()
+    restoreRetryTimer = window.setTimeout(() => {
+      restoreRetryTimer = undefined
+      if (socket.connected && sessionState.value === 'restoring') void register(true)
+    }, PUBLIC_CONFIG.network.sessionRestoreRetryMs)
+  }
+
+  /** 注册新身份或凭服务端秘密令牌恢复既有 UUID；automatic=true 时失败静默重试。 */
+  async function register(automatic = false): Promise<void> {
+    if (busy.value) return
     if (!socket.connected) {
-      notify(strings.store.notConnected, 'warning')
+      if (profile.value.recoveryToken || playerId.value) sessionState.value = 'disconnected'
+      if (!automatic) notify(strings.store.notConnected, 'warning')
       return
     }
+    if (automatic) sessionState.value = 'restoring'
+    clearRestoreRetry()
     busy.value = true
     try {
-      const result = await guarded<{
-        player: { id: string; nickname: string; avatarId: Profile['avatarId'] }
-        recoveryToken: string
-        restored: boolean
-      }>(
-        request(EVENTS.sessionRegister, {
-          protocolVersion: APP_CONFIG.app.protocolVersion,
-          profile: { nickname: profile.value.nickname, avatarId: profile.value.avatarId },
-          preferences: {
-            discoverable: settings.value.discoverable,
-            acceptsInvites: settings.value.acceptsInvites,
+      const result = await guarded<SessionRegistration>(
+        request(
+          EVENTS.sessionRegister,
+          {
+            protocolVersion: APP_CONFIG.app.protocolVersion,
+            profile: { nickname: profile.value.nickname, avatarId: profile.value.avatarId },
+            preferences: {
+              discoverable: settings.value.discoverable,
+              acceptsInvites: settings.value.acceptsInvites,
+            },
+            // 只传递不会公开的恢复令牌；公开 playerId 不具备身份凭证能力。
+            ...(profile.value.recoveryToken ? { recoveryToken: profile.value.recoveryToken } : {}),
           },
-          // 只传递不会公开的恢复令牌；公开 playerId 不具备身份凭证能力。
-          ...(profile.value.recoveryToken ? { recoveryToken: profile.value.recoveryToken } : {}),
-        }),
+          { quiet: automatic },
+        ),
       )
-      // 注册失败时 request 已弹错误 Toast，直接终止本次流程。
-      if (!result?.ok) return
+      if (!result?.ok) {
+        const retryableTransportFailure = !result || !result.code
+        if (automatic && profile.value.recoveryToken && retryableTransportFailure) {
+          scheduleRestoreRetry()
+        } else if (automatic) {
+          // 协议不匹配/载荷拒绝等永久错误不能无限静默重试；退出阻断框并给出可见错误。
+          sessionState.value = 'idle'
+          playerId.value = ''
+          room.value = undefined
+          page.value = 'profile'
+          notify(result?.error ?? strings.request.genericFailure, 'error')
+        }
+        return
+      }
       playerId.value = result.data.player.id
       profile.value = {
-        ...profile.value,
         nickname: result.data.player.nickname,
         avatarId: result.data.player.avatarId,
         recoveryToken: result.data.recoveryToken,
-        recoveryTokenExpiresAt: Date.now() + PUBLIC_CONFIG.network.recoveryTokenLifetimeMs,
       }
       saveProfile()
+      // 注册 ack 原子携带权威 room|null：非作画阶段断线已被服务端离房时，必须清掉旧对局视图。
+      room.value = result.data.room ?? undefined
+      if (!result.data.room) vocabulary.value = undefined
       page.value = 'lobby'
-      notify(result.data.restored ? strings.store.restored : strings.store.enteredLobby)
+      sessionState.value = 'ready'
+      notify(
+        result.data.restored
+          ? result.data.room
+            ? strings.store.gameRestored
+            : strings.store.restored
+          : strings.store.enteredLobby,
+      )
     } finally {
       busy.value = false
     }
@@ -303,6 +328,8 @@ export const useGameStore = defineStore('game', () => {
     profile.value = loadProfile()
     playerId.value = ''
     room.value = undefined
+    sessionState.value = 'idle'
+    clearRestoreRetry()
     page.value = 'profile'
     notify(strings.store.profileCleared, 'warning')
   }
@@ -447,6 +474,15 @@ export const useGameStore = defineStore('game', () => {
   async function endEarly(): Promise<void> {
     await guarded(request(EVENTS.gameEndEarly))
   }
+  /** 主动退出当前对局并返回大厅；服务端仍为其他玩家保留本局灰色成绩卡。 */
+  async function leaveGame(): Promise<void> {
+    const result = await guarded<undefined>(request(EVENTS.gameLeave))
+    if (!result?.ok) return
+    room.value = undefined
+    vocabulary.value = undefined
+    page.value = 'lobby'
+    notify(strings.store.roomLeft)
+  }
   async function returnWaiting(): Promise<void> {
     await guarded(request(EVENTS.gameReturnWaiting))
   }
@@ -487,18 +523,30 @@ export const useGameStore = defineStore('game', () => {
     onConnect: () => {
       connected.value = true
       connectionLabel.value = strings.connection.connected
-      // 已有本机身份（服务端签发的 playerId 或未过期的恢复令牌）→ 自动登录进大厅
-      if (playerId.value || profile.value.recoveryToken) void register()
+      // Socket 传输恢复不等于会话恢复：有本机令牌/身份时保持阻断遮罩，直到注册 ack 同步 room|null。
+      if (playerId.value || profile.value.recoveryToken) {
+        sessionState.value = 'restoring'
+        void register(true)
+      }
     },
     onDisconnect: (reason) => {
       connected.value = false
+      clearRestoreRetry()
+      if (playerId.value || profile.value.recoveryToken) sessionState.value = 'disconnected'
       connectionLabel.value =
         reason === 'io server disconnect'
           ? strings.connection.unavailable
           : strings.connection.reconnecting
     },
-    onReconnectAttempt: () => (connectionLabel.value = strings.connection.reconnecting),
-    onIoError: () => (connectionLabel.value = strings.connection.unstable),
+    onReconnectAttempt: () => {
+      connectionLabel.value = strings.connection.reconnecting
+      if (playerId.value || profile.value.recoveryToken) sessionState.value = 'disconnected'
+    },
+    onIoError: () => {
+      connectionLabel.value = strings.connection.unstable
+      if (!socket.connected && (playerId.value || profile.value.recoveryToken))
+        sessionState.value = 'disconnected'
+    },
     onPresence: (snapshot) => (presence.value = snapshot),
     onRooms: (rooms) => (presence.value.rooms = rooms),
     // E4：快照标记 strokesOmitted 时沿用本地已有画布历史（服务端已用增量补齐），避免画布闪空。
@@ -524,6 +572,20 @@ export const useGameStore = defineStore('game', () => {
         }
       }
       room.value = snapshot
+    },
+    onMemberConnectionChanged: (change: MemberConnectionChange) => {
+      // 服务端仅在作画阶段保留席位时广播；排除本人（本人使用不可关闭的恢复模态框）。
+      if (change.playerId === playerId.value || change.playerId === '') return
+      if (change.connection === 'left') {
+        notify(strings.store.memberLeftGame(change.nickname), 'warning')
+        return
+      }
+      notify(
+        change.connection === 'reconnecting'
+          ? strings.store.memberDisconnected(change.nickname)
+          : strings.store.memberReconnected(change.nickname),
+        change.connection === 'reconnecting' ? 'warning' : 'success',
+      )
     },
     onInviteReceived: (invite) => {
       invites.value.push(invite)
@@ -592,7 +654,7 @@ export const useGameStore = defineStore('game', () => {
   // store 初始化：注册监听、应用本地设置、消除热刷新注册竞态、启动延迟探测定时器
   saveSettings()
   // 热刷新或页面重载时 Socket 可能先于 store 完成连接；主动恢复可消除这一竞态。
-  if (socket.connected && profile.value.recoveryToken) queueMicrotask(() => void register())
+  if (socket.connected && profile.value.recoveryToken) queueMicrotask(() => void register(true))
   const pingTimer = window.setInterval(
     () => void measureLatency(),
     APP_CONFIG.network.pingIntervalMs,
@@ -603,6 +665,7 @@ export const useGameStore = defineStore('game', () => {
   if (import.meta.hot) {
     import.meta.hot.dispose(() => {
       window.clearInterval(pingTimer)
+      clearRestoreRetry()
       detachSocketListeners()
     })
   }
@@ -614,6 +677,7 @@ export const useGameStore = defineStore('game', () => {
     playerId,
     page,
     connected,
+    sessionState,
     connectionLabel,
     latency,
     clockOffset,
@@ -622,7 +686,6 @@ export const useGameStore = defineStore('game', () => {
     vocabulary,
     invites,
     drawRevision,
-    toasts,
     busy,
     me,
     isHost,
@@ -653,6 +716,7 @@ export const useGameStore = defineStore('game', () => {
     pause,
     resume,
     endEarly,
+    leaveGame,
     returnWaiting,
     kick,
     transferHost,

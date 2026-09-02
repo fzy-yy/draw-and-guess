@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { APP_CONFIG, getDeploymentConfig } from '../../../config.ts'
 import { serverStrings } from '../../../config/strings.ts'
 import { createApplication } from './app.ts'
+import { closeDb } from './db/index.ts'
 
 /** 使用 schema 在启动时验证跨字段配置，错误会阻止服务带病运行。 */
 function validateBusinessConfig(): void {
@@ -73,7 +74,12 @@ async function main(): Promise<void> {
   // 启动前先校验业务配置，避免带病运行
   validateBusinessConfig()
   const deployment = getDeploymentConfig()
-  const logger = pino({ level: deployment.logLevel })
+  // pino 默认输出结构化 JSON；本地/开发环境用 pino-pretty 传输端让日志可读。
+  // 生产环境（NODE_ENV=production）保持 JSON，便于在日志平台聚合解析。
+  const logger =
+    deployment.logLevel === 'debug' || process.env.NODE_ENV !== 'production'
+      ? pino({ level: deployment.logLevel, transport: { target: 'pino-pretty' } })
+      : pino({ level: deployment.logLevel })
   const addresses = findLanAddresses()
   const preferredAddress = addresses[0] ?? 'localhost'
   const application = await createApplication({
@@ -81,6 +87,8 @@ async function main(): Promise<void> {
     publicBaseUrl: () => `http://${preferredAddress}:${deployment.port}`,
     logger,
   })
+  // 启动恢复：把持久化玩家标记为断线（身份可宽限恢复）、作废全部进行中房间。
+  application.service.recoverOnStartup()
 
   // 端口被占用等监听错误给出可操作的中文提示
   application.httpServer.on('error', (error: NodeJS.ErrnoException) => {
@@ -124,7 +132,11 @@ async function main(): Promise<void> {
       code: 'SERVER_SHUTDOWN',
       message: serverStrings.notices.serverShutdown,
     })
-    application.io.close(() => application.httpServer.close(() => process.exit(0)))
+    application.io.close(() => {
+      // 关闭时先落库数据（WAL checkpoint 由 SQLite 自动处理），再关 HTTP 并退出。
+      closeDb()
+      application.httpServer.close(() => process.exit(0))
+    })
     // 3 秒兜底强退，防止连接未关闭导致进程挂起
     setTimeout(() => process.exit(1), 3_000).unref()
   }

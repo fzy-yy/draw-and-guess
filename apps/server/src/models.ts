@@ -12,6 +12,7 @@ import type {
   RoomSettings,
   RoomVisibility,
   DrawingCommand,
+  FinalRankingEntry,
   RoundResult,
   ScoreDetail,
   VocabularyItem,
@@ -32,6 +33,10 @@ export interface PlayerSecret {
   connected: boolean // 是否在线（断线宽限期内为 false）
   joinedAt: number // 注册时间戳
   disconnectedAt?: number // 最近断线时间戳（用于宽限期判断）
+  /** 在作画阶段断线时保留的房间 ID；用于重连后只向同局成员广播恢复提示。 */
+  drawingDisconnectRoomId?: string
+  /** 每次有效断线递增；画家/房主短宽限回调只处理创建它的断线代次。 */
+  disconnectGeneration: number
   disconnectTimer?: NodeJS.Timeout // 断线清理定时器
   requestCache: Map<string, Ack<unknown>> // event + requestId → 完整 ack 的幂等缓存
   lastInviteAt: Map<string, number> // 目标玩家 ID → 最近邀请时间（限频）
@@ -45,8 +50,13 @@ export interface PlayerSecret {
 /** 房间内成员状态：独立于玩家身份，随房间生命周期存在。 */
 export interface MemberState {
   playerId: string // 对应玩家 ID
+  seatIndex: number // 固定席位序号，对局内颜色与玩家身份据此保持稳定
   /** 是否为观战成员：不参与准备/画家轮换/猜词/计分，游戏中加入时置位。 */
   spectating?: boolean
+  /** 主动退出本局后保留结果卡片，但不再参与房间裁决或接收房间快照。 */
+  leftGame?: boolean
+  /** 退出时冻结公开资料，避免玩家进入其它房间后旧对局卡片发生变化。 */
+  leftProfile?: Profile
   ready: boolean // 是否已准备
   score: number // 本局累计得分
   joinedAt: number // 加入房间时间戳
@@ -63,6 +73,8 @@ export interface MemberState {
 /** 一局游戏的秘密状态：只存在于进程内存，永不写入磁盘。 */
 export interface GameSecret {
   id: string // 本局游戏 ID
+  /** 开局时间（epoch ms），用于战报归档（game_archive.started_at）。 */
+  startedAt: number
   roundId: string // 当前回合 ID（每回合重新生成）
   phaseStartedAt: number // 当前阶段开始时间
   phaseEndsAt: number // 当前阶段权威结束时间
@@ -91,6 +103,8 @@ export interface GameSecret {
   correctDetails: ScoreDetail[]
   revealedIndices: Set<number> // 逐步提示已揭示的字符下标
   roundResult?: RoundResult // 回合结算数据
+  /** 进入最终结算时冻结；成员随后离房不会改变已公布的排名与统计。 */
+  finalRanking?: FinalRankingEntry[]
   timer?: NodeJS.Timeout // 主阶段计时器
   /** 绘图阶段的逐步提示计时器，与主阶段计时器一起在暂停/切换时清理。 */
   hintTimers?: NodeJS.Timeout[]

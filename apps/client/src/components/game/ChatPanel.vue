@@ -1,15 +1,17 @@
 <!--
   右侧聊天区（从 GameView.vue 拆出的子组件）：
-  消息列表 + 猜词输入 / 安全预设短语。猜词输入、消息滚动跟随与自动聚焦逻辑全部收敛到内部；
+  消息列表 + 快捷互动工具 + 猜词输入。猜词输入、消息滚动跟随与自动聚焦逻辑全部收敛到内部；
   是否可猜词由父组件经 canGuess 传入，提交猜词/预设短语直接调用 store。
 -->
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
-import { Send } from 'lucide-vue-next'
+import { computed, nextTick, ref, watch, type Component } from 'vue'
+import { Frown, HelpCircle, Lightbulb, Send, SmilePlus, ThumbsUp } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
+import type { ChatMessage, RoomMember } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
+import ActionPopover from '@/components/ActionPopover.vue'
 
-// canGuess 由父组件（useGameHud）计算，这里只用于条件渲染猜词表单。
+// canGuess 由父组件（useGameHud）计算，这里只用于输入框权限与提交保护。
 const props = defineProps<{
   canGuess: boolean
 }>()
@@ -23,6 +25,46 @@ const messageList = ref<HTMLElement>()
 const shouldFollowMessages = ref(true)
 // 消息数据直接读取房间快照中的聊天记录，无需独立 ticker。
 const messages = computed(() => store.room?.game?.messages ?? [])
+// 快捷短语继续使用服务端白名单；图标仅是客户端表现，不参与协议或裁决。
+const quickPhraseIcons: Component[] = [ThumbsUp, Lightbulb, HelpCircle, Frown]
+const quickPhraseActions = computed(() =>
+  store.config.presets.safeChat.map((text, index) => ({
+    text,
+    icon: quickPhraseIcons[index] ?? SmilePlus,
+  })),
+)
+// 画家、猜词者和已猜中者在作画阶段都能使用受控互动；观战者始终只读。
+const canSendPreset = computed(
+  () =>
+    store.room?.phase === 'drawing' && !store.me?.spectating && store.me?.connection === 'online',
+)
+const interactionHint = computed(() =>
+  props.canGuess
+    ? strings.game.guessLabel
+    : store.isDrawer
+      ? strings.game.drawerChatHint
+      : store.me?.spectating
+        ? strings.game.spectatorChatHint
+        : store.me?.guessed
+          ? strings.game.guessedChatHint
+          : strings.game.waitingChatHint,
+)
+
+function memberForMessage(message: ChatMessage): RoomMember | undefined {
+  return message.playerId
+    ? store.room?.members.find((member) => member.id === message.playerId)
+    : undefined
+}
+
+/** 玩家消息气泡沿用固定席位色；文字始终保持黑色粗体以保证可读性。 */
+function messageStyle(message: ChatMessage): Record<string, string> | undefined {
+  const member = memberForMessage(message)
+  if (!member) return undefined
+  return {
+    borderLeftColor: member.seatColor,
+    backgroundColor: `color-mix(in srgb, ${member.seatColor} 16%, white)`,
+  }
+}
 
 /** 提交猜词：先交由服务端判定，只有成功送达才清空输入框；
  * 超时或业务失败（如重复猜中）时保留草稿，避免玩家已输入的内容被吞。 */
@@ -31,6 +73,12 @@ async function sendGuess(): Promise<void> {
   if (!text || !props.canGuess) return
   const delivered = await store.submitGuess(text)
   if (delivered) guess.value = ''
+}
+
+/** 发送服务端白名单内的互动内容，并在送达后收起其悬浮面板。 */
+async function sendPresetAndClose(preset: string, close: () => void): Promise<void> {
+  await store.sendPreset(preset)
+  close()
 }
 
 /** 用户接近列表底部时跟随新消息；主动上滚后保留阅读位置。 */
@@ -108,16 +156,13 @@ watch(
         :key="message.id"
         :class="[
           'flex flex-wrap gap-[0.35em] border-l-[0.3cqh] border-slate-400 bg-white px-[0.65em] py-[0.6cqh] text-[0.72em] leading-[1.35] text-slate-700 first:mt-auto transition-[transform,box-shadow,border-color,background-color,color,opacity] duration-[160ms]',
-          message.type === 'correct' &&
-            '!text-[#14532d] !bg-green-100 !border-l-green font-extrabold',
+          message.playerId && '!text-ink font-extrabold',
           message.type === 'system' && '!text-[#1e3a8a] !bg-sky !border-l-blue',
-          message.type === 'preset' && '!text-[#7c2d12] !bg-[#ffedd5] !border-l-orange',
         ]"
+        :style="messageStyle(message)"
       >
         <!-- 玩家消息显示发送者昵称 -->
-        <b v-if="message.playerId">{{
-          store.room.members.find((member) => member.id === message.playerId)?.nickname
-        }}</b>
+        <b v-if="message.playerId">{{ memberForMessage(message)?.nickname }}</b>
         <span>{{ message.text }}</span>
       </div>
       <div
@@ -127,59 +172,71 @@ watch(
         <Send class="h-[4cqh] w-[4cqh]" /><span>{{ strings.game.noMessages }}</span>
       </div>
     </div>
-    <!-- 猜词输入表单：仅可猜词的玩家显示 -->
-    <form
-      v-if="canGuess"
-      class="border-t-[0.18cqh] border-line pt-[0.8cqh]"
-      @submit.prevent="sendGuess"
-    >
-      <label for="guess-input" class="text-muted text-[0.65em]">{{
-        strings.game.guessLabel
-      }}</label>
-      <div class="flex mt-[0.45cqh]">
+    <!-- 所有角色共享同一操作布局：上排快捷互动，下排输入；无猜词权限时仅禁用输入。 -->
+    <div class="border-t-[0.18cqh] border-line pt-[0.8cqh]">
+      <p class="text-muted min-h-[1.3em] text-[0.6em] leading-[1.3]">
+        {{ interactionHint }}
+      </p>
+      <div
+        class="mt-[0.55cqh] flex items-center gap-[0.45em]"
+        role="group"
+        :aria-label="strings.game.chatActionsAria"
+      >
+        <ActionPopover
+          :trigger-label="strings.game.reactionPickerAria"
+          :panel-aria-label="strings.game.reactionPanelAria"
+          :disabled="!canSendPreset"
+        >
+          <template #trigger><SmilePlus class="h-[2.4cqh] w-[2.4cqh]" /></template>
+          <template #default="{ close }">
+            <div class="grid grid-cols-3 gap-[0.45em]">
+              <button
+                v-for="reaction in store.config.presets.chatReactions"
+                :key="reaction"
+                type="button"
+                class="grid h-[4.2cqh] w-[4.2cqh] place-items-center rounded-full bg-slate-100 text-[1.05em] hover:bg-sky"
+                :aria-label="strings.game.sendReactionAria(reaction)"
+                @click="sendPresetAndClose(reaction, close)"
+              >
+                {{ reaction }}
+              </button>
+            </div>
+          </template>
+        </ActionPopover>
+        <button
+          v-for="action in quickPhraseActions"
+          :key="action.text"
+          type="button"
+          class="grid h-[4.2cqh] w-[4.2cqh] shrink-0 place-items-center rounded-full border-[0.18cqh] border-line bg-white text-blue disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="!canSendPreset"
+          :title="action.text"
+          :aria-label="strings.game.sendQuickPhraseAria(action.text)"
+          @click="store.sendPreset(action.text)"
+        >
+          <component :is="action.icon" class="h-[2.35cqh] w-[2.35cqh]" />
+        </button>
+      </div>
+      <form class="mt-[0.65cqh] flex gap-[0.5em]" @submit.prevent="sendGuess">
+        <label for="guess-input" class="sr-only">{{ strings.game.guessLabel }}</label>
         <input
           id="guess-input"
           ref="guessInput"
           v-model="guess"
           :maxlength="store.config.player.chatMaxLength"
           autocomplete="off"
-          class="w-full min-w-0 h-[5.2cqh] rounded-l-[0.65em] border-[0.2cqh] border-r-0 border-blue px-[0.8em] outline-0"
+          class="h-[5.2cqh] min-w-0 flex-1 rounded-[0.65em] border-[0.2cqh] border-blue bg-white px-[0.8em] outline-0 disabled:cursor-not-allowed disabled:border-line disabled:bg-slate-100 disabled:text-muted"
+          :disabled="!canGuess"
           :placeholder="strings.game.guessPlaceholder"
-        /><button
+        />
+        <button
           type="submit"
-          class="grid h-[5cqh] w-[5cqh] place-items-center rounded-r-[0.65em] bg-blue text-white"
-          :disabled="!guess.trim()"
+          class="grid h-[5.2cqh] w-[5.2cqh] shrink-0 place-items-center rounded-[0.65em] bg-blue text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          :disabled="!canGuess || !guess.trim()"
           :aria-label="strings.game.sendGuessAria"
         >
-          <Send />
+          <Send class="h-[2.5cqh] w-[2.5cqh]" />
         </button>
-      </div>
-    </form>
-    <!-- 安全短语区：画家 / 已猜中者 / 观战者不能发送文字 -->
-    <div v-else class="border-t-[0.18cqh] border-line pt-[0.8cqh]">
-      <p class="text-muted text-[0.62em] leading-[1.3]">
-        {{
-          store.isDrawer
-            ? strings.game.drawerChatHint
-            : store.me?.spectating
-              ? strings.game.spectatorChatHint
-              : store.me?.guessed
-                ? strings.game.guessedChatHint
-                : strings.game.waitingChatHint
-        }}
-      </p>
-      <div class="mt-[0.5cqh] grid grid-cols-2 gap-[0.4cqh_0.4em]">
-        <button
-          v-for="preset in store.config.presets.safeChat"
-          :key="preset"
-          type="button"
-          class="bg-[#ffedd5] px-[0.3em] py-[0.45cqh] text-[#7c2d12] rounded-[0.45em] text-[0.58em]"
-          :disabled="store.room.phase !== 'drawing' || store.me?.spectating"
-          @click="store.sendPreset(preset)"
-        >
-          {{ preset }}
-        </button>
-      </div>
+      </form>
     </div>
   </aside>
 </template>

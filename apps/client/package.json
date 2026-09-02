@@ -13,13 +13,18 @@
     "@tailwindcss/vite": "^4.1.14",
     "@tanstack/vue-virtual": "^3.13.36",
     "@vueuse/core": "^14.4.0",
+    "@vueuse/integrations": "^14.4.0",
     "clsx": "^2.1.1",
+    "focus-trap": "^8.2.2",
     "lucide-vue-next": "^0.548.0",
     "nanoid": "^6.0.1",
+    "perfect-freehand": "^1.2.3",
     "pinia": "^3.0.3",
     "socket.io-client": "^4.8.1",
+    "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.1.14",
-    "vue": "^3.5.22"
+    "vue": "^3.5.22",
+    "vue-sonner": "^2.0.9"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",

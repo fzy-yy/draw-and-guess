@@ -65,6 +65,7 @@ export class SnapshotBuilder {
           lastSequence: game.lastSequence, // 下发已接受的最大绘图序号，供重连客户端续起
           messages: game.messages.slice(-APP_CONFIG.ui.recentMessageCount),
           ...(game.roundResult ? { roundResult: game.roundResult } : {}),
+          ...(game.finalRanking ? { finalRanking: game.finalRanking } : {}),
         }
       : undefined
     return {
@@ -81,9 +82,23 @@ export class SnapshotBuilder {
       settings: room.settings,
       // 成员视图：公开身份 + 局内状态，注意不包含服务端秘密字段
       members: room.members.map((member) => {
-        const player = this.service.requirePlayer(member.playerId)
+        const player = this.service.players.get(member.playerId)
+        if (!member.leftGame && !player)
+          throw new GameError('UNAUTHORIZED', serverStrings.errors.UNAUTHORIZED)
+        const profile = member.leftProfile ?? player?.profile
+        if (!profile) throw new GameError('UNAUTHORIZED', serverStrings.errors.UNAUTHORIZED)
+        const publicPlayer = member.leftGame
+          ? {
+              id: member.playerId,
+              nickname: profile.nickname,
+              avatarId: profile.avatarId,
+              status: 'idle' as const,
+            }
+          : this.toPublicPlayer(player!)
         return {
-          ...this.toPublicPlayer(player),
+          ...publicPlayer,
+          seatIndex: member.seatIndex,
+          seatColor: APP_CONFIG.room.seatColors[member.seatIndex] ?? APP_CONFIG.room.seatColors[0],
           // 房主为隐式准备状态；非房主仍以真实 ready 字段为准。
           ready: room.hostId === member.playerId || member.ready,
           score: member.score,
@@ -91,7 +106,8 @@ export class SnapshotBuilder {
           isDrawer: game?.drawerId === member.playerId,
           guessed: Boolean(member.guessedAt),
           spectating: Boolean(member.spectating),
-          connection: player.connected ? 'online' : 'reconnecting',
+          leftGame: Boolean(member.leftGame),
+          connection: member.leftGame ? 'left' : player!.connected ? 'online' : 'reconnecting',
           stats: member.stats,
         }
       }),

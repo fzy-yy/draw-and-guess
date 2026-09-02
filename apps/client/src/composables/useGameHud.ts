@@ -1,21 +1,23 @@
 /**
  * 对局 HUD 组合式逻辑：时间驱动、剩余时间/进度、猜词权限、阶段标签、画家与排行榜。
  * 从 GameView 拆出，便于独立测试；ticker 的生命周期在 composable 内管理。
+ * 计时用 @vueuse/core 的 useTimestamp 驱动（组件卸载自动清理，替代手写 setInterval）。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed } from 'vue'
+import { useTimestamp } from '@vueuse/core'
 import { strings } from '@draw-guess/strings'
-import type { RoomMember } from '@draw-guess/shared'
+import type { FinalRankingEntry, RoomMember } from '@draw-guess/shared'
 import type { useGameStore } from '@/stores/game'
 
 type GameStore = ReturnType<typeof useGameStore>
 
-/** 带同名次排位的成员视图：在公开成员信息基础上叠加并排位次。 */
-export type RankedMember = RoomMember & { rank: number }
+/** 最终排行使用服务端冻结的公开结算项。 */
+export type RankedMember = FinalRankingEntry
 
 /** 从对局快照派生 HUD 计算属性，并启动/清理时间刷新定时器。 */
 export function useGameHud(store: GameStore) {
-  const now = ref(Date.now())
-  let ticker = 0
+  // useTimestamp 返回毫秒级响应式时间戳（默认 100ms 间隔），卸载时自动停止，替代手写 ticker。
+  const now = useTimestamp({ interval: 200 })
 
   const game = computed(() => store.room?.game)
   // 校正后的本地时钟：叠加了与服务端的时钟偏移，避免设备时钟偏差导致倒计时不准（F2）
@@ -67,22 +69,29 @@ export function useGameHud(store: GameStore) {
   )
   // 最终排行：按分数降序并计算同名次（同分并列）
   const rankings = computed<RankedMember[]>(() => {
-    const members = [...(store.room?.members ?? [])].sort((a, b) => b.score - a.score)
+    // game_result 优先读取服务端在结算瞬间冻结的榜单；旧快照缺少该字段时才回退实时成员。
+    if (store.room?.phase === 'game_result' && game.value?.finalRanking)
+      return game.value.finalRanking
+    const members = [...(store.room?.members ?? [])]
+      .filter((member) => !member.spectating)
+      .sort((a, b) => b.score - a.score)
     let previous = -1
     let rank = 0
     return members.map((member, index) => {
       if (member.score !== previous) rank = index + 1
       previous = member.score
-      return { ...member, rank }
+      return {
+        id: member.id,
+        nickname: member.nickname,
+        avatarId: member.avatarId,
+        rank,
+        score: member.score,
+        stats: member.stats,
+      }
     })
   })
 
-  onMounted(() => {
-    ticker = window.setInterval(() => (now.value = Date.now()), 200)
-  })
-  onBeforeUnmount(() => {
-    window.clearInterval(ticker)
-  })
+  // 无需手动清理：useTimestamp 组件卸载自动停止计时器，避免残留 setInterval。
 
   return { game, correctedNow, secondsLeft, progress, canGuess, phaseLabel, drawer, rankings }
 }

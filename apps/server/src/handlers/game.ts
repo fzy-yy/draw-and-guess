@@ -35,6 +35,9 @@ export function registerGameHandlers(
   bindRequest(socket, EVENTS.gameEndEarly, RequestSchema, (_input, playerId) =>
     service.endEarly(playerId),
   )
+  bindRequest(socket, EVENTS.gameLeave, RequestSchema, (_input, playerId) =>
+    service.leaveGame(playerId),
+  )
   bindRequest(socket, EVENTS.gameReturnWaiting, RequestSchema, (_input, playerId) =>
     service.returnWaiting(playerId),
   )

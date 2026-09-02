@@ -13,6 +13,7 @@ const store = useGameStore()
 
 /** 当前成员在局内的角色文案（与聊天区角色标签一致）。 */
 function roleText(member: RoomMember): string {
+  if (member.leftGame) return strings.status.roleLeftGame
   if (member.isDrawer) return strings.status.roleDrawing
   if (member.guessed) return strings.status.roleGuessed
   if (member.spectating) return strings.status.roleSpectating
@@ -32,9 +33,15 @@ function roleText(member: RoomMember): string {
       :key="member.id"
       class="grid min-h-[8.5cqh] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[0.55em] border-l-[0.35cqh] border-slate-400 bg-white px-[0.5em] py-[0.55cqh]"
       :class="{
-        '!border-l-orange !bg-[#fff7ed]': member.isDrawer,
-        '!border-l-green !bg-[#f0fdf4]': member.guessed,
-        'opacity-55 border-dashed': member.connection === 'reconnecting',
+        '!bg-[#f0fdf4]': member.guessed,
+        'opacity-55 border-dashed': member.connection !== 'online',
+      }"
+      :style="{
+        '--seat-color': member.seatColor,
+        borderLeftColor: member.seatColor,
+        backgroundColor: member.isDrawer
+          ? `color-mix(in srgb, ${member.seatColor} 12%, white)`
+          : undefined,
       }"
     >
       <div class="relative">
@@ -52,20 +59,28 @@ function roleText(member: RoomMember): string {
         />
       </div>
       <div class="min-w-0 flex flex-col">
-        <b
-          class="overflow-hidden text-ellipsis whitespace-nowrap text-[0.75em]"
-          :class="member.id === store.playerId ? '!text-blue' : ''"
-          >{{ member.nickname }}</b
+        <b class="overflow-hidden text-ellipsis whitespace-nowrap text-[0.75em] text-ink">{{
+          member.nickname
+        }}</b
         ><span class="text-blue text-[0.7em] font-black">{{
           strings.common.scoreUnit(member.score)
         }}</span
         ><span
-          class="text-[0.58em] font-extrabold"
-          :class="member.id === store.playerId ? '!text-blue' : 'text-muted'"
+          class="text-muted text-[0.58em] font-extrabold"
+          :class="
+            member.isDrawer
+              ? 'bg-[linear-gradient(90deg,var(--seat-color),#172033,var(--seat-color))] bg-[length:200%_100%] bg-clip-text text-transparent animate-[drawer-role-flow_1.4s_linear_infinite]'
+              : ''
+          "
           >{{ roleText(member) }}</span
         >
       </div>
       <Crown v-if="member.isHost" class="text-[#a16207]" :aria-label="strings.game.hostMarkAria" />
+      <span
+        v-else-if="member.id === store.playerId"
+        class="grid h-[2.6cqh] w-[2.6cqh] place-items-center rounded-full bg-blue text-[0.58em] font-black text-white"
+        >{{ strings.room.meTag }}</span
+      >
     </article>
   </aside>
 </template>

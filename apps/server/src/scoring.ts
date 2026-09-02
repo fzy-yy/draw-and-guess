@@ -8,7 +8,7 @@ import type { GameSecret, MemberState, RoomSecret } from './models.ts'
 
 /** 房间可玩成员数（排除观战者），计分与满员判定统一使用它。 */
 export function activePlayerCount(room: RoomSecret): number {
-  return room.members.filter((member) => !member.spectating).length
+  return room.members.filter((member) => !member.spectating && !member.leftGame).length
 }
 
 /** 为单个猜中者构造得分明细（与猜中时同规则、同口径）。 */
@@ -47,7 +47,7 @@ export function buildDrawerScore(input: {
   // 参与本回合的可玩成员全集（含已掉线者）：满员奖励必须“确实每个人都猜中”。
   // 若仅按在线成员判定，3 人局中 1 人掉线后只要剩下 1 人猜中就会发放满员奖，属虚增。
   const roundGuessers = room.members.filter(
-    (member) => member.playerId !== game.drawerId && !member.spectating,
+    (member) => member.playerId !== game.drawerId && !member.spectating && !member.leftGame,
   )
   const allCorrect =
     roundGuessers.length > 0 &&

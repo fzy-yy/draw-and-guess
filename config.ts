@@ -63,11 +63,12 @@ export const PUBLIC_CONFIG = {
   network: {
     requestTimeoutMs: APP_CONFIG.network.requestTimeoutMs,
     pingIntervalMs: APP_CONFIG.network.pingIntervalMs,
-    recoveryTokenLifetimeMs: APP_CONFIG.network.reconnectGraceMs,
+    sessionRestoreRetryMs: APP_CONFIG.network.sessionRestoreRetryMs,
   },
   player: APP_CONFIG.player,
   room: {
     defaultName: APP_CONFIG.room.defaultName,
+    seatColors: APP_CONFIG.room.seatColors,
     allowPlayerInvite: APP_CONFIG.room.allowPlayerInvite,
     allowPause: APP_CONFIG.room.allowPause,
     joinPolicy: APP_CONFIG.room.joinPolicy,

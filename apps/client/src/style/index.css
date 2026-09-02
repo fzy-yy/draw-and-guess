@@ -37,7 +37,7 @@
     @apply inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black;
   }
   .btn-primary {
-    @apply text-white bg-blue shadow-[0_0.4cqh_0_#1e40af];
+    @apply text-white bg-blue;
   }
   .btn-secondary {
     /* 注意：按钮在 .game-stage 内有基础 border:0，须用 !border 以重要声明覆盖。 */
@@ -138,6 +138,7 @@
   /* 舞台内按钮去掉默认边框，由各按钮样式自行定义。 */
   .game-stage button {
     border: 0;
+    box-shadow: none !important;
   }
   /* 浏览器全屏时舞台铺满屏幕，并移除窗口模式装饰。 */
   .game-stage:fullscreen {
@@ -229,6 +230,16 @@
   }
   50% {
     transform: scale(1.03);
+  }
+}
+
+/* 当前画家角色文字沿固定席位色流动；关闭动画设置时会被全局 motion-disabled 规则停用。 */
+@keyframes drawer-role-flow {
+  from {
+    background-position: 200% 50%;
+  }
+  to {
+    background-position: 0% 50%;
   }
 }
 

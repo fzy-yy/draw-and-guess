@@ -3,10 +3,11 @@
   收敛原本分散在各视图的 `.stage-overlay` / `.game-dialog` / header / footer 长串行内类。
   - 标准弹窗：传 closeAria 显示标题栏与关闭按钮，header 槽放眉题 + 标题。
   - 确认弹窗：不传 closeAria（无标题栏），用 sectionClass 追加居中布局，footerClass 微调底部按钮区。
-  - Esc / 关闭按钮统一触发 close 事件（顺带统一了键盘可访问性）。
+  - Esc / 关闭按钮统一触发 close 事件；系统阻断框可用 dismissible=false 禁止关闭。
 -->
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { useFocusTrap } from '@vueuse/integrations/useFocusTrap'
 import { X } from 'lucide-vue-next'
 
 const props = withDefaults(
@@ -22,6 +23,10 @@ const props = withDefaults(
     ariaLabel?: string
     /** 若提供则在标题栏渲染关闭按钮，并提供关闭语义 */
     closeAria?: string
+    /** 不可关闭的系统阻断弹窗传 false：禁用 Esc 与关闭按钮。 */
+    dismissible?: boolean
+    /** 遮罩层级等附加类；系统断线提示需高于普通弹窗与 Toast。 */
+    overlayClass?: string
   }>(),
   {
     widthClass: '',
@@ -30,6 +35,8 @@ const props = withDefaults(
     labelledby: undefined,
     ariaLabel: undefined,
     closeAria: undefined,
+    dismissible: true,
+    overlayClass: 'z-30',
   },
 )
 
@@ -37,51 +44,53 @@ const emit = defineEmits<{ close: [] }>()
 
 /**
  * 可访问性：Esc 关闭 + 初始聚焦 + Tab 焦点陷阱 + 关闭后焦点还原。
- * Esc 放在 document 级，确保焦点不在弹窗内时也能关闭；监听仅在 `open` 为 true 期间挂载，
- * 这样条件挂载式与常驻式弹窗两种用法下行为一致，也不会出现常驻监听被多实例反复触发。
+ * Tab 循环、初始聚焦与焦点归还原处交由 @vueuse/integrations 的 useFocusTrap 接管
+ * （其内部基于 focus-trap 实现：激活时聚焦容器/首个可聚焦项、Tab/shift+Tab 循环、
+ * 失活时把焦点还给触发元素）。
+ * Esc 关闭与多弹窗顶层仲裁仍需自行处理：useFocusTrap 不响应 Escape，且本项目
+ * 在断线瞬间可能同时存在多个弹窗，只有视觉层级最高者才应响应键盘。
  */
+const overlayRef = ref<HTMLElement>()
 const dialogRef = ref<HTMLElement>()
-/** 打开弹窗前的焦点元素，关闭后归还，避免键盘用户丢失位置。 */
-let previouslyFocused: HTMLElement | null = null
 
-/** 枚举弹窗内当前可聚焦元素（跳过禁用与不可见项），用于 Tab 循环。 */
-function focusableItems(): HTMLElement[] {
-  if (!dialogRef.value) return []
-  return Array.from(
-    dialogRef.value.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    ),
-  ).filter((element) => !element.hasAttribute('disabled') && element.offsetParent !== null)
+// useFocusTrap：挂载到对话框卡片（section，tabindex=-1）。immediate 关闭以便在 open 时手动激活。
+const { activate: activateTrap, deactivate: deactivateTrap } = useFocusTrap(dialogRef, {
+  immediate: false,
+  // 初始聚焦从容器内部第一个可聚焦项开始（卡片本身为 -1，不会被选中）。
+  initialFocus: false,
+  // 失活后把焦点还给打开前的触发元素，避免键盘用户丢失位置。
+  returnFocusOnDeactivate: true,
+})
+
+/**
+ * 多个弹窗可能在断线瞬间同时存在；只允许视觉层级最高者处理键盘，
+ * 防止系统阻断框在最上层时，底层普通弹窗仍响应 Esc 并把焦点还到游戏控件。
+ */
+function isTopmostDialog(): boolean {
+  const dialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]')).filter(
+    (element) => element.offsetParent !== null,
+  )
+  const topmost = dialogs.reduce<HTMLElement | undefined>((current, element) => {
+    if (!current) return element
+    const currentZ = Number.parseInt(window.getComputedStyle(current).zIndex, 10) || 0
+    const elementZ = Number.parseInt(window.getComputedStyle(element).zIndex, 10) || 0
+    return elementZ >= currentZ ? element : current
+  }, undefined)
+  return topmost === overlayRef.value
 }
 
+/** 只处理 Esc 关闭；Tab 循环由 useFocusTrap 负责。不处于顶层弹窗时直接忽略。 */
 function handleKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') {
-    event.stopPropagation()
-    emit('close')
-    return
-  }
-  // 焦点陷阱：Tab 只在弹窗内部循环，不会跑到遮罩后面的页面内容上
-  if (event.key !== 'Tab') return
-  const items = focusableItems()
-  if (!items.length) return
-  const first = items[0]
-  const last = items[items.length - 1]
-  if (!first || !last) return
-  const active = document.activeElement
-  if (event.shiftKey && (active === first || !dialogRef.value?.contains(active))) {
-    event.preventDefault()
-    last.focus()
-  } else if (!event.shiftKey && active === last) {
-    event.preventDefault()
-    first.focus()
-  }
+  if (event.key !== 'Escape' || !isTopmostDialog()) return
+  event.stopImmediatePropagation()
+  event.preventDefault()
+  if (props.dismissible) emit('close')
 }
 
-/** 关闭时解除监听并把焦点还给触发元素。 */
+/** 打开/关闭弹窗时同步激活/失活焦点陷阱，并在失活时归还焦点。 */
 function releaseFocus(): void {
   document.removeEventListener('keydown', handleKeydown)
-  if (previouslyFocused?.isConnected) previouslyFocused.focus()
-  previouslyFocused = null
+  deactivateTrap()
 }
 
 watch(
@@ -89,11 +98,9 @@ watch(
   async (isOpen) => {
     if (isOpen) {
       document.addEventListener('keydown', handleKeydown)
-      previouslyFocused =
-        document.activeElement instanceof HTMLElement ? document.activeElement : null
       await nextTick()
-      // 聚焦卡片本身（tabindex=-1）：不显示焦点环，但让后续 Tab 从弹窗内部开始
-      dialogRef.value?.focus()
+      // 激活焦点陷阱：让 Tab 循环从弹窗内部开始，初次聚焦进入容器。
+      activateTrap()
     } else {
       releaseFocus()
     }
@@ -109,7 +116,9 @@ onBeforeUnmount(releaseFocus)
   <Transition name="modal">
     <div
       v-if="open"
-      class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
+      ref="overlayRef"
+      class="absolute inset-0 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
+      :class="overlayClass"
       role="dialog"
       aria-modal="true"
       :aria-labelledby="labelledby"
@@ -122,7 +131,7 @@ onBeforeUnmount(releaseFocus)
         :class="[widthClass, sectionClass]"
       >
         <header
-          v-if="closeAria"
+          v-if="closeAria && dismissible"
           class="flex min-h-[9cqh] items-center justify-between bg-navy px-[1.7em] py-[1.3cqh] text-white"
         >
           <div><slot name="header" /></div>

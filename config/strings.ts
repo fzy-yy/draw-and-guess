@@ -76,6 +76,7 @@ export const strings = {
     roleReady: '已准备', // 席位：已准备
     roleNotReady: '未准备', // 席位：未准备
     roleReconnecting: '重连中', // 席位：断线重连
+    roleLeftGame: '已退出', // 对局：主动退出本局
   },
 
   /* ============================= 根舞台 App.vue ============================= */
@@ -87,6 +88,11 @@ export const strings = {
     inviterAvatarAria: '邀请者 SVG 头像', // 邀请者头像标签
     inviteHeading: '收到房间邀请', // 邀请横幅标题
     inviteReceived: (nickname: string, roomName: string) => `${nickname} 邀请你加入“${roomName}”`, // 邀请横幅正文
+    disconnectDialogAria: '连接中断提示', // 本人断线阻断模态框标签
+    disconnectedTitle: '与主机连接已中断', // 传输断开标题
+    disconnectedBody: '正在自动重连，请保持页面打开。连接恢复后会继续同步你的身份和未完成对局。', // 传输断开说明
+    restoringTitle: '正在恢复游戏状态', // 传输恢复后的会话同步标题
+    restoringBody: '已连接到主机，正在核对本机恢复令牌并同步权威房间与画布状态。', // 会话同步说明
     portraitTitle: '请横屏使用', // 竖屏警告标题
     portraitHint: '旋转设备后即可获得完整的游戏舞台。', // 竖屏警告说明
   },
@@ -290,9 +296,14 @@ export const strings = {
     guessLabel: '输入你的答案', // 猜词输入标签
     guessPlaceholder: '按 Enter 发送猜词', // 猜词输入占位符
     sendGuessAria: '发送猜词', // 发送按钮标签
-    drawerChatHint: '画家不能发送文字，可使用安全互动短语', // 画家禁言提示
+    chatActionsAria: '快捷互动', // 聊天区圆形快捷操作组
+    reactionPickerAria: '选择表情反应', // 表情悬浮面板按钮
+    reactionPanelAria: '表情反应列表', // 表情悬浮面板
+    sendReactionAria: (reaction: string) => `发送表情 ${reaction}`, // 表情选项标签
+    sendQuickPhraseAria: (phrase: string) => `发送快捷短语：${phrase}`, // 快捷短语图标标签
+    drawerChatHint: '画家不能输入答案，可使用上方快捷互动', // 画家禁言提示
     spectatorChatHint: '观战成员只能观看，不能发言或猜词', // 观战禁言提示
-    guessedChatHint: '你已猜中，只能发送安全互动短语', // 已猜中提示
+    guessedChatHint: '你已猜中，可继续使用上方快捷互动', // 已猜中提示
     waitingChatHint: '等待作画阶段开始', // 开局前提示
     toolGroup: '工具', // 工具栏分组
     penTool: '画笔', // 画笔工具
@@ -337,6 +348,10 @@ export const strings = {
       `猜中 ${correct} 次 · 平均 ${avgSeconds} 秒 · 作画带猜中 ${drawing} 人次`, // 排行统计行
     backToRoom: '返回房间 · 再来一局', // 房主返回房间按钮
     leaveRoom: '退出房间', // 退出房间按钮
+    leaveGame: '退出游戏', // 游戏内设置顶栏退出按钮
+    leaveGameTitle: '退出本局游戏？', // 游戏内退出确认标题
+    leaveGameBody: '退出后将返回大厅，你在本局的成绩卡会为其他玩家保留。', // 退出确认说明
+    confirmLeaveGame: '确认退出', // 退出确认提交
     clearCanvasTitle: '清空整个画板？', // 清空确认标题
     clearCanvasBody: '这会清除本回合全部笔画；操作将由服务端广播给所有玩家。', // 清空确认说明
     confirmClear: '确认清空', // 清空确认提交
@@ -354,6 +369,7 @@ export const strings = {
   /* ============================= 设置页 SettingsView.vue ============================= */
   settings: {
     backToLobby: '返回大厅', // 顶栏返回按钮
+    backToGame: '返回游戏', // 游戏内打开完整设置时的返回按钮
     label: 'SETTINGS', // 顶栏英文眉题
     title: '游戏设置', // 顶栏标题
     localOnly: '设置仅保存在本机', // 本地存储提示
@@ -423,13 +439,17 @@ export const strings = {
   /** stores/game.ts：操作结果 Toast 与连接事件文案。 */
   store: {
     notConnected: '尚未连接到主机服务，请稍候再试', // 未连接时注册
-    restored: '座位与对局状态已恢复', // 恢复令牌登录成功
+    restored: '身份已恢复', // 恢复令牌登录成功但当前不在房间
+    gameRestored: '座位与未完成对局状态已恢复', // 作画阶段保留席位后的恢复成功
     enteredLobby: '已进入在线大厅', // 登录成功
+    memberDisconnected: (nickname: string) => `${nickname} 已断线，正在等待重连`, // 作画阶段他人断线
+    memberReconnected: (nickname: string) => `${nickname} 已重新连接`, // 作画阶段他人恢复
+    memberLeftGame: (nickname: string) => `${nickname} 已退出本局游戏`, // 主动离局提示
     settingsReset: '本地设置已恢复默认', // 恢复默认设置
     profileCleared: '本地资料已清除；刷新后将作为新玩家进入', // 清除资料
     profileUpdated: '玩家资料已更新', // 更新资料
     roomLeft: '已安全退出房间', // 退出房间
-    vocabularyUpdated: '本局词库已更新，所有人需要重新准备', // 保存词库
+    vocabularyUpdated: '本局词库已更新，已准备状态保持不变', // 保存词库
     inviteSent: '邀请已发送', // 发送邀请
     pauseReasonHost: '房主暂停了游戏', // 房主暂停请求原因（与服务端通知共用）
   },
@@ -481,6 +501,8 @@ export const serverStrings = {
     INVALID_PHASE_END_EARLY: '当前没有可提前结束的比赛', // 无对局时提前结束
     INVALID_PHASE_TRANSFER_HOST: '仅等待阶段可以主动移交房主', // 非等待阶段移交
     INVALID_PHASE_RETURN_WAITING: '只有最终结算后才能返回房间', // 非结算阶段返回房间
+    INVALID_PHASE_LEAVE_GAME: '当前没有可退出的对局', // 等待阶段误发离局
+    GAME_ALREADY_LEFT: '你已退出过这局游戏，请等待本局结束后再加入', // 防止同局重复占位
     INVALID_TRANSITION: (from: string, to: string) => `非法状态转换：${from} → ${to}`, // 非法阶段转换
     SETTINGS_LOCKED_UPDATE: '比赛期间规则为只读，请返回房间后修改', // 对局中改规则
     SETTINGS_LOCKED_VOCABULARY: '游戏开始后不能修改本局词库', // 对局中改词库
@@ -530,14 +552,14 @@ export const serverStrings = {
     closeRoomNoPlayableHost: '房间已无可接任房主的玩家，房间已关闭', // 仅剩观战者时关闭
     kickedReason: '你已被房主移出房间', // 被移出房间
     kickedLog: '玩家被房主移出', // 移出记录的离开原因
-    joinedReadyReset: (nickname: string) => `${nickname} 加入了房间，所有人需重新准备`, // 新成员加入
+    playerJoined: (nickname: string) => `${nickname} 加入了房间`, // 新成员加入
+    playerLeft: (nickname: string) => `${nickname} 离开了房间`, // 成员离开
     leaveReasonDefault: '主动离开房间', // 默认离开原因
-    leaveReadyReset: (reason: string) => `${reason}，所有人需重新准备`, // 离开后取消准备
     countdownCanceled: '开始倒计时因成员变化而取消', // 成员变化取消倒计时
     drawerLeftChoosing: (nickname: string) => `${nickname} 在选词时离开，本回合作废`, // 画家选词时离开
     autoPaused: '在线玩家不足，比赛已自动暂停', // 人数不足自动暂停
     rulesUpdated: '房间规则已修改，所有人需重新准备', // 规则修改
-    vocabularyUpdated: '本局词库已修改，所有人需重新准备', // 词库修改
+    vocabularyUpdated: '本局词库已修改，已准备状态保持不变', // 词库修改
     backToRoom: '已返回房间，请全员重新准备', // 返回房间
     hostTransferred: (nickname: string) => `房主已移交给 ${nickname}`, // 主动移交房主
     hostMigrated: (nickname: string) => `房主已迁移给 ${nickname}`, // 房主离开自动迁移
@@ -552,6 +574,7 @@ export const serverStrings = {
     noDrawerAvailable: '没有可继续作画的在线玩家', // 无可用画家
     disconnectCountdownCanceled: '有玩家掉线，开始倒计时已取消', // 掉线取消倒计时
     drawerDisconnectChoosing: '画家在选词时掉线，本回合作废并重选', // 画家掉线重选
+    playerDisconnectedLeave: (nickname: string) => `${nickname} 已断线并退出房间`, // 非作画阶段断线立即离房
     playerReconnectedTimeout: '玩家重连超时离开', // 重连超时离开
   },
 

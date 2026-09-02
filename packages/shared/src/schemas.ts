@@ -20,15 +20,14 @@ export const ProfileSchema = z
     avatarId: AvatarIdSchema,
   })
   .strict()
+/** 服务端签发的秘密恢复令牌格式；客户端加载本地资料时复用校验，避免损坏存储阻塞自动恢复。 */
+export const RecoveryTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{32,128}$/u)
 /** 会话注册 schema：只允许使用不公开的恢复令牌接管既有身份，公开玩家 ID 不能用于登录。 */
 export const RegisterSchema = RequestSchema.extend({
   protocolVersion: z.string().min(1).max(16),
   profile: ProfileSchema,
   // 断线/刷新恢复令牌：仅当服务端仍保留该身份（宽限期内）才有效
-  recoveryToken: z
-    .string()
-    .regex(/^[A-Za-z0-9_-]{32,128}$/u)
-    .optional(),
+  recoveryToken: RecoveryTokenSchema.optional(),
   preferences: z.object({ discoverable: z.boolean(), acceptsInvites: z.boolean() }).strict(),
 })
 /** 房间规则 schema：数值字段全部按 config.ts 允许范围做整数校验。 */

@@ -14,7 +14,7 @@
 - **内存态**：不落数据库，服务重启即清空（含身份、房间、画布、分数）。
 - **画板**：高 DPI 实时画布，支持自由画笔、橡皮擦（`destination-out`）与封闭区域洪泛填充；画笔/橡皮擦共用连续粗细，可滚轮调整；支持预设或任意 HEX 颜色，工具可自定义单键切换。
 - **头像**：仅允许从 40 个内置 SVG 白名单编号中选择，协议只传编号；禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像。
-- **应用标识**：名称「你画我猜」、版本 `2.2.0`、协议版本 `protocolVersion: '4'`（见 `config/app.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。
+- **应用标识**：名称「你画我猜」、版本 `2.2.0`、协议版本 `protocolVersion: '5'`（见 `config/app.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。
 
 ### 技术栈与运行环境
 

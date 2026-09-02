@@ -16,7 +16,7 @@ const store = useGameStore()
 const slots = computed(() =>
   Array.from(
     { length: store.room?.settings.maxPlayers ?? store.config.player.defaultMaxPlayers },
-    (_, index) => store.room?.members[index],
+    (_, index) => store.room?.members.find((member) => member.seatIndex === index),
   ),
 )
 </script>

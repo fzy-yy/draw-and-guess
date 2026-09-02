@@ -21,6 +21,21 @@ import ShortcutsTab from '@/components/settings/ShortcutsTab.vue'
 import DiagnosticsTab from '@/components/settings/DiagnosticsTab.vue'
 
 const store = useGameStore()
+const props = withDefaults(
+  defineProps<{
+    /** 返回按钮可由使用场景替换为“返回大厅”“返回游戏”等文案。 */
+    backLabel?: string
+    /** 对局内禁止修改昵称、头像或清除资料，其它本地设置仍可使用。 */
+    profileEditingDisabled?: boolean
+  }>(),
+  {
+    backLabel: strings.settings.backToLobby,
+    profileEditingDisabled: false,
+  },
+)
+const emit = defineEmits<{
+  back: []
+}>()
 // 当前激活的设置分类标签
 const tab = ref<'audio' | 'accessibility' | 'shortcuts' | 'diagnostics'>('audio')
 const shortcutError = ref('') // 快捷键错误提示文案
@@ -122,26 +137,33 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
 <template>
   <!-- 设置子页骨架：顶栏 + 标签栏 + 正文四段（声音/显示/快捷键/资料诊断） -->
   <main class="grid h-full grid-rows-[11%_9%_minmax(0,1fr)] bg-[#eef2ff]">
-    <!-- 顶栏：返回大厅 / 标题 / 只保存在本机的提示 -->
+    <!-- 顶栏：返回动作可配置，header-actions 插槽可按使用场景追加按钮。 -->
     <header
       class="grid grid-cols-[1fr_auto_1fr] items-center border-b-[0.45cqh] border-yellow bg-navy px-[2cqw] text-white"
     >
-      <button
-        type="button"
-        class="justify-self-start flex items-center gap-[0.45em] rounded-[0.55em] bg-white/10 px-[0.8em] py-[0.8cqh] text-white"
-        @click="store.page = 'lobby'"
-      >
-        <ArrowLeft /> {{ strings.settings.backToLobby }}
-      </button>
+      <div class="justify-self-start flex items-center gap-[0.6em]">
+        <button
+          type="button"
+          class="flex items-center gap-[0.45em] rounded-[0.55em] bg-white/10 px-[0.8em] py-[0.8cqh] text-white"
+          @click="emit('back')"
+        >
+          <ArrowLeft /> {{ props.backLabel }}
+        </button>
+        <slot name="header-actions" />
+      </div>
       <div class="text-center">
         <p class="text-[#93c5fd] font-black tracking-[0.16em] text-[0.72em]">
           {{ strings.settings.label }}
         </p>
         <h1 class="text-[1.25em]">{{ strings.settings.title }}</h1>
       </div>
-      <span class="justify-self-end flex items-center gap-[0.4em] text-[#bfdbfe] text-[0.72em]"
-        ><ShieldCheck /> {{ strings.settings.localOnly }}</span
-      >
+      <div class="justify-self-end">
+        <slot name="header-status">
+          <span class="flex items-center gap-[0.4em] text-[#bfdbfe] text-[0.72em]"
+            ><ShieldCheck /> {{ strings.settings.localOnly }}</span
+          >
+        </slot>
+      </div>
     </header>
     <!-- 分类标签：声音 / 显示与操作 / 快捷键 / 资料与诊断 -->
     <nav
@@ -196,6 +218,7 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
       :diagnostic="diagnostic"
       :server-address="serverAddress"
       :show-avatar-picker="showAvatarPicker"
+      :profile-editing-disabled="props.profileEditingDisabled"
       @update:show-avatar-picker="showAvatarPicker = $event"
       @copy="copyDiagnostics"
     />

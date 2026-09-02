@@ -18,8 +18,10 @@ withDefaults(
     icon?: FunctionalComponent
     /** 确认按钮变体，默认 danger（红） */
     confirmVariant?: 'primary' | 'danger'
+    /** 需要覆盖较高层级页面时，可覆盖通用弹窗的默认层级。 */
+    overlayClass?: string
   }>(),
-  { icon: undefined, confirmVariant: 'danger' },
+  { icon: undefined, confirmVariant: 'danger', overlayClass: undefined },
 )
 
 const emit = defineEmits<{ confirm: []; cancel: [] }>()
@@ -32,6 +34,7 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>()
     section-class="items-center gap-[1.4cqh] pt-[3cqh] text-center"
     footer-class="w-full mt-[1cqh]"
     :aria-label="title"
+    :overlay-class="overlayClass"
     @close="emit('cancel')"
   >
     <component

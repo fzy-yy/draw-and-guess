@@ -6,6 +6,7 @@
  */
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
 import path from 'node:path'
+import compression from 'compression'
 import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
@@ -19,6 +20,10 @@ import { registerRoomHandlers } from './handlers/room.ts'
 import { registerGameHandlers } from './handlers/game.ts'
 import { registerChatHandlers } from './handlers/chat.ts'
 import { registerDrawHandlers } from './handlers/draw.ts'
+import { SqlitePlayerRepository } from './repositories/player-repository.ts'
+import { SqliteRoomRepository } from './repositories/room-repository.ts'
+import { SqliteArchiveRepository } from './repositories/archive-repository.ts'
+import { runMigrations } from './db/migrate.ts'
 
 export interface RunningApplication {
   httpServer: HttpServer
@@ -48,26 +53,35 @@ export async function createApplication(
   } = {},
 ): Promise<RunningApplication> {
   const vocabulary = options.vocabulary ?? (await loadVocabulary())
+  // 建库并执行迁移（幂等）：首次启动建全部表，升级时应用新增迁移。
+  runMigrations()
   const app = express()
   const httpServer = createHttpServer(app)
-  // Socket.IO 配置：允许任意源跨域、限制单包体积、配置心跳与连接状态恢复
+  // Socket.IO 只负责传输重连；身份、业务房间与遗漏画布一律由秘密令牌 + 权威全量快照恢复。
+  // 不启用 connectionStateRecovery：它会在应用层注册校验前恢复旧 socket.rooms 并重放消息，
+  // 导致已经被领域层移出房间的身份仍短暂收到旧房间数据，形成跨房间状态与隐私风险。
   const io = new Server(httpServer, {
     cors: { origin: true, credentials: false },
     maxHttpBufferSize: 128 * 1024,
     pingInterval: APP_CONFIG.network.pingIntervalMs,
-    connectionStateRecovery: {
-      maxDisconnectionDuration: APP_CONFIG.network.reconnectGraceMs,
-      skipMiddlewares: false,
-    },
   })
   const baseUrl = options.publicBaseUrl ?? (() => `http://localhost:${APP_CONFIG.network.port}`)
-  const service = new GameService(io, vocabulary, options.logger)
+  // 持久化仓储：SQLite 实现，注入领域服务（领域层只依赖接口，便于测试换内存实现）。
+  const repositories = {
+    players: new SqlitePlayerRepository(),
+    rooms: new SqliteRoomRepository(),
+    archive: new SqliteArchiveRepository(),
+  }
+  const service = new GameService(io, vocabulary, repositories, options.logger)
 
   // 安全头与请求解析；CSP 由客户端自行管理，跨域资源策略关闭以便局域网访问
   app.disable('x-powered-by')
   app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }))
   app.use(cors())
   app.use(express.json({ limit: '32kb' }))
+  // 静态资源 gzip 压缩：JS/CSS/SVG 经 compression 减小传输体积，对局域网也有明显收益。
+  // 放在静态托管前，仅对可压缩内容（text/javascript/css/svg 等）生效。
+  app.use(compression())
   // 健康检查：对外暴露服务名称、版本与词库规模
   app.get('/api/health', (_request, response) =>
     response.json({

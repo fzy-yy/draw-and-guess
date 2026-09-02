@@ -28,4 +28,6 @@ export const ui = {
 
 export const presets = {
   safeChat: ['画得真棒！', '我知道了！', '再来一点提示', '好难猜呀'],
+  /** 表情反应同样经过服务端白名单校验，避免把任意聊天入口开放给画家或已猜中者。 */
+  chatReactions: ['👏', '🎉', '😂', '🤔', '😮', '💡'],
 } as const

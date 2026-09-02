@@ -7,11 +7,13 @@
 -->
 <script setup lang="ts">
 // 图标库：系统/操作提示/邀请横幅使用的图标
-import { AlertCircle, CheckCircle2, Gamepad2, RotateCw, X } from 'lucide-vue-next'
+import { Gamepad2, LoaderCircle, RotateCw, WifiOff } from 'lucide-vue-next'
+import { Toaster } from 'vue-sonner'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
 import { useAudioFeedback } from '@/composables/useAudioFeedback'
 import AvatarImage from '@/components/AvatarImage.vue'
+import BaseDialog from '@/components/BaseDialog.vue'
 // 五个视图组件：对局、房间等待、设置、大厅、资料确认
 import ProfileView from '@/views/ProfileView.vue'
 import LobbyView from '@/views/LobbyView.vue'
@@ -36,49 +38,59 @@ useAudioFeedback()
       <!-- 四个页面视图按状态互斥渲染：对局 > 房间 > 设置 > 大厅 > 资料 -->
       <GameView v-if="store.room && store.room.phase !== 'waiting'" />
       <RoomView v-else-if="store.room" />
-      <SettingsView v-else-if="store.page === 'settings'" />
+      <SettingsView v-else-if="store.page === 'settings'" @back="store.page = 'lobby'" />
       <LobbyView v-else-if="store.playerId && store.page === 'lobby'" />
       <ProfileView v-else />
 
-      <!-- 操作通知 Toast 堆栈：右上角，成功/警告/错误三种风格；repeated 为防抖变色标记 -->
-      <TransitionGroup
-        name="toast"
-        tag="div"
-        class="absolute right-[1.2cqw] top-[12cqh] z-[70] flex w-[28cqw] flex-col gap-[0.8cqh] pointer-events-none"
-        aria-live="polite"
-        :aria-label="strings.app.toastStackAria"
+      <!-- 本人断线/会话恢复阻断框：Socket 重连后仍保持，直到身份与权威 room|null 同步完成。 -->
+      <BaseDialog
+        :open="store.sessionState === 'disconnected' || store.sessionState === 'restoring'"
+        :dismissible="false"
+        overlay-class="z-[90]"
+        width-class="w-[47cqw]"
+        section-class="items-center gap-[1em] px-[2.2em] py-[4.5cqh] text-center"
+        :aria-label="strings.app.disconnectDialogAria"
       >
         <div
-          v-for="toast in store.toasts"
-          :key="toast.id"
-          class="grid grid-cols-[auto_1fr_auto] items-center gap-[0.7em] border-l-[0.45cqh] px-[0.9em] py-[1.1cqh] text-[0.75em] font-extrabold shadow-[0_0.6cqh_2cqh_#0f172a44] pointer-events-auto"
-          :class="[
-            toast.type === 'warning'
-              ? 'text-[#713f12] bg-[#fef3c7] border-l-[#ca8a04]'
-              : toast.type === 'error'
-                ? 'text-[#7f1d1d] bg-[#fee2e2] border-l-red'
-                : 'text-[#14532d] bg-[#dcfce7] border-l-green',
-            {
-              repeated:
-                'text-[#0c4a6e] bg-[#e0f2fe] border-l-[#0284c7] animate-[toast-pulse_0.5s_ease-in-out_2]',
-            },
-          ]"
+          class="grid h-[10cqh] w-[10cqh] place-items-center rounded-full bg-red/10 text-red"
+          aria-hidden="true"
         >
-          <!-- 成功用对勾图标，其余用警示图标 -->
-          <CheckCircle2 v-if="toast.type === 'success'" />
-          <AlertCircle v-else />
-          <span>{{ toast.text }}</span>
-          <!-- 手动关闭按钮：从 toasts 数组移除该条（store 内做 index 边界保护） -->
-          <button
-            type="button"
-            class="grid place-items-center bg-transparent text-current"
-            :aria-label="strings.app.toastDismissAria"
-            @click="store.dismissToast(toast.id)"
-          >
-            <X />
-          </button>
+          <WifiOff v-if="store.sessionState === 'disconnected'" class="h-[5cqh] w-[5cqh]" />
+          <LoaderCircle v-else class="h-[5cqh] w-[5cqh] animate-spin" />
         </div>
-      </TransitionGroup>
+        <h2 class="text-[1.45em] font-black text-navy">
+          {{
+            store.sessionState === 'disconnected'
+              ? strings.app.disconnectedTitle
+              : strings.app.restoringTitle
+          }}
+        </h2>
+        <p class="max-w-[37cqw] text-[0.82em] font-bold leading-relaxed text-muted" role="status">
+          {{
+            store.sessionState === 'disconnected'
+              ? strings.app.disconnectedBody
+              : strings.app.restoringBody
+          }}
+        </p>
+      </BaseDialog>
+
+      <!-- 操作通知 Toast 堆栈：由 vue-sonner 的 <Toaster /> 承载渲染与堆栈动画，
+           通知内容通过 store.notify 触发（见 stores/game.ts 的 vue-sonner 转译）。
+           自定义容器单位定位，保证与旧版 Toast 一样落在舞台内右上角。 -->
+      <Toaster
+        :position="'top-right'"
+        :toast-options="{
+          style: {
+            fontSize: '0.75em',
+            fontWeight: 800,
+            background: '#f8fafc',
+            color: '#172033',
+            borderLeft: '0.45cqh solid #facc15',
+            borderRadius: '0.7em',
+            boxShadow: '0 0.6cqh 2cqh #0f172a44',
+          },
+        }"
+      />
 
       <!-- 房间邀请横幅：不在房间时收到邀请才会显示，可接受或拒绝 -->
       <Transition name="banner">
@@ -111,7 +123,7 @@ useAudioFeedback()
             {{ strings.common.decline }}
           </button>
           <button
-            class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-blue shadow-[0_0.4cqh_0_#1e40af]"
+            class="inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-blue"
             type="button"
             @click="store.respondInvite(store.invites[0]!.id, true)"
           >

@@ -10,7 +10,7 @@ export type RoomPhase =
   | 'closed' // 房间已关闭（不可再加入）
 
 /** 成员与服务器的连接状态（仅表示是否在线，与玩家在场状态无关）。 */
-export type ConnectionState = 'online' | 'reconnecting'
+export type ConnectionState = 'online' | 'reconnecting' | 'left'
 /** 玩家在场状态：空闲 / 在房间中 / 正在对局 / 断线恢复宽限期。 */
 export type PresenceStatus = 'idle' | 'in_room' | 'playing' | 'reconnecting'
 /** 画布工具类型：画笔、橡皮擦、封闭区域填充。 */
@@ -43,12 +43,15 @@ export interface PublicPlayer {
 
 /** 房间成员视图：在公开玩家信息基础上叠加本局内的成员状态。 */
 export interface RoomMember extends PublicPlayer {
+  seatIndex: number // 固定席位序号（0～5），整局不随其他玩家退出而改变
+  seatColor: string // 席位识别色，由服务端按配置裁剪下发
   ready: boolean // 是否已准备（观战者恒为 false）
   score: number // 本局累计得分
   isHost: boolean // 是否为房主
   isDrawer: boolean // 是否当前画家
   guessed: boolean // 本回合是否已猜中
   spectating: boolean // 是否为观战成员（不参与准备/作画/猜词/计分）
+  leftGame: boolean // 是否已主动退出本局；保留灰色卡片但不再参与游戏
   connection: ConnectionState // 连接状态
   /** 服务端累计的公开局内统计，仅包含计数和时长，不暴露猜词正文。 */
   stats: {
@@ -56,6 +59,19 @@ export interface RoomMember extends PublicPlayer {
     totalGuessMs: number // 猜中累计用时（毫秒）
     drawingCorrectCount: number // 作画时带动的猜中人次
   }
+}
+
+/**
+ * 最终结算排行项：进入 game_result 时由服务端一次性冻结。
+ * 它不依赖仍在房间中的成员列表，因此结算后有人离房也不会让榜单重排或缺项。
+ */
+export interface FinalRankingEntry {
+  id: string
+  nickname: string
+  avatarId: AvatarId
+  rank: number // 同分并列时共享名次
+  score: number
+  stats: RoomMember['stats']
 }
 
 /** 房间规则；全部字段由服务端校验，客户端只能按配置允许的范围修改。 */
@@ -161,6 +177,7 @@ export interface GameView {
   lastSequence: number // 服务端已接受的绘图序号（供重连客户端续起 seq，避免被当旧包拒绝）
   messages: ChatMessage[] // 最近消息（服务端裁剪数量）
   roundResult?: RoundResult // 回合结算数据
+  finalRanking?: FinalRankingEntry[] // 最终结算时冻结的权威排行
 }
 
 /** 房间完整快照：大厅行摘要 + 成员 + 规则 + 角色裁剪的对局视图。 */
@@ -178,6 +195,24 @@ export interface RoomSnapshot {
   selectedWordCount: number // 本局已选词条数
   totalWordCount: number // 词库总词条数
   game?: GameView // 对局中才有
+}
+
+/**
+ * 会话注册成功后的权威结果。
+ * `room: null` 是显式状态：表示该身份当前不在房间，客户端必须清除旧房间快照。
+ */
+export interface SessionRegistration {
+  player: PublicPlayer
+  recoveryToken: string
+  restored: boolean
+  room: RoomSnapshot | null
+}
+
+/** 作画阶段成员连接变化通知；仅用于即时 UI 提示，不参与任何游戏裁决。 */
+export interface MemberConnectionChange {
+  playerId: string
+  nickname: string
+  connection: ConnectionState
 }
 
 /** 词库词条：稳定 ID + 原始词面。 */

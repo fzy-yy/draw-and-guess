@@ -130,7 +130,7 @@ async function joinPrivateRoom(): Promise<void> {
       <div class="my-[2cqh] grid grid-cols-2 gap-[1.3cqw]">
         <button
           type="button"
-          class="flex h-[12cqh] items-center gap-[1em] rounded-[0.9em] bg-blue px-[1.4em] text-left text-white shadow-[0_0.55cqh_0_#1e40af]"
+          class="flex h-[12cqh] items-center gap-[1em] rounded-[0.9em] bg-blue px-[1.4em] text-left text-white"
           @click="showCreate = true"
         >
           <CirclePlus class="first:h-[4.5cqh] first:w-[4.5cqh] first:text-yellow" /><span
@@ -143,7 +143,7 @@ async function joinPrivateRoom(): Promise<void> {
         </button>
         <button
           type="button"
-          class="flex h-[12cqh] items-center gap-[1em] rounded-[0.9em] bg-navy px-[1.4em] text-left text-white shadow-[0_0.55cqh_0_#0f172a]"
+          class="flex h-[12cqh] items-center gap-[1em] rounded-[0.9em] bg-navy px-[1.4em] text-left text-white"
           @click="showJoinPrivate = true"
         >
           <KeyRound class="first:h-[4.5cqh] first:w-[4.5cqh] first:text-yellow" /><span

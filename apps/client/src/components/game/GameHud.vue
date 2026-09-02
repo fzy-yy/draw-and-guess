@@ -47,7 +47,7 @@ const store = useGameStore()
   <!-- 顶栏 HUD：回合数、当前画家、答案、计时器、网络状态与暂停按钮 -->
   <header
     v-if="store.room"
-    class="col-span-full grid grid-cols-[auto_minmax(0,1fr)_minmax(12cqw,2fr)_auto_auto_auto] items-center gap-[1.3em] border-b-[0.45cqh] border-yellow bg-navy px-[1.2cqw] text-white"
+    class="col-span-full grid min-w-0 grid-cols-[auto_minmax(0,1fr)_minmax(12cqw,2fr)_minmax(8.6cqw,auto)_auto_auto] items-center gap-[1.1em] overflow-hidden border-b-[0.45cqh] border-yellow bg-navy px-[1.2cqw] text-white"
   >
     <!-- 回合指示：当前回合/总回合 -->
     <div class="flex flex-col text-[#93c5fd] text-[0.65em]">
@@ -82,11 +82,13 @@ const store = useGameStore()
     </div>
     <!-- 计时器：剩余秒数 + 进度条；最后 10 秒进入紧急样式 -->
     <div
-      class="relative flex h-[6.5cqh] min-w-[7cqw] items-center justify-center gap-[0.3em] overflow-hidden rounded-[0.65em] bg-white/10"
+      class="relative box-border grid h-[6.5cqh] min-w-0 grid-cols-[auto_minmax(2.2em,auto)_auto] items-center justify-center gap-[0.3em] overflow-hidden whitespace-nowrap rounded-[0.65em] bg-white/10 px-[0.55em]"
       :class="{ '!bg-[#7f1d1d]': secondsLeft <= 10 && secondsLeft > 0 }"
     >
-      <Clock3 /><b class="text-[1.65em] tabular-nums min-w-[2.4em] text-center">{{ secondsLeft }}</b
-      ><span class="text-[0.6em] text-[#bfdbfe]">{{ strings.game.secondsSuffix }}</span
+      <Clock3 class="h-[2.5cqh] w-[2.5cqh] shrink-0" /><b
+        class="min-w-0 text-center text-[1.65em] tabular-nums"
+        >{{ secondsLeft }}</b
+      ><span class="shrink-0 text-[0.6em] text-[#bfdbfe]">{{ strings.game.secondsSuffix }}</span
       ><i
         class="absolute bottom-0 left-0 h-[0.45cqh] w-full bg-green [transform-origin:left]"
         :class="{ '!bg-yellow': secondsLeft <= 10 && secondsLeft > 0 }"

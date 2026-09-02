@@ -3,5 +3,8 @@ node_modules/
 **/dist/
 .pi/
 
+# pnpm 权威锁文件由包管理器维护，禁止 prettier 仅为 YAML 排版制造数千行无意义 diff
+pnpm-lock.yaml
+
 # 权威词库：必须保持「每个非空行一个词」，禁止被 markdown 段落重排合并
 vocabulary.md

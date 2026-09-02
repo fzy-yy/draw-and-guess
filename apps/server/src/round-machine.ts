@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto'
 import { APP_CONFIG } from '../../../config.ts'
 import { serverStrings } from '../../../config/strings.ts'
-import { EVENTS, canTransition, type RoundResult } from '@draw-guess/shared'
+import { EVENTS, canTransition, type FinalRankingEntry, type RoundResult } from '@draw-guess/shared'
 import type { MemberState, RoomSecret } from './models.ts'
 import type { GameService } from './game-service.ts'
 import { buildDrawerScore, buildGuessDetail } from './scoring.ts'
@@ -133,6 +133,7 @@ export class RoundMachine {
       (candidate) =>
         candidate.playerId !== game.drawerId &&
         !candidate.spectating &&
+        !candidate.leftGame &&
         this.service.players.get(candidate.playerId)?.connected,
     )
     if (eligible.length > 0 && eligible.every((candidate) => candidate.guessedAt))
@@ -184,6 +185,32 @@ export class RoundMachine {
     const game = this.service.requireGame(room)
     this.service.clearHintTimers(game)
     if (game.timer) clearTimeout(game.timer)
+    // 排行必须在首次进入最终结算时一次性冻结。之后 leaveRoom 会从 room.members 移除成员，
+    // 但已公布的成绩属于本局历史，不能跟随当前房间席位继续变化。
+    if (!game.finalRanking) {
+      const rankedMembers = room.members
+        .filter((member) => !member.spectating)
+        .sort((left, right) => right.score - left.score || left.joinedAt - right.joinedAt)
+      let previousScore: number | undefined
+      let rank = 0
+      game.finalRanking = rankedMembers.flatMap<FinalRankingEntry>((member, index) => {
+        const player = this.service.players.get(member.playerId)
+        const profile = member.leftProfile ?? player?.profile
+        if (!profile) return []
+        if (member.score !== previousScore) rank = index + 1
+        previousScore = member.score
+        return [
+          {
+            id: member.playerId,
+            nickname: profile.nickname,
+            avatarId: profile.avatarId,
+            rank,
+            score: member.score,
+            stats: { ...member.stats },
+          },
+        ]
+      })
+    }
     // 从暂停态结束时要先回到暂停前阶段，再走合法转换到 game_result，并清理暂停字段
     if (room.phase === 'paused') {
       room.phase = game.phaseBeforePause ?? 'drawing'
@@ -197,6 +224,8 @@ export class RoundMachine {
     game.phaseStartedAt = Date.now()
     game.phaseEndsAt = 0
     this.service.addSystemNotice(room, reason)
+    // 战绩落盘：进入最终结算时把冻结的最终排名与玩家结果写入 SQLite（低频，无性能顾虑）。
+    this.service.persistGameResult(room, reason)
     this.service.emitRoom(room.id)
     this.service.broadcastPresence()
   }
@@ -242,13 +271,17 @@ export class RoundMachine {
         delay,
       )
   }
-  public setWaiting(room: RoomSecret, notice: string): void {
+  public setWaiting(room: RoomSecret, notice: string, resetReady = true): void {
     // 把房间状态重置回等待：清理对局秘密、提示计时器与全员准备
     if (room.game) this.service.clearHintTimers(room.game)
     if (room.game?.timer) clearTimeout(room.game.timer)
     delete room.game
     room.phase = 'waiting'
-    this.service.invalidateReady(room, notice)
+    if (resetReady) this.service.invalidateReady(room, notice)
+    else {
+      room.stateVersion += 1
+      this.service.addSystemNotice(room, notice)
+    }
     this.service.emitRoom(room.id)
   }
   public scheduleHints(room: RoomSecret): void {

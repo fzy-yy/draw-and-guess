@@ -7,6 +7,7 @@ import {
   EVENTS,
   type FillCommand,
   type Invite,
+  type MemberConnectionChange,
   type PresenceSnapshot,
   type PublicRoom,
   type RoomSnapshot,
@@ -22,6 +23,7 @@ export interface SocketHandlers {
   onPresence(snapshot: PresenceSnapshot): void
   onRooms(rooms: PublicRoom[]): void
   onRoomSnapshot(snapshot: RoomSnapshot): void
+  onMemberConnectionChanged(change: MemberConnectionChange): void
   onInviteReceived(invite: Invite): void
   onInviteResolved(id: string): void
   onRoomClosed(reason: string): void
@@ -57,6 +59,9 @@ export function attachSocketListeners(handlers: SocketHandlers): () => void {
   socket.on(EVENTS.presenceSnapshot, (snapshot: PresenceSnapshot) => handlers.onPresence(snapshot))
   socket.on(EVENTS.roomListChanged, (rooms: PublicRoom[]) => handlers.onRooms(rooms))
   socket.on(EVENTS.roomSnapshot, (snapshot: RoomSnapshot) => handlers.onRoomSnapshot(snapshot))
+  socket.on(EVENTS.roomMemberConnectionChanged, (change: MemberConnectionChange) =>
+    handlers.onMemberConnectionChanged(change),
+  )
   socket.on(EVENTS.inviteReceived, (invite: Invite) => handlers.onInviteReceived(invite))
   socket.on(EVENTS.inviteResolved, ({ id }: { id: string }) => handlers.onInviteResolved(id))
   socket.on(EVENTS.roomClosed, ({ reason }: { reason: string }) => handlers.onRoomClosed(reason))
@@ -84,6 +89,7 @@ export function attachSocketListeners(handlers: SocketHandlers): () => void {
       EVENTS.presenceSnapshot,
       EVENTS.roomListChanged,
       EVENTS.roomSnapshot,
+      EVENTS.roomMemberConnectionChanged,
       EVENTS.inviteReceived,
       EVENTS.inviteResolved,
       EVENTS.roomClosed,

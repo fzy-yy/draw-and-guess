@@ -8,6 +8,7 @@ import {
   RegisterSchema,
   RequestSchema,
   type RoomSnapshot,
+  type SessionRegistration,
 } from '@draw-guess/shared'
 import { bindRequest } from '../protocol/binder.ts'
 import type { GameService } from '../game-service.ts'
@@ -22,13 +23,15 @@ export function registerSessionHandlers(
     EVENTS.sessionRegister,
     RegisterSchema,
     (input) => {
-      const result = service.register(socket, input)
-      // 把该玩家的幂等缓存挂到 socket 上，供后续请求复用
-      socket.data.requestCache = service.players.get(result.player.id)?.requestCache
-      // 注册成功后立即推送：身份、大厅状态、房间快照（若在房间中）
+      const identity = service.register(socket, input)
+      // 把该玩家的幂等缓存挂到 socket 上，供后续请求复用。
+      socket.data.requestCache = service.players.get(identity.player.id)?.requestCache
+      // 注册 ack 必须显式携带 room|null，客户端才能原子清除旧房间；恢复对局时强制返回全量画布，
+      // 避免页面刷新后的空本地历史收到 strokesOmitted 快照而显示空画布。
+      const room = service.snapshotForPlayer(identity.player.id, true) ?? null
+      const result: SessionRegistration = { ...identity, room }
       socket.emit(EVENTS.sessionReady, result)
       socket.emit(EVENTS.presenceSnapshot, service.presenceSnapshot())
-      const room = service.snapshotForPlayer(result.player.id)
       if (room) socket.emit(EVENTS.roomSnapshot, room)
       return result
     },

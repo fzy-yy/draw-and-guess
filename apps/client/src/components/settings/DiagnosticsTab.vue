@@ -16,6 +16,7 @@ defineProps<{
   diagnostic: string
   serverAddress: string
   showAvatarPicker: boolean
+  profileEditingDisabled?: boolean
 }>()
 const emit = defineEmits<{
   copy: []
@@ -36,10 +37,12 @@ function onAvatarPickerOpenChange(open: boolean): void {
   >
     <div
       class="grid grid-cols-[auto_1fr] items-center gap-[1.5cqh_1em] border-t-[0.4cqh] border-blue bg-white p-[2cqh_1.5em]"
+      :class="{ 'opacity-50': profileEditingDisabled }"
     >
       <button
         type="button"
         class="row-span-2 flex flex-col items-center gap-[0.7cqh] text-blue bg-transparent text-[0.72em] font-black"
+        :disabled="profileEditingDisabled"
         :aria-label="strings.profile.changeAvatarAria"
         @click="onAvatarPickerOpenChange(true)"
       >
@@ -55,9 +58,16 @@ function onAvatarPickerOpenChange(open: boolean): void {
         }}<input
           v-model="store.profile.nickname"
           :maxlength="store.config.player.nicknameMaxLength"
-          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink"
+          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+          :disabled="profileEditingDisabled"
       /></label>
-      <AppButton variant="primary" type="button" class="col-start-2" @click="store.updateProfile">
+      <AppButton
+        variant="primary"
+        type="button"
+        class="col-start-2"
+        :disabled="profileEditingDisabled"
+        @click="store.updateProfile"
+      >
         {{ strings.settings.saveProfile }}
       </AppButton>
     </div>
@@ -82,6 +92,7 @@ function onAvatarPickerOpenChange(open: boolean): void {
         variant="danger"
         type="button"
         class="!min-h-[5cqh] !px-[1em] !rounded-[0.6em] !gap-[0.5em]"
+        :disabled="profileEditingDisabled"
         @click="store.clearProfile"
       >
         <Trash2 />{{ strings.settings.clearProfile }}
@@ -90,6 +101,7 @@ function onAvatarPickerOpenChange(open: boolean): void {
   </section>
 
   <AvatarPickerDialog
+    v-if="!profileEditingDisabled"
     v-model="store.profile.avatarId"
     :open="showAvatarPicker"
     @close="onAvatarPickerOpenChange(false)"

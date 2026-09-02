@@ -132,8 +132,14 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           class="inline-flex items-center gap-[0.55em] py-[0.65cqh] px-[1.05em] rounded-[99em] text-[0.65em] font-extrabold text-[#14532d] bg-[#dcfce7]"
           ><ShieldCheck /> {{ strings.room.authoritativeConnected }}</span
         >
-        <button type="button" @click="showLeaveConfirm = true">
-          <LogOut /> {{ strings.common.exit }}
+        <button
+          type="button"
+          class="grid h-[4.6cqh] w-[4.6cqh] place-items-center rounded-[0.6em] bg-white/10 text-white"
+          :aria-label="strings.common.exit"
+          :title="strings.common.exit"
+          @click="showLeaveConfirm = true"
+        >
+          <LogOut class="h-[2.6cqh] w-[2.6cqh]" />
         </button>
       </div>
     </header>

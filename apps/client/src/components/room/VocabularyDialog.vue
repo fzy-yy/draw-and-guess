@@ -7,7 +7,8 @@
   spacer+window+行高测量（wordGridScrollTop/wordRowStride/updateVirtualMetrics 等）。
 -->
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { Check, Search, X } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
@@ -22,11 +23,10 @@ const store = useGameStore()
 
 // ---- 词库弹窗内部状态 ----
 const search = ref('') // 搜索框即时输入
-const searchKeyword = ref('') // 150ms 防抖后的实际筛选关键词
+const searchKeyword = ref('') // 防抖后的实际筛选关键词
 const selectedIds = ref(new Set<string>()) // 使用响应式 Set，5000+ 词条下单选仍为 O(1)
 const vocabularyLoading = ref(false) // 拉取中标记（防重复打开）
 const wordGrid = ref<HTMLElement>() // 虚拟滚动可视容器（也是滚动元素）
-let searchTimer: number | undefined
 const WORD_GRID_COLUMNS = 6
 
 /**
@@ -116,18 +116,13 @@ async function saveVocabulary(): Promise<void> {
   emit('close')
 }
 
-// 搜索防抖后回到列表顶部，保证筛选结果与虚拟窗口起点一致。
-watch(search, (value) => {
-  window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(() => {
-    searchKeyword.value = value
-    if (wordGrid.value) wordGrid.value.scrollTop = 0
-  }, 150)
-})
-
-onBeforeUnmount(() => {
-  window.clearTimeout(searchTimer)
-})
+// 搜索防抖：用 @vueuse/core 的 useDebounceFn 替代手写 setTimeout + onBeforeUnmount 清理。
+// 防抖后回到列表顶部，保证筛选结果与虚拟窗口起点一致。
+const debouncedSearch = useDebounceFn((value: string) => {
+  searchKeyword.value = value
+  if (wordGrid.value) wordGrid.value.scrollTop = 0
+}, 150)
+watch(search, (value) => debouncedSearch(value))
 </script>
 
 <template>
