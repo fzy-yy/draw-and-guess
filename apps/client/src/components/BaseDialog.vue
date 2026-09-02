@@ -54,12 +54,16 @@ const overlayRef = ref<HTMLElement>()
 const dialogRef = ref<HTMLElement>()
 
 // useFocusTrap：挂载到对话框卡片（section，tabindex=-1）。immediate 关闭以便在 open 时手动激活。
+// fallbackFocus 指向容器本身：系统阻断框等可能没有任何可聚焦按钮，focus-trap 要求至少一个
+// tabbable 节点，此时把 fallback 设为容器（tabindex=-1）即可保证它能聚焦而不抛错。
 const { activate: activateTrap, deactivate: deactivateTrap } = useFocusTrap(dialogRef, {
   immediate: false,
   // 初始聚焦从容器内部第一个可聚焦项开始（卡片本身为 -1，不会被选中）。
   initialFocus: false,
   // 失活后把焦点还给打开前的触发元素，避免键盘用户丢失位置。
   returnFocusOnDeactivate: true,
+  // 无任何可聚焦节点时兜底聚焦容器，避免 focus-trap 抛“至少一个 tabbable 节点”错误。
+  fallbackFocus: () => dialogRef.value as HTMLElement,
 })
 
 /**

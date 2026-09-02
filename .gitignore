@@ -31,3 +31,10 @@ dist-ssr
 apps/server/data/*.db
 apps/server/data/*.db-wal
 apps/server/data/*.db-shm
+
+# 服务端运行日志（每次启动新建，保留最近 10 个）
+apps/server/log/*.log
+apps/server/log/*.log-*
+
+# 本地环境变量（部署参数，不入库）
+.env

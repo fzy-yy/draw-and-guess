@@ -6,7 +6,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useTimeoutFn } from '@vueuse/core'
-import { getStroke } from 'perfect-freehand'
 import {
   type DrawingCommand,
   type DrawPoint,
@@ -91,73 +90,40 @@ function resizeCanvas(): void {
  * 绘制自由笔画；橡皮擦使用 destination-out 做透明擦除，并与画笔共用 width。
  * fromIndex 表示从第几个采样点开始绘制（用于增量绘制局部笔画，0 = 从头画））。
  */
-/**
- * 绘制自由笔画；橡皮擦使用 destination-out 做透明擦除，并与画笔共用 width。
- * 用 perfect-freehand 的 getStroke 把原始点列平滑为圆润的描边轮廓，再以 fill 填充，
- * 转折处比原来的连接线段更顺滑，且所有端对同一条笔画用同一算法，跨端一致。
- *
- * 增量语义（fromIndex > 0 表示该笔画有新增点，需要重绘整条平滑轮廓）：
- * - 画笔（pen）：source-over 重新 fill 会与旧轮廓叠加变深，因此先用 destination-out fill
- *   擦掉上次绘制的旧轮廓，再 source-over 绘制新轮廓，避免重影；
- * - 橡皮擦（eraser）：destination-out 透明化是幂等的，直接对整条新轮廓重复擦除即可，无需恢复。
- */
 function drawStroke(context: CanvasRenderingContext2D, stroke: Stroke, fromIndex = 0): void {
   if (!stroke.points.length) return
   const canvasWidth = context.canvas.width
   const canvasHeight = context.canvas.height
   const scale = Math.min(canvasWidth, canvasHeight) / 720
-  const lineWidth = stroke.width * Math.max(0.6, scale)
-  // 归一化坐标 → 像素坐标。
-  const pixelPoints = stroke.points.map((point) => ({
-    x: point.x * canvasWidth,
-    y: point.y * canvasHeight,
-  }))
-  // getStroke 需要至少 1 个点；点过少时也可能返回空，直接以其像素点兜底。
-  const outline = getStroke(pixelPoints, { size: lineWidth })
-  // 画笔增量：先擦除上一次绘制的旧轮廓，避免叠加加深；橡皮擦重复擦除幂等，可跳过。
-  if (fromIndex > 0 && stroke.tool !== 'eraser') {
-    const previousOutline = drawnOutlines.get(stroke.id)
-    if (previousOutline && previousOutline.length) {
-      context.save()
-      context.globalCompositeOperation = 'destination-out'
-      fillOutline(context, previousOutline, '#000')
-      context.restore()
-    }
-  }
-  if (outline.length) {
-    context.save()
-    context.globalCompositeOperation = stroke.tool === 'eraser' ? 'destination-out' : 'source-over'
-    context.fillStyle = stroke.color
-    fillOutline(context, outline, stroke.color)
-    // 极短笔画（单点/两点）getStroke 形成的轮廓可能过窄，再叠一个圆点兜底保证落笔可见。
-    if (pixelPoints.length <= 2) {
-      const anchor = pixelPoints[0]
-      if (anchor) {
-        context.beginPath()
-        context.arc(anchor.x, anchor.y, lineWidth / 2, 0, Math.PI * 2)
-        context.fill()
-      }
-    }
-    context.restore()
-  }
-  // 记录本条已绘制的最终像素轮廓，供下一次增量时擦除旧轮廓。
-  if (outline.length) drawnOutlines.set(stroke.id, outline)
-}
-
-/** 用给定颜色填充一条闭合轮廓路径（用于绘制笔画或擦除旧轮廓）。 */
-function fillOutline(
-  context: CanvasRenderingContext2D,
-  outline: Array<[number, number]>,
-  color: string,
-): void {
-  const first = outline[0]
-  if (!first) return
-  context.fillStyle = color
+  context.save()
+  context.globalCompositeOperation = stroke.tool === 'eraser' ? 'destination-out' : 'source-over'
+  context.strokeStyle = stroke.color
+  context.lineWidth = stroke.width * Math.max(0.6, scale)
+  context.lineCap = 'round'
+  context.lineJoin = 'round'
   context.beginPath()
-  context.moveTo(first[0], first[1])
-  for (const point of outline.slice(1)) context.lineTo(point[0], point[1])
-  context.closePath()
-  context.fill()
+  // 从 fromIndex-1 起笔，保证与上一段线段连续（首段从 0 起）
+  const start = Math.max(0, fromIndex - 1)
+  const first = stroke.points[start]
+  if (!first) {
+    context.restore()
+    return
+  }
+  context.moveTo(first.x * canvasWidth, first.y * canvasHeight)
+  for (const point of stroke.points.slice(start + 1))
+    context.lineTo(point.x * canvasWidth, point.y * canvasHeight)
+  if (stroke.points.length === 1)
+    context.lineTo(first.x * canvasWidth + 0.01, first.y * canvasHeight + 0.01)
+  else if (start >= 1 && stroke.points.length - start === 1 && stroke.points[start - 1]) {
+    // 追加单点时补一条极短线段让笔迹可见
+    const previous = stroke.points[start - 1]!
+    context.lineTo(
+      previous.x * canvasWidth + (first.x - previous.x) * canvasWidth + 0.01,
+      previous.y * canvasHeight + (first.y - previous.y) * canvasHeight + 0.01,
+    )
+  }
+  context.stroke()
+  context.restore()
 }
 
 /** 把配置允许的六位 HEX 颜色转换为 Canvas ImageData 使用的 RGBA。 */
@@ -265,9 +231,6 @@ let committedCount = 0 // 已绘制到画布的可见命令数
 let committedUndoLen = props.undoneStrokeIds.length // 上次已绘制时的撤销栈长度
 let committedRoundId = props.roundId // 上次完成绘制的回合，用于识别“等长历史替换”
 const drawnPoints = new Map<string, number>() // strokeId → 本画布已绘制的点数（-1 表示填充命令已画）
-// 每条已绘制笔画的最终平滑轮廓（像素坐标）。画笔增量「先擦旧轮廓再画新轮廓」需要它来避免叠加加深；
-// 橡皮擦则直接用整条轮廓重复 destination-out（透明化幂等，无需分增量段）。
-const drawnOutlines = new Map<string, Array<[number, number]>>()
 
 /** 清空并依序重绘权威历史，再叠加尚未提交完毕的本地自由笔画；重绘后重置增量游标。 */
 function redraw(): void {
@@ -281,16 +244,14 @@ function redraw(): void {
   if (activePoints.value.length) {
     drawStroke(context, {
       kind: 'stroke',
-      id: activeStrokeId || 'local-preview',
+      id: 'local-preview',
       ...currentStrokeStyle(),
       points: activePoints.value,
       sequence,
     })
   }
-  // 登记已绘制游标：撤销等结构变化后必须全量重绘，游标随之重建。
-  // 同时清空平滑轮廓缓存、重建各笔画轮廓（drawStroke 内部会重写）。
+  // 登记已绘制游标：撤销等结构变化后必须全量重绘，游标随之重建
   drawnPoints.clear()
-  drawnOutlines.clear()
   for (const command of visibleCommands.value)
     drawnPoints.set(command.id, command.kind === 'stroke' ? command.points.length : -1)
   committedCount = visibleCommands.value.length
@@ -379,12 +340,12 @@ function pointerDown(event: PointerEvent): void {
   activePoints.value = [point]
   // 同步登记本地已画点数：服务端回写同 ID 点时按此跳过，防止笔迹加深
   drawnPoints.set(activeStrokeId, 1)
-  // 本地预览立即画出落笔点（id 用真实笔画 id，使 drawnOutlines 与服务端回显可正确擦除）
+  // 本地预览立即画出落笔点
   const context = getContext()
   if (context)
     drawStroke(context, {
       kind: 'stroke',
-      id: activeStrokeId,
+      id: 'local-preview',
       ...currentStrokeStyle(),
       points: activePoints.value,
       sequence,
@@ -403,14 +364,14 @@ function pointerMove(event: PointerEvent): void {
   const from = activePoints.value.length
   activePoints.value.push(point)
   drawnPoints.set(activeStrokeId, activePoints.value.length)
-  // 本地预览增量绘制（id 用真实笔画 id，drawnOutlines 记录完整轮廓供增量擦旧画新）
+  // 本地预览增量绘制新增点段（只画末尾这一小段）
   const context = getContext()
   if (context)
     drawStroke(
       context,
       {
         kind: 'stroke',
-        id: activeStrokeId,
+        id: 'local-preview',
         ...currentStrokeStyle(),
         points: activePoints.value,
         sequence,

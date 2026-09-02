@@ -2,13 +2,18 @@
  * 局域网生产服务入口。
  * 启动前验证唯一业务配置与词库，并列出所有可信局域网 IPv4 候选地址。
  */
+import { execSync } from 'node:child_process'
+import { existsSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs'
 import { networkInterfaces } from 'node:os'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import pino from 'pino'
 import { z } from 'zod'
-import { APP_CONFIG, getDeploymentConfig } from '../../../config.ts'
+import { APP_CONFIG, getDeploymentConfig, type DeploymentConfig } from '../../../config.ts'
 import { serverStrings } from '../../../config/strings.ts'
 import { createApplication } from './app.ts'
 import { closeDb } from './db/index.ts'
+import { SILENT_LOGGER, type RuntimeLogger } from './errors.ts'
 
 /** 使用 schema 在启动时验证跨字段配置，错误会阻止服务带病运行。 */
 function validateBusinessConfig(): void {
@@ -70,16 +75,113 @@ export function findLanAddresses(): string[] {
   return [...results]
 }
 
+/**
+ * Windows 控制台中文乱码预防提示。
+ *
+ * Node/pino 向 stdout 输出的是 UTF-8 字节，而 cmd 与旧版 PowerShell 控制台默认按本地
+ * 代码页（GBK/cp936）解码，导致中文日志显示为乱码（如“局域网服务监听成功”变成
+ * “灞€鍩熺綉鏈嶅姟鐩戝惉鎴愬姛”）。英文/数字不受影响，因为 ASCII 在两种编码中逐字节兼容。
+ *
+ * 检测条件：Windows 平台 + stdout 为控制台（TTY）+ 当前代码页非 UTF-8(65001)
+ * 时打印 ASCII 提示（提示本身用英文，避免在乱码环境里再次无法阅读）。
+ */
+function warnIfWindowsConsoleNotUtf8(): void {
+  if (process.platform !== 'win32' || !process.stdout.isTTY) return
+  try {
+    const output = execSync('chcp', { encoding: 'utf8' })
+    const codePage = output.match(/\d+/)?.[0]
+    if (codePage && Number(codePage) !== 65001) {
+      console.log(
+        `\n[info] Windows console code page is ${codePage} (not UTF-8): Chinese logs may be garbled.\n` +
+          `  Please run "chcp 65001" (cmd) or set [Console]::OutputEncoding=UTF8 (PowerShell)\n` +
+          `  before starting, or use Windows Terminal for UTF-8 by default.\n`,
+      )
+    }
+  } catch {
+    // chcp 不可用（非标准 shell / 无 cmd）时静默跳过，不阻塞启动。
+  }
+}
+
+/** 日志目录：apps/server/log/（服务端包目录下，与 data/ 同级）。 */
+const LOG_DIR = join(dirname(fileURLToPath(import.meta.url)), '../log')
+/** 项目根目录（含 .env）：index.ts 位于 apps/server/src/，上溯三级。 */
+const PROJECT_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..')
+
+/**
+ * 加载项目根目录的 .env（若存在）。
+ * 用 Node 内置 loadEnvFile：只把 .env 中「尚未存在」的变量写入 process.env，
+ * 即进程已有环境变量的优先级高于 .env（符合部署惯例）。文件不存在或无权限时静默跳过。
+ */
+function loadProjectEnv(): void {
+  const envPath = join(PROJECT_ROOT, '.env')
+  if (!existsSync(envPath)) return
+  try {
+    process.loadEnvFile(envPath)
+  } catch {
+    // .env 解析失败不阻塞启动：缺失的关键项会由 getDeploymentConfig 后续校验报错。
+  }
+}
+
+/**
+ * 依据部署配置构造日志记录器：
+ * - logEnabled=false：返回静默日志器，**完全不创建 pino、不建立日志目录**（零内存开销）；
+ * - logEnabled=true：创建 pino 文件日志器（本次启动新建一个文件），并裁剪日志文件数至上限。
+ */
+function makeLogger(deployment: DeploymentConfig): RuntimeLogger {
+  if (!deployment.logEnabled) {
+    return SILENT_LOGGER
+  }
+  const logPath = prepareLogDir(deployment.logMaxFiles)
+  const pinoLogger = pino(
+    { level: deployment.logLevel },
+    pino.destination({ dest: logPath, sync: true }),
+  )
+  pinoLogger.info({ logPath }, '日志文件已创建')
+  // 收窄 pino 的多参数重载到 RuntimeLogger 的 (context, message) 双参签名。
+  return {
+    info: (context, message) => void pinoLogger.info(context, message),
+    error: (context, message) => void pinoLogger.error(context, message),
+  }
+}
+
+/** 生成带日期的日志文件名（精确到秒）：app-YYYY-MM-DD-HH-mm-ss.log。 */
+function logFileName(date: Date = new Date()): string {
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  const stamp = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
+  )}-${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`
+  return `app-${stamp}.log`
+}
+
+/**
+ * 准备日志目录：确保目录存在，并裁剪日志文件总数（含本次即将新建的文件）不超过 maxFiles。
+ * 文件名是固定宽度的秒级时间戳，字典序即时间序，因此按文件名排序即可定位最老文件并删除。
+ * @returns 本次启动新建的日志文件完整路径。
+ */
+function prepareLogDir(maxFiles: number): string {
+  mkdirSync(LOG_DIR, { recursive: true })
+  const newPath = join(LOG_DIR, logFileName())
+  const logs = readdirSync(LOG_DIR)
+    .filter((name) => name.endsWith('.log'))
+    .sort() // 字典序 = 时间序（定宽时间戳）
+  // 本次新建的文件也会占用一个名额，因此按“已有文件数 + 1”裁剪到上限；不足则一个都不删。
+  const excess = logs.length + 1 - maxFiles
+  for (let index = 0; index < excess; index += 1) {
+    unlinkSync(join(LOG_DIR, logs[index]!)) // 删除最老的日志文件
+  }
+  return newPath
+}
+
 async function main(): Promise<void> {
-  // 启动前先校验业务配置，避免带病运行
+  // 先加载根目录 .env，让后续 getDeploymentConfig（PORT/HOST/LOG_LEVEL/LOG_ENABLED/LOG_MAX_FILES）读取生效。
+  loadProjectEnv()
+  // 启动前先校验业务配置，避免带病运行；同时检查 Windows 控制台编码，避免横幅中文乱码。
+  warnIfWindowsConsoleNotUtf8()
   validateBusinessConfig()
   const deployment = getDeploymentConfig()
-  // pino 默认输出结构化 JSON；本地/开发环境用 pino-pretty 传输端让日志可读。
-  // 生产环境（NODE_ENV=production）保持 JSON，便于在日志平台聚合解析。
-  const logger =
-    deployment.logLevel === 'debug' || process.env.NODE_ENV !== 'production'
-      ? pino({ level: deployment.logLevel, transport: { target: 'pino-pretty' } })
-      : pino({ level: deployment.logLevel })
+  // 日志开关与条数由 .env（LOG_ENABLED / LOG_MAX_FILES）控制：
+  // 关闭时完全不启动日志记录（零 pino 实例、零日志文件），开启时按现有策略写文件。
+  const logger = makeLogger(deployment)
   const addresses = findLanAddresses()
   const preferredAddress = addresses[0] ?? 'localhost'
   const application = await createApplication({
