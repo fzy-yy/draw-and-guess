@@ -48,7 +48,7 @@ pnpm format:check  # 检查格式
 - **部署覆盖**：复制 [`.env.example`](.env.example) 为根目录 `.env`，可配置 `HOST`、`PORT`、`LOG_LEVEL`、`LOG_ENABLED`、`LOG_MAX_FILES`；服务启动时会自动加载 `.env`（进程已有环境变量优先级更高）。环境变量不会覆盖游戏规则。
   - `LOG_ENABLED=false` 时完全不创建日志记录器、不写日志文件（零内存开销）；
   - `LOG_MAX_FILES` 控制日志文件保留条数（默认 10，每次启动新建一个 `apps/server/log/app-<秒级时间戳>.log`，超出删除最老）。
-- **唯一词库**：根级 [`vocabulary.md`](vocabulary.md)。每个非空行只能写一个词或短语，不要加标题、列表符号、编号或注释。修改后重启服务生效。
+- **唯一词库**：[`vocabulary/`](vocabulary/) 目录下的 JSON 文件（当前 `draw_guess_words_zh-CN_v2.json`）。词条为富字段（词面/别称/分类/难度/结构化提示/词条级时限与权重等），分类必须落在文件的 `category_enum` 白名单内，`enabled=false` 的词条不参与抽选。修改后重启服务生效，异常数据会以中文错误阻止启动。
 - 服务启动时会清理换行和首尾空白、过滤空行、按规范化词面去重并生成稳定 ID；词条过少或过长会阻止启动并显示中文错误。
 
 ## 工程结构
@@ -61,7 +61,7 @@ apps/server/       Express、Socket.IO、权威领域状态与 SQLite 本地持�
   └─ src/db/ 与 src/repositories/   # 数据库连接/迁移与仓储（player/room/archive）
 packages/shared/   DTO、Zod schema、事件名和领域纯函数
 config.ts          唯一业务配置中心（按领域聚合 config/ 目录）
-vocabulary.md      唯一权威词库正文
+vocabulary/        唯一权威词库目录（JSON 格式，Provider 加载）
 ```
 
 客户端样式采用「单一 `apps/client/src/style/index.css`（Tailwind `@theme` 令牌 + `@layer base` 全局层与 `@layer components` 共享组件类）+ 组件内行内 Tailwind 类」的约定，不新建分片 CSS 文件。

@@ -1,7 +1,7 @@
 # AGENTS.md
 
 > 本文件是所有后续开发（人工或 AI）的**第一入口**。下列内容以**当前代码为准**；原始需求文档已删除，若与本文件或代码冲突，一律以代码与本文件为准。
-> 仓库内其它根级文档：`README.md`（项目总览/十分钟启动）、`vocabulary.md`（唯一权威词库）。`开发建议.md`、`样式重构与代码审查报告.md`、根级 `docs/` 目录均已删除，不再维护；历史要点已并入本文件/README。**注意：`README.md` 部分章节（依赖清单、持久化/日志说明、已被删除的文档引用）已过时，与代码不一致时以本文件与代码为准。**
+> 仓库内其它根级文档：`README.md`（项目总览/十分钟启动）、`vocabulary/`（JSON 词库目录）。`开发建议.md`、`样式重构与代码审查报告.md`、根级 `docs/` 目录均已删除，不再维护；历史要点已并入本文件/README。**注意：`README.md` 部分章节（依赖清单、持久化/日志说明、已被删除的文档引用）已过时，与代码不一致时以本文件与代码为准。**
 
 ---
 
@@ -15,7 +15,7 @@
 - **日志文件化**：服务端日志**不输出到控制台**（规避 Windows 控制台 GBK 解码 UTF-8 中文乱码），默认写入 `apps/server/log/app-<秒级时间戳>.log`（每次启动新建一个、最多保留 `LOG_MAX_FILES` 条）；可通过 `.env` 的 `LOG_ENABLED` 完全关闭（零内存开销）。
 - **画板**：高 DPI 实时画布，支持自由画笔、橡皮擦（`destination-out`）与封闭区域洪泛填充；画笔/橡皮擦共用连续粗细，可滚轮调整；支持预设或任意 HEX 颜色，工具可自定义单键切换。**渲染模型为「归一化点列 + 直线段描边」增量同步**（不引入轮廓填充型平滑库，曾因此导致白边/闪烁/空心缺陷）。
 - **头像**：仅允许从 40 个内置 SVG 白名单编号中选择，协议只传编号；禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像。
-- **应用标识**：名称「你画我猜」、版本 `2.2.0`、协议版本 `protocolVersion: '5'`（见 `config/app.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。
+- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '6'`（见 `config/app.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。
 
 ### 技术栈与运行环境
 
@@ -49,11 +49,12 @@ draw_and_guess/
 │   ├── room.ts                   # 房间默认名、公开性、私密短码长度、允许邀请/暂停、加入策略 joinPolicy
 │   ├── game.ts                   # 对局规则：轮数/作画/选词/候选数、提示阈值、分数（基础/速度/顺序/画家）
 │   ├── drawing.ts                # 画板：预设色、色正则、粗细区间、填充容差、批次/限频/历史命令与点数预算
-│   ├── vocabulary.ts             # 词库：路径、编码、最小/最大词条数、去重与重置策略
+│   ├── vocabulary.ts             # 词库来源/路径/校验预算/去重/Provider 标识（扩展点）
 │   ├── audio.ts                  # 音效合成 cue（频率序列与时长）与增益
 │   ├── settings.ts               # 本地设置（音量/动画/快捷键/发现偏好/自动聚焦）、UI 参数、预设安全短语
 │   └── strings.ts                # ★唯一 UI 文案表：客户端 strings / 服务端 serverStrings；含模板函数，不纳入 PUBLIC_CONFIG
-├── vocabulary.md                 # ★唯一权威词库：每个非空行一个词/短语（禁止标题/列表符号/编号/注释）
+├── vocabulary/                   # ★唯一权威词库目录：JSON 格式（version/category_enum/words 富字段）
+│   └── draw_guess_words_zh-CN_v2.json
 ├── README.md                     # 项目总览、十分钟启动（注意：部分章节已过时，见顶部声明）
 ├── AGENTS.md                     # 本文件：导读、硬性限制、启动方法、编码/测试/提交流程
 │
@@ -80,7 +81,7 @@ draw_and_guess/
 │       ├── rate-limit.ts          # 猜词/绘图滑动窗口限频
 │       ├── errors.ts              # GameError / success / failure / RuntimeLogger / SILENT_LOGGER（避免循环依赖）
 │       ├── models.ts              # 服务端内存秘密模型（PlayerSecret/RoomSecret/GameSecret/InviteSecret…）
-│       ├── vocabulary.ts          # 词库加载/解析/去重/版本哈希
+│       ├── vocabulary/            # 词库 Provider 架构：contract（接口）/normalize（共享纯函数）/json-file.provider（JSON 实现）/index（分发入口）；新增 SQLite 等来源只需实现 VocabularyProvider 并在 config 切换
 │       ├── db/                    # SQLite 持久化：连接（WAL + 事务辅助）/ 版本化迁移（db/index.ts、db/migrate.ts）
 │       ├── repositories/          # 仓储接口 + SQLite 实现（player/room/archive，领域层只依赖接口）
 │       ├── protocol/binder.ts     # 统一请求绑定：schema 校验、会话限频、幂等缓存、统一 ack
@@ -193,7 +194,7 @@ pnpm format:check  # 仅检查格式
 - **计分统一口径**：`scoring.ts` 与 `pure.ts` 的 `calculateGuessScore` 使用同一规则（基础 + 速度 + 顺序；两人局禁用顺序奖）。
 - **画布增量绘制**（`GameCanvas.vue`）：坐标一律**归一化 0～1**；绘图序号单调递增，服务端拒绝旧包；橡皮擦/填充只传「点击位置 + 颜色」，不传像素，客户端按同一历史重放；`lastSequence` 用于重连续接。**渲染为直线段描边（`stroke()` + `round` 线帽），增量只补画新增段（fromIndex）**。
 - **持久化分层**：`db/` 管连接与迁移（`runMigrations` 幂等）；`repositories/` 提供 `PlayerRepository`/`RoomRepository`/`ArchiveRepository` 接口 + SQLite 实现，领域层（`game-service.ts`）只依赖接口。游戏结束时经 `finishGame → persistGameResult` 落盘战报；重启时 `recoverOnStartup` 标记玩家断线（身份可宽限恢复）并作废进行中房间。
-- **配置单一来源**：业务规则只写在 `config/` + `config.ts` 聚合；UI 文案只写在 `config/strings.ts`；词库只写在 `vocabulary.md`；部署覆盖只写在 `.env`（HOST/PORT/LOG_LEVEL/LOG_ENABLED/LOG_MAX_FILES）。
+- **配置单一来源**：业务规则只写在 `config/` + `config.ts` 聚合；UI 文案只写在 `config/strings.ts`；词库只写在 `vocabulary/`（JSON，经 Provider 加载）；部署覆盖只写在 `.env`（HOST/PORT/LOG_LEVEL/LOG_ENABLED/LOG_MAX_FILES）。
 
 ---
 
@@ -272,7 +273,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
    - 客户端请求必须带 `requestId`（幂等）与统一 `ack`；非法阶段/角色/序号/频率由 `binder.ts` 与领域服务拒绝。
    - 头像只允许 `config/player.ts` 白名单中的内置 SVG 编号；**禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像**。
 3. **词库与内容**
-   - `vocabulary.md` 每行只能写一个词/短语：**禁止标题、列表符号、编号、注释**；修改后需重启服务。
+   - `vocabulary/*.json` 是唯一词库来源：顶层含 version/updated_at/default_time_limit/default_score_weight/category_enum/words；词条含 id/type/text/category/difficulty/hint/tags/lang/enabled/time_limit/score_weight/aliases；**分类必须 ⊆ category_enum**、type 仅支持 word、enabled=false 词条不进入候选池；修改后需重启服务，异常数据以中文错误阻止启动。
    - 猜词判定固定用 `normalizeAnswer`（NFKC + 去空白 + 折叠空白 + 忽略拉丁大小写），不要在别处另写一套比较。
 4. **配置治理**
    - 业务规则**只允许**写在 `config/` 目录 + `config.ts` 聚合；环境变量仅覆盖 `HOST / PORT / LOG_LEVEL / LOG_ENABLED / LOG_MAX_FILES`，禁止环境变量覆盖游戏规则。
@@ -355,7 +356,8 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 | 应用名/版本/端口/协议/限频参数 | `config/app.ts`（经 `config.ts` 聚合）                                                                                                   |
 | 对局轮数/时间/分数/提示        | `config/game.ts`                                                                                                                         |
 | 画板颜色/粗细/批次/历史上限    | `config/drawing.ts`                                                                                                                      |
-| 词库内容                       | `vocabulary.md`（改后重启服务）                                                                                                          |
+| 词库内容                       | `vocabulary/*.json`（改后重启服务）                                                                                                      |
+| 新增词库来源（如 SQLite）      | `apps/server/src/vocabulary/` 实现 VocabularyProvider → `config/vocabulary.ts` 切 provider                                               |     |
 | 新增一个请求事件               | `packages/shared/src/events.ts` → `schemas.ts` → `game-service.ts` 或对应 `handler` → `handlers/*.ts` 注册 → `stores/game.ts` 客户端方法 |
 | 回合流转/阶段                  | `apps/server/src/round-machine.ts`                                                                                                       |
 | 计分规则                       | `apps/server/src/scoring.ts`                                                                                                             |

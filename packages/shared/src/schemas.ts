@@ -7,6 +7,15 @@ import { APP_CONFIG } from '../../../config.ts'
 
 /** 客户端请求统一带 UUID requestId，以便服务端对重试请求执行幂等返回。 */
 export const RequestSchema = z.object({ requestId: z.string().uuid() }).strict()
+/**
+ * 词库词条 ID 校验：格式与词库来源解耦（JSON 实现为数字主键字符串化，
+ * 将来 SQLite 实现可是任意主键串），仅限定可见 ASCII 字符集与长度。
+ */
+export const WordIdSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9:_-]+$/u, { message: 'invalid word id' })
 /** 内置 SVG 头像编号白名单；拒绝任意 URL、文件路径和 SVG 正文。 */
 export const AvatarIdSchema = z.enum(APP_CONFIG.player.avatarIds)
 /** 玩家资料 schema：昵称由服务层按 Unicode 码点复核，头像必须来自内置白名单。 */
@@ -60,6 +69,11 @@ export const RoomSettingsSchema = z
       .max(APP_CONFIG.game.optionCount.max),
     showWordLength: z.boolean(),
     progressiveHints: z.boolean(),
+    structuredHintsEnabled: z.boolean(),
+    hintStartRatio: z.number().min(0.05).max(0.9),
+    hintIntervalRatio: z.number().min(0.05).max(0.45),
+    guessBaseScore: z.number().int().min(50).max(2_000),
+    scoreMode: z.enum(['standard', 'flat']),
     closeGuessEnabled: z.boolean(),
     allowPlayerInvite: z.boolean(),
     allowPause: z.boolean(),

@@ -54,10 +54,26 @@ export class SnapshotBuilder {
                 ? createAnswerMask(game.answer.text, game.revealedIndices)
                 : serverStrings.notices.answerHidden
             : '',
-          // 画家才可看到真实答案与候选词
+          // 画家才可看到真实答案与候选词（候选词携带难度供选词星级展示）
           ...(viewerIsDrawer && game.answer ? { answer: game.answer.text } : {}),
           ...(viewerIsDrawer && room.phase === 'choosing_word'
-            ? { wordOptions: game.candidates.map((word) => ({ id: word.id, text: word.text })) }
+            ? {
+                wordOptions: game.candidates.map((word) => ({
+                  id: word.id,
+                  text: word.text,
+                  difficulty: word.difficulty,
+                })),
+              }
+            : {}),
+          // 已揭示的结构化提示：按服务端每回合洗牌后的顺序切片下发；
+          // 客户端只渲染首条（即「从全部提示中随机选出的一条」，且全体猜词者一致）。
+          ...(game.answer && game.revealedHintCount > 0
+            ? {
+                revealedHints: game.hintOrder
+                  .slice(0, game.revealedHintCount)
+                  .map((hintIndex) => game.answer!.hints[hintIndex])
+                  .filter((hint): hint is string => hint !== undefined),
+              }
             : {}),
           strokes: canOmitStrokes ? [] : game.strokes,
           ...(canOmitStrokes ? { strokesOmitted: true } : {}),

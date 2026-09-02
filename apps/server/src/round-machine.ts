@@ -70,6 +70,8 @@ export class RoundMachine {
     game.correctOrder = []
     game.correctDetails = [] // 新回合重置得分明细
     game.revealedIndices = new Set()
+    game.hintOrder = [] // 结构化提示顺序在 beginDrawing（答案确定后）洗牌
+    game.revealedHintCount = 0
     game.roundResult = undefined
     room.members.forEach((member) => (member.guessedAt = undefined))
     game.phaseStartedAt = Date.now()
@@ -89,16 +91,41 @@ export class RoundMachine {
     const game = this.service.requireGame(room)
     if (game.timer) clearTimeout(game.timer)
     this.service.transition(room, 'drawing')
-    game.answer = answer
+    // 记录富答案：candidates 中的词条即含别称/提示/词条级时限，直接取用
+    const richAnswer = game.candidates.find((candidate) => candidate.id === answer.id) ?? {
+      ...answer,
+      aliases: [],
+      categories: [],
+      difficulty: 0,
+      hints: [],
+      tags: [],
+      lang: 'zh-CN',
+    }
+    game.answer = richAnswer
     game.usedWordIds.add(answer.id) // 记录已用词条，避免后续回合重复
+    // 回合实际时长：词条级 time_limit 覆盖房间统一作画秒数（可在配置关闭；钳制到合法区间）
+    const configuredSeconds =
+      APP_CONFIG.vocabulary.useWordTimeLimit && richAnswer.timeLimit
+        ? richAnswer.timeLimit
+        : room.settings.drawSeconds
+    const seconds = Math.max(
+      APP_CONFIG.game.drawSeconds.min,
+      Math.min(APP_CONFIG.game.drawSeconds.max, configuredSeconds),
+    )
+    game.roundDurationMs = seconds * 1_000
     game.phaseStartedAt = Date.now()
-    game.phaseEndsAt = Date.now() + room.settings.drawSeconds * 1_000
+    game.phaseEndsAt = Date.now() + game.roundDurationMs
+    // 结构化提示揭示顺序：每回合对词条 hints 下标洗牌一次，
+    // 首条即「从全部提示中随机选出的一条」，且对全体猜词者一致（随快照下发）。
+    game.hintOrder = this.service
+      .shuffle(richAnswer.hints.map((_hint, index) => index))
+      .slice(0, APP_CONFIG.vocabulary.maxHintsPerWord)
     // 作画倒计时结束进入回合结算
     game.timer = setTimeout(
       () => this.service.safeRun('drawingTimeout', () => this.finishRound(room, false)),
-      room.settings.drawSeconds * 1_000,
+      game.roundDurationMs,
     )
-    this.scheduleHints(room) // 若开启逐步提示则安排揭示计时器
+    this.scheduleHints(room) // 若开启逐步/结构化提示则安排揭示计时器
     this.service.addSystemNotice(room, serverStrings.notices.drawingStarted)
     this.service.emitRoom(room.id)
   }
@@ -114,7 +141,7 @@ export class RoundMachine {
       playerId: member.playerId,
       guessedAt: member.guessedAt,
       orderIndex: game.correctOrder.length,
-      durationMs: room.settings.drawSeconds * 1_000,
+      durationMs: game.roundDurationMs,
     })
     member.score += detail.total
     // 与入账同一条明细留存，供结算展示直接取用（见 GameSecret.correctDetails 说明）
@@ -300,17 +327,49 @@ export class RoundMachine {
   public scheduleHints(room: RoomSecret): void {
     const game = this.service.requireGame(room)
     this.service.clearHintTimers(game)
-    if (!room.settings.progressiveHints || !game.answer || room.phase !== 'drawing') return
-    const totalMs = room.settings.drawSeconds * 1_000
+    if (!game.answer || room.phase !== 'drawing') return
+    const totalMs = game.roundDurationMs
     const remainingRatio = Math.max(0, Math.min(1, (game.phaseEndsAt - Date.now()) / totalMs))
-    game.hintTimers = APP_CONFIG.game.finalHintThresholds
-      .filter((threshold) => threshold < remainingRatio)
-      .map((threshold) =>
-        setTimeout(
-          () => this.service.safeRun('revealHint', () => this.revealHint(room)),
-          Math.max(0, (remainingRatio - threshold) * totalMs),
-        ),
-      )
+    const timers: NodeJS.Timeout[] = []
+    // ① 逐字揭示遮罩：沿用全局阈值 finalHintThresholds（受 progressiveHints 门控）
+    if (room.settings.progressiveHints) {
+      for (const threshold of APP_CONFIG.game.finalHintThresholds) {
+        if (threshold >= remainingRatio) continue
+        timers.push(
+          setTimeout(
+            () => this.service.safeRun('revealHint', () => this.revealHint(room)),
+            Math.max(0, (remainingRatio - threshold) * totalMs),
+          ),
+        )
+      }
+    }
+    // ② 结构化提示：开始时机 + 间隔均为房间规则可设的剩余比例；揭示顺序已洗牌（hintOrder）
+    if (room.settings.structuredHintsEnabled && game.hintOrder.length > 0) {
+      const start = room.settings.hintStartRatio
+      const interval = room.settings.hintIntervalRatio
+      for (let step = 0; step < game.hintOrder.length; step += 1) {
+        const threshold = start - step * interval
+        if (threshold <= 0 || threshold >= remainingRatio) continue
+        timers.push(
+          setTimeout(
+            () =>
+              this.service.safeRun('revealStructuredHint', () => this.revealStructuredHint(room)),
+            Math.max(0, (remainingRatio - threshold) * totalMs),
+          ),
+        )
+      }
+    }
+    game.hintTimers = timers
+  }
+
+  /** 按洗牌顺序揭示下一条结构化提示（受房间规则开关门控）。 */
+  private revealStructuredHint(room: RoomSecret): void {
+    const game = room.game
+    if (!game?.answer || room.phase !== 'drawing') return
+    if (!room.settings.structuredHintsEnabled) return
+    if (game.revealedHintCount >= game.hintOrder.length) return
+    game.revealedHintCount += 1
+    this.service.emitRoom(room.id)
   }
   public revealHint(room: RoomSecret): void {
     const game = room.game

@@ -83,6 +83,16 @@ export interface RoomSettings {
   optionCount: number // 每回合候选词个数
   showWordLength: boolean // 是否显示答案字数遮罩
   progressiveHints: boolean // 是否开启逐步提示（随时间揭示字符）
+  /** 是否开启结构化提示（词条 hint 字段按阈值逐条揭示，HUD 随机展示其中一条） */
+  structuredHintsEnabled: boolean
+  /** 结构化提示开始时机：剩余时间比例降到该值时揭示第一条（0.05~0.9） */
+  hintStartRatio: number
+  /** 结构化提示间隔：词条有多条提示时，相邻两条揭示时机之间的剩余比例间隔（0.05~0.45） */
+  hintIntervalRatio: number
+  /** 统一猜词基础分：本局内猜中者的基础得分（覆盖全局默认值） */
+  guessBaseScore: number
+  /** 猜词分数计算方式：standard=基础+速度+顺序；flat=仅固定基础分 */
+  scoreMode: 'standard' | 'flat'
   closeGuessEnabled: boolean // 是否开启「很接近」提示
   allowPlayerInvite: boolean // 普通玩家是否可邀请
   allowPause: boolean // 是否允许暂停
@@ -169,7 +179,9 @@ export interface GameView {
   phaseEndsAt: number // 服务端权威的截止时间戳（毫秒）
   answerMask: string // 猜词者可见的答案遮罩（画家可见真实答案）
   answer?: string // 仅当前画家可见
-  wordOptions?: Array<{ id: string; text: string }> // 仅画家选词阶段可见
+  wordOptions?: Array<{ id: string; text: string; difficulty: number }> // 仅画家选词阶段可见（含难度星级）
+  /** 已揭示的结构化提示（服务端每回合随机洗牌后按阈值揭示的有序列表） */
+  revealedHints?: string[]
   strokes: DrawingCommand[] // 全部画布命令历史
   /** 是否省略 strokes（画布历史）：仅在该成员已在线同步全部增量时置位，客户端应沿用本地已有历史。 */
   strokesOmitted?: boolean
@@ -215,17 +227,43 @@ export interface MemberConnectionChange {
   connection: ConnectionState
 }
 
-/** 词库词条：稳定 ID + 原始词面。 */
-export interface VocabularyItem {
+/**
+ * 词库词条（富模型）：由服务端词库 Provider 在加载期校验并规范化产出，前后端共用。
+ * 相比旧版纯文本词库，新增别称、分类、难度、结构化提示等维度，
+ * 支撑别称判对、词条级时限、筛选与徽章等玩法与 UI。
+ */
+export interface VocabularyWord {
+  /** 稳定唯一 ID；格式由词库来源决定（JSON 实现 = 数字主键字符串化），协议层不限定来源 */
   id: string
+  /** 答案词面 */
   text: string
+  /** 可被判定为正确答案的别称（与词面一样经规范化后比较） */
+  aliases: string[]
+  /** 分类标签（必定 ⊆ 词库文件的 category_enum 白名单） */
+  categories: string[]
+  /** 难度 1~5，数值越大越难；用于选词星级与词库管理筛选 */
+  difficulty: number
+  /** 结构化提示列表；按房间规则的剩余时间阈值逐条揭示给猜词者 */
+  hints: string[]
+  /** 自由标签（本期仅透传展示，不参与玩法逻辑） */
+  tags: string[]
+  /** 语言标识（如 zh-CN）；加载期按配置白名单过滤 */
+  lang: string
+  /** 词条级作画时限（秒）；缺省回退文件缺省值，再回退房间规则；生效前经配置区间锾制 */
+  timeLimit?: number
+  /** 词条级计分权重；计分语义确认前仅透传预留，不参与计分 */
+  scoreWeight?: number
 }
 
-/** 词库快照：仅房主可见全部词条与当前选择。 */
+/**
+ * 词库快照：仅房主可见全部词条与当前选择。
+ * categories 为词库文件的分类白名单（category_enum），供管理 UI 做筛选下拉。
+ */
 export interface VocabularySnapshot {
-  items: VocabularyItem[]
+  items: VocabularyWord[]
   selectedIds: string[]
   version: string // 词库内容哈希版本
+  categories: string[] // 分类白名单（供筛选下拉与字段统计）
 }
 
 /** 定向房间邀请：过期后将自动失效。 */

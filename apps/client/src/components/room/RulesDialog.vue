@@ -117,6 +117,71 @@ watch(
       <label
         class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-slate-200 rounded-[0.5em]"
         ><input
+          v-model="localDraft.structuredHintsEnabled"
+          type="checkbox"
+          class="h-[2.2cqh] w-[2.2cqh] accent-blue"
+        />
+        {{ strings.room.toggleStructuredHints }}</label
+      >
+      <!-- 结构化提示开始时机：剩余时间比例（10%~90%，步进 5%） -->
+      <label
+        class="min-w-0 flex flex-col gap-[0.3cqh] text-[0.76em] font-extrabold"
+        :class="{ 'opacity-45 pointer-events-none': !localDraft.structuredHintsEnabled }"
+        >{{ strings.room.hintStartRatioField }}
+        <input
+          v-model.number="localDraft.hintStartRatio"
+          type="range"
+          :min="0.1"
+          :max="0.9"
+          :step="0.05"
+          :disabled="!localDraft.structuredHintsEnabled"
+        /><b class="text-blue">{{
+          strings.room.hintStartRatioUnit(Math.round(localDraft.hintStartRatio * 100))
+        }}</b></label
+      >
+      <!-- 提示间隔：相邻提示揭示时机之间的剩余比例（5%~45%，步进 5%） -->
+      <label
+        class="min-w-0 flex flex-col gap-[0.3cqh] text-[0.76em] font-extrabold"
+        :class="{ 'opacity-45 pointer-events-none': !localDraft.structuredHintsEnabled }"
+        >{{ strings.room.hintIntervalRatioField }}
+        <input
+          v-model.number="localDraft.hintIntervalRatio"
+          type="range"
+          :min="0.05"
+          :max="0.45"
+          :step="0.05"
+          :disabled="!localDraft.structuredHintsEnabled"
+        /><b class="text-blue">{{
+          strings.room.hintIntervalRatioUnit(Math.round(localDraft.hintIntervalRatio * 100))
+        }}</b></label
+      >
+      <!-- 统一猜词基础分：覆盖全局默认值（flat 模式下即为唯一得分） -->
+      <label class="min-w-0 flex flex-col gap-[0.3cqh] text-[0.76em] font-extrabold"
+        >{{ strings.room.guessBaseScoreField }}
+        <input
+          v-model.number="localDraft.guessBaseScore"
+          type="range"
+          :min="50"
+          :max="2000"
+          :step="50"
+        /><b class="text-blue">{{
+          strings.room.guessBaseScoreUnit(localDraft.guessBaseScore)
+        }}</b></label
+      >
+      <!-- 计分方式：标准（基础+速度+顺序）/ 固定分（仅基础分） -->
+      <label class="min-w-0 flex flex-col gap-[0.5cqh] text-[0.76em] font-extrabold"
+        >{{ strings.room.scoreModeField }}
+        <select
+          v-model="localDraft.scoreMode"
+          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink"
+        >
+          <option value="standard">{{ strings.room.scoreModeStandard }}</option>
+          <option value="flat">{{ strings.room.scoreModeFlat }}</option>
+        </select></label
+      >
+      <label
+        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-slate-200 rounded-[0.5em]"
+        ><input
           v-model="localDraft.closeGuessEnabled"
           type="checkbox"
           class="h-[2.2cqh] w-[2.2cqh] accent-blue"

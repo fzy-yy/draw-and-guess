@@ -4,6 +4,7 @@
   保持三块为片段（多根节点），使其仍作为 aside（flex-col）的直接子项，保留原有间距。
 -->
 <script setup lang="ts">
+import { computed } from 'vue'
 import { BookOpenCheck, Send, Settings2 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
@@ -20,6 +21,19 @@ const emit = defineEmits<{
 }>()
 
 const store = useGameStore()
+
+/**
+ * 提示规则的摘要文案：逐字遮罩与结构化提示是两个独立开关，
+ * 按「双开 / 仅结构化 / 仅逐字 / 全关」四种组合展示，避免两个开关挤在一行。
+ */
+const hintsSummary = computed(() => {
+  const settings = store.room?.settings
+  if (!settings) return strings.room.hintsOff
+  if (settings.progressiveHints && settings.structuredHintsEnabled) return strings.room.hintsBothOn
+  if (settings.structuredHintsEnabled) return strings.room.hintsStructuredOnly
+  if (settings.progressiveHints) return strings.room.hintsMaskOnly
+  return strings.room.hintsOff
+})
 </script>
 
 <template>
@@ -70,9 +84,7 @@ const store = useGameStore()
         >
           <dt class="text-muted">{{ strings.room.ruleHintsDt }}</dt>
           <dd class="m-0 font-black">
-            {{
-              store.room?.settings.progressiveHints ? strings.room.hintsOn : strings.room.hintsOff
-            }}
+            {{ hintsSummary }}
           </dd>
         </div>
       </dl>

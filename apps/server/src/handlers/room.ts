@@ -9,6 +9,7 @@ import {
   JoinRoomSchema,
   RequestSchema,
   RoomSettingsSchema,
+  WordIdSchema,
 } from '@draw-guess/shared'
 import { bindRequest } from '../protocol/binder.ts'
 import type { GameService } from '../game-service.ts'
@@ -54,7 +55,8 @@ export function registerRoomHandlers(
     socket,
     EVENTS.roomUpdateVocabulary,
     RequestSchema.extend({
-      ids: z.array(z.string().length(12)).max(service.vocabulary.items.length),
+      // 词库词条 ID：格式与来源解耦（见 shared WordIdSchema），数量上限为权威词库规模
+      ids: z.array(WordIdSchema).max(service.vocabulary.items.length),
       expectedVersion: z.number().int().nonnegative(),
     }),
     (input, playerId) => service.updateVocabulary(playerId, input.ids, input.expectedVersion),

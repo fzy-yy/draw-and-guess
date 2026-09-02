@@ -14,6 +14,7 @@ import { useGameStore } from '@/stores/game'
 import type { RankedMember } from '@/composables/useGameHud'
 import AppButton from '@/components/AppButton.vue'
 import AvatarImage from '@/components/AvatarImage.vue'
+import DifficultyStars from '@/components/common/DifficultyStars.vue'
 
 // 阶段遮罩需要的 HUD 派生值（剩余秒数、对局数据、最终排行）由父组件 GameView
 // 统一计算后经 props 下发，整局只保留一个 ticker（不再此处单独起定时器）。
@@ -67,10 +68,12 @@ const store = useGameStore()
             v-for="option in game.wordOptions ?? []"
             :key="option.id"
             type="button"
-            class="min-h-[7cqh] min-w-[12cqw] rounded-[0.7em] bg-yellow border-b-[0.6cqh] border-[#ca8a04] text-navy px-[1em] text-[1.25em] font-[1000]"
+            class="flex min-h-[7cqh] min-w-[12cqw] flex-col items-center justify-center gap-[0.3cqh] rounded-[0.7em] bg-yellow border-b-[0.6cqh] border-[#ca8a04] text-navy px-[1em] text-[1.25em] font-[1000]"
             @click="emit('choose-word', option.id)"
           >
-            {{ option.text }}
+            <span>{{ option.text }}</span>
+            <!-- 难度星级：1~5 星（上限取自全局配置，见 DifficultyStars 组件） -->
+            <DifficultyStars :value="option.difficulty" class="text-[0.55em]" />
           </button>
         </div>
         <span>{{ strings.game.autoChoose(secondsLeft) }}</span>

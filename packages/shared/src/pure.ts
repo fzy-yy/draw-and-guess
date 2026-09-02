@@ -29,6 +29,7 @@ export function createAnswerMask(
 /**
  * 计算猜中者分数。速度奖励按剩余时间比例线性衰减，并通过取整保证各客户端展示一致。
  * 两人局不使用顺序奖，避免唯一猜词者天然获得第一名额外分。
+ * scoreMode='flat'（固定分）时只给基础分，速度与顺序奖励归零。
  */
 export function calculateGuessScore(input: {
   elapsedMs: number
@@ -38,7 +39,12 @@ export function calculateGuessScore(input: {
   base: number
   maxSpeedBonus: number
   orderBonuses: readonly number[]
+  /** 计分方式：缺省 standard（基础+速度+顺序）；flat 为固定分 */
+  mode?: 'standard' | 'flat'
 }): Omit<ScoreDetail, 'playerId'> {
+  if (input.mode === 'flat') {
+    return { base: input.base, speed: 0, order: 0, total: input.base }
+  }
   const duration = Math.max(1, input.durationMs)
   const remainingRatio = Math.max(0, Math.min(1, 1 - input.elapsedMs / duration))
   const speed = Math.round(input.maxSpeedBonus * remainingRatio)

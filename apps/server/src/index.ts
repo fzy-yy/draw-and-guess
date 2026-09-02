@@ -51,12 +51,20 @@ function validateBusinessConfig(): void {
     vocabulary: z.object({
       minWords: z.number().int().min(1),
       maxWordLength: z.number().int().min(1),
+      maxAliasesPerWord: z.number().int().min(1),
+      maxHintsPerWord: z.number().int().min(1),
+      difficultyRange: z.object({ min: z.number().int().min(1), max: z.number().int().min(1) }),
+      languages: z.array(z.string().min(2)).min(1),
     }),
   })
   schema.parse(APP_CONFIG)
-  // 额外交叉校验：最小人数必须≤最大人数（zod 无法直接表达跨字段关系）
+  // 额外交叉校验：最小人数必须≤最大人数、难度下限≤上限、最小词条数≤最大词条数
   if (APP_CONFIG.player.minPlayers > APP_CONFIG.player.maxPlayers)
     throw new Error('玩家最小人数不能大于最大人数')
+  if (APP_CONFIG.vocabulary.difficultyRange.min > APP_CONFIG.vocabulary.difficultyRange.max)
+    throw new Error('词库难度下限不能大于上限')
+  if (APP_CONFIG.vocabulary.minWords > APP_CONFIG.vocabulary.maxWords)
+    throw new Error('词库最小词条数不能大于最大词条数')
 }
 
 /** 排除回环、链路本地与常见虚拟网卡，保留实际可供同网段玩家访问的 IPv4。 */

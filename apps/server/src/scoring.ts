@@ -28,9 +28,11 @@ export function buildGuessDetail(input: {
       durationMs,
       correctOrder: orderIndex,
       playerCount: activePlayerCount(room),
-      base: APP_CONFIG.game.score.guessBase,
+      // 统一猜词基础分与计分方式均为房间规则可设项（默认值取自全局配置）
+      base: room.settings.guessBaseScore,
       maxSpeedBonus: APP_CONFIG.game.score.maxSpeedBonus,
       orderBonuses: APP_CONFIG.game.score.orderBonuses,
+      mode: room.settings.scoreMode,
     }),
   }
   return detail

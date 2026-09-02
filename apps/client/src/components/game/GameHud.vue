@@ -71,7 +71,7 @@ const store = useGameStore()
         }}</b></span
       >
     </div>
-    <!-- 答案展示：画家看自己的题目，猜词者看遮罩 -->
+    <!-- 答案展示：画家看自己的题目，猜词者看遮罩；猜词者额外可见已揭示的结构化提示 -->
     <div class="justify-self-center min-w-[16cqw] flex flex-col items-center">
       <span class="text-[#93c5fd] text-[0.6em]">{{
         store.isDrawer && game?.answer ? strings.game.yourWord : strings.game.guessPrompt
@@ -79,6 +79,23 @@ const store = useGameStore()
       ><b class="min-h-[3.8cqh] flex items-center text-yellow text-[1.45em] tracking-[0.16em]">{{
         store.isDrawer && game?.answer ? game.answer : game?.answerMask || strings.game.awaitingWord
       }}</b>
+      <!--
+        结构化提示区：服务端每回合对词条 hints 洗牌后按房间规则的时机逐条揭示，
+        这里只渲染随机选定的首条（全体猜词者一致）；未揭示时不渲染、不占位。
+        画家已知答案，不重复展示提示。
+      -->
+      <p
+        v-if="!store.isDrawer && game?.revealedHints?.length"
+        class="flex min-h-[2.2cqh] items-center gap-[0.35em] rounded-[0.5em] bg-white/10 px-[0.6em] py-[0.15cqh] text-[0.62em] font-bold leading-[1.3] text-[#dbeafe]"
+        role="status"
+      >
+        <span class="rounded-[0.35em] bg-yellow px-[0.4em] py-[0.05cqh] font-black text-navy">{{
+          strings.game.hintBadgeLabel
+        }}</span>
+        <span class="min-w-0 flex-1 truncate" :title="game!.revealedHints![0]">{{
+          game!.revealedHints![0]
+        }}</span>
+      </p>
     </div>
     <!-- 计时器：剩余秒数 + 进度条；最后 10 秒进入紧急样式 -->
     <div

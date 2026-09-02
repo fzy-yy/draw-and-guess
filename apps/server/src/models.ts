@@ -15,7 +15,7 @@ import type {
   FinalRankingEntry,
   RoundResult,
   ScoreDetail,
-  VocabularyItem,
+  VocabularyWord,
 } from '@draw-guess/shared'
 
 /**
@@ -82,10 +82,12 @@ export interface GameSecret {
   pausedRemainingMs?: number // 暂停时冻结的剩余毫秒
   currentRound: number // 当前回合序号（从 1 开始）
   totalRounds: number // 总回合数 = 人数 × 每人轮数
+  /** 当前回合实际作画时长（毫秒）：词条级 time_limit 或房间设置，计分与提示调度统一用它 */
+  roundDurationMs: number
   drawerOrder: string[] // 画家轮换顺序（开局时洗牌）
   drawerId: string // 当前画家
-  candidates: VocabularyItem[] // 当前回合候选词（仅画家可见）
-  answer?: VocabularyItem // 当前回合答案（选定后置位）
+  candidates: VocabularyWord[] // 当前回合候选词（富模型，仅画家可见）
+  answer?: VocabularyWord // 当前回合答案（选定后置位；含别称/提示/词条级时限）
   usedWordIds: Set<string> // 已用过的词条 ID（避免回合重复）
   /** 自由笔画与区域填充共用一条内存历史，支持统一撤销、重做与重连恢复。 */
   strokes: DrawingCommand[]
@@ -102,6 +104,10 @@ export interface GameSecret {
    */
   correctDetails: ScoreDetail[]
   revealedIndices: Set<number> // 逐步提示已揭示的字符下标
+  /** 结构化提示的揭示顺序（每回合对词条 hints 下标洗牌一次，首条即「随机一条」） */
+  hintOrder: number[]
+  /** 已揭示的结构化提示条数（snapshot 据此切片下发 revealedHints） */
+  revealedHintCount: number
   roundResult?: RoundResult // 回合结算数据
   /** 进入最终结算时冻结；成员随后离房不会改变已公布的排名与统计。 */
   finalRanking?: FinalRankingEntry[]

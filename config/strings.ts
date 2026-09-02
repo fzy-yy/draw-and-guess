@@ -198,6 +198,9 @@ export const strings = {
     ruleHintsDt: '提示', // 规则项：提示
     hintsOn: '逐步提示', // 提示开启
     hintsOff: '关闭', // 提示关闭
+    hintsBothOn: '逐字 + 结构化', // 两种提示均开启
+    hintsStructuredOnly: '仅结构化提示', // 仅结构化提示开启
+    hintsMaskOnly: '仅逐字遮罩', // 仅逐字揭示开启
     vocabularyTitle: '本局词库', // 词库管理入口标题
     vocabularyCount: (selected: number, total: number) => `${selected} / ${total} 个词条`, // 词库数量
     vocabularyManage: '管理', // 房主的管理入口
@@ -232,6 +235,30 @@ export const strings = {
     vocabMinHint: (min: number) => `至少选择 ${min} 个词条；搜索不会丢失其他选择。`, // 最小词条提示
     restoreDefault: '恢复默认全选', // 恢复默认按钮
     confirmSelection: '确认选择', // 保存词库按钮
+    // —— 词库管理：视图切换 / 列显隐 / 筛选 / 表格列 ——
+    vocabViewGrid: '散列陈列', // 散列视图切换按钮（仅词面）
+    vocabViewTable: '表格陈列', // 表格视图切换按钮（多字段陈列）
+    vocabViewSwitchAria: '切换词条展示形式', // 视图切换按钮组无障碍标签
+    vocabShowColumns: '显示字段', // 列显隐按钮
+    vocabShowColumnsAria: '选择表格中显示的字段列', // 列显隐按钮无障碍标签
+    vocabColumnText: '词面', // 表格列：词面
+    vocabColumnCategories: '分类', // 表格列：分类
+    vocabColumnDifficulty: '难度', // 表格列：难度
+    vocabColumnAliases: '别称', // 表格列：别称
+    vocabColumnTags: '标签', // 表格列：标签
+    vocabColumnLang: '语言', // 表格列：语言
+    vocabColumnTimeLimit: '时限', // 表格列：作画时限（秒）
+    vocabColumnScoreWeight: '权重', // 表格列：计分权重
+    vocabSortAria: (name: string) => `按${name}排序`, // 表头排序无障碍标签
+    vocabFilterAria: (name: string) => `按${name}筛选`, // 字段筛选按钮无障碍标签
+    vocabFilterAll: (name: string) => `全部${name}`, // 筛选按钮未选中时的默认文案
+    vocabSelectAllShort: '全选', // 多选弹层：全选
+    vocabClearAllShort: '清空', // 多选弹层：清空
+    vocabPanelDone: '完成', // 多选弹层：关闭按钮
+    vocabColumnHiddenNote: '可在「显示字段」中开启更多列。', // 表格空态说明
+    vocabNoMatch: '没有符合条件的词条。', // 筛选/搜索无结果
+    vocabDifficultyLabel: (value: number) => `${value} 星`, // 难度值文案（筛选选项/表格）
+    vocabAliasEmpty: '—', // 空列表占位
     settingsLabel: 'ROOM SETTINGS', // 规则弹窗眉题
     settingsTitle: '房间规则', // 规则弹窗标题
     settingsCloseAria: '关闭规则', // 规则弹窗关闭按钮
@@ -242,6 +269,16 @@ export const strings = {
     optionCountUnit: (count: number) => `${count} 个`, // 候选词数量单位
     toggleShowWordLength: '显示答案字数', // 规则开关：字数显示
     toggleProgressiveHints: '逐步提示字符', // 规则开关：逐步提示
+    toggleStructuredHints: '结构化提示', // 规则开关：结构化提示（词条 hint 按阈值揭示）
+    hintStartRatioField: '提示出现时机', // 规则项：结构化提示开始时机
+    hintStartRatioUnit: (percent: number) => `剩余 ${percent}% 时`, // 提示开始时机取值展示
+    hintIntervalRatioField: '提示间隔', // 规则项：相邻提示的揭示间隔
+    hintIntervalRatioUnit: (percent: number) => `每隔 ${percent}%`, // 提示间隔取值展示
+    guessBaseScoreField: '猜词基础分', // 规则项：统一猜词基础分
+    guessBaseScoreUnit: (score: number) => `${score} 分`, // 基础分取值展示
+    scoreModeField: '计分方式', // 规则项：猜词分数计算方式
+    scoreModeStandard: '标准（基础+速度+顺序）', // 计分方式：标准
+    scoreModeFlat: '固定分（仅基础分）', // 计分方式：固定
     toggleCloseGuess: '近似答案提示', // 规则开关：近似提示
     togglePlayerInvite: '普通玩家可邀请', // 规则开关：成员邀请
     togglePause: '房主可暂停', // 规则开关：暂停权限
@@ -323,6 +360,8 @@ export const strings = {
     countdownHint: '画家顺序和首个回合由服务器统一确定', // 开局倒计时说明
     yourTurn: '轮到你作画了', // 选词面板提示
     chooseWordTitle: '选择一个词', // 选词面板标题
+    wordDifficultyAria: (value: number) => `难度 ${value} 星`, // 候选词难度星级无障碍标签
+    hintBadgeLabel: '提示', // HUD 结构化提示前缀
     autoChoose: (seconds: number) => `${seconds} 秒后将自动选择`, // 选词倒计时提示
     pausedTitle: '游戏已安全暂停', // 暂停面板标题
     pausedSubtitle: '所有计时已由服务器冻结', // 暂停面板副标题

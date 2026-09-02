@@ -32,7 +32,7 @@ import {
 import type { GameSecret, InviteSecret, MemberState, PlayerSecret, RoomSecret } from './models.ts'
 import { RoundMachine } from './round-machine.ts'
 import { SnapshotBuilder } from './snapshot.ts'
-import type { VocabularyStore } from './vocabulary.ts'
+import type { VocabularyStore } from './vocabulary/index.ts'
 import { enforceEventRate } from './rate-limit.ts'
 import { GameError, SILENT_LOGGER, type RuntimeLogger } from './errors.ts'
 import type {
@@ -52,6 +52,11 @@ export function createDefaultRoomSettings(): RoomSettings {
     optionCount: APP_CONFIG.game.optionCount.default,
     showWordLength: APP_CONFIG.game.showWordLength,
     progressiveHints: APP_CONFIG.game.progressiveHints,
+    structuredHintsEnabled: APP_CONFIG.game.structuredHintsEnabled,
+    hintStartRatio: APP_CONFIG.game.hintStartRatio,
+    hintIntervalRatio: APP_CONFIG.game.hintIntervalRatio,
+    guessBaseScore: APP_CONFIG.game.score.guessBase,
+    scoreMode: APP_CONFIG.game.scoreMode,
     closeGuessEnabled: APP_CONFIG.game.closeGuessEnabled,
     allowPlayerInvite: APP_CONFIG.room.allowPlayerInvite,
     allowPause: APP_CONFIG.room.allowPause,
@@ -678,13 +683,14 @@ export class GameService {
     return this.snapshotter.snapshot(room, playerId)
   }
 
-  /** 房主读取本局词库快照（全部词条、当前选择与词库版本）。 */
+  /** 房主读取本局词库快照（全部词条、当前选择、词库版本与分类白名单）。 */
   getVocabulary(playerId: string): VocabularySnapshot {
     const room = this.requireHostRoom(playerId)
     return {
       items: this.vocabulary.items,
       selectedIds: [...room.selectedWordIds],
       version: this.vocabulary.version,
+      categories: this.vocabulary.meta.categoryEnum,
     }
   }
 
@@ -759,6 +765,7 @@ export class GameService {
       phaseEndsAt: Date.now() + APP_CONFIG.game.startingCountdownSeconds * 1_000,
       currentRound: 0,
       totalRounds: activeMembers.length * room.settings.roundsPerPlayer,
+      roundDurationMs: room.settings.drawSeconds * 1_000, // 开局默认房间时长；每回合 beginDrawing 按词条时限刷新
       drawerOrder: this.shuffle(activeMembers.map((member) => member.playerId)),
       drawerId: '',
       candidates: [],
@@ -771,6 +778,8 @@ export class GameService {
       correctOrder: [],
       correctDetails: [],
       revealedIndices: new Set(),
+      hintOrder: [],
+      revealedHintCount: 0,
       timer,
     }
     // 完整 game 已安装后只广播一次 starting 快照，避免客户端收到阶段存在但 game 缺失的中间态。
@@ -812,13 +821,16 @@ export class GameService {
       throw new GameError('INVALID_MESSAGE', serverStrings.errors.INVALID_MESSAGE_EMPTY)
     const normalized = normalizeAnswer(text)
     const answer = normalizeAnswer(game.answer.text)
-    // 命中正确答案：计分并广播，返回 correct 标记
-    if (normalized === answer) {
+    // 命中正确答案：词面与全部别称均可判对（规范化后比较）
+    const acceptedAnswers = [answer, ...game.answer.aliases.map((alias) => normalizeAnswer(alias))]
+    if (acceptedAnswers.includes(normalized)) {
       this.round.markCorrect(room, member)
       return { correct: true, close: false }
     }
-    // 未命中但很接近：只提示原发送者，不进入聊天流，避免刷屏泄露
-    const close = room.settings.closeGuessEnabled && isCloseAnswer(text, game.answer.text)
+    // 未命中但很接近：与词面/别称逐一比较取最近者；只提示原发送者，不进入聊天流，避免刷屏泄露
+    const close =
+      room.settings.closeGuessEnabled &&
+      acceptedAnswers.some((candidate) => isCloseAnswer(normalized, candidate))
     if (close) {
       this.emitToPlayer(playerId, EVENTS.guessClose, { text: serverStrings.notices.guessClose })
     } else {
@@ -1429,7 +1441,7 @@ export class GameService {
 
   /** @internal 内部协作接口 */
   public pickCandidates(room: RoomSecret, game: GameSecret) {
-    // 从本局已选词库中排除本局已用过的词条，构建候选池
+    // 从本局已选词库中排除本局已用过的词条，构建候选池（元素为富模型 VocabularyWord）
     let pool = [...room.selectedWordIds]
       .filter((id) => !game.usedWordIds.has(id))
       .map((id) => this.vocabulary.byId.get(id))
@@ -1551,7 +1563,15 @@ export class GameService {
       settings.chooseSeconds >= APP_CONFIG.game.chooseSeconds.min &&
       settings.chooseSeconds <= APP_CONFIG.game.chooseSeconds.max &&
       settings.optionCount >= APP_CONFIG.game.optionCount.min &&
-      settings.optionCount <= APP_CONFIG.game.optionCount.max
+      settings.optionCount <= APP_CONFIG.game.optionCount.max &&
+      settings.hintStartRatio >= 0.05 &&
+      settings.hintStartRatio <= 0.9 &&
+      settings.hintIntervalRatio >= 0.05 &&
+      settings.hintIntervalRatio <= 0.45 &&
+      Number.isInteger(settings.guessBaseScore) &&
+      settings.guessBaseScore >= 50 &&
+      settings.guessBaseScore <= 2_000 &&
+      (settings.scoreMode === 'standard' || settings.scoreMode === 'flat')
     if (!valid) throw new GameError('INVALID_SETTINGS', serverStrings.errors.INVALID_SETTINGS)
   }
 
@@ -1638,7 +1658,8 @@ export class GameService {
   }
 
   /** Fisher-Yates 洗牌：随机打乱数组并返回新数组（不改原数组）。 */
-  private shuffle<T>(values: T[]): T[] {
+  /** @internal 内部协作接口（RoundMachine 结构化提示顺序洗牌等） */
+  public shuffle<T>(values: T[]): T[] {
     const result = [...values]
     for (let index = result.length - 1; index > 0; index -= 1) {
       const target = Math.floor(Math.random() * (index + 1))
