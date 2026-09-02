@@ -49,7 +49,7 @@ const emit = defineEmits<{
   >
     <!-- 词面列：主文字加粗突出 -->
     <template #cell-text="{ row }">
-      <span class="block truncate font-black text-ink" :title="row.text">{{ row.text }}</span>
+      <span class="block truncate font-black text-navy" :title="row.text">{{ row.text }}</span>
     </template>
     <!-- 分类列：蓝色小徽章（允许多分类并排） -->
     <template #cell-categories="{ row }">
@@ -57,7 +57,7 @@ const emit = defineEmits<{
         <span
           v-for="category in row.categories"
           :key="category"
-          class="rounded-full bg-sky px-[0.5em] py-[0.08cqh] text-[0.9em] font-extrabold text-[#1e3a8a]"
+          class="rounded-full bg-sky px-[0.5em] py-[0.08cqh] text-[0.9em] font-extrabold text-blue"
           >{{ category }}</span
         >
       </span>
@@ -83,7 +83,7 @@ const emit = defineEmits<{
         <span
           v-for="tag in row.tags"
           :key="tag"
-          class="rounded-full bg-slate-100 px-[0.5em] py-[0.08cqh] text-[0.9em] font-bold text-slate-600"
+          class="rounded-full bg-line px-[0.5em] py-[0.08cqh] text-[0.9em] font-bold text-muted"
           >{{ tag }}</span
         >
       </span>

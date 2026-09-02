@@ -41,7 +41,7 @@ const positions = computed(() => Array.from({ length: props.max }, (_, index) =>
       v-for="position in positions"
       :key="position"
       class="h-[1em] w-[1em] shrink-0"
-      :class="position <= filled ? 'fill-yellow text-[#854d0e]' : 'text-slate-300'"
+      :class="position <= filled ? 'fill-yellow text-yellow' : 'text-muted'"
       aria-hidden="true"
     />
   </span>

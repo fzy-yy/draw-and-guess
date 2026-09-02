@@ -78,8 +78,8 @@ function displayValue(row: T, column: DataTableColumn<T>): string {
   >
     <!-- 表格区：表头吸顶，表体滚动（容器高度由调用方控制） -->
     <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
-      <table class="w-full border-collapse text-left text-[0.72em] text-ink">
-        <thead class="sticky top-0 z-10 bg-slate-100 shadow-[0_0.2cqh_0_#e2e8f0]">
+      <table class="w-full border-collapse text-left text-[0.72em] text-navy">
+        <thead class="sticky top-0 z-10 bg-line shadow-[0_0.2cqh_0_#e2e8f0]">
           <tr>
             <!-- 可选行首复选列表头（仅占位，无全选语义——全选由工具栏按钮承担） -->
             <th
@@ -90,7 +90,7 @@ function displayValue(row: T, column: DataTableColumn<T>): string {
             <th
               v-for="column in props.columns"
               :key="column.key"
-              class="whitespace-nowrap px-[0.6em] py-[0.55cqh] font-black text-slate-600"
+              class="whitespace-nowrap px-[0.6em] py-[0.55cqh] font-black text-muted"
               :class="[
                 column.widthClass,
                 column.align === 'center'
@@ -111,7 +111,7 @@ function displayValue(row: T, column: DataTableColumn<T>): string {
               <button
                 v-if="column.sortable !== false"
                 type="button"
-                class="inline-flex items-center gap-[0.25em] rounded-[0.3em] px-[0.25em] py-[0.1cqh] hover:bg-slate-200"
+                class="inline-flex items-center gap-[0.25em] rounded-[0.3em] px-[0.25em] py-[0.1cqh] hover:bg-line"
                 :aria-label="strings.room.vocabSortAria(column.label)"
                 @click="emit('sort', column.key)"
               >
@@ -126,11 +126,7 @@ function displayValue(row: T, column: DataTableColumn<T>): string {
                   class="h-[1.2cqh] w-[1.2cqh] text-blue"
                   aria-hidden="true"
                 />
-                <ArrowUpDown
-                  v-else
-                  class="h-[1.2cqh] w-[1.2cqh] text-slate-400"
-                  aria-hidden="true"
-                />
+                <ArrowUpDown v-else class="h-[1.2cqh] w-[1.2cqh] text-muted" aria-hidden="true" />
               </button>
               <span v-else>{{ column.label }}</span>
             </th>
@@ -141,7 +137,7 @@ function displayValue(row: T, column: DataTableColumn<T>): string {
             v-for="row in props.rows"
             :key="String(row[props.rowKey])"
             class="border-t-[0.12cqh] border-t-slate-100 transition-colors duration-[120ms] hover:bg-sky"
-            :class="isSelected(row) ? '!bg-sky-100' : ''"
+            :class="isSelected(row) ? '!bg-sky' : ''"
           >
             <!-- 行首复选列：词库选择与表格浏览共存，勾选即写入父组件的已选集合 -->
             <td v-if="props.selectedIds" class="px-[0.5em] py-[0.4cqh]">

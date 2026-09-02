@@ -8,6 +8,16 @@ export const drawing = {
   defaultColor: '#1F2937',
   /** 画笔与橡皮擦共用同一粗细值，画板滚轮按 wheelStep 连续调整。 */
   width: { min: 1, max: 30, default: 5, step: 1, wheelStep: 1 },
+  /** 画布像素缓冲的设备像素比封顶（限制填充等大内存分配上限）。 */
+  devicePixelRatioCap: 2.0,
+  /** 线宽相对画布缩放的基准分辨率（drawStroke 用 min(宽,高)/referenceResolution 算缩放）。 */
+  referenceResolution: 720,
+  /** 缩放到画布像素时线宽的最小倍率，避免超小画布上笔迹过细。 */
+  minLineScale: 0.6,
+  /** 自由笔画采样的去抖距离（归一化坐标），避免一帧内产生大量重复点。 */
+  dedupDistance: 0.0015,
+  /** 工具栏线宽预览圆点直径的视觉封顶（像素），避免超出画板高度的最大线宽显示过大。 */
+  widthPreviewCap: 20,
   /** 洪泛填充比较目标像素时允许的单通道误差，用于兼容 Canvas 抗锯齿边缘。 */
   fillTolerance: 8,
   // —— 性能预算（为什么是这些值）：

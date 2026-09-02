@@ -10,6 +10,7 @@ import { strings } from '@draw-guess/strings'
 import type { ChatMessage, RoomMember } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
 import ActionPopover from '@/components/ActionPopover.vue'
+import RoundIconButton from '@/components/common/RoundIconButton.vue'
 
 // canGuess 由父组件（useGameHud）计算，这里只用于输入框权限与提交保护。
 const props = defineProps<{
@@ -121,7 +122,7 @@ watch(
   <!-- 右侧聊天区：消息列表 + 猜词输入 / 安全预设短语 -->
   <aside
     v-if="store.room"
-    class="flex min-w-0 flex-col border-l-[0.2cqh] border-slate-400 bg-paper px-[0.9cqw] py-[1.5cqh]"
+    class="flex min-w-0 flex-col border-l-[0.2cqh] border-line bg-paper px-[0.9cqw] py-[1.5cqh]"
   >
     <header class="flex items-center justify-between border-b-[0.18cqh] border-line pb-[1cqh]">
       <div>
@@ -132,7 +133,7 @@ watch(
       </div>
       <!-- 当前角色标签：观战中 / 已猜中 / 作画中 / 猜词中 -->
       <span
-        class="bg-sky px-[0.6em] py-[0.35cqh] text-[#1e3a8a] rounded-[99em] text-[0.62em] font-extrabold"
+        class="bg-sky px-[0.6em] py-[0.35cqh] text-blue rounded-[99em] text-[0.62em] font-extrabold"
         >{{
           store.me?.spectating
             ? strings.status.roleSpectating
@@ -155,9 +156,9 @@ watch(
         v-for="message in messages"
         :key="message.id"
         :class="[
-          'flex flex-wrap gap-[0.35em] border-l-[0.3cqh] border-slate-400 bg-white px-[0.65em] py-[0.6cqh] text-[0.72em] leading-[1.35] text-slate-700 first:mt-auto transition-[transform,box-shadow,border-color,background-color,color,opacity] duration-[160ms]',
-          message.playerId && '!text-ink font-extrabold',
-          message.type === 'system' && '!text-[#1e3a8a] !bg-sky !border-l-blue',
+          'flex flex-wrap gap-[0.35em] border-l-[0.3cqh] border-line bg-white px-[0.65em] py-[0.6cqh] text-[0.72em] leading-[1.35] text-navy first:mt-auto ui-feedback',
+          message.playerId && '!text-navy font-extrabold',
+          message.type === 'system' && '!text-blue !bg-sky !border-l-blue',
         ]"
         :style="messageStyle(message)"
       >
@@ -167,7 +168,7 @@ watch(
       </div>
       <div
         v-if="!messages.length"
-        class="m-auto flex flex-col items-center text-slate-400 text-[0.7em]"
+        class="m-auto flex flex-col items-center text-muted text-[0.7em]"
       >
         <Send class="h-[4cqh] w-[4cqh]" /><span>{{ strings.game.noMessages }}</span>
       </div>
@@ -194,7 +195,7 @@ watch(
                 v-for="reaction in store.config.presets.chatReactions"
                 :key="reaction"
                 type="button"
-                class="grid h-[4.2cqh] w-[4.2cqh] place-items-center rounded-full bg-slate-100 text-[1.05em] hover:bg-sky"
+                class="grid h-[4.2cqh] w-[4.2cqh] place-items-center rounded-full bg-line text-[1.05em] hover:bg-sky"
                 :aria-label="strings.game.sendReactionAria(reaction)"
                 @click="sendPresetAndClose(reaction, close)"
               >
@@ -203,18 +204,16 @@ watch(
             </div>
           </template>
         </ActionPopover>
-        <button
+        <RoundIconButton
           v-for="action in quickPhraseActions"
           :key="action.text"
-          type="button"
-          class="grid h-[4.2cqh] w-[4.2cqh] shrink-0 place-items-center rounded-full border-[0.18cqh] border-line bg-white text-blue disabled:cursor-not-allowed disabled:opacity-40"
           :disabled="!canSendPreset"
+          :label="strings.game.sendQuickPhraseAria(action.text)"
           :title="action.text"
-          :aria-label="strings.game.sendQuickPhraseAria(action.text)"
           @click="store.sendPreset(action.text)"
         >
           <component :is="action.icon" class="h-[2.35cqh] w-[2.35cqh]" />
-        </button>
+        </RoundIconButton>
       </div>
       <form class="mt-[0.65cqh] flex gap-[0.5em]" @submit.prevent="sendGuess">
         <label for="guess-input" class="sr-only">{{ strings.game.guessLabel }}</label>
@@ -224,13 +223,13 @@ watch(
           v-model="guess"
           :maxlength="store.config.player.chatMaxLength"
           autocomplete="off"
-          class="h-[5.2cqh] min-w-0 flex-1 rounded-[0.65em] border-[0.2cqh] border-blue bg-white px-[0.8em] outline-0 disabled:cursor-not-allowed disabled:border-line disabled:bg-slate-100 disabled:text-muted"
+          class="h-[5.2cqh] min-w-0 flex-1 rounded-[0.65em] border-[0.2cqh] border-blue bg-white px-[0.8em] outline-0 disabled:cursor-not-allowed disabled:border-line disabled:bg-line disabled:text-muted"
           :disabled="!canGuess"
           :placeholder="strings.game.guessPlaceholder"
         />
         <button
           type="submit"
-          class="grid h-[5.2cqh] w-[5.2cqh] shrink-0 place-items-center rounded-[0.65em] bg-blue text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          class="grid h-[5.2cqh] w-[5.2cqh] shrink-0 place-items-center rounded-[0.65em] bg-blue text-white disabled:cursor-not-allowed disabled:bg-line"
           :disabled="!canGuess || !guess.trim()"
           :aria-label="strings.game.sendGuessAria"
         >

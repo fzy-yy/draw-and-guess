@@ -15,6 +15,7 @@ import type { RankedMember } from '@/composables/useGameHud'
 import AppButton from '@/components/AppButton.vue'
 import AvatarImage from '@/components/AvatarImage.vue'
 import DifficultyStars from '@/components/common/DifficultyStars.vue'
+import OverlayCard from '@/components/game/OverlayCard.vue'
 
 // 阶段遮罩需要的 HUD 派生值（剩余秒数、对局数据、最终排行）由父组件 GameView
 // 统一计算后经 props 下发，整局只保留一个 ticker（不再此处单独起定时器）。
@@ -43,7 +44,7 @@ const store = useGameStore()
     <!-- 阶段遮罩：开局倒计时 -->
     <div
       v-if="store.room.phase === 'starting'"
-      class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh] text-white"
+      class="absolute inset-0 z-30 grid place-items-center bg-navy/80 px-[5cqw] py-[4cqh] text-white"
     >
       <span>{{ strings.game.countdownTitle }}</span
       ><b
@@ -53,128 +54,100 @@ const store = useGameStore()
       <p>{{ strings.game.countdownHint }}</p>
     </div>
     <!-- 阶段遮罩：画家选词（只有画家可见候选词按钮） -->
-    <div
-      v-else-if="store.room.phase === 'choosing_word' && store.isDrawer"
-      class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
-    >
-      <section
-        class="flex min-w-[50cqw] flex-col items-center gap-[1.2cqh] rounded-[1.2em] border-[0.35cqh] border-white bg-paper px-[4cqw] py-[4cqh] text-center"
-      >
-        <Brush class="h-[8cqh] w-[8cqh] bg-blue p-[1.4cqh] text-white rounded-full" />
-        <p>{{ strings.game.yourTurn }}</p>
-        <h2>{{ strings.game.chooseWordTitle }}</h2>
-        <div class="flex gap-[1em] my-[2cqh]">
-          <button
-            v-for="option in game.wordOptions ?? []"
-            :key="option.id"
-            type="button"
-            class="flex min-h-[7cqh] min-w-[12cqw] flex-col items-center justify-center gap-[0.3cqh] rounded-[0.7em] bg-yellow border-b-[0.6cqh] border-[#ca8a04] text-navy px-[1em] text-[1.25em] font-[1000]"
-            @click="emit('choose-word', option.id)"
-          >
-            <span>{{ option.text }}</span>
-            <!-- 难度星级：1~5 星（上限取自全局配置，见 DifficultyStars 组件） -->
-            <DifficultyStars :value="option.difficulty" class="text-[0.55em]" />
-          </button>
-        </div>
-        <span>{{ strings.game.autoChoose(secondsLeft) }}</span>
-      </section>
-    </div>
+    <OverlayCard v-else-if="store.room.phase === 'choosing_word' && store.isDrawer">
+      <Brush class="h-[8cqh] w-[8cqh] bg-blue p-[1.4cqh] text-white rounded-full" />
+      <p>{{ strings.game.yourTurn }}</p>
+      <h2>{{ strings.game.chooseWordTitle }}</h2>
+      <div class="flex gap-[1em] my-[2cqh]">
+        <button
+          v-for="option in game.wordOptions ?? []"
+          :key="option.id"
+          type="button"
+          class="flex min-h-[7cqh] min-w-[12cqw] flex-col items-center justify-center gap-[0.3cqh] rounded-[0.7em] bg-yellow border-b-[0.6cqh] border-yellow text-navy px-[1em] text-[1.25em] font-[1000]"
+          @click="emit('choose-word', option.id)"
+        >
+          <span>{{ option.text }}</span>
+          <!-- 难度星级：1~5 星（上限取自全局配置，见 DifficultyStars 组件） -->
+          <DifficultyStars :value="option.difficulty" class="text-[0.55em]" />
+        </button>
+      </div>
+      <span>{{ strings.game.autoChoose(secondsLeft) }}</span>
+    </OverlayCard>
     <!-- 阶段遮罩：游戏暂停（房主可继续或提前结束） -->
-    <div
-      v-else-if="store.room.phase === 'paused'"
-      class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
-    >
-      <section
-        class="flex min-w-[50cqw] flex-col items-center gap-[1.2cqh] rounded-[1.2em] border-[0.35cqh] border-white bg-paper px-[4cqw] py-[4cqh] text-center"
-      >
-        <CirclePause class="h-[8cqh] w-[8cqh] bg-blue p-[1.4cqh] text-white rounded-full" />
-        <p>{{ strings.game.pausedTitle }}</p>
-        <h2>{{ strings.game.pausedSubtitle }}</h2>
-        <span>{{ strings.game.pausedHint }}</span>
-        <div v-if="store.isHost" class="flex gap-[0.8em] mt-[1.5cqh]">
-          <AppButton variant="primary" @click="emit('resume')">
-            <CirclePlay />{{ strings.game.resumeGame }}</AppButton
-          ><AppButton variant="danger" @click="emit('open-end-confirm')">
-            {{ strings.game.endEarly }}
-          </AppButton>
-        </div>
-      </section>
-    </div>
+    <OverlayCard v-else-if="store.room.phase === 'paused'">
+      <CirclePause class="h-[8cqh] w-[8cqh] bg-blue p-[1.4cqh] text-white rounded-full" />
+      <p>{{ strings.game.pausedTitle }}</p>
+      <h2>{{ strings.game.pausedSubtitle }}</h2>
+      <span>{{ strings.game.pausedHint }}</span>
+      <div v-if="store.isHost" class="flex gap-[0.8em] mt-[1.5cqh]">
+        <AppButton variant="primary" @click="emit('resume')">
+          <CirclePlay />{{ strings.game.resumeGame }}</AppButton
+        ><AppButton variant="danger" @click="emit('open-end-confirm')">
+          {{ strings.game.endEarly }}
+        </AppButton>
+      </div>
+    </OverlayCard>
     <!-- 阶段遮罩：回合结算（答案、得分明细） -->
-    <div
-      v-else-if="store.room.phase === 'round_result' && game.roundResult"
-      class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
-    >
-      <section
-        class="flex min-w-[50cqw] flex-col items-center gap-[1.2cqh] rounded-[1.2em] border-[0.35cqh] border-white bg-paper px-[4cqw] py-[4cqh] text-center"
-      >
-        <p>{{ strings.game.roundAnswerLabel }}</p>
-        <h2>{{ game.roundResult.answer }}</h2>
-        <div class="my-[1.5cqh] flex w-full flex-col gap-[0.6cqh]">
-          <article
-            v-for="detail in game.roundResult.details"
-            :key="detail.playerId"
-            class="grid grid-cols-[1.5fr_repeat(4,1fr)] items-center bg-slate-200 px-[0.8em] py-[0.8cqh] text-left text-[0.72em]"
-          >
-            <b>{{ store.room.members.find((member) => member.id === detail.playerId)?.nickname }}</b
-            ><span>{{ strings.game.scoreBase(detail.base) }}</span
-            ><span>{{ strings.game.scoreSpeed(detail.speed) }}</span
-            ><span>{{ strings.game.scoreOrder(detail.order) }}</span
-            ><strong class="text-blue text-[1.2em]">{{
-              strings.game.scoreTotal(detail.total)
-            }}</strong>
-          </article>
-          <p v-if="!game.roundResult.details.length">{{ strings.game.noGuesses }}</p>
-        </div>
-        <span>{{ strings.game.drawerScoreLine(game.roundResult.drawerScore, secondsLeft) }}</span>
-      </section>
-    </div>
+    <OverlayCard v-else-if="store.room.phase === 'round_result' && game.roundResult">
+      <p>{{ strings.game.roundAnswerLabel }}</p>
+      <h2>{{ game.roundResult.answer }}</h2>
+      <div class="my-[1.5cqh] flex w-full flex-col gap-[0.6cqh]">
+        <article
+          v-for="detail in game.roundResult.details"
+          :key="detail.playerId"
+          class="grid grid-cols-[1.5fr_repeat(4,1fr)] items-center bg-line px-[0.8em] py-[0.8cqh] text-left text-[0.72em]"
+        >
+          <b>{{ store.room.members.find((member) => member.id === detail.playerId)?.nickname }}</b
+          ><span>{{ strings.game.scoreBase(detail.base) }}</span
+          ><span>{{ strings.game.scoreSpeed(detail.speed) }}</span
+          ><span>{{ strings.game.scoreOrder(detail.order) }}</span
+          ><strong class="text-blue text-[1.2em]">{{
+            strings.game.scoreTotal(detail.total)
+          }}</strong>
+        </article>
+        <p v-if="!game.roundResult.details.length">{{ strings.game.noGuesses }}</p>
+      </div>
+      <span>{{ strings.game.drawerScoreLine(game.roundResult.drawerScore, secondsLeft) }}</span>
+    </OverlayCard>
     <!-- 阶段遮罩：最终结算（排行榜、统计） -->
-    <div
-      v-else-if="store.room.phase === 'game_result'"
-      class="absolute inset-0 z-30 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
-    >
-      <section
-        class="flex min-w-[55cqw] flex-col items-center gap-[1.2cqh] rounded-[1.2em] border-[0.35cqh] border-white bg-paper px-[4cqw] pt-[2.5cqh] pb-[4cqh] text-center"
-      >
-        <Trophy class="h-[8cqh] w-[8cqh] bg-yellow p-[1.4cqh] text-[#854d0e] rounded-full" />
-        <p>{{ strings.game.gameResultLabel }}</p>
-        <h2>{{ strings.game.finalRanking }}</h2>
-        <div class="my-[1cqh] flex w-full flex-col gap-[0.6cqh]">
-          <article
-            v-for="member in rankings"
-            :key="member.id"
-            class="grid grid-cols-[3em_auto_1fr_auto] items-center gap-[0.8em] bg-slate-200 px-[1em] py-[0.6cqh] text-left"
-            :class="{ '!text-[#713f12] !bg-amber-100': member.rank === 1 }"
-          >
-            <b>#{{ member.rank }}</b
-            ><AvatarImage
-              class="h-[4.5cqh] w-[4.5cqh]"
-              :avatar-id="member.avatarId"
-              :label="strings.common.playerAvatarAria(member.nickname)"
-            />
-            <span class="flex flex-col font-extrabold"
-              >{{ member.nickname
-              }}<small class="text-muted text-[0.62em] font-semibold">{{
-                strings.game.playerStats(
-                  member.stats.correctCount,
-                  member.stats.correctCount
-                    ? Math.round(member.stats.totalGuessMs / member.stats.correctCount / 1000)
-                    : 0,
-                  member.stats.drawingCorrectCount,
-                )
-              }}</small></span
-            ><strong>{{ strings.common.scoreUnit(member.score) }}</strong>
-          </article>
-        </div>
-        <div class="flex gap-[0.8em] mt-[1.5cqh]">
-          <AppButton v-if="store.isHost" variant="primary" @click="emit('return-waiting')">
-            {{ strings.game.backToRoom }}</AppButton
-          ><AppButton variant="secondary" @click="emit('leave-room')">
-            {{ strings.game.leaveRoom }}
-          </AppButton>
-        </div>
-      </section>
-    </div>
+    <OverlayCard v-else-if="store.room.phase === 'game_result'" wide>
+      <Trophy class="h-[8cqh] w-[8cqh] bg-yellow p-[1.4cqh] text-yellow rounded-full" />
+      <p>{{ strings.game.gameResultLabel }}</p>
+      <h2>{{ strings.game.finalRanking }}</h2>
+      <div class="my-[1cqh] flex w-full flex-col gap-[0.6cqh]">
+        <article
+          v-for="member in rankings"
+          :key="member.id"
+          class="grid grid-cols-[3em_auto_1fr_auto] items-center gap-[0.8em] bg-line px-[1em] py-[0.6cqh] text-left"
+          :class="{ '!text-yellow !bg-yellow/20': member.rank === 1 }"
+        >
+          <b>#{{ member.rank }}</b
+          ><AvatarImage
+            class="h-[4.5cqh] w-[4.5cqh]"
+            :avatar-id="member.avatarId"
+            :label="strings.common.playerAvatarAria(member.nickname)"
+          />
+          <span class="flex flex-col font-extrabold"
+            >{{ member.nickname
+            }}<small class="text-muted text-[0.62em] font-semibold">{{
+              strings.game.playerStats(
+                member.stats.correctCount,
+                member.stats.correctCount
+                  ? Math.round(member.stats.totalGuessMs / member.stats.correctCount / 1000)
+                  : 0,
+                member.stats.drawingCorrectCount,
+              )
+            }}</small></span
+          ><strong>{{ strings.common.scoreUnit(member.score) }}</strong>
+        </article>
+      </div>
+      <div class="flex gap-[0.8em] mt-[1.5cqh]">
+        <AppButton v-if="store.isHost" variant="primary" @click="emit('return-waiting')">
+          {{ strings.game.backToRoom }}</AppButton
+        ><AppButton variant="secondary" @click="emit('leave-room')">
+          {{ strings.game.leaveRoom }}
+        </AppButton>
+      </div>
+    </OverlayCard>
   </div>
 </template>

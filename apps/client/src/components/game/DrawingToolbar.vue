@@ -9,6 +9,7 @@ import { Brush, Eraser, PaintBucket, RotateCcw, RotateCw, Trash2 } from 'lucide-
 import { strings } from '@draw-guess/strings'
 import { EVENTS, type ToolKind } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
+import ToolButton from '@/components/common/ToolButton.vue'
 
 // 当前工具/颜色/线宽由父组件管理，这里只读值、再把变更事件抛回去（受控组件）。
 defineProps<{
@@ -51,59 +52,41 @@ function clearCanvas(): void {
   <!-- 底部绘图工具栏：工具 / 颜色 / 线宽 / 历史操作（非画家时整条禁用） -->
   <footer
     v-if="store.room"
-    class="col-span-full grid grid-cols-[1.35fr_1fr_0.8fr_auto] items-center gap-[1.2em] border-t-[0.25cqh] border-slate-600 bg-paper px-[1.4cqw]"
-    :class="{ 'text-slate-400': !store.isDrawer || store.room.phase !== 'drawing' }"
+    class="col-span-full grid grid-cols-[1.35fr_1fr_0.8fr_auto] items-center gap-[1.2em] border-t-[0.25cqh] border-navy bg-paper px-[1.4cqw]"
+    :class="{ 'text-muted': !store.isDrawer || store.room.phase !== 'drawing' }"
   >
     <!-- 工具组：画笔 / 橡皮擦 / 填充，可自定义快捷键 -->
     <div class="flex items-center gap-[0.45em]">
       <span class="mr-[0.3em] text-muted text-[0.62em] font-extrabold">{{
         strings.game.toolGroup
       }}</span>
-      <button
-        type="button"
-        class="flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] bg-slate-200 px-[0.7em] text-[0.72em] text-slate-700 font-extrabold"
-        :class="{ '!text-white !bg-blue': tool === 'pen' }"
+      <ToolButton
+        :active="tool === 'pen'"
         :disabled="!store.isDrawer"
         :aria-label="strings.game.penAria(store.settings.penShortcut)"
+        :shortcut="store.settings.showShortcuts ? store.settings.penShortcut : undefined"
         @click="setTool('pen')"
       >
-        <Brush />{{ strings.game.penTool
-        }}<kbd
-          v-if="store.settings.showShortcuts"
-          class="bg-white px-[0.35em] py-[0.1em] min-w-[1.6em] rounded-[0.35em] border-[0.12em] text-navy text-[0.82em] uppercase [font-family:ui-monospace,SFMono-Regular,Consolas,monospace]"
-          >{{ store.settings.penShortcut }}</kbd
-        >
-      </button>
-      <button
-        type="button"
-        class="flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] bg-slate-200 px-[0.7em] text-[0.72em] text-slate-700 font-extrabold"
-        :class="{ '!text-white !bg-blue': tool === 'eraser' }"
+        <Brush />{{ strings.game.penTool }}
+      </ToolButton>
+      <ToolButton
+        :active="tool === 'eraser'"
         :disabled="!store.isDrawer"
         :aria-label="strings.game.eraserAria(store.settings.eraserShortcut)"
+        :shortcut="store.settings.showShortcuts ? store.settings.eraserShortcut : undefined"
         @click="setTool('eraser')"
       >
-        <Eraser />{{ strings.game.eraserTool
-        }}<kbd
-          v-if="store.settings.showShortcuts"
-          class="bg-white px-[0.35em] py-[0.1em] min-w-[1.6em] rounded-[0.35em] border-[0.12em] text-navy text-[0.82em] uppercase [font-family:ui-monospace,SFMono-Regular,Consolas,monospace]"
-          >{{ store.settings.eraserShortcut }}</kbd
-        >
-      </button>
-      <button
-        type="button"
-        class="flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] bg-slate-200 px-[0.7em] text-[0.72em] text-slate-700 font-extrabold"
-        :class="{ '!text-white !bg-blue': tool === 'fill' }"
+        <Eraser />{{ strings.game.eraserTool }}
+      </ToolButton>
+      <ToolButton
+        :active="tool === 'fill'"
         :disabled="!store.isDrawer"
         :aria-label="strings.game.fillAria(store.settings.fillShortcut)"
+        :shortcut="store.settings.showShortcuts ? store.settings.fillShortcut : undefined"
         @click="setTool('fill')"
       >
-        <PaintBucket />{{ strings.game.fillTool
-        }}<kbd
-          v-if="store.settings.showShortcuts"
-          class="bg-white px-[0.35em] py-[0.1em] min-w-[1.6em] rounded-[0.35em] border-[0.12em] text-navy text-[0.82em] uppercase [font-family:ui-monospace,SFMono-Regular,Consolas,monospace]"
-          >{{ store.settings.fillShortcut }}</kbd
-        >
-      </button>
+        <PaintBucket />{{ strings.game.fillTool }}
+      </ToolButton>
     </div>
     <!-- 颜色组：预设色块 + 任意颜色选择器 -->
     <div class="flex items-center justify-center gap-[0.45em]">
@@ -114,7 +97,7 @@ function clearCanvas(): void {
         v-for="paint in store.config.drawing.colors"
         :key="paint"
         type="button"
-        class="h-[3.5cqh] w-[3.5cqh] rounded-full border-[0.2cqh] border-slate-400 bg-[var(--paint)]"
+        class="h-[3.5cqh] w-[3.5cqh] rounded-full border-[0.2cqh] border-line bg-[var(--paint)]"
         :class="{
           'outline-[0.3cqh] outline-yellow outline-offset-[0.15cqh] !border-navy':
             color.toUpperCase() === paint,
@@ -125,7 +108,7 @@ function clearCanvas(): void {
         @click="setColor(paint)"
       ></button>
       <label
-        class="relative h-[3.8cqh] w-[3.8cqh] overflow-hidden rounded-full border-[0.2cqh] border-slate-400"
+        class="relative h-[3.8cqh] w-[3.8cqh] overflow-hidden rounded-full border-[0.2cqh] border-line"
         :title="strings.game.customColorTitle"
       >
         <input
@@ -157,38 +140,37 @@ function clearCanvas(): void {
       <!-- 画笔宽度预览：外包固定尺寸容器，圆点尺寸变化不影响同一行其它组件位置 -->
       <span class="flex h-[2.5cqh] w-[2.5cqh] shrink-0 items-center justify-center">
         <i
-          class="block rounded-full bg-ink"
-          :style="{ width: `${Math.min(width, 20)}px`, height: `${Math.min(width, 20)}px` }"
+          class="block rounded-full bg-navy"
+          :style="{
+            width: `${Math.min(width, store.config.drawing.widthPreviewCap)}px`,
+            height: `${Math.min(width, store.config.drawing.widthPreviewCap)}px`,
+          }"
         ></i>
       </span>
     </label>
     <!-- 历史操作组：撤销 / 重做 / 清空 -->
     <div class="flex items-center gap-[0.45em]">
-      <button
-        type="button"
-        class="flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] bg-slate-200 px-[0.7em] text-[0.72em] text-slate-700 font-extrabold"
+      <ToolButton
         :disabled="!store.isDrawer"
         :aria-label="strings.game.undoAria"
         @click="store.drawAction(EVENTS.drawUndo)"
       >
-        <RotateCcw /> {{ strings.game.undo }}</button
-      ><button
-        type="button"
-        class="flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] bg-slate-200 px-[0.7em] text-[0.72em] text-slate-700 font-extrabold"
+        <RotateCcw /> {{ strings.game.undo }}
+      </ToolButton>
+      <ToolButton
         :disabled="!store.isDrawer"
         :aria-label="strings.game.redoAria"
         @click="store.drawAction(EVENTS.drawRedo)"
       >
-        <RotateCw /> {{ strings.game.redo }}</button
-      ><button
-        type="button"
-        class="flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] bg-slate-200 px-[0.7em] text-[0.72em] text-slate-700 font-extrabold"
+        <RotateCw /> {{ strings.game.redo }}
+      </ToolButton>
+      <ToolButton
         :disabled="!store.isDrawer"
         :aria-label="strings.game.clearAria"
         @click="clearCanvas"
       >
         <Trash2 /> {{ strings.game.clear }}
-      </button>
+      </ToolButton>
     </div>
   </footer>
 </template>

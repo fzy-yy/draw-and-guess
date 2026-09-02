@@ -87,14 +87,14 @@ function clearAll(): void {
         >
           <button
             type="button"
-            class="rounded-[0.4em] bg-slate-100 px-[0.55em] py-[0.25cqh] text-[0.62em] font-extrabold text-blue hover:bg-sky"
+            class="rounded-[0.4em] bg-line px-[0.55em] py-[0.25cqh] text-[0.62em] font-extrabold text-blue hover:bg-sky"
             @click="selectAll"
           >
             {{ strings.room.vocabSelectAllShort }}
           </button>
           <button
             type="button"
-            class="rounded-[0.4em] bg-slate-100 px-[0.55em] py-[0.25cqh] text-[0.62em] font-extrabold text-muted hover:bg-slate-200"
+            class="rounded-[0.4em] bg-line px-[0.55em] py-[0.25cqh] text-[0.62em] font-extrabold text-muted hover:bg-line"
             @click="clearAll"
           >
             {{ strings.room.vocabClearAllShort }}
@@ -107,7 +107,7 @@ function clearAll(): void {
           <label
             v-for="option in options"
             :key="option.value"
-            class="flex min-h-[2.6cqh] cursor-pointer items-center gap-[0.45em] rounded-[0.4em] px-[0.45em] py-[0.2cqh] text-[0.66em] font-bold text-ink hover:bg-sky"
+            class="flex min-h-[2.6cqh] cursor-pointer items-center gap-[0.45em] rounded-[0.4em] px-[0.45em] py-[0.2cqh] text-[0.66em] font-bold text-navy hover:bg-sky"
           >
             <input
               type="checkbox"

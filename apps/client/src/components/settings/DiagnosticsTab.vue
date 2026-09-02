@@ -58,7 +58,7 @@ function onAvatarPickerOpenChange(open: boolean): void {
         }}<input
           v-model="store.profile.nickname"
           :maxlength="store.config.player.nicknameMaxLength"
-          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-navy disabled:cursor-not-allowed disabled:bg-line disabled:text-muted"
           :disabled="profileEditingDisabled"
       /></label>
       <AppButton
@@ -74,7 +74,7 @@ function onAvatarPickerOpenChange(open: boolean): void {
     <div class="border-t-[0.4cqh] border-blue bg-white p-[2cqh_1.5em]">
       <h2>{{ strings.settings.diagnosticsTitle }}</h2>
       <pre
-        class="my-[1.4cqh] rounded-[0.6em] bg-navy p-[1.2cqh_1em] text-[#dbeafe] font-mono text-[0.7em] leading-[1.5] whitespace-pre-wrap"
+        class="my-[1.4cqh] rounded-[0.6em] bg-navy p-[1.2cqh_1em] text-sky font-mono text-[0.7em] leading-[1.5] whitespace-pre-wrap"
         >{{ diagnostic }}</pre>
       <AppButton variant="secondary" type="button" @click="emit('copy')">
         <Clipboard />{{ strings.settings.copyDiagnostics }}

@@ -80,9 +80,14 @@ export function attachSocketListeners(handlers: SocketHandlers): () => void {
   /**
    * 返回解绑函数：开发态 HMR 或 store 销毁时调用，避免同一事件被重复注册
    * （否则会出现 invites 双推、drawRevision 双增、多个探测定时器）。
-   * 只解绑应用层事件与连接事件，不动 socket.io 内部机制（重连、心跳）。
+   * 除了解绑 socket 级事件，还需解绑挂在 Manager（socket.io）上的 reconnect_attempt / error 监听——
+   * 它们不在 socket 事件命名空间内，`socket.off` 对其无效；不清理会让 HMR 反复热更时在
+   * Manager 上不断累积监听，导致 onReconnectAttempt/onIoError 被重复触发。
+   * 这里不动 socket.io 内部重连/心跳机制本身。
    */
   return () => {
+    socket.io.off('reconnect_attempt')
+    socket.io.off('error')
     for (const event of [
       'connect',
       'disconnect',

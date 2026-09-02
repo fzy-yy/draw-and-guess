@@ -80,7 +80,7 @@ function resizeCanvas(): void {
   const element = canvas.value
   if (!element) return
   const rect = element.getBoundingClientRect()
-  const ratio = Math.min(window.devicePixelRatio || 1, 2.0)
+  const ratio = Math.min(window.devicePixelRatio || 1, APP_CONFIG.drawing.devicePixelRatioCap)
   element.width = Math.max(1, Math.round(rect.width * ratio))
   element.height = Math.max(1, Math.round(rect.height * ratio))
   redraw()
@@ -94,11 +94,11 @@ function drawStroke(context: CanvasRenderingContext2D, stroke: Stroke, fromIndex
   if (!stroke.points.length) return
   const canvasWidth = context.canvas.width
   const canvasHeight = context.canvas.height
-  const scale = Math.min(canvasWidth, canvasHeight) / 720
+  const scale = Math.min(canvasWidth, canvasHeight) / APP_CONFIG.drawing.referenceResolution
   context.save()
   context.globalCompositeOperation = stroke.tool === 'eraser' ? 'destination-out' : 'source-over'
   context.strokeStyle = stroke.color
-  context.lineWidth = stroke.width * Math.max(0.6, scale)
+  context.lineWidth = stroke.width * Math.max(APP_CONFIG.drawing.minLineScale, scale)
   context.lineCap = 'round'
   context.lineJoin = 'round'
   context.beginPath()
@@ -242,13 +242,23 @@ function redraw(): void {
     else drawFill(context, command)
   }
   if (activePoints.value.length) {
-    drawStroke(context, {
-      kind: 'stroke',
-      id: 'local-preview',
-      ...currentStrokeStyle(),
-      points: activePoints.value,
-      sequence,
-    })
+    // 本地预览只补画“服务端尚未确认”的尾部，避免 redraw（如窗口缩放）把整段本地预览
+    // 再次叠画到已随 visibleCommands 重绘的确认段落上，造成画笔抗锯齿叠加变深。
+    const confirmedStroke = visibleCommands.value.find(
+      (command) => command.kind === 'stroke' && command.id === activeStrokeId,
+    )
+    const confirmedCount = confirmedStroke?.kind === 'stroke' ? confirmedStroke.points.length : 0
+    drawStroke(
+      context,
+      {
+        kind: 'stroke',
+        id: 'local-preview',
+        ...currentStrokeStyle(),
+        points: activePoints.value,
+        sequence,
+      },
+      confirmedCount,
+    )
   }
   // 登记已绘制游标：撤销等结构变化后必须全量重绘，游标随之重建
   drawnPoints.clear()
@@ -360,7 +370,11 @@ function pointerMove(event: PointerEvent): void {
   const point = normalizedPoint(event)
   const previous = activePoints.value.at(-1)
   // 距离过近的去抖：避免一帧内产生大量重复点
-  if (previous && Math.hypot(point.x - previous.x, point.y - previous.y) < 0.0015) return
+  if (
+    previous &&
+    Math.hypot(point.x - previous.x, point.y - previous.y) < APP_CONFIG.drawing.dedupDistance
+  )
+    return
   const from = activePoints.value.length
   activePoints.value.push(point)
   drawnPoints.set(activeStrokeId, activePoints.value.length)

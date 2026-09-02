@@ -33,7 +33,7 @@ function randomize(): void {
   <!-- 玩家资料确认页：左侧品牌介绍，右侧头像在上、昵称在下的资料表单。 -->
   <main class="grid h-full grid-cols-[43%_57%]">
     <section
-      class="relative flex flex-col items-start justify-center overflow-hidden bg-navy px-[7cqw] py-[8cqh] text-white before:absolute before:right-[-12cqh] before:top-[-10cqh] before:h-[34cqh] before:w-[34cqh] before:rounded-full before:border-[0.5cqh] before:border-[#ffffff18] before:content-[''] after:absolute after:bottom-[-7cqh] after:left-[-9cqh] after:h-[22cqh] after:w-[22cqh] after:rounded-full after:border-[0.5cqh] after:border-[#ffffff18] after:content-['']"
+      class="relative flex flex-col items-start justify-center overflow-hidden bg-navy px-[7cqw] py-[8cqh] text-white before:absolute before:right-[-12cqh] before:top-[-10cqh] before:h-[34cqh] before:w-[34cqh] before:rounded-full before:border-[0.5cqh] before:border-white/10 before:content-[''] after:absolute after:bottom-[-7cqh] after:left-[-9cqh] after:h-[22cqh] after:w-[22cqh] after:rounded-full after:border-[0.5cqh] after:border-white/10 after:content-['']"
       :aria-label="strings.profile.brandAria"
     >
       <div
@@ -41,23 +41,23 @@ function randomize(): void {
         aria-hidden="true"
       >
         <span
-          class="absolute left-[3.1cqh] top-[1.6cqh] h-[9cqh] w-[2.3cqh] rounded-full border-[0.35cqh] border-navy bg-orange rotate-[38deg]"
+          class="absolute left-[3.1cqh] top-[1.6cqh] h-[9cqh] w-[2.3cqh] rounded-full border-[0.35cqh] border-navy bg-yellow rotate-[38deg]"
         ></span
         ><span
           class="absolute right-[1.2cqh] top-[1.2cqh] grid h-[4.5cqh] w-[4.5cqh] place-items-center rounded-full bg-blue text-white text-[1.7em] font-[1000]"
           >?</span
         >
       </div>
-      <p class="mt-[3cqh] font-black tracking-[0.16em] text-[0.72em] text-[#93c5fd]">
+      <p class="mt-[3cqh] eyebrow-light">
         {{ strings.profile.brandEyebrow }}
       </p>
       <h1 class="mt-[0.8cqh] text-[3.5em]">{{ store.config.app.name }}</h1>
-      <p class="mx-0 mb-[3.2cqh] mt-[1.8cqh] max-w-[25em] leading-[1.8] text-[#dbeafe]">
+      <p class="mx-0 mb-[3.2cqh] mt-[1.8cqh] max-w-[25em] leading-[1.8] text-sky">
         {{ strings.profile.brandCopy }}
       </p>
       <div
         class="inline-flex items-center gap-[0.55em] rounded-full px-[1.05em] py-[0.65cqh] text-[0.8em] font-extrabold"
-        :class="store.connected ? 'text-[#14532d] bg-[#dcfce7]' : 'text-[#991b1b] bg-[#fee2e2]'"
+        :class="store.connected ? 'text-green bg-green/10' : 'text-red bg-red/10'"
       >
         <Wifi v-if="store.connected" /><WifiOff v-else />
         <span>{{ store.connectionLabel }}</span>
@@ -70,7 +70,7 @@ function randomize(): void {
     >
       <header class="mb-[2.7cqh] flex items-center justify-between">
         <div>
-          <p class="text-blue font-black tracking-[0.16em] text-[0.72em]">
+          <p class="eyebrow">
             {{ strings.profile.sectionLabel }}
           </p>
           <h2 id="profile-title" class="mt-[0.5cqh] text-[1.8em]">
@@ -89,7 +89,7 @@ function randomize(): void {
 
       <!-- 大头像位于资料区顶部；整个圆形按钮均可打开头像选择弹窗。 -->
       <div class="flex flex-col items-center mb-[2.2cqh]">
-        <span class="mb-[0.65cqh] block text-slate-700 font-extrabold">{{
+        <span class="mb-[0.65cqh] block text-navy font-extrabold">{{
           strings.profile.avatarLabel
         }}</span>
         <button
@@ -108,14 +108,14 @@ function randomize(): void {
       </div>
 
       <!-- 昵称位于头像下方，保留自定义输入和 Enter 提交。 -->
-      <label class="mb-[0.65cqh] block text-slate-700 font-extrabold" for="nickname">{{
+      <label class="mb-[0.65cqh] block text-navy font-extrabold" for="nickname">{{
         strings.profile.nicknameLabel
       }}</label>
       <div class="relative flex">
         <input
           id="nickname"
           v-model="store.profile.nickname"
-          class="w-full min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink pr-[3em] text-[1.05em]"
+          class="w-full min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-navy pr-[3em] text-[1.05em]"
           :maxlength="store.config.player.nicknameMaxLength"
           autocomplete="nickname"
           @keydown.enter="nicknameValid && store.connected && store.register()"
@@ -143,7 +143,7 @@ function randomize(): void {
       >
         {{ store.busy ? strings.profile.busy : strings.profile.enterLobby }}<ArrowRight />
       </button>
-      <p v-if="!store.connected" class="mt-[0.75cqh] text-[#b91c1c] text-[0.72em] font-bold">
+      <p v-if="!store.connected" class="mt-[0.75cqh] text-red text-[0.72em] font-bold">
         {{ strings.profile.offlineWarning }}
       </p>
     </section>

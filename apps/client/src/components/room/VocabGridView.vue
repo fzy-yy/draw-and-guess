@@ -75,8 +75,8 @@ watch(
         <label
           v-for="item in rowItems(virtualRow.index)"
           :key="item.id"
-          class="flex min-w-0 items-center gap-[0.4em] rounded-[0.5em] border-[0.16cqh] border-line bg-white px-[0.65em] py-[0.5cqh] text-[0.76em] text-slate-600 cursor-pointer"
-          :class="selectedIds.has(item.id) ? '!border-blue !bg-sky-100 !text-[#1e3a8a]' : ''"
+          class="flex min-w-0 items-center gap-[0.4em] rounded-[0.5em] border-[0.16cqh] border-line bg-white px-[0.65em] py-[0.5cqh] text-[0.76em] text-muted cursor-pointer"
+          :class="selectedIds.has(item.id) ? '!border-blue !bg-sky !text-blue' : ''"
           ><input
             type="checkbox"
             class="absolute [opacity:0]"

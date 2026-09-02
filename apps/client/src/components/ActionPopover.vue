@@ -49,7 +49,7 @@ defineExpose({ close })
     <button
       ref="trigger"
       type="button"
-      class="grid h-[4.2cqh] w-[4.2cqh] shrink-0 place-items-center rounded-full border-[0.18cqh] border-line bg-white text-blue disabled:cursor-not-allowed disabled:opacity-40"
+      class="round-icon-btn"
       :disabled="disabled"
       :aria-label="triggerLabel"
       :aria-expanded="open"

@@ -484,9 +484,6 @@ export const useGameStore = defineStore('game', () => {
   async function kick(targetId: string): Promise<void> {
     await guarded(request(EVENTS.roomKick, { targetId }))
   }
-  async function transferHost(targetId: string): Promise<void> {
-    await guarded(request(EVENTS.roomTransferHost, { targetId }))
-  }
 
   /** 向指定在线玩家发送定向房间邀请。 */
   async function invite(targetId: string): Promise<void> {
@@ -589,6 +586,9 @@ export const useGameStore = defineStore('game', () => {
     onInviteResolved: (id) => (invites.value = invites.value.filter((invite) => invite.id !== id)),
     onRoomClosed: (reason) => {
       room.value = undefined
+      // 与 leaveRoom/leaveGame 保持一致：房间关闭时同样清空词库快照，
+      // 避免跨房间残留旧词库（词库仅房主可见，残留会造成规则/词库展示错误）。
+      vocabulary.value = undefined
       notify(reason, 'warning')
     },
     onSystemNotice: (text) => notify(text, 'warning'),
@@ -712,7 +712,6 @@ export const useGameStore = defineStore('game', () => {
     leaveGame,
     returnWaiting,
     kick,
-    transferHost,
     invite,
     respondInvite,
   }

@@ -118,9 +118,10 @@ draw_and_guess/
 │       │   ├── AvatarPickerDialog.vue # 40 个 SVG 头像选择模态框
 │       │   ├── ActionPopover.vue  # 悬浮操作面板（聊天快捷互动用）
 │       │   ├── GameCanvas.vue     # 高 DPI 实时画板：直线段描边增量绘制、橡皮擦/destination-out、洪泛填充、滚轮线宽
-│       │   ├── game/              # 对局组件：GameHud / ChatPanel / DrawingToolbar / PhaseOverlay / ScoreStrip
-│       │   ├── room/              # 房间组件：SeatGrid / RuleSummary / RulesDialog / InviteDialog / VocabularyDialog
-│       │   └── settings/          # 设置页组件：AudioTab / ShortcutsTab / AccessibilityTab / DiagnosticsTab / SettingSliderRow / SettingSwitchRow
+│       │   ├── game/              # 对局组件：GameHud / ChatPanel / DrawingToolbar / PhaseOverlay / OverlayCard / ScoreStrip
+│       │   ├── room/              # 房间组件：SeatGrid / RuleSummary / RuleRow / RulesDialog / InviteDialog / VocabularyDialog
+│       │   ├── common/            # 通用原语组件：DataTable / DifficultyStars / MultiSelectPopover / IconButton / ToolButton / RoundIconButton / SettingSliderRow / SettingSwitchRow
+│       │   └── settings/          # 设置页组件：AudioTab / ShortcutsTab / AccessibilityTab / DiagnosticsTab
 │       ├── views/
 │       │   ├── ProfileView.vue    # 资料确认页（随机昵称/内置 SVG 头像选择，无上传）
 │       │   ├── LobbyView.vue      # 在线大厅（公开列表/公私建房/私密短码加入/可发现玩家）
@@ -133,7 +134,7 @@ draw_and_guess/
 │           └── createUuid.ts      # 多环境 UUID：nanoid 十六进制 + RFC 4122 v4 位点（兼容服务端 z.string().uuid()）
 ```
 
-> **关于客户端样式**：`apps/client/src/style/` 仅剩 `index.css` 一个文件。它是 **Tailwind 全局配置**（`@theme` 语义色令牌 + `@layer base` 全局 reset、舞台上下文、交互动效、Vue 过渡钩子、关键帧、竖屏/减少动效 + `@layer components` 共享组件类 `.btn`/`.dialog-shell`/`.field-input`/`.eyebrow` 等，用 `@apply` 收敛重复行内类）。**组件/页面自身视觉样式一律写成 Vue 模板内的行内 Tailwind 类**（依赖 `cqh/cqw` 容器单位 + 语义色 `bg-navy`/`text-muted`/`border-line` 等）。新增样式时不要新建 CSS 文件、不要写 `@layer components` 之外的原生 CSS 类选择器。
+> **关于客户端样式**：`apps/client/src/style/` 仅剩 `index.css` 一个文件。它是 **Tailwind 全局配置**（`@theme` 语义色令牌 + `@layer base` 全局 reset、舞台上下文、交互动效、Vue 过渡钩子、关键帧、竖屏/减少动效 + `@layer components` 共享组件类 `.dialog-shell`/`.field-input`/`.eyebrow`/`.round-icon-btn`/`.ui-feedback`/`.hover-lift` 等，用 `@apply` 收敛重复行内类）。**组件/页面自身视觉样式一律写成 Vue 模板内的行内 Tailwind 类**（依赖 `cqh/cqw` 容器单位 + 语义色 `bg-navy`/`text-muted`/`border-line` 等）。新增样式时不要新建 CSS 文件、不要写 `@layer components` 之外的原生 CSS 类选择器。
 
 ---
 
@@ -207,7 +208,9 @@ pnpm format:check  # 仅检查格式
 - **错误处理**：服务端用 `GameError` + `errors.ts` 统一错误码与中文文案；客户端经 `request.ts` 统一超时 + ack + 错误翻译 + `quiet` 静默降级。
 - **日志**：由 `.env` 的 `LOG_ENABLED` 控制（默认 true）：关闭时完全不创建日志记录器、不写日志文件（零内存开销）；开启时服务端用 `pino`（默认结构化 JSON，无 ANSI 色码），**每次启动写一个新的日志文件**（`apps/server/log/app-YYYY-MM-DD-HH-mm-ss.log`，精确到秒），目录最多保留最近 `LOG_MAX_FILES` 条（默认 10，超出删除最老）；控制台只保留启动横幅，不输出业务日志；级别经 `LOG_LEVEL` 控制。
 - **UI 文案**：**严禁在组件/业务代码里硬编码展示字符**；一律从 `config/strings.ts` 的 `strings`（客户端）或 `serverStrings`（服务端）导入。
-- **样式**：组件/页面视觉一律用**行内 Tailwind 类**写在 Vue 模板；重复长串收敛到共享组件（`AppButton`/`BaseDialog`/`ConfirmDialog`）或 `style/index.css` 的 `@layer components` 共享类。不要新建 CSS 文件、不要写 `@layer components` 之外的原生 CSS 类选择器。语义色用 `@theme` 令牌；容器单位 `cqh/cqw` 用任意值（内部空格用 `_`，如 `shadow-[0_1.2cqh_5cqh_#0009]`）。
+- **样式**：组件/页面视觉一律用**行内 Tailwind 类**写在 Vue 模板；重复长串收敛到共享组件（`AppButton`/`BaseDialog`/`ConfirmDialog`/`IconButton`/`ToolButton`/`OverlayCard`/`RuleRow`/`RoundIconButton`）或 `style/index.css` 的 `@layer components` 共享类。不要新建 CSS 文件、不要写 `@layer components` 之外的原生 CSS 类选择器。语义色用 `@theme` 令牌；容器单位 `cqh/cqw` 用任意值（内部空格用 `_`，如 `shadow-[0_1.2cqh_5cqh_#0009]`）。
+- **配色（≤10 色）**：全应用自定义颜色**只取自 `index.css` `@theme` 里固定的 10 个语义变量**（`navy`/`muted`/`line`/`paper`/`blue`/`sky`/`yellow`/`green`/`red`/`purple`），`config/room.ts` 的 `seatColors` 取其中 6 个；`#fff`/`#000` 与透明度衍生（如 `bg-blue/10`）不计入调色板。**禁止**在组件/模板中硬编码任意 HEX（`bg-[#...]`/`text-[#...]`）或 Tailwind 默认色阶（`slate-*` 等）。`config/drawing.ts` 的 `colors` 是**画板工具色**（画家可选画笔色），属功能性工具配置，非 UI 主题色，不纳入 10 色限制。
+- **动画一致性**：按钮/卡片交互动效统一为 160ms（复用 `.ui-feedback` / `.hover-lift` 共享类，或依赖 `@layer base` 中 `.game-stage button` 的全局过渡）；同类控件应复用同一动画，避免各自定制造成手感不一。
 
 ---
 
@@ -273,7 +276,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
    - 客户端请求必须带 `requestId`（幂等）与统一 `ack`；非法阶段/角色/序号/频率由 `binder.ts` 与领域服务拒绝。
    - 头像只允许 `config/player.ts` 白名单中的内置 SVG 编号；**禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像**。
 3. **词库与内容**
-   - `vocabulary/*.json` 是唯一词库来源：顶层含 version/updated_at/default_time_limit/default_score_weight/category_enum/words；词条含 id/type/text/category/difficulty/hint/tags/lang/enabled/time_limit/score_weight/aliases；**分类必须 ⊆ category_enum**、type 仅支持 word、enabled=false 词条不进入候选池；修改后需重启服务，异常数据以中文错误阻止启动。
+   - `vocabulary/*.json` 是唯一词库来源：顶层含 version/updated_at/default_time_limit/default_score_weight/category_enum/words；词条含 id/type/text/category/difficulty/hint/tags/lang/enabled/time_limit/score_weight/aliases；**分类必须 ⊆ category_enum**、type 仅支持 word/phrase/scene（白名单见 config/vocabulary.ts 的 wordTypes）、enabled=false 词条不进入候选池；修改后需重启服务，异常数据以中文错误阻止启动。
    - 猜词判定固定用 `normalizeAnswer`（NFKC + 去空白 + 折叠空白 + 忽略拉丁大小写），不要在别处另写一套比较。
 4. **配置治理**
    - 业务规则**只允许**写在 `config/` 目录 + `config.ts` 聚合；环境变量仅覆盖 `HOST / PORT / LOG_LEVEL / LOG_ENABLED / LOG_MAX_FILES`，禁止环境变量覆盖游戏规则。

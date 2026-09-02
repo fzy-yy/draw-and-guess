@@ -14,41 +14,29 @@
 /* ===== 设计令牌：行内 Tailwind 类据此生成语义化颜色 / 字体 ===== */
 @theme {
   --font-sans: Inter, ui-rounded, 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+  /* ========== 10 色设计调色板（全应用视觉颜色唯一来源） ==========
+     约定：
+     - 应用内所有“自定义”颜色（含 config/room.ts 的座位颜色 seatColors）必须取自这 10 个变量；
+     - #fff / #000 / 透明度（如 bg-navy/80、bg-blue/10）视为通用基色与透明度衍生，不计入调色板；
+     - 归类原则：相近色阶合并为同一语义色，避免“相似但不同”的漂移，保证全站视觉一致。 */
   --color-navy: #172554;
+  --color-muted: #64748b;
+  --color-line: #cbd5e1;
+  --color-paper: #f8fafc;
   --color-blue: #2563eb;
   --color-sky: #dbeafe;
   --color-yellow: #facc15;
-  --color-orange: #f97316;
   --color-green: #16a34a;
   --color-red: #dc2626;
-  --color-ink: #172033;
-  --color-muted: #64748b;
-  --color-paper: #f8fafc;
-  --color-line: #cbd5e1;
+  --color-purple: #c026d3;
 }
 
 /* ===== 共享「组件类」：用 @apply 收敛重复的行内 Tailwind 长串，供各视图引用。
-   仅定义新增、语义值与现有组件/模板中的行内类保持一致；当前代码尚未迁移使用，先作为公共样式约定存在。
-   注意：这些类未在各 .vue 中使用（避免与本任务其它改动冲突），引用时应与既有行内类等价。 ===== */
+   仅定义新增、语义值与现有组件/模板中的行内类保持一致，供组件直接 class 引用。 ===== */
 @layer components {
-  /* 动作按钮底座：与 AppButton 组件的 base 串一致。
-     .btn-primary/.btn-secondary/.btn-danger 分别对应 primary/secondary/danger 变体色。 */
-  .btn {
-    @apply inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black;
-  }
-  .btn-primary {
-    @apply text-white bg-blue;
-  }
-  .btn-secondary {
-    /* 注意：按钮在 .game-stage 内有基础 border:0，须用 !border 以重要声明覆盖。 */
-    @apply text-navy bg-white !border !border-[0.18cqh] !border-line;
-  }
-  .btn-danger {
-    @apply text-white bg-red;
-  }
-  /* 弹窗卡片骨架：与 BaseDialog 组件 .game-dialog 一致。 */
+  /* 弹窗卡片骨架：与 BaseDialog 组件使用的 .game-dialog dialog-shell 一致。 */
   .dialog-shell {
-    @apply flex max-h-[86cqh] flex-col overflow-hidden rounded-[1.2em] border-[0.35cqh] border-white bg-paper text-ink shadow-[0_1.4cqh_4cqh_#0007];
+    @apply flex max-h-[86cqh] flex-col overflow-hidden rounded-[1.2em] border-[0.35cqh] border-white bg-paper text-navy shadow-[0_1.4cqh_4cqh_#0007];
   }
   /* 输入框/搜索框外壳：与词库弹窗搜索框一致。 */
   .field-input {
@@ -57,6 +45,22 @@
   /* 眉题：分区小标题（如词库弹窗标题上方的标签）。 */
   .eyebrow {
     @apply text-blue font-black tracking-[0.16em] text-[0.72em];
+  }
+  /* 浅色眉题：用于深色（navy）背景下的分区小标题，避免对比度不足。 */
+  .eyebrow-light {
+    @apply text-sky font-black tracking-[0.16em] text-[0.72em];
+  }
+  /* 圆形图标按钮底座：ActionPopover 触发钮等统一圆形图标（与 RoundIconButton 组件等价）。 */
+  .round-icon-btn {
+    @apply grid h-[4.2cqh] w-[4.2cqh] shrink-0 place-items-center rounded-full border-[0.18cqh] border-line bg-white text-blue disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  /* 统一变色过渡：卡片/列表项 hover 的颜色过渡（160ms）；配合 .hover-tint 使用。 */
+  .ui-feedback {
+    @apply transition-[background-color,border-color,color,opacity] duration-[160ms];
+  }
+  /* 统一变色悬浮：白色/浅色表面 hover 时稍变深（只变色，不加阴影、不位移）。 */
+  .hover-tint {
+    @apply hover:bg-line;
   }
 }
 
@@ -151,26 +155,26 @@
   }
 }
 
-/* ===== 全局交互反馈：跨组件统一的手感（仅用通用元素选择器；卡片级 hover 由组件行内类实现） ===== */
+/* ===== 全局交互反馈：跨组件统一变色手感（仅用通用元素选择器；卡片级 hover 由组件行内类实现） =====
+   约定：全站悬浮/按下只改变颜色（亮度/背景/边框/文字），不位移、不缩放、不加阴影，保证手感一致。 */
 @layer base {
   .game-stage button,
   .game-stage input,
   .game-stage select {
     transition:
-      transform 160ms ease,
-      box-shadow 160ms ease,
+      filter 160ms ease,
       border-color 160ms ease,
       background-color 160ms ease,
       color 160ms ease,
       opacity 160ms ease;
   }
-  /* 所有可用按钮都有轻微抬起与按下缩放反馈，不改变禁用控件。 */
+  /* 所有可用按钮悬浮时统一变暗：白色 → 稍深，蓝色/红色等 → 对应更深的同色。 */
   .game-stage button:not(:disabled):hover {
-    transform: translateY(-0.16cqh);
-    filter: brightness(1.03);
+    filter: brightness(0.95);
   }
+  /* 按下时再加深一点，作为按压反馈（同样只变色，无位移/缩放）。 */
   .game-stage button:not(:disabled):active {
-    transform: scale(0.96);
+    filter: brightness(0.9);
   }
 }
 

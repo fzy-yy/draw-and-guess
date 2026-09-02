@@ -31,6 +31,8 @@ export const vocabulary = {
   maxTagsPerWord: 8,
   /** 语言白名单：不在名单内的词条视为异常数据，阻止启动 */
   languages: ['zh-CN'],
+  /** 词条类型白名单：JSON 词库的 type 字段仅允许这些值，其余视为异常数据阻止启动 */
+  wordTypes: ['word', 'phrase', 'scene'],
   /** 难度合法区间（1 最易） */
   difficultyRange: { min: 1, max: 5 },
   /** 按规范化词面去重（重复词面视为异常数据） */

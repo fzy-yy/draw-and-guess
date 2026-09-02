@@ -33,7 +33,7 @@ function selectAvatar(avatarId: AvatarId): void {
     @close="emit('close')"
   >
     <template #header>
-      <p class="text-blue font-black tracking-[0.16em] text-[0.72em]">
+      <p class="eyebrow">
         {{ strings.profile.avatarPickerLabel }}
       </p>
       <h2 id="avatar-picker-title">{{ strings.profile.avatarPickerTitle }}</h2>

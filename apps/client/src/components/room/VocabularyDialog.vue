@@ -182,9 +182,11 @@ const visibleColumns = computed<DataTableColumn<VocabularyWord>[]>(() =>
     (column) => column.key === 'text' || visibleColumnKeys.value.includes(column.key),
   ),
 )
-/** 「显示字段」弹层选项：全部列均可开关（含词面列，勾掉后表格仍保底显示词面）。 */
+/** 「显示字段」弹层选项：只提供可开关列；词面列恒可见，不提供开关，避免勾选无效果造成误导。 */
 const columnOptions = computed<MultiSelectOption[]>(() =>
-  allColumns.value.map((column) => ({ value: column.key, label: column.label })),
+  allColumns.value
+    .filter((column) => column.key !== 'text')
+    .map((column) => ({ value: column.key, label: column.label })),
 )
 
 /** 字段筛选定义：分类（来自词库白名单）/ 难度（1~上限）/ 语言（词库内实际出现的语言）。 */
@@ -227,7 +229,7 @@ function updateFilter(key: string, values: string[]): void {
 // 防抖后回到列表顶部，保证筛选结果与虚拟窗口起点一致。
 const debouncedSearch = useDebounceFn((value: string) => {
   searchKeyword.value = value
-}, 150)
+}, store.config.ui.searchDebounceMs)
 watch(search, (value) => debouncedSearch(value))
 
 /** 打开弹窗：拉取词库成功后初始化选择与搜索，并让虚拟器基于当前内容重新测量。 */
@@ -269,7 +271,7 @@ watch(
     @close="emit('close')"
   >
     <template #header>
-      <p class="text-blue font-black tracking-[0.16em] text-[0.72em]">
+      <p class="eyebrow">
         {{ strings.room.vocabLabel }}
       </p>
       <h2 id="vocab-title">{{ strings.room.vocabTitle }}</h2>
@@ -307,9 +309,7 @@ watch(
               :key="mode"
               type="button"
               class="flex h-full items-center gap-[0.3em] rounded-[0.45em] px-[0.7em] text-[0.68em] font-extrabold"
-              :class="
-                viewMode === mode ? 'bg-blue text-white' : 'text-slate-600 hover:bg-slate-100'
-              "
+              :class="viewMode === mode ? 'bg-blue text-white' : 'text-muted hover:bg-line'"
               :aria-pressed="viewMode === mode"
               @click="viewMode = mode"
             >
@@ -341,7 +341,7 @@ watch(
         </div>
 
         <!-- 词库统计：全部 / 搜索+筛选结果 / 已选数量 -->
-        <div class="flex gap-[2em] py-[1cqh] px-[1.7em] text-slate-600 bg-sky-100 text-[0.78em]">
+        <div class="flex gap-[2em] py-[1cqh] px-[1.7em] text-muted bg-sky text-[0.78em]">
           <span
             >{{ strings.room.vocabAll }}
             <b class="text-blue">{{ store.vocabulary?.items.length ?? 0 }}</b></span
@@ -359,21 +359,21 @@ watch(
         >
           <button
             type="button"
-            class="px-[0.8em] text-navy bg-slate-200 rounded-[0.5em] text-[0.72em] font-extrabold"
+            class="px-[0.8em] text-navy bg-line rounded-[0.5em] text-[0.72em] font-extrabold"
             @click="setSelection(allWordIds, true)"
           >
             {{ strings.room.selectAll }}
           </button>
           <button
             type="button"
-            class="px-[0.8em] text-navy bg-slate-200 rounded-[0.5em] text-[0.72em] font-extrabold"
+            class="px-[0.8em] text-navy bg-line rounded-[0.5em] text-[0.72em] font-extrabold"
             @click="setSelection(allWordIds, false)"
           >
             {{ strings.room.deselectAll }}
           </button>
           <button
             type="button"
-            class="px-[0.8em] text-navy bg-slate-200 rounded-[0.5em] text-[0.72em] font-extrabold"
+            class="px-[0.8em] text-navy bg-line rounded-[0.5em] text-[0.72em] font-extrabold"
             @click="
               setSelection(
                 filteredWords.map((item) => item.id),
@@ -385,7 +385,7 @@ watch(
           </button>
           <button
             type="button"
-            class="px-[0.8em] text-navy bg-slate-200 rounded-[0.5em] text-[0.72em] font-extrabold"
+            class="px-[0.8em] text-navy bg-line rounded-[0.5em] text-[0.72em] font-extrabold"
             @click="
               setSelection(
                 filteredWords.map((item) => item.id),

@@ -38,10 +38,11 @@ const variantClasses = computed(() => {
 // attrs 是响应式代理，此处保存引用后，后续变更仍能被下方 computed 追踪。
 const attrs = useAttrs()
 
-// 用 cn() 合并内置变体类与调用处透传进来的外部类：
-// tailwind-merge 会消解外部类与内置类之间的冲突（如调用处传 bg-white 覆盖内置 bg-blue），
-// 保证最终类名干净、无互相覆盖的残留。
-const buttonClass = computed(() => cn(variantClasses.value, attrs))
+// 用 cn() 合并内置变体类与调用处透传进来的外部 class：
+// 只取 attrs.class（外部类名），不要把整包 attrs 交给 clsx——那会把 class/style/onClick 等键名当作类名
+// 追加进按钮 className，且外部类也不会经由 tailwind-merge 与内置类做冲突消解（如调用处 bg-white 覆盖内置 bg-blue）。
+// 其余 attrs（style、事件、无障碍属性等）由 Vue 单根组件的隐式透传落到 <button> 上。
+const buttonClass = computed(() => cn(variantClasses.value, attrs.class))
 </script>
 
 <template>

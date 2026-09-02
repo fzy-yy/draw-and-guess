@@ -85,7 +85,7 @@ function handleFullscreenToggle(): void {
   <!-- 对局主骨架：仅在房间存在且对局未结束时渲染 -->
   <main
     v-if="store.room && game"
-    class="grid h-full grid-cols-[17%_minmax(0,61%)_22%] grid-rows-[11%_minmax(0,76%)_13%] bg-[#cbd5e1]"
+    class="grid h-full grid-cols-[17%_minmax(0,61%)_22%] grid-rows-[11%_minmax(0,76%)_13%] bg-line"
   >
     <!-- 顶栏 HUD：回合数、当前画家、答案、计时器、网络状态与暂停按钮 -->
     <GameHud
@@ -103,7 +103,7 @@ function handleFullscreenToggle(): void {
 
     <!-- 中央画布区：实时画板 + 非作画阶段的状态提示遮罩 -->
     <section
-      class="relative min-w-0 min-h-0 m-[1.5cqh_1cqw] overflow-hidden border-[0.3cqh] border-slate-600 bg-white shadow-[0.5cqh_0.5cqh_0_#94a3b8]"
+      class="relative min-w-0 min-h-0 m-[1.5cqh_1cqw] overflow-hidden border-[0.3cqh] border-navy bg-white shadow-[0.5cqh_0.5cqh_0_#94a3b8]"
     >
       <GameCanvas
         :round-id="game.roundId"
@@ -122,7 +122,7 @@ function handleFullscreenToggle(): void {
       <!-- 画布状态遮罩：选词/结算/暂停等非作画阶段覆盖在画布上 -->
       <div
         v-if="store.room.phase !== 'drawing'"
-        class="absolute inset-0 flex flex-col items-center justify-center gap-[0.6cqh] bg-[#f8fafce8] text-slate-600 pointer-events-none"
+        class="absolute inset-0 flex flex-col items-center justify-center gap-[0.6cqh] bg-paper text-muted pointer-events-none"
       >
         <Brush class="h-[7cqh] w-[7cqh] text-blue" /><b class="text-[1.35em]">{{ phaseLabel }}</b
         ><span

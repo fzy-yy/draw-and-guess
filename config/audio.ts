@@ -15,4 +15,6 @@ export const audio = {
     invite: { frequencies: [740, 880], duration: 0.13 },
   },
   synthesizedGain: 0.13,
+  /** 音量滑块（主音量/音效/背景音乐）共用的合法区间与步进。 */
+  volumeRange: { min: 0, max: 1, step: 0.05 },
 } as const

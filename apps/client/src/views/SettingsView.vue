@@ -98,7 +98,8 @@ const { copy: copyToClipboard } = useClipboard({ legacy: true })
  * 其 copy 在完成写入后标记成功，能力缺失时不产生副作用，据此判断成功与否并提示。
  */
 async function copyDiagnostics(): Promise<void> {
-  let copied = false
+  // 只声明不初始化：成功/失败两条分支都会在读取前赋值，初始值永远不会被读取，避免 no-useless-assignment。
+  let copied: boolean
   try {
     await copyToClipboard(diagnostic.value)
     copied = true
@@ -136,7 +137,7 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
 
 <template>
   <!-- 设置子页骨架：顶栏 + 标签栏 + 正文四段（声音/显示/快捷键/资料诊断） -->
-  <main class="grid h-full grid-rows-[11%_9%_minmax(0,1fr)] bg-[#eef2ff]">
+  <main class="grid h-full grid-rows-[11%_9%_minmax(0,1fr)] bg-sky">
     <!-- 顶栏：返回动作可配置，header-actions 插槽可按使用场景追加按钮。 -->
     <header
       class="grid grid-cols-[1fr_auto_1fr] items-center border-b-[0.45cqh] border-yellow bg-navy px-[2cqw] text-white"
@@ -152,14 +153,14 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
         <slot name="header-actions" />
       </div>
       <div class="text-center">
-        <p class="text-[#93c5fd] font-black tracking-[0.16em] text-[0.72em]">
+        <p class="eyebrow-light">
           {{ strings.settings.label }}
         </p>
         <h1 class="text-[1.25em]">{{ strings.settings.title }}</h1>
       </div>
       <div class="justify-self-end">
         <slot name="header-status">
-          <span class="flex items-center gap-[0.4em] text-[#bfdbfe] text-[0.72em]"
+          <span class="flex items-center gap-[0.4em] text-sky text-[0.72em]"
             ><ShieldCheck /> {{ strings.settings.localOnly }}</span
           >
         </slot>
@@ -172,28 +173,28 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
     >
       <button
         type="button"
-        class="bg-transparent flex min-w-[13cqw] items-center justify-center gap-[0.45em] border-b-[0.35cqh] border-transparent font-extrabold text-slate-600"
+        class="bg-transparent flex min-w-[13cqw] items-center justify-center gap-[0.45em] border-b-[0.35cqh] border-transparent font-extrabold text-muted"
         :class="{ '!border-b-blue !text-blue': tab === 'audio' }"
         @click="tab = 'audio'"
       >
         <Volume2 />{{ strings.settings.tabAudio }}</button
       ><button
         type="button"
-        class="bg-transparent flex min-w-[13cqw] items-center justify-center gap-[0.45em] border-b-[0.35cqh] border-transparent font-extrabold text-slate-600"
+        class="bg-transparent flex min-w-[13cqw] items-center justify-center gap-[0.45em] border-b-[0.35cqh] border-transparent font-extrabold text-muted"
         :class="{ '!border-b-blue !text-blue': tab === 'accessibility' }"
         @click="tab = 'accessibility'"
       >
         <Eye />{{ strings.settings.tabAccessibility }}</button
       ><button
         type="button"
-        class="bg-transparent flex min-w-[13cqw] items-center justify-center gap-[0.45em] border-b-[0.35cqh] border-transparent font-extrabold text-slate-600"
+        class="bg-transparent flex min-w-[13cqw] items-center justify-center gap-[0.45em] border-b-[0.35cqh] border-transparent font-extrabold text-muted"
         :class="{ '!border-b-blue !text-blue': tab === 'shortcuts' }"
         @click="tab = 'shortcuts'"
       >
         <Keyboard />{{ strings.settings.tabShortcuts }}</button
       ><button
         type="button"
-        class="bg-transparent flex min-w-[13cqw] items-center justify-center gap-[0.45em] border-b-[0.35cqh] border-transparent font-extrabold text-slate-600"
+        class="bg-transparent flex min-w-[13cqw] items-center justify-center gap-[0.45em] border-b-[0.35cqh] border-transparent font-extrabold text-muted"
         :class="{ '!border-b-blue !text-blue': tab === 'diagnostics' }"
         @click="tab = 'diagnostics'"
       >

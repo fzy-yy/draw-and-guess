@@ -6,7 +6,7 @@
 import { Eye } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
-import SettingSwitchRow from './SettingSwitchRow.vue'
+import SettingSwitchRow from '@/components/common/SettingSwitchRow.vue'
 
 const store = useGameStore()
 </script>
@@ -25,35 +25,35 @@ const store = useGameStore()
     <div class="grid grid-cols-2 gap-[1.2cqh_1em]">
       <SettingSwitchRow
         v-model="store.settings.animationsEnabled"
-        class="border-l-[0.35cqh] border-slate-400"
+        class="border-l-[0.35cqh] border-line"
         :title="strings.settings.animations"
         :hint="strings.settings.animationsHint"
         @save="store.saveSettings"
       />
       <SettingSwitchRow
         v-model="store.settings.showShortcuts"
-        class="border-l-[0.35cqh] border-slate-400"
+        class="border-l-[0.35cqh] border-line"
         :title="strings.settings.showShortcuts"
         :hint="strings.settings.showShortcutsHint"
         @save="store.saveSettings"
       />
       <SettingSwitchRow
         v-model="store.settings.autoFocusGuess"
-        class="border-l-[0.35cqh] border-slate-400"
+        class="border-l-[0.35cqh] border-line"
         :title="strings.settings.autoFocus"
         :hint="strings.settings.autoFocusHint"
         @save="store.saveSettings"
       />
       <SettingSwitchRow
         v-model="store.settings.discoverable"
-        class="border-l-[0.35cqh] border-slate-400"
+        class="border-l-[0.35cqh] border-line"
         :title="strings.settings.discoverable"
         :hint="strings.settings.discoverableHint"
         @save="store.saveSettings"
       />
       <SettingSwitchRow
         v-model="store.settings.acceptsInvites"
-        class="border-l-[0.35cqh] border-slate-400"
+        class="border-l-[0.35cqh] border-line"
         :title="strings.settings.acceptsInvites"
         :hint="strings.settings.acceptsInvitesHint"
         @save="store.saveSettings"

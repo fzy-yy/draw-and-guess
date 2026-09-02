@@ -16,8 +16,8 @@ export type RankedMember = FinalRankingEntry
 
 /** 从对局快照派生 HUD 计算属性，并启动/清理时间刷新定时器。 */
 export function useGameHud(store: GameStore) {
-  // useTimestamp 返回毫秒级响应式时间戳（默认 100ms 间隔），卸载时自动停止，替代手写 ticker。
-  const now = useTimestamp({ interval: 200 })
+  // useTimestamp 返回毫秒级响应式时间戳（间隔源自配置），卸载时自动停止，替代手写 ticker。
+  const now = useTimestamp({ interval: store.config.ui.tickIntervalMs })
 
   const game = computed(() => store.room?.game)
   // 校正后的本地时钟：叠加了与服务端的时钟偏移，避免设备时钟偏差导致倒计时不准（F2）
@@ -93,5 +93,6 @@ export function useGameHud(store: GameStore) {
 
   // 无需手动清理：useTimestamp 组件卸载自动停止计时器，避免残留 setInterval。
 
-  return { game, correctedNow, secondsLeft, progress, canGuess, phaseLabel, drawer, rankings }
+  // correctedNow 仅在内部被 secondsLeft/progress 使用，不作为对外返回值暴露（GameView 不消费它）。
+  return { game, secondsLeft, progress, canGuess, phaseLabel, drawer, rankings }
 }

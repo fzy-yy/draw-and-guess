@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "packageManager": "pnpm@10.6.5",
+  "packageManager": "pnpm@11.25.0",
   "scripts": {
     "dev": "concurrently -n client,server -c cyan,magenta \"pnpm --filter @draw-guess/client dev\" \"pnpm --filter @draw-guess/server dev\"",
     "build": "pnpm typecheck && pnpm --filter @draw-guess/client build",
@@ -14,12 +14,12 @@
     "format:check": "prettier --check ."
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.0",
+    "@eslint/js": "^10.0.1",
     "@types/node": "^24.10.0",
     "@typescript-eslint/eslint-plugin": "^8.46.0",
     "@typescript-eslint/parser": "^8.46.0",
-    "concurrently": "^9.2.1",
-    "eslint": "^9.39.0",
+    "concurrently": "^10.0.5",
+    "eslint": "^10.9.1",
     "eslint-plugin-vue": "^10.5.0",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",

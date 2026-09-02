@@ -25,15 +25,15 @@ function roleText(member: RoomMember): string {
   <!-- 左侧玩家得分条：列出全部成员、得分与画家/猜中标记 -->
   <aside
     v-if="store.room"
-    class="flex min-w-0 flex-col gap-[0.8cqh] border-r-[0.2cqh] border-slate-400 bg-slate-100 px-[0.8cqw] py-[1.7cqh]"
+    class="flex min-w-0 flex-col gap-[0.8cqh] border-r-[0.2cqh] border-line bg-line px-[0.8cqw] py-[1.7cqh]"
     :aria-label="strings.game.scoreStripAria"
   >
     <article
       v-for="member in store.room.members"
       :key="member.id"
-      class="grid min-h-[8.5cqh] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[0.55em] border-l-[0.35cqh] border-slate-400 bg-white px-[0.5em] py-[0.55cqh]"
+      class="grid min-h-[8.5cqh] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[0.55em] border-l-[0.35cqh] border-line bg-white px-[0.5em] py-[0.55cqh]"
       :class="{
-        '!bg-[#f0fdf4]': member.guessed,
+        '!bg-green/10': member.guessed,
         'opacity-55 border-dashed': member.connection !== 'online',
       }"
       :style="{
@@ -59,7 +59,7 @@ function roleText(member: RoomMember): string {
         />
       </div>
       <div class="min-w-0 flex flex-col">
-        <b class="overflow-hidden text-ellipsis whitespace-nowrap text-[0.75em] text-ink">{{
+        <b class="overflow-hidden text-ellipsis whitespace-nowrap text-[0.75em] text-navy">{{
           member.nickname
         }}</b
         ><span class="text-blue text-[0.7em] font-black">{{
@@ -75,7 +75,7 @@ function roleText(member: RoomMember): string {
           >{{ roleText(member) }}</span
         >
       </div>
-      <Crown v-if="member.isHost" class="text-[#a16207]" :aria-label="strings.game.hostMarkAria" />
+      <Crown v-if="member.isHost" class="text-yellow" :aria-label="strings.game.hostMarkAria" />
       <span
         v-else-if="member.id === store.playerId"
         class="grid h-[2.6cqh] w-[2.6cqh] place-items-center rounded-full bg-blue text-[0.58em] font-black text-white"

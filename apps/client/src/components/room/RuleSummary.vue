@@ -8,6 +8,7 @@ import { computed } from 'vue'
 import { BookOpenCheck, Send, Settings2 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
+import RuleRow from '@/components/room/RuleRow.vue'
 
 const props = defineProps<{
   /** 词库拉取中：房主按钮应禁用，避免重复请求 */
@@ -41,7 +42,7 @@ const hintsSummary = computed(() => {
   <template v-if="store.room">
     <div>
       <div class="grid grid-cols-[1fr_auto] items-center">
-        <p class="col-start-1 text-blue font-black tracking-[0.16em] text-[0.72em]">
+        <p class="col-start-1 eyebrow">
           {{ strings.room.rulesEyebrow }}
         </p>
         <h2 class="col-start-1">{{ strings.room.rulesTitle }}</h2>
@@ -55,44 +56,24 @@ const hintsSummary = computed(() => {
         </button>
       </div>
       <dl class="my-[1.4cqh] border-t-[0.16cqh] border-t-line">
-        <div
-          class="flex justify-between py-[0.85cqh] border-b-[0.14cqh] border-b-slate-200 text-[0.75em]"
-        >
-          <dt class="text-muted">{{ strings.room.ruleRoundsDt }}</dt>
-          <dd class="m-0 font-black">
-            {{ strings.room.ruleRoundsDd(store.room?.settings.roundsPerPlayer ?? 0) }}
-          </dd>
-        </div>
-        <div
-          class="flex justify-between py-[0.85cqh] border-b-[0.14cqh] border-b-slate-200 text-[0.75em]"
-        >
-          <dt class="text-muted">{{ strings.room.ruleDrawDt }}</dt>
-          <dd class="m-0 font-black">
-            {{ strings.room.ruleDrawDd(store.room?.settings.drawSeconds ?? 0) }}
-          </dd>
-        </div>
-        <div
-          class="flex justify-between py-[0.85cqh] border-b-[0.14cqh] border-b-slate-200 text-[0.75em]"
-        >
-          <dt class="text-muted">{{ strings.room.ruleOptionsDt }}</dt>
-          <dd class="m-0 font-black">
-            {{ strings.room.ruleOptionsDd(store.room?.settings.optionCount ?? 0) }}
-          </dd>
-        </div>
-        <div
-          class="flex justify-between py-[0.85cqh] border-b-[0.14cqh] border-b-slate-200 text-[0.75em]"
-        >
-          <dt class="text-muted">{{ strings.room.ruleHintsDt }}</dt>
-          <dd class="m-0 font-black">
-            {{ hintsSummary }}
-          </dd>
-        </div>
+        <RuleRow :label="strings.room.ruleRoundsDt">
+          {{ strings.room.ruleRoundsDd(store.room?.settings.roundsPerPlayer ?? 0) }}
+        </RuleRow>
+        <RuleRow :label="strings.room.ruleDrawDt">
+          {{ strings.room.ruleDrawDd(store.room?.settings.drawSeconds ?? 0) }}
+        </RuleRow>
+        <RuleRow :label="strings.room.ruleOptionsDt">
+          {{ strings.room.ruleOptionsDd(store.room?.settings.optionCount ?? 0) }}
+        </RuleRow>
+        <RuleRow :label="strings.room.ruleHintsDt">
+          {{ hintsSummary }}
+        </RuleRow>
       </dl>
     </div>
 
     <!-- 词库管理入口：仅房主可编辑，展示已选/总词条数 -->
     <button
-      class="flex items-center gap-[0.75em] min-h-[7cqh] py-[0.8cqh] px-[0.8em] text-[#1e3a8a] bg-sky !border-l-[0.45cqh] !border-l-blue text-left"
+      class="flex items-center gap-[0.75em] min-h-[7cqh] py-[0.8cqh] px-[0.8em] text-blue bg-sky !border-l-[0.45cqh] !border-l-blue text-left"
       type="button"
       :disabled="!store.isHost || props.vocabularyLoading"
       @click="emit('open-vocabulary')"

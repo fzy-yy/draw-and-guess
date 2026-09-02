@@ -28,6 +28,10 @@ export const ui = {
   vocabDefaultView: 'grid' as 'grid' | 'table',
   /** 难度星级最大值（词库 difficulty 上限，选词星级与难度列共用） */
   difficultyMax: 5,
+  /** 对局 HUD 时间刷新的毫秒间隔（useGameHud 的 useTimestamp interval）。 */
+  tickIntervalMs: 200,
+  /** 词库管理搜索框的防抖毫秒数，避免每次按键都触发过滤。 */
+  searchDebounceMs: 150,
 } as const
 
 export const presets = {

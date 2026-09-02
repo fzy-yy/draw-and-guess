@@ -36,7 +36,7 @@ watch(
     @close="emit('close')"
   >
     <template #header>
-      <p class="text-blue font-black tracking-[0.16em] text-[0.72em]">
+      <p class="eyebrow">
         {{ strings.room.settingsLabel }}
       </p>
       <h2 id="rules-title">{{ strings.room.settingsTitle }}</h2>
@@ -47,10 +47,14 @@ watch(
         >{{ strings.room.maxPlayersField }}
         <select
           v-model="localDraft.maxPlayers"
-          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink"
+          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-navy"
         >
-          <option v-for="value in 5" :key="value" :value="value + 1">
-            {{ strings.common.playersUnit(value + 1) }}
+          <option
+            v-for="n in store.config.player.maxPlayers - store.config.player.minPlayers + 1"
+            :key="n"
+            :value="store.config.player.minPlayers + n - 1"
+          >
+            {{ strings.common.playersUnit(store.config.player.minPlayers + n - 1) }}
           </option></select
         ><small class="text-muted text-[0.8em]">{{ strings.room.maxPlayersNote }}</small></label
       >
@@ -97,7 +101,7 @@ watch(
         /><b class="text-blue">{{ strings.room.optionCountUnit(localDraft.optionCount) }}</b></label
       >
       <label
-        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-slate-200 rounded-[0.5em]"
+        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-line rounded-[0.5em]"
         ><input
           v-model="localDraft.showWordLength"
           type="checkbox"
@@ -106,7 +110,7 @@ watch(
         {{ strings.room.toggleShowWordLength }}</label
       >
       <label
-        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-slate-200 rounded-[0.5em]"
+        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-line rounded-[0.5em]"
         ><input
           v-model="localDraft.progressiveHints"
           type="checkbox"
@@ -115,7 +119,7 @@ watch(
         {{ strings.room.toggleProgressiveHints }}</label
       >
       <label
-        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-slate-200 rounded-[0.5em]"
+        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-line rounded-[0.5em]"
         ><input
           v-model="localDraft.structuredHintsEnabled"
           type="checkbox"
@@ -131,9 +135,9 @@ watch(
         <input
           v-model.number="localDraft.hintStartRatio"
           type="range"
-          :min="0.1"
-          :max="0.9"
-          :step="0.05"
+          :min="store.config.game.hintStartRatioRange.min"
+          :max="store.config.game.hintStartRatioRange.max"
+          :step="store.config.game.hintStartRatioRange.step"
           :disabled="!localDraft.structuredHintsEnabled"
         /><b class="text-blue">{{
           strings.room.hintStartRatioUnit(Math.round(localDraft.hintStartRatio * 100))
@@ -147,9 +151,9 @@ watch(
         <input
           v-model.number="localDraft.hintIntervalRatio"
           type="range"
-          :min="0.05"
-          :max="0.45"
-          :step="0.05"
+          :min="store.config.game.hintIntervalRatioRange.min"
+          :max="store.config.game.hintIntervalRatioRange.max"
+          :step="store.config.game.hintIntervalRatioRange.step"
           :disabled="!localDraft.structuredHintsEnabled"
         /><b class="text-blue">{{
           strings.room.hintIntervalRatioUnit(Math.round(localDraft.hintIntervalRatio * 100))
@@ -161,9 +165,9 @@ watch(
         <input
           v-model.number="localDraft.guessBaseScore"
           type="range"
-          :min="50"
-          :max="2000"
-          :step="50"
+          :min="store.config.game.score.guessBaseRange.min"
+          :max="store.config.game.score.guessBaseRange.max"
+          :step="store.config.game.score.guessBaseRange.step"
         /><b class="text-blue">{{
           strings.room.guessBaseScoreUnit(localDraft.guessBaseScore)
         }}</b></label
@@ -173,14 +177,14 @@ watch(
         >{{ strings.room.scoreModeField }}
         <select
           v-model="localDraft.scoreMode"
-          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink"
+          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-navy"
         >
           <option value="standard">{{ strings.room.scoreModeStandard }}</option>
           <option value="flat">{{ strings.room.scoreModeFlat }}</option>
         </select></label
       >
       <label
-        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-slate-200 rounded-[0.5em]"
+        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-line rounded-[0.5em]"
         ><input
           v-model="localDraft.closeGuessEnabled"
           type="checkbox"
@@ -189,7 +193,7 @@ watch(
         {{ strings.room.toggleCloseGuess }}</label
       >
       <label
-        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-slate-200 rounded-[0.5em]"
+        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-line rounded-[0.5em]"
         ><input
           v-model="localDraft.allowPlayerInvite"
           type="checkbox"
@@ -198,7 +202,7 @@ watch(
         {{ strings.room.togglePlayerInvite }}</label
       >
       <label
-        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-slate-200 rounded-[0.5em]"
+        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-line rounded-[0.5em]"
         ><input
           v-model="localDraft.allowPause"
           type="checkbox"
@@ -210,7 +214,7 @@ watch(
         >{{ strings.room.joinPolicyField }}
         <select
           v-model="localDraft.joinPolicy"
-          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-ink"
+          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-navy"
         >
           <option value="forbid">{{ strings.room.joinPolicyForbid }}</option>
           <option value="spectate">{{ strings.room.joinPolicySpectate }}</option>

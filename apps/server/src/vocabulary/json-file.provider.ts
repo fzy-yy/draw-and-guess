@@ -5,7 +5,7 @@
  * 规范化（ID 生成 / 缺省值回填 / enabled 与语言过滤 / 去重）→ 内容哈希版本号。
  * 任何异常数据都以带中文文案的 Error 阻止启动，绝不带病运行。
  *
- * 文件结构（示例见 vocabulary/draw_guess_words_zh-CN_v2.json）：
+ * 文件结构（见 vocabulary/draw_guess_words_zh-CN_v2.json）：
  * {
  *   version, updated_at, default_time_limit, default_score_weight,
  *   category_enum: string[],          // 分类白名单
@@ -38,9 +38,7 @@ const FileHeaderSchema = z.object({
   words: z.array(z.record(z.string(), z.unknown())).min(1),
 })
 
-/** 词条类型：本项目仅支持 'word'，其他类型明确报错而非静默跳过。 */
-const WORD_TYPE = 'word'
-
+/** 词条类型来自 config 白名单：支持 'word'/'phrase'/'scene'，其余类型明确报错而非静默跳过。 */
 /**
  * 构建词条级 schema：category 必须是 category_enum 的子集（交叉校验），
  * 因此无法在模块顶层静态定义，只能由 Provider 在读取文件后动态构建。
@@ -50,7 +48,7 @@ function buildWordSchema(categoryEnum: readonly string[]) {
   return z
     .object({
       id: z.number().int().positive(),
-      type: z.literal(WORD_TYPE),
+      type: z.enum(APP_CONFIG.vocabulary.wordTypes),
       text: z.string().trim().min(1).max(APP_CONFIG.vocabulary.maxWordLength),
       category: z.array(z.string().trim().min(1)).max(APP_CONFIG.vocabulary.maxCategoriesPerWord),
       difficulty: z

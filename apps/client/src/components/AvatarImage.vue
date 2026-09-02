@@ -10,17 +10,15 @@ withDefaults(
   defineProps<{
     avatarId?: AvatarId | string
     label: string
-    decorative?: boolean
   }>(),
-  { avatarId: undefined, decorative: false },
+  { avatarId: undefined },
 )
 </script>
 
 <template>
   <span
     class="inline-grid flex-none place-items-center overflow-hidden rounded-full border-[0.28cqh] border-white bg-white shadow-[0_0_0_0.18cqh_#94a3b8]"
-    :aria-label="decorative ? undefined : label"
-    :aria-hidden="decorative"
+    :aria-label="label"
   >
     <img
       class="pointer-events-none h-[82%] w-[82%] object-contain"

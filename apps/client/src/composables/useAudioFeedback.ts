@@ -96,7 +96,7 @@ export function useAudioFeedback(): void {
     const endsAt = store.room?.game?.phaseEndsAt
     if (!endsAt || store.room?.phase !== 'drawing') return
     const second = Math.ceil((endsAt - Date.now()) / 1_000)
-    if (second > 0 && second <= 10 && second !== lastWarningSecond) {
+    if (second > 0 && second <= APP_CONFIG.game.warningSeconds && second !== lastWarningSecond) {
       lastWarningSecond = second
       play('warning')
     }

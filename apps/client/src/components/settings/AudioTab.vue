@@ -6,8 +6,8 @@
 import { Music2 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
-import SettingSliderRow from './SettingSliderRow.vue'
-import SettingSwitchRow from './SettingSwitchRow.vue'
+import SettingSliderRow from '@/components/common/SettingSliderRow.vue'
+import SettingSwitchRow from '@/components/common/SettingSwitchRow.vue'
 
 const store = useGameStore()
 </script>
@@ -26,9 +26,9 @@ const store = useGameStore()
         v-model="store.settings.masterVolume"
         :title="strings.settings.masterVolume"
         :hint="strings.settings.masterVolumeHint"
-        :min="0"
-        :max="1"
-        :step="0.05"
+        :min="store.config.audio.volumeRange.min"
+        :max="store.config.audio.volumeRange.max"
+        :step="store.config.audio.volumeRange.step"
         :display="`${Math.round(store.settings.masterVolume * 100)}%`"
         @save="store.saveSettings"
       />
@@ -36,9 +36,9 @@ const store = useGameStore()
         v-model="store.settings.soundVolume"
         :title="strings.settings.soundVolume"
         :hint="strings.settings.soundVolumeHint"
-        :min="0"
-        :max="1"
-        :step="0.05"
+        :min="store.config.audio.volumeRange.min"
+        :max="store.config.audio.volumeRange.max"
+        :step="store.config.audio.volumeRange.step"
         :display="`${Math.round(store.settings.soundVolume * 100)}%`"
         @save="store.saveSettings"
       />
@@ -46,9 +46,9 @@ const store = useGameStore()
         v-model="store.settings.musicVolume"
         :title="strings.settings.musicVolume"
         :hint="strings.settings.musicVolumeHint"
-        :min="0"
-        :max="1"
-        :step="0.05"
+        :min="store.config.audio.volumeRange.min"
+        :max="store.config.audio.volumeRange.max"
+        :step="store.config.audio.volumeRange.step"
         :display="`${Math.round(store.settings.musicVolume * 100)}%`"
         @save="store.saveSettings"
       />

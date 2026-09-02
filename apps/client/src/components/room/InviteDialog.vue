@@ -32,7 +32,7 @@ const availablePlayers = computed(() =>
     @close="emit('close')"
   >
     <template #header>
-      <p class="text-blue font-black tracking-[0.16em] text-[0.72em]">
+      <p class="eyebrow">
         {{ strings.room.inviteLabel }}
       </p>
       <h2 id="invite-title">{{ strings.room.inviteTitle }}</h2>
@@ -45,7 +45,7 @@ const availablePlayers = computed(() =>
           v-for="player in availablePlayers"
           :key="player.id"
           type="button"
-          class="flex items-center gap-[0.7em] py-[0.65cqh] px-[0.7em] text-left text-ink bg-white border-solid border-[0.16cqh] border-line rounded-[0.6em]"
+          class="flex items-center gap-[0.7em] py-[0.65cqh] px-[0.7em] text-left text-navy bg-white border-solid border-[0.16cqh] border-line rounded-[0.6em]"
           @click="store.invite(player.id)"
         >
           <AvatarImage

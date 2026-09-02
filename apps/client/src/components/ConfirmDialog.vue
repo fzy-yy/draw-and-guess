@@ -40,7 +40,7 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>()
     <component
       :is="icon"
       v-if="icon"
-      class="h-[7cqh] w-[7cqh] rounded-full bg-red-100 p-[1.4cqh] text-[#991b1b]"
+      class="h-[7cqh] w-[7cqh] rounded-full bg-red/10 p-[1.4cqh] text-red"
     />
     <h2>{{ title }}</h2>
     <p class="max-w-[30em] leading-[1.6] text-muted">{{ body }}</p>

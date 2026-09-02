@@ -8,6 +8,7 @@ import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
 import SeatGrid from '@/components/room/SeatGrid.vue'
 import RuleSummary from '@/components/room/RuleSummary.vue'
+import IconButton from '@/components/common/IconButton.vue'
 import VocabularyDialog from '@/components/room/VocabularyDialog.vue'
 import RulesDialog from '@/components/room/RulesDialog.vue'
 import InviteDialog from '@/components/room/InviteDialog.vue'
@@ -58,7 +59,8 @@ const { copy: copyToClipboard } = useClipboard({ legacy: true })
 async function copyPrivateCode(): Promise<void> {
   const code = store.room?.privateJoinCode
   if (!code) return
-  let copied = false
+  // 只声明不初始化：成功/失败两条分支都会在读取前赋值，初始值永远不会被读取，避免 no-useless-assignment。
+  let copied: boolean
   try {
     await copyToClipboard(code)
     copied = true
@@ -91,23 +93,21 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
   <!-- 房间等待界面骨架：左侧席位区 + 右侧控制区，顶栏含房间名与退出 -->
   <main
     v-if="store.room"
-    class="grid h-full grid-cols-[minmax(0,67%)_33%] grid-rows-[11%_89%] bg-[#eef2ff]"
+    class="grid h-full grid-cols-[minmax(0,67%)_33%] grid-rows-[11%_89%] bg-sky"
   >
     <!-- 顶栏：房间名、房间可见性标识、连接状态与退出按钮 -->
     <header
       class="col-span-full grid grid-cols-[1fr_auto_1fr] items-center border-b-[0.5cqh] border-yellow bg-navy px-[2cqw] text-white"
     >
       <div class="flex items-baseline gap-[0.8em] min-w-0">
-        <span class="text-[#93c5fd] text-[0.65em] tracking-[0.15em]">{{
-          strings.room.roomEyebrow
-        }}</span>
+        <span class="text-sky text-[0.65em] tracking-[0.15em]">{{ strings.room.roomEyebrow }}</span>
         <h1 class="overflow-hidden text-ellipsis whitespace-nowrap text-[1.35em]">
           {{ store.room.name }}
         </h1>
       </div>
       <div
         class="flex items-center justify-self-center gap-[0.6em] text-yellow text-[0.72em] font-black"
-        :class="clsx(store.room.visibility === 'private' && '!text-[#fbcfe8]')"
+        :class="clsx(store.room.visibility === 'private' && '!text-red')"
       >
         <KeyRound v-if="store.room.visibility === 'private'" />
         <ShieldCheck v-else />
@@ -129,18 +129,17 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
       </div>
       <div class="justify-self-end flex items-center gap-[0.6em]">
         <span
-          class="inline-flex items-center gap-[0.55em] py-[0.65cqh] px-[1.05em] rounded-[99em] text-[0.65em] font-extrabold text-[#14532d] bg-[#dcfce7]"
+          class="inline-flex items-center gap-[0.55em] py-[0.65cqh] px-[1.05em] rounded-[99em] text-[0.65em] font-extrabold text-green bg-green/10"
           ><ShieldCheck /> {{ strings.room.authoritativeConnected }}</span
         >
-        <button
-          type="button"
-          class="grid h-[4.6cqh] w-[4.6cqh] place-items-center rounded-[0.6em] bg-white/10 text-white"
-          :aria-label="strings.common.exit"
+        <IconButton
+          size="lg"
+          :label="strings.common.exit"
           :title="strings.common.exit"
           @click="showLeaveConfirm = true"
         >
           <LogOut class="h-[2.6cqh] w-[2.6cqh]" />
-        </button>
+        </IconButton>
       </div>
     </header>
 
@@ -148,7 +147,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
     <SeatGrid />
 
     <!-- 右侧控制区：规则摘要、词库管理、邀请、准备与开始 -->
-    <aside class="min-w-0 flex flex-col py-[2.5cqh] px-[1.6cqw] bg-slate-50">
+    <aside class="min-w-0 flex flex-col py-[2.5cqh] px-[1.6cqw] bg-paper">
       <RuleSummary
         :vocabulary-loading="vocabularyLoading"
         @open-vocabulary="openVocabulary"
@@ -182,7 +181,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
         <button
           v-if="!store.isHost && !store.me?.spectating"
           class="w-full min-h-[5.2cqh] my-[0.8cqh] text-navy bg-white border-[0.22cqh] border-blue rounded-[0.7em] font-[1000]"
-          :class="clsx(store.me?.ready && '!text-[#14532d] !bg-[#dcfce7] !border-green')"
+          :class="clsx(store.me?.ready && '!text-green !bg-green/10 !border-green')"
           type="button"
           @click="store.setReady(!store.me?.ready)"
         >
@@ -247,7 +246,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
         labelledby="leave-title"
         @close="showLeaveConfirm = false"
       >
-        <LogOut class="h-[7cqh] w-[7cqh] rounded-full bg-red-100 p-[1.4cqh] text-[#991b1b]" />
+        <LogOut class="h-[7cqh] w-[7cqh] rounded-full bg-red/10 p-[1.4cqh] text-red" />
         <h2 id="leave-title">{{ strings.room.leaveTitle }}</h2>
         <p class="max-w-[30em] text-muted leading-[1.6]">{{ strings.room.leaveBody }}</p>
         <template #footer>

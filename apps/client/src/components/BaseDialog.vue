@@ -121,7 +121,7 @@ onBeforeUnmount(releaseFocus)
     <div
       v-if="open"
       ref="overlayRef"
-      class="absolute inset-0 grid place-items-center bg-[#0f172acc] px-[5cqw] py-[4cqh]"
+      class="absolute inset-0 grid place-items-center bg-navy/80 px-[5cqw] py-[4cqh]"
       :class="overlayClass"
       role="dialog"
       aria-modal="true"
@@ -131,7 +131,7 @@ onBeforeUnmount(releaseFocus)
       <section
         ref="dialogRef"
         tabindex="-1"
-        class="game-dialog flex max-h-[86cqh] flex-col overflow-hidden rounded-[1.2em] border-[0.35cqh] border-white bg-paper text-ink shadow-[0_1.4cqh_4cqh_#0007] outline-none"
+        class="game-dialog dialog-shell outline-hidden"
         :class="[widthClass, sectionClass]"
       >
         <header
@@ -151,7 +151,7 @@ onBeforeUnmount(releaseFocus)
         <slot />
         <footer
           v-if="$slots.footer"
-          class="flex min-h-[8cqh] items-center justify-end gap-[0.8em] bg-slate-200 px-[1.7em] py-[1cqh]"
+          class="flex min-h-[8cqh] items-center justify-end gap-[0.8em] bg-line px-[1.7em] py-[1cqh]"
           :class="footerClass"
         >
           <slot name="footer" />
