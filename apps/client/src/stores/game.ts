@@ -181,11 +181,6 @@ export const useGameStore = defineStore('game', () => {
     push(text, { id, duration: APP_CONFIG.ui.toastDurationMs })
   }
 
-  /** 手动关闭指定 Toast；vue-sonner 的 id 即上面 notify 生成的稳定 id，直接 dismiss。 */
-  function dismissToast(id: string): void {
-    toast.dismiss(id)
-  }
-
   /** 所有可失败请求使用 timeout + ack，并在这里统一翻译网络失败（实现见 stores/request.ts）。 */
   const request = createRequester({ socket, notify })
 
@@ -691,9 +686,7 @@ export const useGameStore = defineStore('game', () => {
     isHost,
     isDrawer,
     notify,
-    dismissToast,
     register,
-    saveProfile,
     saveSettings,
     resetSettings,
     clearProfile,

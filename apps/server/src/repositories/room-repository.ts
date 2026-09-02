@@ -42,18 +42,11 @@ export interface RoomMemberRecord {
 export interface RoomRepository {
   /** 插入或更新房间（upsert，按 id 覆盖）。 */
   upsertRoom(record: RoomRecord): void
-  findRoom(id: string): RoomRecord | undefined
-  /** 列出全部房间（作废扫描用）。 */
+  /** 列出全部房间（启动作废扫描用）。 */
   listRooms(): RoomRecord[]
-  /** 标记房间更新时间（状态变更时调用，供作废判断）。 */
-  touchRoom(id: string, phase: string, updatedAt: number): void
   removeRoom(id: string): void
   /** 替换某房间的成员集合（入房/离房/清空时调用）。 */
   replaceMembers(roomId: string, members: RoomMemberRecord[]): void
-  /** 按房间取成员。 */
-  listMembers(roomId: string): RoomMemberRecord[]
-  /** 删除某房间全部成员。 */
-  clearMembers(roomId: string): void
 }
 
 /** 房间表行（蛇形，对应 SELECT * 返回的列名）。 */
@@ -106,20 +99,9 @@ export class SqliteRoomRepository implements RoomRepository {
       .run(this.toRoomRow(record))
   }
 
-  findRoom(id: string): RoomRecord | undefined {
-    const row = this.db.prepare('SELECT * FROM rooms WHERE id = ?').get(id) as RoomRow | undefined
-    return row ? this.fromRoomRow(row) : undefined
-  }
-
   listRooms(): RoomRecord[] {
     const rows = this.db.prepare('SELECT * FROM rooms').all() as RoomRow[]
     return rows.map((row) => this.fromRoomRow(row))
-  }
-
-  touchRoom(id: string, phase: string, updatedAt: number): void {
-    this.db
-      .prepare('UPDATE rooms SET phase = ?, updated_at = ? WHERE id = ?')
-      .run(phase, updatedAt, id)
   }
 
   removeRoom(id: string): void {
@@ -137,17 +119,6 @@ export class SqliteRoomRepository implements RoomRepository {
       for (const member of members) insert.run(this.toMemberRow(member))
     })
     replace()
-  }
-
-  listMembers(roomId: string): RoomMemberRecord[] {
-    const rows = this.db
-      .prepare('SELECT * FROM room_members WHERE room_id = ?')
-      .all(roomId) as RoomMemberRow[]
-    return rows.map((row) => this.fromMemberRow(row))
-  }
-
-  clearMembers(roomId: string): void {
-    this.db.prepare('DELETE FROM room_members WHERE room_id = ?').run(roomId)
   }
 
   /** 领域对象（驼峰）→ 表行（蛇形），供 SQL 命名参数使用。 */

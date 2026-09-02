@@ -15,6 +15,11 @@ import { buildDrawerScore, buildGuessDetail } from './scoring.ts'
 export class RoundMachine {
   constructor(private readonly service: GameService) {}
 
+  /**
+   * 画家在选词阶段离开/掉线时废弃当前回合，立即进入下一回合选词。
+   * 先把阶段切到 round_result（从 choosing_word 出发的合法转换），再走统一的开局流程，
+   * 避免选词计时器空转导致整轮挂起。
+   */
   public abandonChoosing(room: RoomSecret, notice: string): void {
     const game = this.service.requireGame(room)
     if (game.timer) clearTimeout(game.timer)
@@ -223,6 +228,9 @@ export class RoundMachine {
     }
     game.phaseStartedAt = Date.now()
     game.phaseEndsAt = 0
+    // 收敛回合显示：beginChoosing 先自增 currentRound 再判断是否超限，进入最终结算时
+    // 回退到总回合数，避免结算界面 HUD 短暂显示「5 / 4」这类越界数字。
+    game.currentRound = Math.min(game.currentRound, game.totalRounds)
     this.service.addSystemNotice(room, reason)
     // 战绩落盘：进入最终结算时把冻结的最终排名与玩家结果写入 SQLite（低频，无性能顾虑）。
     this.service.persistGameResult(room, reason)
@@ -284,6 +292,11 @@ export class RoundMachine {
     }
     this.service.emitRoom(room.id)
   }
+  /**
+   * 按剩余时间阈值安排逐步提示。
+   * 剩余比例降到某个阈值以下时揭示一个非标点字符（如 [0.35, 0.2] 表示两次揭示），
+   * 且每次揭示后仍保留至少一个字符未知，因此提示只缩小范围而不会直接泄露答案。
+   */
   public scheduleHints(room: RoomSecret): void {
     const game = this.service.requireGame(room)
     this.service.clearHintTimers(game)

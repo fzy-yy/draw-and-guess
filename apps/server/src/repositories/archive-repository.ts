@@ -50,12 +50,8 @@ export interface RoundRecord {
 export interface ArchiveRepository {
   /** 在一个事务内写入整局战报：档案、逐玩家结果、逐回合明细，保证原子。 */
   saveGame(archive: GameArchiveRecord, results: GameResultRecord[], rounds: RoundRecord[]): void
-  /** 写入单回合明细（可在整局完成前按回合逐步落盘点）。 */
-  saveRound(round: RoundRecord): void
   /** 查询某房间的历史战报（倒序）。 */
   listByRoom(roomId: string, limit: number): GameArchiveRecord[]
-  /** 查询某局结果（仅供内部校验）。 */
-  listResults(gameId: string): GameResultRecord[]
 }
 
 /** SQLite 实现：全部写操作在事务内执行，保证档案/结果/回合三者一致。 */
@@ -108,12 +104,13 @@ export class SqliteArchiveRepository implements ArchiveRepository {
           })
       }
       for (const round of rounds) {
-        this.saveRound(round)
+        this.insertRound(round)
       }
     })
   }
 
-  saveRound(round: RoundRecord): void {
+  /** 写入/更新单回合明细；仅供 saveGame 在事务内调用，不单独对外暴露。 */
+  private insertRound(round: RoundRecord): void {
     this.db
       .prepare(
         `INSERT INTO rounds(id, game_id, round_no, drawer_id, answer, drawer_score, correct_details, started_at, ended_at)
@@ -150,21 +147,6 @@ export class SqliteArchiveRepository implements ArchiveRepository {
       totalRounds: Number(row.total_rounds),
       finalRanking: String(row.final_ranking),
       reason: row.reason ? String(row.reason) : undefined,
-    }))
-  }
-
-  listResults(gameId: string): GameResultRecord[] {
-    const rows = this.db
-      .prepare('SELECT * FROM game_results WHERE game_id = ?')
-      .all(gameId) as Array<Record<string, unknown>>
-    return rows.map((row) => ({
-      gameId: String(row.game_id),
-      playerId: String(row.player_id),
-      nickname: String(row.nickname),
-      avatarId: String(row.avatar_id),
-      rank: Number(row.rank),
-      score: Number(row.score),
-      stats: String(row.stats),
     }))
   }
 }

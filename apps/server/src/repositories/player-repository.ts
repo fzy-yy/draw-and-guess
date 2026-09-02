@@ -8,7 +8,7 @@
  * 接口与行类型放在本文件，SQLite 实现用 better-sqlite3 同步适配。
  */
 import type { Database } from 'better-sqlite3'
-import { getDb, withTransaction } from '../db/index.ts'
+import { getDb } from '../db/index.ts'
 
 /** 玩家可存档行：与 players 表字段一一对应。 */
 export interface PlayerRecord {
@@ -44,12 +44,12 @@ export interface PlayerRepository {
     },
   ): void
   remove(id: string): void
-  /** 查找某房间内的全部玩家（作废/恢复时用）。 */
-  listByRoom(roomId: string): PlayerRecord[]
   /** 启动恢复：把全部玩家标记为断线（connected=0）并清空房间归属，身份保留供宽限恢复。 */
   markAllDisconnected(disconnectedAt: number): void
   /** 清空全部玩家的房间归属（作废进行中局时用）。 */
   clearAllRoomIds(): void
+  /** 删除「断线时间早于 before」的过期身份记录（启动恢复时清理历史残留，防止表无限增长）。 */
+  deleteStaleDisconnected(before: number): void
 }
 
 /** better-sqlite3 实现。行对象命名遵循表列（蛇形），接口层再转驼峰。 */
@@ -134,13 +134,6 @@ export class SqlitePlayerRepository implements PlayerRepository {
     this.db.prepare('DELETE FROM players WHERE id = ?').run(id)
   }
 
-  listByRoom(roomId: string): PlayerRecord[] {
-    const rows = this.db
-      .prepare('SELECT * FROM players WHERE room_id = ?')
-      .all(roomId) as PlayerRow[]
-    return rows.map((row) => this.fromRow(row))
-  }
-
   markAllDisconnected(disconnectedAt: number): void {
     this.db
       .prepare('UPDATE players SET connected = 0, disconnected_at = ?, room_id = NULL')
@@ -151,7 +144,13 @@ export class SqlitePlayerRepository implements PlayerRepository {
     this.db.prepare('UPDATE players SET room_id = NULL').run()
   }
 
-  /** 持久化入口统一在事务内写玩家与其关联（本仓储只写 players，事务由调用方组织）。 */
+  deleteStaleDisconnected(before: number): void {
+    this.db
+      .prepare('DELETE FROM players WHERE disconnected_at IS NOT NULL AND disconnected_at < ?')
+      .run(before)
+  }
+
+  /** 内存记录（驼峰）→ 表行（蛇形），供 SQL 命名参数使用。 */
   private toRow(record: PlayerRecord): PlayerRow {
     return {
       id: record.id,
@@ -196,6 +195,3 @@ interface PlayerRow {
   disconnected_at: number | null
   room_id: string | null
 }
-
-/** 导出事务辅助的便捷别名，供调用方在单事务内写多个仓储。 */
-export { withTransaction }

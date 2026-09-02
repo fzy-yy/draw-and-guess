@@ -82,8 +82,6 @@ export const strings = {
   /* ============================= 根舞台 App.vue ============================= */
   app: {
     stageAriaLabel: (appName: string) => `${appName} 游戏舞台`, // 舞台区无障碍标签
-    toastStackAria: '操作通知', // Toast 堆栈无障碍标签
-    toastDismissAria: '关闭通知', // Toast 关闭按钮标签
     inviteDialogAria: '房间邀请', // 邀请横幅弹层标签
     inviterAvatarAria: '邀请者 SVG 头像', // 邀请者头像标签
     inviteHeading: '收到房间邀请', // 邀请横幅标题
@@ -284,9 +282,6 @@ export const strings = {
     fullscreenFailed: '当前浏览器或页面环境无法进入全屏', // 全屏失败提示
     settingsTitle: '对局设置', // 对局内设置弹窗标题
     settingsCloseAria: '关闭对局设置', // 设置弹窗关闭按钮
-    settingsQuickTitle: '快速调整', // 设置弹窗说明标题
-    settingsQuickHint: '修改会立即保存在本机，不会中断当前游戏。', // 设置弹窗说明
-    settingsDone: '完成', // 设置弹窗关闭提交
     scoreStripAria: '玩家得分', // 得分条无障碍标签
     hostMarkAria: '房主', // 得分条房主标记
     choosingHint: '画家正在选择题目', // 选词阶段非画家提示
@@ -572,8 +567,6 @@ export const serverStrings = {
     guessClose: '很接近！再想一想', // 接近答案提示
     allRoundsDone: '全部回合完成', // 全部回合结束
     noDrawerAvailable: '没有可继续作画的在线玩家', // 无可用画家
-    disconnectCountdownCanceled: '有玩家掉线，开始倒计时已取消', // 掉线取消倒计时
-    drawerDisconnectChoosing: '画家在选词时掉线，本回合作废并重选', // 画家掉线重选
     playerDisconnectedLeave: (nickname: string) => `${nickname} 已断线并退出房间`, // 非作画阶段断线立即离房
     playerReconnectedTimeout: '玩家重连超时离开', // 重连超时离开
   },

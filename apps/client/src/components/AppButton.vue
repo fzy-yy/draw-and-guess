@@ -33,14 +33,19 @@ const variantClasses = computed(() => {
   }
 })
 
-// 用 cn() 合并内置变体类与调用处透传进来的外部类（来自 $attrs，见下方 v-bind）：
+// 在 setup 顶层取响应式 attrs 对象（官方要求 useAttrs 必须在 setup 内同步调用；
+// 若写在 computed 惰性求值里，会依赖渲染期 currentRenderingInstance 副作用才能取到实例，脆弱且不可靠）。
+// attrs 是响应式代理，此处保存引用后，后续变更仍能被下方 computed 追踪。
+const attrs = useAttrs()
+
+// 用 cn() 合并内置变体类与调用处透传进来的外部类：
 // tailwind-merge 会消解外部类与内置类之间的冲突（如调用处传 bg-white 覆盖内置 bg-blue），
 // 保证最终类名干净、无互相覆盖的残留。
-const buttonClass = computed(() => cn(variantClasses.value, useAttrs()))
+const buttonClass = computed(() => cn(variantClasses.value, attrs))
 </script>
 
 <template>
-  <!-- v-bind="$attrs" 让调用处的 class / 原生事件 / aria 透传到按钮，并由 cn() 合并内置类与外部类 -->
+  <!-- 外部 class 等未声明 attrs 由 Vue 单根组件特性自动透传到按钮（与 buttonClass 合并生效） -->
   <button :type="type" :disabled="disabled" :class="buttonClass">
     <slot />
   </button>

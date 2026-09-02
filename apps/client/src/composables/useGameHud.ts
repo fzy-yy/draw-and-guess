@@ -6,7 +6,7 @@
 import { computed } from 'vue'
 import { useTimestamp } from '@vueuse/core'
 import { strings } from '@draw-guess/strings'
-import type { FinalRankingEntry, RoomMember } from '@draw-guess/shared'
+import type { FinalRankingEntry } from '@draw-guess/shared'
 import type { useGameStore } from '@/stores/game'
 
 type GameStore = ReturnType<typeof useGameStore>
@@ -95,5 +95,3 @@ export function useGameHud(store: GameStore) {
 
   return { game, correctedNow, secondsLeft, progress, canGuess, phaseLabel, drawer, rankings }
 }
-
-export type { RoomMember }

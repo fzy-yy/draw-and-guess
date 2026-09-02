@@ -35,7 +35,12 @@ import { SnapshotBuilder } from './snapshot.ts'
 import type { VocabularyStore } from './vocabulary.ts'
 import { enforceEventRate } from './rate-limit.ts'
 import { GameError, SILENT_LOGGER, type RuntimeLogger } from './errors.ts'
-import type { PlayerRepository, RoomRepository, ArchiveRepository } from './repositories/index.ts'
+import type {
+  PlayerRecord,
+  PlayerRepository,
+  RoomRepository,
+  ArchiveRepository,
+} from './repositories/index.ts'
 
 /** 默认房间规则只从根级配置生成，避免处理器中出现另一套默认值。 */
 export function createDefaultRoomSettings(): RoomSettings {
@@ -127,6 +132,20 @@ export class GameService {
     ) {
       return this.reclaimPlayer(socket, recovering)
     }
+    // 内存索引未命中时回退查持久化记录：服务重启后 playersByToken 为空，
+    // 但 SQLite 中的身份行（含令牌）仍在；只要记录断线时间仍在宽限期内，
+    // 就从持久化记录重建内存身份，实现真正的「跨重启凭令牌恢复同一 UUID」。
+    // （房间席位不恢复：进行中局在重启时已被作废，恢复后回到大厅。）
+    if (!recovering && input.recoveryToken) {
+      const record = this.repositories.players.findByToken(input.recoveryToken)
+      const withinGrace =
+        record?.disconnectedAt !== undefined &&
+        Date.now() - record.disconnectedAt <= APP_CONFIG.network.reconnectGraceMs
+      if (record && withinGrace) {
+        const restored = this.restorePlayerFromRecord(record)
+        if (restored) return this.reclaimPlayer(socket, restored)
+      }
+    }
     // 同一连接上重复注册（典型路径：注册 ack 超时后客户端未存到令牌、用户再点一次“进入”）
     // 必须复用现有身份：否则旧身份仍 connected:true 且 socket 指向同一存活连接，
     // 而 handleDisconnect 只按 socket.data.playerId 匹配，旧身份永不回收；
@@ -189,6 +208,44 @@ export class GameService {
       disconnectedAt: player.disconnectedAt,
       roomId: player.roomId,
     })
+  }
+
+  /**
+   * 从持久化记录重建内存身份（跨重启恢复通道）。
+   * 服务重启后 playersByToken 内存索引为空，仅靠内存无法恢复；此处按令牌从 SQLite
+   * 找回身份关键字段重建 PlayerSecret（房间归属已随重启作废，不恢复席位）。
+   * 记录不完整（如头像编号不在白名单）时返回 undefined，按全新注册处理。
+   */
+  private restorePlayerFromRecord(record: PlayerRecord): PlayerSecret | undefined {
+    // 头像编号防御性校验：持久化值若因版本升级脱离白名单，不恢复、走全新注册。
+    if (!(APP_CONFIG.player.avatarIds as readonly string[]).includes(record.avatarId))
+      return undefined
+    const player: PlayerSecret = {
+      id: record.id,
+      token: record.token,
+      profile: {
+        nickname: record.nickname,
+        avatarId: record.avatarId as PlayerSecret['profile']['avatarId'],
+      },
+      preferences: {
+        discoverable: record.discoverable,
+        acceptsInvites: record.acceptsInvites,
+      },
+      // 恢复后仍是「断线待接管」状态：reclaimPlayer 会清除 disconnectedAt 并绑定新 socket。
+      connected: false,
+      joinedAt: record.joinedAt,
+      disconnectedAt: record.disconnectedAt,
+      disconnectGeneration: 0,
+      requestCache: new Map(),
+      lastInviteAt: new Map(),
+      guessEventTimes: [],
+      drawEventTimes: [],
+      privateJoinAttemptTimes: [],
+    }
+    this.players.set(player.id, player)
+    this.playersByToken.set(player.token, player)
+    this.logger.info({ playerId: player.id }, '玩家身份已从持久化记录恢复')
+    return player
   }
 
   /** 把房间及其成员席位同步到 SQLite（settings/selectedWords 以 JSON 存储）。 */
@@ -265,6 +322,11 @@ export class GameService {
    * 这样不会出现「重启后房间仍在库但无人可接管」的僵尸状态。
    */
   recoverOnStartup(): void {
+    // 先清理「上一次运行前就已超过恢复宽限期」的过期身份行，防止 players 表随重启无限增长；
+    // 再把剩余行（含崩溃时 connected=1 的行）全部标记为断线，给它们一个全新的恢复宽限窗口。
+    this.repositories.players.deleteStaleDisconnected(
+      Date.now() - APP_CONFIG.network.reconnectGraceMs,
+    )
     // 全部玩家视为断线，开始身份宽限计时（宽限期由 APP_CONFIG.network.reconnectGraceMs 定义）。
     this.repositories.players.markAllDisconnected(Date.now())
     // 作废全部进行中房间：对局在内存，重启即数据丢失，作废关闭避免残留。
@@ -611,6 +673,7 @@ export class GameService {
     room.settings = next
     this.invalidateReady(room, serverStrings.notices.rulesUpdated)
     this.emitRoom(room.id)
+    // maxPlayers 会显示在大厅房间行中，规则变更后需同步广播大厅快照，避免列表展示陈旧人数。
     this.broadcastPresence()
     return this.snapshotter.snapshot(room, playerId)
   }
@@ -1005,6 +1068,8 @@ export class GameService {
       ),
     )
     this.emitRoom(room.id)
+    // hostName 会显示在大厅房间行中，房主迁移后需同步广播大厅快照，避免列表展示陈旧房主名。
+    this.broadcastPresence()
   }
 
   sendInvite(playerId: string, targetId: string): Invite {
@@ -1224,7 +1289,7 @@ export class GameService {
     this.io.emit(EVENTS.roomListChanged, snapshot.rooms)
   }
 
-  /** 大厅在线状态快照：只包含可发现玩家与全部未关闭房间。 */ /** 大厅在线状态快照：只包含可发现玩家与全部未关闭房间。 */
+  /** 大厅在线状态快照：只包含可发现玩家与全部未关闭房间。 */
   presenceSnapshot(): PresenceSnapshot {
     return {
       players: [...this.players.values()]
@@ -1249,12 +1314,6 @@ export class GameService {
     return this.snapshotter.snapshot(room, playerId)
   }
 
-  /**
-   * 画家在选词阶段离开/掉线时废弃当前回合，立即进入下一回合选词。
-   * 先把阶段切到 round_result（从 choosing_word 出发的合法转换），再走统一的开局流程，
-   * 避免选词计时器空转导致整轮挂起。
-   */
-
   /** 执行合法的阶段转换；非法转换直接抛错，绝不自作主张切换。转换后版本号 +1。 */
   /** @internal 内部协作接口（RoundMachine / 模块间调用） */
   public transition(room: RoomSecret, next: RoomPhase): void {
@@ -1268,11 +1327,6 @@ export class GameService {
     this.logger.info({ roomId: room.id, from: previous, to: next }, '房间阶段已转换')
     room.stateVersion += 1
   }
-
-  /**
-   * 为指定观看者生成裁剪后的房间快照。
-   * 画家能看到答案与候选词；猜词者只能看到遮罩；结算阶段全员都能看到答案。
-   */
 
   private resolveInvite(id: string, status: 'accepted' | 'declined' | 'expired'): void {
     // 无论接受/拒绝/过期，都清除定时器并通知邀请双方
@@ -1365,12 +1419,6 @@ export class GameService {
     if (room.game) this.addMessage(room, { type: 'system', text })
     this.io.to(room.id).emit(EVENTS.systemNotice, { text })
   }
-
-  /**
-   * 按剩余时间阈值安排提示。
-   * 剩余比例降到某个阈值以下时揭示一个非标点字符（如 [0.35, 0.2] 表示两次揭示），
-   * 且每次揭示后仍保留至少一个字符未知，因此提示只缩小范围而不会直接泄露答案。
-   */
 
   /** @internal 内部协作接口（RoundMachine / 模块间调用） */
   public clearHintTimers(game: GameSecret): void {

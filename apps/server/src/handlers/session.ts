@@ -7,7 +7,6 @@ import {
   ProfileSchema,
   RegisterSchema,
   RequestSchema,
-  type RoomSnapshot,
   type SessionRegistration,
 } from '@draw-guess/shared'
 import { bindRequest } from '../protocol/binder.ts'
@@ -72,5 +71,3 @@ export function registerSessionHandlers(
 
   socket.on('disconnect', () => service.handleDisconnect(socket))
 }
-
-export type { RoomSnapshot }
