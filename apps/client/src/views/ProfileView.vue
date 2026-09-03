@@ -3,8 +3,9 @@
 import { computed, ref } from 'vue'
 import { ArrowRight, CheckCircle2, RefreshCw, Wifi, WifiOff } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
-import AvatarImage from '@/components/AvatarImage.vue'
-import AvatarPickerDialog from '@/components/AvatarPickerDialog.vue'
+import AppButton from '@/components/common/AppButton.vue'
+import AvatarImage from '@/components/common/AvatarImage.vue'
+import AvatarPickerDialog from '@/components/common/AvatarPickerDialog.vue'
 import { useGameStore } from '@/stores/game'
 
 const store = useGameStore()
@@ -19,13 +20,9 @@ const nicknameValid = computed(() => {
   )
 })
 
-/** 同时重抽昵称和内置 SVG 头像；随机结果始终来自前后端共享白名单。 */
+/** 同时重抽昵称和内置 SVG 头像；随机收敛到 store.randomizeProfile，保证与初始随机同一白名单来源。 */
 function randomize(): void {
-  const names = store.config.player.defaultNicknames
-  const avatars = store.config.player.avatarIds
-  store.profile.nickname = names[Math.floor(Math.random() * names.length)] ?? names[0]
-  store.profile.avatarId =
-    avatars[Math.floor(Math.random() * avatars.length)] ?? store.config.player.defaultAvatarId
+  store.randomizeProfile()
 }
 </script>
 
@@ -37,11 +34,11 @@ function randomize(): void {
       :aria-label="strings.profile.brandAria"
     >
       <div
-        class="relative h-[13cqh] w-[13cqh] rounded-[2.4cqh] border-[0.55cqh] border-white bg-yellow shadow-[0.8cqh_0.8cqh_0_#0f172a55] -rotate-3"
+        class="relative h-[13cqh] w-[13cqh] rounded-[2.4cqh] border-[0.55cqh] border-white bg-yellow shadow-[0.8cqh_0.8cqh_0] shadow-navy/40 -rotate-3"
         aria-hidden="true"
       >
         <span
-          class="absolute left-[3.1cqh] top-[1.6cqh] h-[9cqh] w-[2.3cqh] rounded-full border-[0.35cqh] border-navy bg-yellow rotate-[38deg]"
+          class="absolute left-[3.1cqh] top-[1.6cqh] h-[9cqh] w-[2.3cqh] rounded-full border-[0.35cqh] border-navy bg-yellow rotate-38"
         ></span
         ><span
           class="absolute right-[1.2cqh] top-[1.2cqh] grid h-[4.5cqh] w-[4.5cqh] place-items-center rounded-full bg-blue text-white text-[1.7em] font-[1000]"
@@ -77,14 +74,15 @@ function randomize(): void {
             {{ strings.profile.sectionTitle }}
           </h2>
         </div>
-        <button
-          class="flex items-center gap-[0.5em] bg-transparent text-blue font-extrabold"
+        <!-- 换一组：复用统一按钮组件 AppButton（secondary 白底描边），保证与全站按钮风格一致 -->
+        <AppButton
+          variant="secondary"
           type="button"
           :aria-label="strings.profile.randomizeAria"
           @click="randomize"
         >
           <RefreshCw /> {{ strings.profile.randomize }}
-        </button>
+        </AppButton>
       </header>
 
       <!-- 大头像位于资料区顶部；整个圆形按钮均可打开头像选择弹窗。 -->
@@ -115,7 +113,7 @@ function randomize(): void {
         <input
           id="nickname"
           v-model="store.profile.nickname"
-          class="w-full min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-navy pr-[3em] text-[1.05em]"
+          class="w-full min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] text-center font-bold text-navy pr-[3em] pl-[3em] text-[1.05em]"
           :maxlength="store.config.player.nicknameMaxLength"
           autocomplete="nickname"
           @keydown.enter="nicknameValid && store.connected && store.register()"
@@ -135,14 +133,15 @@ function randomize(): void {
         }}
       </p>
 
-      <button
-        class="mt-[2.5cqh] inline-flex min-h-[5.2cqh] w-full items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black text-white bg-blue"
+      <!-- 进入大厅：复用统一按钮组件 AppButton（primary 蓝底），保证与全站按钮风格一致。 -->
+      <AppButton
         type="button"
+        class="mt-[2.5cqh] w-full"
         :disabled="!nicknameValid || !store.connected || store.busy"
         @click="store.register()"
       >
         {{ store.busy ? strings.profile.busy : strings.profile.enterLobby }}<ArrowRight />
-      </button>
+      </AppButton>
       <p v-if="!store.connected" class="mt-[0.75cqh] text-red text-[0.72em] font-bold">
         {{ strings.profile.offlineWarning }}
       </p>

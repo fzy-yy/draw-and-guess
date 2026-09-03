@@ -44,7 +44,7 @@ const buttonClass = computed(() =>
     <slot />
     <kbd
       v-if="shortcut"
-      class="bg-white px-[0.35em] py-[0.1em] min-w-[1.6em] rounded-[0.35em] border-[0.12em] text-navy text-[0.82em] uppercase [font-family:ui-monospace,SFMono-Regular,Consolas,monospace]"
+      class="bg-white px-[0.35em] py-[0.1em] min-w-[1.6em] rounded-[0.35em] border-[0.12em] text-navy text-[0.82em] uppercase font-[ui-monospace,SFMono-Regular,Consolas,monospace]"
       >{{ shortcut }}</kbd
     >
   </button>

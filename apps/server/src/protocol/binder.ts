@@ -53,7 +53,7 @@ export function bindRequest<T extends { requestId: string }, R>(
     if (options.rateLimit !== false) {
       const now = Date.now()
       const history = ((socket.data.eventTimes as number[] | undefined) ?? []).filter(
-        (time) => now - time < 1_000,
+        (time) => now - time < APP_CONFIG.network.requestRateWindowMs,
       )
       if (history.length >= APP_CONFIG.network.requestEventsPerSecond) {
         socket.data.eventTimes = history
@@ -113,7 +113,8 @@ export function bindRequest<T extends { requestId: string }, R>(
       if (liveCache && ack.ok) {
         liveCache.set(cacheKey, ack as Ack<unknown>)
         // 简单 FIFO 上限，防止长时间连接下幂等缓存无界增长
-        if (liveCache.size > 100) liveCache.delete(liveCache.keys().next().value as string)
+        if (liveCache.size > APP_CONFIG.network.idempotencyCacheMax)
+          liveCache.delete(liveCache.keys().next().value as string)
       }
       respond(ack)
     } catch (error) {

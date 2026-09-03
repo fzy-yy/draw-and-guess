@@ -11,9 +11,10 @@ import { APP_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import { EVENTS, type FillCommand, type Stroke } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
-import GameCanvas from '@/components/GameCanvas.vue'
+import GameCanvas from '@/components/game/GameCanvas.vue'
 import SettingsView from '@/views/SettingsView.vue'
-import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import AppButton from '@/components/common/AppButton.vue'
 import GameHud from '@/components/game/GameHud.vue'
 import ScoreStrip from '@/components/game/ScoreStrip.vue'
 import ChatPanel from '@/components/game/ChatPanel.vue'
@@ -82,10 +83,11 @@ function handleFullscreenToggle(): void {
 </script>
 
 <template>
-  <!-- 对局主骨架：仅在房间存在且对局未结束时渲染 -->
+  <!-- 对局主骨架：仅在房间存在且对局未结束时渲染；
+       画框以外区域统一使用 paper（近白）语义色，与画布白底协调 -->
   <main
     v-if="store.room && game"
-    class="grid h-full grid-cols-[17%_minmax(0,61%)_22%] grid-rows-[11%_minmax(0,76%)_13%] bg-line"
+    class="grid h-full grid-cols-[17%_minmax(0,61%)_22%] grid-rows-[11%_minmax(0,76%)_13%] bg-paper"
   >
     <!-- 顶栏 HUD：回合数、当前画家、答案、计时器、网络状态与暂停按钮 -->
     <GameHud
@@ -103,7 +105,7 @@ function handleFullscreenToggle(): void {
 
     <!-- 中央画布区：实时画板 + 非作画阶段的状态提示遮罩 -->
     <section
-      class="relative min-w-0 min-h-0 m-[1.5cqh_1cqw] overflow-hidden border-[0.3cqh] border-navy bg-white shadow-[0.5cqh_0.5cqh_0_#94a3b8]"
+      class="relative min-w-0 min-h-0 m-[1.5cqh_1cqw] overflow-hidden border-[0.3cqh] border-navy bg-white shadow-block"
     >
       <GameCanvas
         :round-id="game.roundId"
@@ -157,21 +159,23 @@ function handleFullscreenToggle(): void {
       @leave-room="store.leaveRoom"
     />
 
-    <!-- 对局内直接复用完整设置页；顶栏插槽追加退出游戏，资料编辑能力按场景禁用。 -->
+    <!-- 对局内直接复用完整设置页；右上角放「退出游戏」，资料编辑能力按场景禁用。 -->
     <div v-if="showGameSettings" class="absolute inset-0 z-40">
       <SettingsView
         :back-label="strings.settings.backToGame"
         :profile-editing-disabled="true"
         @back="showGameSettings = false"
       >
-        <template #header-actions>
-          <button
+        <template #header-status>
+          <!-- 退出游戏：复用 AppButton danger 变体并压缩为顶栏小尺寸，与全站按钮风格一致 -->
+          <AppButton
+            variant="danger"
             type="button"
-            class="flex items-center gap-[0.45em] rounded-[0.55em] bg-red px-[0.8em] py-[0.8cqh] text-white"
+            class="min-h-[4.4cqh] rounded-[0.55em] px-[0.8em] py-[0.8cqh] text-[0.85em]"
             @click="showLeaveGameConfirm = true"
           >
             <LogOut />{{ strings.game.leaveGame }}
-          </button>
+          </AppButton>
         </template>
       </SettingsView>
     </div>

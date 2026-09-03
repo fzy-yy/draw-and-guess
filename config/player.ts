@@ -71,6 +71,4 @@ export const player = {
     '40',
   ],
   defaultAvatarId: '01',
-  /** 绘图颜色仍使用 HEX 校验；头像改为预设编号后不再复用此格式。 */
-  colorPattern: '^#[0-9A-Fa-f]{6}$',
 } as const

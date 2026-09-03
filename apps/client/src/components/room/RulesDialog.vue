@@ -7,8 +7,11 @@
 import { ref, watch } from 'vue'
 import { strings } from '@draw-guess/strings'
 import type { RoomSettings } from '@draw-guess/shared'
-import BaseDialog from '@/components/BaseDialog.vue'
-import AppButton from '@/components/AppButton.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
+import AppButton from '@/components/common/AppButton.vue'
+import SectionHeader from '@/components/common/SectionHeader.vue'
+import RuleSliderField from '@/components/common/RuleSliderField.vue'
+import RuleToggleField from '@/components/common/RuleToggleField.vue'
 import { useGameStore } from '@/stores/game'
 
 const props = defineProps<{ open: boolean; draft?: RoomSettings }>()
@@ -36,10 +39,11 @@ watch(
     @close="emit('close')"
   >
     <template #header>
-      <p class="eyebrow">
-        {{ strings.room.settingsLabel }}
-      </p>
-      <h2 id="rules-title">{{ strings.room.settingsTitle }}</h2>
+      <SectionHeader
+        id="rules-title"
+        :eyebrow="strings.room.settingsLabel"
+        :title="strings.room.settingsTitle"
+      ></SectionHeader>
     </template>
 
     <div class="grid grid-cols-3 gap-[1.2cqh_1.3em] py-[2cqh] px-[1.8em]">
@@ -58,120 +62,79 @@ watch(
           </option></select
         ><small class="text-muted text-[0.8em]">{{ strings.room.maxPlayersNote }}</small></label
       >
-      <label class="min-w-0 flex flex-col gap-[0.5cqh] text-[0.76em] font-extrabold"
-        >{{ strings.common.roundsField }}
-        <input
-          v-model.number="localDraft.roundsPerPlayer"
-          type="range"
-          :min="store.config.game.roundsPerPlayer.min"
-          :max="store.config.game.roundsPerPlayer.max"
-          :step="store.config.game.roundsPerPlayer.step"
-        /><b class="text-blue">{{
-          strings.common.roundsUnit(localDraft.roundsPerPlayer)
-        }}</b></label
-      >
-      <label class="min-w-0 flex flex-col gap-[0.5cqh] text-[0.76em] font-extrabold"
-        >{{ strings.common.drawTimeField }}
-        <input
-          v-model.number="localDraft.drawSeconds"
-          type="range"
-          :min="store.config.game.drawSeconds.min"
-          :max="store.config.game.drawSeconds.max"
-          :step="store.config.game.drawSeconds.step"
-        /><b class="text-blue">{{ strings.common.secondsUnit(localDraft.drawSeconds) }}</b></label
-      >
-      <label class="min-w-0 flex flex-col gap-[0.5cqh] text-[0.76em] font-extrabold"
-        >{{ strings.room.chooseTimeField }}
-        <input
-          v-model.number="localDraft.chooseSeconds"
-          type="range"
-          :min="store.config.game.chooseSeconds.min"
-          :max="store.config.game.chooseSeconds.max"
-          :step="store.config.game.chooseSeconds.step"
-        /><b class="text-blue">{{ strings.common.secondsUnit(localDraft.chooseSeconds) }}</b></label
-      >
-      <label class="min-w-0 flex flex-col gap-[0.5cqh] text-[0.76em] font-extrabold"
-        >{{ strings.room.optionCountField }}
-        <input
-          v-model.number="localDraft.optionCount"
-          type="range"
-          :min="store.config.game.optionCount.min"
-          :max="store.config.game.optionCount.max"
-          :step="store.config.game.optionCount.step"
-        /><b class="text-blue">{{ strings.room.optionCountUnit(localDraft.optionCount) }}</b></label
-      >
-      <label
-        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-line rounded-[0.5em]"
-        ><input
-          v-model="localDraft.showWordLength"
-          type="checkbox"
-          class="h-[2.2cqh] w-[2.2cqh] accent-blue"
-        />
-        {{ strings.room.toggleShowWordLength }}</label
-      >
-      <label
-        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-line rounded-[0.5em]"
-        ><input
-          v-model="localDraft.progressiveHints"
-          type="checkbox"
-          class="h-[2.2cqh] w-[2.2cqh] accent-blue"
-        />
-        {{ strings.room.toggleProgressiveHints }}</label
-      >
-      <label
-        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-line rounded-[0.5em]"
-        ><input
-          v-model="localDraft.structuredHintsEnabled"
-          type="checkbox"
-          class="h-[2.2cqh] w-[2.2cqh] accent-blue"
-        />
-        {{ strings.room.toggleStructuredHints }}</label
-      >
+      <RuleSliderField
+        v-model="localDraft.roundsPerPlayer"
+        :label="strings.common.roundsField"
+        :min="store.config.game.roundsPerPlayer.min"
+        :max="store.config.game.roundsPerPlayer.max"
+        :step="store.config.game.roundsPerPlayer.step"
+        :display="strings.common.roundsUnit(localDraft.roundsPerPlayer)"
+      />
+      <RuleSliderField
+        v-model="localDraft.drawSeconds"
+        :label="strings.common.drawTimeField"
+        :min="store.config.game.drawSeconds.min"
+        :max="store.config.game.drawSeconds.max"
+        :step="store.config.game.drawSeconds.step"
+        :display="strings.common.secondsUnit(localDraft.drawSeconds)"
+      />
+      <RuleSliderField
+        v-model="localDraft.chooseSeconds"
+        :label="strings.room.chooseTimeField"
+        :min="store.config.game.chooseSeconds.min"
+        :max="store.config.game.chooseSeconds.max"
+        :step="store.config.game.chooseSeconds.step"
+        :display="strings.common.secondsUnit(localDraft.chooseSeconds)"
+      />
+      <RuleSliderField
+        v-model="localDraft.optionCount"
+        :label="strings.room.optionCountField"
+        :min="store.config.game.optionCount.min"
+        :max="store.config.game.optionCount.max"
+        :step="store.config.game.optionCount.step"
+        :display="strings.room.optionCountUnit(localDraft.optionCount)"
+      />
+      <RuleToggleField
+        v-model="localDraft.showWordLength"
+        :label="strings.room.toggleShowWordLength"
+      />
+      <RuleToggleField
+        v-model="localDraft.progressiveHints"
+        :label="strings.room.toggleProgressiveHints"
+      />
+      <RuleToggleField
+        v-model="localDraft.structuredHintsEnabled"
+        :label="strings.room.toggleStructuredHints"
+      />
       <!-- 结构化提示开始时机：剩余时间比例（10%~90%，步进 5%） -->
-      <label
-        class="min-w-0 flex flex-col gap-[0.3cqh] text-[0.76em] font-extrabold"
-        :class="{ 'opacity-45 pointer-events-none': !localDraft.structuredHintsEnabled }"
-        >{{ strings.room.hintStartRatioField }}
-        <input
-          v-model.number="localDraft.hintStartRatio"
-          type="range"
-          :min="store.config.game.hintStartRatioRange.min"
-          :max="store.config.game.hintStartRatioRange.max"
-          :step="store.config.game.hintStartRatioRange.step"
-          :disabled="!localDraft.structuredHintsEnabled"
-        /><b class="text-blue">{{
-          strings.room.hintStartRatioUnit(Math.round(localDraft.hintStartRatio * 100))
-        }}</b></label
-      >
+      <RuleSliderField
+        v-model="localDraft.hintStartRatio"
+        :label="strings.room.hintStartRatioField"
+        :min="store.config.game.hintStartRatioRange.min"
+        :max="store.config.game.hintStartRatioRange.max"
+        :step="store.config.game.hintStartRatioRange.step"
+        :display="strings.common.percentUnit(Math.round(localDraft.hintStartRatio * 100))"
+        :disabled="!localDraft.structuredHintsEnabled"
+      />
       <!-- 提示间隔：相邻提示揭示时机之间的剩余比例（5%~45%，步进 5%） -->
-      <label
-        class="min-w-0 flex flex-col gap-[0.3cqh] text-[0.76em] font-extrabold"
-        :class="{ 'opacity-45 pointer-events-none': !localDraft.structuredHintsEnabled }"
-        >{{ strings.room.hintIntervalRatioField }}
-        <input
-          v-model.number="localDraft.hintIntervalRatio"
-          type="range"
-          :min="store.config.game.hintIntervalRatioRange.min"
-          :max="store.config.game.hintIntervalRatioRange.max"
-          :step="store.config.game.hintIntervalRatioRange.step"
-          :disabled="!localDraft.structuredHintsEnabled"
-        /><b class="text-blue">{{
-          strings.room.hintIntervalRatioUnit(Math.round(localDraft.hintIntervalRatio * 100))
-        }}</b></label
-      >
+      <RuleSliderField
+        v-model="localDraft.hintIntervalRatio"
+        :label="strings.room.hintIntervalRatioField"
+        :min="store.config.game.hintIntervalRatioRange.min"
+        :max="store.config.game.hintIntervalRatioRange.max"
+        :step="store.config.game.hintIntervalRatioRange.step"
+        :display="strings.common.percentUnit(Math.round(localDraft.hintIntervalRatio * 100))"
+        :disabled="!localDraft.structuredHintsEnabled"
+      />
       <!-- 统一猜词基础分：覆盖全局默认值（flat 模式下即为唯一得分） -->
-      <label class="min-w-0 flex flex-col gap-[0.3cqh] text-[0.76em] font-extrabold"
-        >{{ strings.room.guessBaseScoreField }}
-        <input
-          v-model.number="localDraft.guessBaseScore"
-          type="range"
-          :min="store.config.game.score.guessBaseRange.min"
-          :max="store.config.game.score.guessBaseRange.max"
-          :step="store.config.game.score.guessBaseRange.step"
-        /><b class="text-blue">{{
-          strings.room.guessBaseScoreUnit(localDraft.guessBaseScore)
-        }}</b></label
-      >
+      <RuleSliderField
+        v-model="localDraft.guessBaseScore"
+        :label="strings.room.guessBaseScoreField"
+        :min="store.config.game.score.guessBaseRange.min"
+        :max="store.config.game.score.guessBaseRange.max"
+        :step="store.config.game.score.guessBaseRange.step"
+        :display="strings.room.guessBaseScoreUnit(localDraft.guessBaseScore)"
+      />
       <!-- 计分方式：标准（基础+速度+顺序）/ 固定分（仅基础分） -->
       <label class="min-w-0 flex flex-col gap-[0.5cqh] text-[0.76em] font-extrabold"
         >{{ strings.room.scoreModeField }}
@@ -183,33 +146,15 @@ watch(
           <option value="flat">{{ strings.room.scoreModeFlat }}</option>
         </select></label
       >
-      <label
-        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-line rounded-[0.5em]"
-        ><input
-          v-model="localDraft.closeGuessEnabled"
-          type="checkbox"
-          class="h-[2.2cqh] w-[2.2cqh] accent-blue"
-        />
-        {{ strings.room.toggleCloseGuess }}</label
-      >
-      <label
-        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-line rounded-[0.5em]"
-        ><input
-          v-model="localDraft.allowPlayerInvite"
-          type="checkbox"
-          class="h-[2.2cqh] w-[2.2cqh] accent-blue"
-        />
-        {{ strings.room.togglePlayerInvite }}</label
-      >
-      <label
-        class="min-w-0 flex flex-row items-center gap-[0.5cqh] min-h-[4.8cqh] px-[0.8em] text-[0.76em] font-extrabold bg-line rounded-[0.5em]"
-        ><input
-          v-model="localDraft.allowPause"
-          type="checkbox"
-          class="h-[2.2cqh] w-[2.2cqh] accent-blue"
-        />
-        {{ strings.room.togglePause }}</label
-      >
+      <RuleToggleField
+        v-model="localDraft.closeGuessEnabled"
+        :label="strings.room.toggleCloseGuess"
+      />
+      <RuleToggleField
+        v-model="localDraft.allowPlayerInvite"
+        :label="strings.room.togglePlayerInvite"
+      />
+      <RuleToggleField v-model="localDraft.allowPause" :label="strings.room.togglePause" />
       <label class="min-w-0 flex flex-col gap-[0.5cqh] text-[0.76em] font-extrabold"
         >{{ strings.room.joinPolicyField }}
         <select

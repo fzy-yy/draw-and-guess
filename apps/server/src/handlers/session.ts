@@ -29,7 +29,6 @@ export function registerSessionHandlers(
       // 避免页面刷新后的空本地历史收到 strokesOmitted 快照而显示空画布。
       const room = service.snapshotForPlayer(identity.player.id, true) ?? null
       const result: SessionRegistration = { ...identity, room }
-      socket.emit(EVENTS.sessionReady, result)
       socket.emit(EVENTS.presenceSnapshot, service.presenceSnapshot())
       if (room) socket.emit(EVENTS.roomSnapshot, room)
       return result

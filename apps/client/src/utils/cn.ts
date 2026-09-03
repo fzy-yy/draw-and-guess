@@ -6,11 +6,12 @@
  * - tailwind-merge 负责去重冲突类（如 bg-white 与 bg-blue 并存时保留靠后者），
  *   避免多个可切换类串在一起产生互相覆盖的残留。
  *
- * 本项目使用 Tailwind v4 并在 @theme 中自定义了语义色令牌（navy/blue/sky/yellow/...），
+ * 本项目使用 Tailwind v4 并在 @theme 中自定义了语义色令牌（见 apps/client/src/style/index.css
+ * 的 @theme：navy/muted/line/paper/blue/sky/yellow/green/red/purple），
  * 这些自定义颜色不在 tailwind-merge 的默认类名推断表内，
  * 若不加声明会被当作“普通未知类”而在冲突合并时误删。
  * 因此这里用 extendTailwindMerge 把全部自定义语义色注册进颜色合并组，
- * 保证 bg-navy/bg-blue、text-muted/text-ink、border-line/border-slate-400 等正确参与合并判断。
+ * 保证 bg-navy/bg-blue、text-muted/text-navy、border-line/border-blue 等正确参与合并判断。
  */
 import { clsx, type ClassValue } from 'clsx'
 import { extendTailwindMerge } from 'tailwind-merge'
@@ -18,21 +19,20 @@ import { extendTailwindMerge } from 'tailwind-merge'
 /** 项目自定义语义色令牌（与 apps/client/src/style/index.css 的 @theme 保持一致）。 */
 const CUSTOM_COLORS = [
   'navy',
+  'muted',
+  'line',
+  'paper',
   'blue',
   'sky',
   'yellow',
-  'orange',
   'green',
   'red',
-  'ink',
-  'muted',
-  'paper',
-  'line',
+  'purple',
 ] as const
 
 /**
  * 扩展后的 twMerge：把自定义语义色并入 color 冲突组。
- * 这样 bg-navy 与 bg-blue、text-muted 与 text-ink、border-line 与 border-slate-400
+ * 这样 bg-navy 与 bg-blue、text-muted 与 text-navy、border-line 与 border-blue
  * 等同类（背景/文字/边框颜色）才能正确参与“保留靠后者”的冲突消解。
  */
 const twMerge = extendTailwindMerge({

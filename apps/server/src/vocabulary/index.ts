@@ -9,7 +9,7 @@
  * 加载失败抛出带中文文案的 Error，由启动流程阻止服务带病运行。
  */
 import { APP_CONFIG } from '../../../../config.ts'
-import { normalizeAnswer, type VocabularyWord } from '@draw-guess/shared'
+import type { VocabularyWord } from '@draw-guess/shared'
 import type { VocabularyMeta, VocabularyProvider } from './contract.ts'
 import { JsonFileProvider } from './json-file.provider.ts'
 
@@ -50,10 +50,4 @@ export async function loadVocabulary(rootDirectory = process.cwd()): Promise<Voc
     version: loaded.version,
     meta: loaded.meta,
   }
-}
-
-/** 供测试/调试：按规范化词面查找词条（与运行时判定口径一致）。 */
-export function findWordByText(store: VocabularyStore, text: string): VocabularyWord | undefined {
-  const normalized = normalizeAnswer(text)
-  return store.items.find((word) => normalizeAnswer(word.text) === normalized)
 }

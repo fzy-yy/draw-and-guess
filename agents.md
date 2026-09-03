@@ -45,7 +45,7 @@ draw_and_guess/
 ├── config.ts                     # ★唯一业务配置中心（聚合 export）：APP_CONFIG / PUBLIC_CONFIG / DeploymentConfig / getDeploymentConfig
 ├── config/                       # 按领域拆分的配置（由 config.ts 聚合；strings.ts 除外）
 │   ├── app.ts                    # 应用标识/名称版本/协议版本/storageKey/网络与连接参数（限频、宽限、端口、恢复令牌窗口）
-│   ├── player.ts                 # 玩家资料：昵称长度、默认昵称、40 个内置 SVG 头像 ID 白名单、颜色正则
+│   ├── player.ts                 # 玩家资料：昵称长度、默认昵称、40 个内置 SVG 头像 ID 白名单
 │   ├── room.ts                   # 房间默认名、公开性、私密短码长度、允许邀请/暂停、加入策略 joinPolicy
 │   ├── game.ts                   # 对局规则：轮数/作画/选词/候选数、提示阈值、分数（基础/速度/顺序/画家）
 │   ├── drawing.ts                # 画板：预设色、色正则、粗细区间、填充容差、批次/限频/历史命令与点数预算
@@ -101,7 +101,7 @@ draw_and_guess/
 │       ├── main.ts                # 客户端入口：创建 App 并挂载 #app；仅引入 ./style/index.css
 │       ├── App.vue                # 根舞台：页面互斥渲染（对局>房间>设置>大厅>资料）、vue-sonner `<Toaster/>`、邀请横幅、竖屏提示、断线恢复阻断框
 │       ├── style/
-│       │   └── index.css          # ★唯一全局样式文件：@import tailwindcss + @theme 令牌 + @layer base + @layer components（.btn/.dialog-shell/.field-input/.eyebrow 等）
+│       │   └── index.css          # ★唯一全局样式文件：@import tailwindcss + @theme 令牌 + @layer base + @layer components（.dialog-shell/.eyebrow/.round-icon-btn/.ui-feedback 等）
 │       ├── stores/
 │       │   ├── game.ts            # Pinia store：本地资料/设置、房间与对局状态、业务操作请求（发送方）、vue-sonner notify 转译
 │       │   ├── socket.ts          # Socket 单例 + 推送事件桥接（HMR dispose）
@@ -134,7 +134,7 @@ draw_and_guess/
 │           └── createUuid.ts      # 多环境 UUID：nanoid 十六进制 + RFC 4122 v4 位点（兼容服务端 z.string().uuid()）
 ```
 
-> **关于客户端样式**：`apps/client/src/style/` 仅剩 `index.css` 一个文件。它是 **Tailwind 全局配置**（`@theme` 语义色令牌 + `@layer base` 全局 reset、舞台上下文、交互动效、Vue 过渡钩子、关键帧、竖屏/减少动效 + `@layer components` 共享组件类 `.dialog-shell`/`.field-input`/`.eyebrow`/`.round-icon-btn`/`.ui-feedback`/`.hover-lift` 等，用 `@apply` 收敛重复行内类）。**组件/页面自身视觉样式一律写成 Vue 模板内的行内 Tailwind 类**（依赖 `cqh/cqw` 容器单位 + 语义色 `bg-navy`/`text-muted`/`border-line` 等）。新增样式时不要新建 CSS 文件、不要写 `@layer components` 之外的原生 CSS 类选择器。
+> **关于客户端样式**：`apps/client/src/style/` 仅剩 `index.css` 一个文件。它是 **Tailwind 全局配置**（`@theme` 语义色令牌 + `@layer base` 全局 reset、舞台上下文、交互动效、Vue 过渡钩子、关键帧、竖屏/减少动效 + `@layer components` 共享组件类 `.dialog-shell`/`.eyebrow`/`.round-icon-btn`/`.ui-feedback`/`.hover-tint` 等，用 `@apply` 收敛重复行内类）。**组件/页面自身视觉样式一律写成 Vue 模板内的行内 Tailwind 类**（依赖 `cqh/cqw` 容器单位 + 语义色 `bg-navy`/`text-muted`/`border-line` 等）。新增样式时不要新建 CSS 文件、不要写 `@layer components` 之外的原生 CSS 类选择器。
 
 ---
 
@@ -210,7 +210,7 @@ pnpm format:check  # 仅检查格式
 - **UI 文案**：**严禁在组件/业务代码里硬编码展示字符**；一律从 `config/strings.ts` 的 `strings`（客户端）或 `serverStrings`（服务端）导入。
 - **样式**：组件/页面视觉一律用**行内 Tailwind 类**写在 Vue 模板；重复长串收敛到共享组件（`AppButton`/`BaseDialog`/`ConfirmDialog`/`IconButton`/`ToolButton`/`OverlayCard`/`RuleRow`/`RoundIconButton`）或 `style/index.css` 的 `@layer components` 共享类。不要新建 CSS 文件、不要写 `@layer components` 之外的原生 CSS 类选择器。语义色用 `@theme` 令牌；容器单位 `cqh/cqw` 用任意值（内部空格用 `_`，如 `shadow-[0_1.2cqh_5cqh_#0009]`）。
 - **配色（≤10 色）**：全应用自定义颜色**只取自 `index.css` `@theme` 里固定的 10 个语义变量**（`navy`/`muted`/`line`/`paper`/`blue`/`sky`/`yellow`/`green`/`red`/`purple`），`config/room.ts` 的 `seatColors` 取其中 6 个；`#fff`/`#000` 与透明度衍生（如 `bg-blue/10`）不计入调色板。**禁止**在组件/模板中硬编码任意 HEX（`bg-[#...]`/`text-[#...]`）或 Tailwind 默认色阶（`slate-*` 等）。`config/drawing.ts` 的 `colors` 是**画板工具色**（画家可选画笔色），属功能性工具配置，非 UI 主题色，不纳入 10 色限制。
-- **动画一致性**：按钮/卡片交互动效统一为 160ms（复用 `.ui-feedback` / `.hover-lift` 共享类，或依赖 `@layer base` 中 `.game-stage button` 的全局过渡）；同类控件应复用同一动画，避免各自定制造成手感不一。
+- **动画一致性**：按钮/卡片交互动效统一为 160ms（复用 `.ui-feedback` / `.hover-tint` 共享类，或依赖 `@layer base` 中 `.game-stage button` 的全局过渡）；同类控件应复用同一动画，避免各自定制造成手感不一。
 
 ---
 

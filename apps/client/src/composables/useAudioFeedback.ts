@@ -14,8 +14,6 @@ export function useAudioFeedback(): void {
   const store = useGameStore()
   let context: AudioContext | undefined
   let lastWarningSecond = -1
-  // 页面级防抖：最后一分钟内每秒只播放一次警告音
-  let timer = 0
 
   /** 首次用户交互时解锁音频上下文（遵守浏览器自动播放限制）。 */
   const unlock = (): void => {
@@ -91,11 +89,13 @@ export function useAudioFeedback(): void {
     (count, previous) => count > previous && play('invite'),
   )
 
-  // 最后十秒按服务端结束时间重新计算；标签页恢复后不会继续错误的本地递减值。
-  timer = window.setInterval(() => {
+  // 最后十秒按服务端结束时间与全局时钟偏移重新计算：与 useGameHud 的倒计时同一口径，
+  // 局域网设备时钟有偏差时警告音不会先于/后于 HUD 数字跳动；标签页恢复后也不会继续错误的本地值。
+  // 最后十秒警告音的轮询定时器（挂载时创建一次，卸载时清理）：与 HUD 倒计时同一时钟口径。
+  const warningTimer = window.setInterval(() => {
     const endsAt = store.room?.game?.phaseEndsAt
     if (!endsAt || store.room?.phase !== 'drawing') return
-    const second = Math.ceil((endsAt - Date.now()) / 1_000)
+    const second = Math.ceil((endsAt - (Date.now() + store.clockOffset)) / 1_000)
     if (second > 0 && second <= APP_CONFIG.game.warningSeconds && second !== lastWarningSecond) {
       lastWarningSecond = second
       play('warning')
@@ -104,7 +104,7 @@ export function useAudioFeedback(): void {
 
   // 组件卸载时清理定时器、事件监听与音频上下文
   onBeforeUnmount(() => {
-    window.clearInterval(timer)
+    window.clearInterval(warningTimer)
     window.removeEventListener('pointerdown', unlock)
     window.removeEventListener('keydown', unlock)
     if (context) void context.close()

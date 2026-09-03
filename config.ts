@@ -83,6 +83,7 @@ export const PUBLIC_CONFIG = {
     requestTimeoutMs: APP_CONFIG.network.requestTimeoutMs,
     pingIntervalMs: APP_CONFIG.network.pingIntervalMs,
     sessionRestoreRetryMs: APP_CONFIG.network.sessionRestoreRetryMs,
+    latencyGoodMs: APP_CONFIG.network.latencyGoodMs,
   },
   player: APP_CONFIG.player,
   room: {

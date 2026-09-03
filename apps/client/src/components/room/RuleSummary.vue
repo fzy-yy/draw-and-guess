@@ -49,7 +49,7 @@ const hintsSummary = computed(() => {
         <button
           v-if="store.isHost"
           type="button"
-          class="col-start-2 row-[1_/_3] flex items-center gap-[0.4em] text-blue bg-transparent font-extrabold"
+          class="col-start-2 row-[1/3] flex items-center gap-[0.4em] text-blue bg-transparent font-extrabold"
           @click="emit('edit-rules')"
         >
           <Settings2 /> {{ strings.room.rulesEdit }}
@@ -73,7 +73,7 @@ const hintsSummary = computed(() => {
 
     <!-- 词库管理入口：仅房主可编辑，展示已选/总词条数 -->
     <button
-      class="flex items-center gap-[0.75em] min-h-[7cqh] py-[0.8cqh] px-[0.8em] text-blue bg-sky !border-l-[0.45cqh] !border-l-blue text-left"
+      class="flex items-center gap-[0.75em] min-h-[7cqh] py-[0.8cqh] px-[0.8em] text-blue bg-sky border-l-[0.45cqh]! border-l-blue! text-left"
       type="button"
       :disabled="!store.isHost || props.vocabularyLoading"
       @click="emit('open-vocabulary')"
@@ -94,7 +94,7 @@ const hintsSummary = computed(() => {
     <!-- 邀请在线玩家：满员或无权限时禁用 -->
     <div class="grid grid-cols-1 gap-[0.6em] my-[1.3cqh]">
       <button
-        class="inline-flex min-h-[4.6cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[0.5em] font-black text-navy bg-white !border !border-[0.18cqh] !border-line text-[0.72em]"
+        class="inline-flex min-h-[4.6cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[0.5em] font-black text-navy bg-white border-[0.18cqh]! border-line! text-[0.72em]"
         type="button"
         :disabled="
           (store.room?.members.length ?? 0) >= (store.room?.settings.maxPlayers ?? 0) ||

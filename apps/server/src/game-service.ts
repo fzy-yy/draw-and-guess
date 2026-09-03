@@ -604,6 +604,9 @@ export class GameService {
     delete player.roomId
     room.stateVersion += 1
     this.logger.info({ roomId: room.id, playerId }, '玩家主动退出当前对局并保留成绩卡')
+    // 持久化：成员席位（leftGame/ready）与玩家房间归属同步入库。
+    this.persistPlayer(player)
+    this.persistRoom(room)
 
     const payload: MemberConnectionChange = {
       playerId,
@@ -677,6 +680,7 @@ export class GameService {
       throw new GameError('INVALID_SETTINGS', serverStrings.errors.INVALID_SETTINGS_MAX_PLAYERS)
     room.settings = next
     this.invalidateReady(room, serverStrings.notices.rulesUpdated)
+    this.persistRoom(room)
     this.emitRoom(room.id)
     // maxPlayers 会显示在大厅房间行中，规则变更后需同步广播大厅快照，避免列表展示陈旧人数。
     this.broadcastPresence()
@@ -717,6 +721,7 @@ export class GameService {
     room.stateVersion += 1
     // 词库内容变化不影响已准备状态；只有房间规则变化才要求重新确认准备。
     this.addSystemNotice(room, serverStrings.notices.vocabularyUpdated)
+    this.persistRoom(room)
     this.emitRoom(room.id)
     return this.getVocabulary(playerId)
   }
@@ -894,6 +899,18 @@ export class GameService {
     }
     game.lastSequence = stroke.sequence
     game.strokePointTotal = nextPointTotal
+    // 撤销语义：新命令使重做失效，且此前被撤销的命令被永久丢弃（而不是重新显示），
+    // 与主流画板一致：撤销即移除，继续作画不会让被撤销的内容回来。
+    // 从历史中物理移除并同步回收点数预算；客户端按同一命令流在本地做同样的移除。
+    if (game.undoneStrokeIds.length) {
+      const undoneSet = new Set(game.undoneStrokeIds)
+      for (const command of game.strokes) {
+        if (undoneSet.has(command.id))
+          game.strokePointTotal -= command.kind === 'stroke' ? command.points.length : 1
+      }
+      game.strokes = game.strokes.filter((command) => !undoneSet.has(command.id))
+      game.undoneStrokeIds = []
+    }
     if (existing) {
       // 同一按下动作的后续批次沿用笔画 ID；只追加新增点，撤销仍能一次移除完整笔画。
       existing.points.push(...stroke.points)
@@ -906,7 +923,7 @@ export class GameService {
         if (dropped) game.strokePointTotal -= dropped.kind === 'stroke' ? dropped.points.length : 1
       }
     }
-    game.undoneStrokeIds = [] // 新笔画会清空撤销栈（不能再撤销之前的操作）
+    // 撤销栈已在上方随新命令一并处置（物理移除被撤销命令），无需重复清空
     // E4：增量广播前标记房间全部成员已同步到该序号，快照可省略画布历史（差分下发）
     room.members.forEach((member) => (member.lastSyncedSeq = game.lastSequence))
     // 标准化颜色后广播给房间所有成员（画家自身也会收到并用于纠正本地预览）
@@ -932,13 +949,23 @@ export class GameService {
       throw new GameError('DRAW_BUDGET_EXCEEDED', serverStrings.errors.DRAW_BUDGET_EXCEEDED)
     game.lastSequence = fill.sequence
     game.strokePointTotal += 1
+    // 与 addStroke 同一撤销语义：新命令永久丢弃此前被撤销的命令（同步回收点数预算）
+    if (game.undoneStrokeIds.length) {
+      const undoneSet = new Set(game.undoneStrokeIds)
+      for (const command of game.strokes) {
+        if (undoneSet.has(command.id))
+          game.strokePointTotal -= command.kind === 'stroke' ? command.points.length : 1
+      }
+      game.strokes = game.strokes.filter((command) => !undoneSet.has(command.id))
+      game.undoneStrokeIds = []
+    }
     game.strokes.push({ ...fill, color })
     // 丢弃最早命令时同步回收其点数预算
     if (game.strokes.length > APP_CONFIG.drawing.maxHistoryCommands) {
       const dropped = game.strokes.shift()
       if (dropped) game.strokePointTotal -= dropped.kind === 'stroke' ? dropped.points.length : 1
     }
-    game.undoneStrokeIds = [] // 新填充同样清空撤销栈
+    // 撤销栈已在上方随新命令一并处置，无需重复清空
     // E4：标记房间全部成员同步到该序号（与笔画增量同一套差分机制）
     room.members.forEach((member) => (member.lastSyncedSeq = game.lastSequence))
     this.io.to(room.id).emit(EVENTS.drawFillCommit, {
@@ -952,7 +979,9 @@ export class GameService {
     const game = this.requireDrawerGame(room, playerId, roundId)
     // 与笔画/填充同样受绘图限频保护：否则单请求可无限触发全员快照广播
     enforceEventRate(this.requirePlayer(playerId), 'draw')
-    // 从最新命令倒序找第一条未撤销的命令（倒向遍历避免拷贝整个历史数组）
+    // 从最新命令倒序找第一条未撤销的命令（倒向遍历避免拷贝整个历史数组）。
+    // 撤销只是把命令移入撤销集合（仍留在历史中供重做与丢弃判定），
+    // 真正的物理移除发生在下一个新命令被接受时（见 addStroke/addFill 的撤销语义）。
     const undoneSet = new Set(game.undoneStrokeIds)
     let target: (typeof game.strokes)[number] | undefined
     for (let index = game.strokes.length - 1; index >= 0; index -= 1) {
@@ -1036,9 +1065,10 @@ export class GameService {
     this.round.finishGame(room, serverStrings.notices.endEarlyByHost)
   }
 
-  /** 最终结算后返回等待阶段：释放本局秘密并让全员重新准备。 */
+  /** 最终结算后返回等待阶段：释放本局秘密并让全员重新准备。
+   * 任意在线成员均可触发（与房主等效的全局转换）：避免结算后非房主只能退出房间。 */
   returnWaiting(playerId: string): void {
-    const room = this.requireHostRoom(playerId)
+    const { room } = this.requireMembership(playerId)
     if (room.phase !== 'game_result')
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_RETURN_WAITING)
     if (room.game?.timer) clearTimeout(room.game.timer)
@@ -1046,6 +1076,8 @@ export class GameService {
     room.members = room.members.filter((member) => !member.leftGame)
     room.phase = 'waiting'
     this.invalidateReady(room, serverStrings.notices.backToRoom)
+    // 持久化：返回房间后成员集合与准备状态变化入库。
+    this.persistRoom(room)
     this.emitRoom(room.id)
     this.broadcastPresence()
   }
@@ -1079,6 +1111,8 @@ export class GameService {
         this.players.get(targetId)?.profile.nickname ?? serverStrings.notices.hostFallback,
       ),
     )
+    // 持久化：房主变更与轮换后的私密房码同步入库。
+    this.persistRoom(room)
     this.emitRoom(room.id)
     // hostName 会显示在大厅房间行中，房主迁移后需同步广播大厅快照，避免列表展示陈旧房主名。
     this.broadcastPresence()
@@ -1230,6 +1264,8 @@ export class GameService {
                     serverStrings.notices.hostFallback,
                 ),
               )
+              // 持久化：断线超时迁移房主与主动移交同一套落库口径。
+              this.persistRoom(room)
               this.emitRoom(room.id)
             }),
           APP_CONFIG.network.drawerReconnectGraceMs,

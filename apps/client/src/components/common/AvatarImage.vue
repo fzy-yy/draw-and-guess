@@ -17,7 +17,7 @@ withDefaults(
 
 <template>
   <span
-    class="inline-grid flex-none place-items-center overflow-hidden rounded-full border-[0.28cqh] border-white bg-white shadow-[0_0_0_0.18cqh_#94a3b8]"
+    class="inline-grid flex-none place-items-center overflow-hidden rounded-full border-[0.28cqh] border-white bg-white shadow-ring"
     :aria-label="label"
   >
     <img

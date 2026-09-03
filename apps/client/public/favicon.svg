@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="你画我猜">
+  <!-- 站点图标：深蓝圆角底 + 黄色描边，呼应游戏舞台主题色（见 index.css @theme 的 navy/yellow） -->
+  <rect width="32" height="32" rx="7" fill="#172554" />
+  <g fill="none" stroke="#facc15" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 手柄主体 -->
+    <path d="M8.5 12.5h15a3.5 3.5 0 0 1 3.4 4.3l-1 4.6a2.6 2.6 0 0 1-4.5 1l-1.9-2.2h-5l-1.9 2.2a2.6 2.6 0 0 1-4.5-1l-1-4.6a3.5 3.5 0 0 1 3.4-4.3Z" />
+    <!-- 方向键与按钮 -->
+    <path d="M11.5 16v3M10 17.5h3" />
+    <circle cx="20.5" cy="16.5" r="0.6" fill="#facc15" />
+    <circle cx="22.5" cy="18.5" r="0.6" fill="#facc15" />
+  </g>
+</svg>

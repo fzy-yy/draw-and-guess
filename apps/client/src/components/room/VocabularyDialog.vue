@@ -1,19 +1,31 @@
 <!--
-  本局词库管理弹窗（房主）——搜索、多字段筛选、排序、双视图陈列、批量选择、确认保存。
-  展示形式两档可切换（config/ui.vocabDefaultView 决定默认档）：
+  本局词库管理弹窗（房主）——搜索、多字段筛选、排序、双视图陈列、统一复选框选择、确认保存。
+  展示形式两档可切换（config/ui.vocabDefaultView 决定默认档），切换按钮只展示图标（悬浮提示说明）：
   - 散列视图（VocabGridView）：仅词面 + 虚拟滚动，适合快速勾选；
   - 表格视图（VocabTableView）：多字段陈列 + 表头排序 + 列显隐，适合逐条审阅词库质量。
-  三类筛选（分类/难度/语言）与搜索框可叠加生效（取交集）；表格列显隐由「显示字段」弹层控制。
+  三类筛选（分类/难度/语言）与搜索框可叠加生效（取交集）；筛选触发按钮同样只展示图标。
+  批量选择收敛为一个「统一三态复选框」：散列视图放在统计栏、表格视图放在表头，
+  作用于当前搜索+筛选结果（无筛选时即全部词条），替代原先四个批量按钮。
   选择集合为两视图共享；全部展示文案来自 config/strings.ts，全部上限/默认值来自 config。
 -->
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch, type Component } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
-import { LayoutGrid, Search, Table2, X } from 'lucide-vue-next'
+import {
+  Languages,
+  LayoutGrid,
+  Search,
+  SlidersHorizontal,
+  Star,
+  Table2,
+  Tags,
+  X,
+} from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import type { VocabularyWord } from '@draw-guess/shared'
-import BaseDialog from '@/components/BaseDialog.vue'
-import AppButton from '@/components/AppButton.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
+import AppButton from '@/components/common/AppButton.vue'
+import SectionHeader from '@/components/common/SectionHeader.vue'
 import MultiSelectPopover, {
   type MultiSelectOption,
 } from '@/components/common/MultiSelectPopover.vue'
@@ -54,7 +66,7 @@ const filterSelections = ref<Record<string, string[]>>({
 /**
  * 全部词条 ID。统一走可选链而非 `store.vocabulary!` 非空断言：
  * 弹窗只按 `showVocabulary` 挂载，若词库拉取尚未完成或失败，
- * 直接断言会在点击「全选/取消全选/恢复默认」时抛 TypeError。
+ * 直接断言会在点击「恢复默认/确认选择」时抛 TypeError。
  */
 const allWordIds = computed(() => (store.vocabulary?.items ?? []).map((item) => item.id))
 
@@ -139,40 +151,67 @@ function setSelection(ids: string[], selected: boolean): void {
   }
 }
 
-/** 保存词库选择；请求失败由统一请求层提示，并保留当前弹窗和选择供重试。 */
-async function saveVocabulary(): Promise<void> {
-  await store.saveVocabulary([...selectedIds.value])
-  emit('close')
+// —— 统一三态复选框：作用于当前「搜索+筛选结果」，无筛选时等价于全部词条 ——
+/** 统一复选框三态：结果全选 → all；部分选中 → some；未选 → none。 */
+const selectAllState = computed<'all' | 'some' | 'none'>(() => {
+  if (!filteredWords.value.length || !selectedIds.value.size) return 'none'
+  const selectedInResults = filteredWords.value.filter((word) => selectedIds.value.has(word.id))
+  if (!selectedInResults.length) return 'none'
+  return selectedInResults.length === filteredWords.value.length ? 'all' : 'some'
+})
+
+/**
+ * 统一复选框点击：未全选 → 全选当前结果；已全选 → 取消当前结果。
+ * 半选（some）视为「未全选」，一次点击即可补齐剩余结果。
+ */
+function toggleSelectAll(): void {
+  const select = selectAllState.value !== 'all'
+  setSelection(
+    filteredWords.value.map((word) => word.id),
+    select,
+  )
 }
 
-/** 表格列定义（label 全部来自 strings，禁止硬编码）。 */
+/** 保存词库选择；失败由统一请求层提示，并保留当前弹窗和选择供重试。 */
+async function saveVocabulary(): Promise<void> {
+  const ok = await store.saveVocabulary([...selectedIds.value])
+  if (ok) emit('close')
+}
+
+/** 表格列定义（label 全部来自 strings，禁止硬编码）。
+ * weight：列宽相对权重，配合 DataTable 的权重归一化，列显隐后自动重新铺满整表。 */
 const allColumns = computed<DataTableColumn<VocabularyWord>[]>(() => [
-  { key: 'text', label: strings.room.vocabColumnText },
+  { key: 'text', label: strings.room.vocabColumnText, weight: 22 },
   {
     key: 'categories',
     label: strings.room.vocabColumnCategories,
+    weight: 13,
     sortValue: (word) => word.categories.join(','),
   },
-  { key: 'difficulty', label: strings.room.vocabColumnDifficulty },
+  { key: 'difficulty', label: strings.room.vocabColumnDifficulty, weight: 12 },
   {
     key: 'aliases',
     label: strings.room.vocabColumnAliases,
+    weight: 27,
     sortValue: (word) => word.aliases.join(','),
   },
   {
     key: 'tags',
     label: strings.room.vocabColumnTags,
+    weight: 10,
     sortValue: (word) => word.tags.join(','),
   },
-  { key: 'lang', label: strings.room.vocabColumnLang },
+  { key: 'lang', label: strings.room.vocabColumnLang, weight: 8 },
   {
     key: 'timeLimit',
     label: strings.room.vocabColumnTimeLimit,
+    weight: 8,
     sortValue: (word) => word.timeLimit ?? 0,
   },
   {
     key: 'scoreWeight',
     label: strings.room.vocabColumnScoreWeight,
+    weight: 8,
     sortValue: (word) => word.scoreWeight ?? 0,
   },
 ])
@@ -190,35 +229,38 @@ const columnOptions = computed<MultiSelectOption[]>(() =>
 )
 
 /** 字段筛选定义：分类（来自词库白名单）/ 难度（1~上限）/ 语言（词库内实际出现的语言）。 */
-const filterDefs = computed<Array<{ key: string; label: string; options: MultiSelectOption[] }>>(
-  () => {
-    const difficultyMax = store.config.ui.difficultyMax
-    const langs = [...new Set((store.vocabulary?.items ?? []).map((word) => word.lang))]
-    return [
-      {
-        key: 'categories',
-        label: strings.room.vocabColumnCategories,
-        options: (store.vocabulary?.categories ?? []).map((category) => ({
-          value: category,
-          label: category,
-        })),
-      },
-      {
-        key: 'difficulty',
-        label: strings.room.vocabColumnDifficulty,
-        options: Array.from({ length: difficultyMax }, (_item, index) => {
-          const value = index + 1
-          return { value: String(value), label: strings.room.vocabDifficultyLabel(value) }
-        }),
-      },
-      {
-        key: 'lang',
-        label: strings.room.vocabColumnLang,
-        options: langs.map((lang) => ({ value: lang, label: lang })),
-      },
-    ]
-  },
-)
+const filterDefs = computed<
+  Array<{ key: string; label: string; icon: Component; options: MultiSelectOption[] }>
+>(() => {
+  const difficultyMax = store.config.ui.difficultyMax
+  const langs = [...new Set((store.vocabulary?.items ?? []).map((word) => word.lang))]
+  return [
+    {
+      key: 'categories',
+      label: strings.room.vocabColumnCategories,
+      icon: Tags,
+      options: (store.vocabulary?.categories ?? []).map((category) => ({
+        value: category,
+        label: category,
+      })),
+    },
+    {
+      key: 'difficulty',
+      label: strings.room.vocabColumnDifficulty,
+      icon: Star,
+      options: Array.from({ length: difficultyMax }, (_item, index) => {
+        const value = index + 1
+        return { value: String(value), label: strings.room.vocabDifficultyLabel(value) }
+      }),
+    },
+    {
+      key: 'lang',
+      label: strings.room.vocabColumnLang,
+      icon: Languages,
+      options: langs.map((lang) => ({ value: lang, label: lang })),
+    },
+  ]
+})
 
 /** 更新某个筛选字段的选中集合（MultiSelectPopover 受控回写）。 */
 function updateFilter(key: string, values: string[]): void {
@@ -271,20 +313,21 @@ watch(
     @close="emit('close')"
   >
     <template #header>
-      <p class="eyebrow">
-        {{ strings.room.vocabLabel }}
-      </p>
-      <h2 id="vocab-title">{{ strings.room.vocabTitle }}</h2>
+      <SectionHeader
+        id="vocab-title"
+        :eyebrow="strings.room.vocabLabel"
+        :title="strings.room.vocabTitle"
+      ></SectionHeader>
     </template>
 
     <template v-if="store.vocabulary">
       <div class="flex min-h-0 flex-1 flex-col">
-        <!-- 工具栏：搜索 + 视图切换 + 显示字段 + 字段筛选（全部可与搜索叠加） -->
+        <!-- 工具栏：搜索 + 视图切换（纯图标）+ 显示字段 + 字段筛选（纯图标，悬浮说明语义） -->
         <div
           class="flex flex-wrap items-center gap-[0.6em] py-[1.1cqh] px-[1.7em] border-b-[0.18cqh] border-b-line"
         >
           <label
-            class="flex h-[4.8cqh] min-w-[16cqw] flex-[2] items-center gap-[0.6em] rounded-[0.65em] border-[0.18cqh] border-line bg-white px-[0.75em]"
+            class="flex h-[4.8cqh] min-w-[16cqw] flex-2 items-center gap-[0.6em] rounded-[0.65em] border-[0.18cqh] border-line bg-white px-[0.75em]"
             ><Search aria-hidden="true" /><input
               v-model="search"
               class="w-full min-w-0 border-0 outline-0 bg-transparent"
@@ -298,7 +341,7 @@ watch(
             >
               <X /></button
           ></label>
-          <!-- 视图切换：散列（仅词面）/ 表格（多字段） -->
+          <!-- 视图切换：散列（仅词面）/ 表格（多字段）；只展示图标，悬浮提示承载文字语义 -->
           <div
             class="flex h-[4.8cqh] items-center gap-[0.3em] rounded-[0.65em] border-[0.18cqh] border-line bg-white p-[0.3em]"
             role="group"
@@ -308,40 +351,64 @@ watch(
               v-for="mode in ['grid', 'table'] as const"
               :key="mode"
               type="button"
-              class="flex h-full items-center gap-[0.3em] rounded-[0.45em] px-[0.7em] text-[0.68em] font-extrabold"
+              class="flex h-full w-[3.4em] items-center justify-center rounded-[0.45em]"
               :class="viewMode === mode ? 'bg-blue text-white' : 'text-muted hover:bg-line'"
+              :title="mode === 'grid' ? strings.room.vocabViewGrid : strings.room.vocabViewTable"
+              :aria-label="
+                mode === 'grid' ? strings.room.vocabViewGrid : strings.room.vocabViewTable
+              "
               :aria-pressed="viewMode === mode"
               @click="viewMode = mode"
             >
-              <LayoutGrid v-if="mode === 'grid'" class="h-[1.5cqh] w-[1.5cqh]" aria-hidden="true" />
-              <Table2 v-else class="h-[1.5cqh] w-[1.5cqh]" aria-hidden="true" />
-              {{ mode === 'grid' ? strings.room.vocabViewGrid : strings.room.vocabViewTable }}
+              <LayoutGrid v-if="mode === 'grid'" class="h-[2cqh] w-[2cqh]" aria-hidden="true" />
+              <Table2 v-else class="h-[2cqh] w-[2cqh]" aria-hidden="true" />
             </button>
           </div>
-          <!-- 显示字段：控制表格可见列（列显隐） -->
+          <!-- 显示字段：控制表格可见列（列显隐）；纯图标 + 悬浮说明。
+              位于工具栏顶部，弹层必须向下弹出（placement="bottom"），
+              否则会越过对话框顶部被裁剪（历史上曾因此看不到弹层上半部分） -->
           <MultiSelectPopover
             :label="strings.room.vocabShowColumns"
             :options="columnOptions"
             :selected="visibleColumnKeys"
+            icon-only
+            :icon="SlidersHorizontal"
+            :highlight="true"
+            placement="bottom"
             @update:selected="visibleColumnKeys = $event"
           />
-          <!-- 字段筛选：分类 / 难度 / 语言（多选，可叠加搜索） -->
+          <!-- 字段筛选：分类 / 难度 / 语言（多选，可叠加搜索）；纯图标 + 悬浮说明 -->
           <MultiSelectPopover
             v-for="filter in filterDefs"
             :key="filter.key"
-            :label="
-              (filterSelections[filter.key] ?? []).length
-                ? `${filter.label} · ${(filterSelections[filter.key] ?? []).length}`
-                : strings.room.vocabFilterAll(filter.label)
-            "
+            :label="filter.label"
             :options="filter.options"
             :selected="filterSelections[filter.key] ?? []"
+            icon-only
+            :icon="filter.icon"
+            :highlight="true"
+            placement="bottom"
             @update:selected="updateFilter(filter.key, $event)"
           />
         </div>
 
-        <!-- 词库统计：全部 / 搜索+筛选结果 / 已选数量 -->
-        <div class="flex gap-[2em] py-[1cqh] px-[1.7em] text-muted bg-sky text-[0.78em]">
+        <!-- 词库统计 + 统一复选框：散列视图下复选框放在统计栏左侧；表格视图放在表头 -->
+        <div
+          class="flex gap-[2em] items-center py-[1cqh] px-[1.7em] text-muted bg-sky text-[0.78em]"
+        >
+          <label
+            v-if="viewMode === 'grid'"
+            class="flex cursor-pointer items-center gap-[0.45em] font-extrabold text-navy"
+          >
+            <input
+              type="checkbox"
+              class="h-[1.7cqh] w-[1.7cqh] accent-blue"
+              :checked="selectAllState === 'all'"
+              :indeterminate="selectAllState === 'some'"
+              :aria-label="strings.room.vocabToggleAllAria"
+              @change="toggleSelectAll"
+            />
+          </label>
           <span
             >{{ strings.room.vocabAll }}
             <b class="text-blue">{{ store.vocabulary?.items.length ?? 0 }}</b></span
@@ -353,69 +420,28 @@ watch(
           >
         </div>
 
-        <!-- 批量选择工具条：全选/取消全选作用于全部词条，全选/取消结果作用于当前筛选结果 -->
-        <div
-          class="flex flex-wrap gap-[0.6em] px-[1.7em] py-[0.9cqh] border-b-[0.18cqh] border-b-line"
-        >
-          <button
-            type="button"
-            class="px-[0.8em] text-navy bg-line rounded-[0.5em] text-[0.72em] font-extrabold"
-            @click="setSelection(allWordIds, true)"
-          >
-            {{ strings.room.selectAll }}
-          </button>
-          <button
-            type="button"
-            class="px-[0.8em] text-navy bg-line rounded-[0.5em] text-[0.72em] font-extrabold"
-            @click="setSelection(allWordIds, false)"
-          >
-            {{ strings.room.deselectAll }}
-          </button>
-          <button
-            type="button"
-            class="px-[0.8em] text-navy bg-line rounded-[0.5em] text-[0.72em] font-extrabold"
-            @click="
-              setSelection(
-                filteredWords.map((item) => item.id),
-                true,
-              )
-            "
-          >
-            {{ strings.room.selectResults }}
-          </button>
-          <button
-            type="button"
-            class="px-[0.8em] text-navy bg-line rounded-[0.5em] text-[0.72em] font-extrabold"
-            @click="
-              setSelection(
-                filteredWords.map((item) => item.id),
-                false,
-              )
-            "
-          >
-            {{ strings.room.deselectResults }}
-          </button>
-        </div>
-
-        <!-- 内容区：双视图切换。keep-alive 保留两视图各自的滚动位置与虚拟器测量结果 -->
-        <KeepAlive>
-          <VocabGridView
-            v-if="viewMode === 'grid'"
-            :words="filteredWords"
-            :selected-ids="selectedIds"
-            @toggle="toggleWord"
-          />
-          <VocabTableView
-            v-else
-            :rows="tableRows"
-            :columns="visibleColumns"
-            :selected-ids="selectedIds"
-            :sort-key="sortKey"
-            :sort-dir="sortDir"
-            @sort="handleSort"
-            @toggle="toggleWord"
-          />
-        </KeepAlive>
+        <!--
+          内容区：双视图切换。两视图都通过 useVirtualRows 虚拟滚动（同一份逻辑）；
+          不使用 KeepAlive：切换即重新挂载，虚拟器基于当前内容重新测量，
+          避免隐藏期间测量缓存失效导致切回时白屏（选择集合在父组件，不受影响）。
+        -->
+        <VocabGridView
+          v-if="viewMode === 'grid'"
+          :words="filteredWords"
+          :selected-ids="selectedIds"
+          @toggle="toggleWord"
+        />
+        <VocabTableView
+          v-else
+          :rows="tableRows"
+          :columns="visibleColumns"
+          :selected-ids="selectedIds"
+          :sort-key="sortKey"
+          :sort-dir="sortDir"
+          @sort="handleSort"
+          @toggle="toggleWord"
+          @toggle-all="toggleSelectAll"
+        />
       </div>
     </template>
 
@@ -423,7 +449,7 @@ watch(
       <!-- 底部操作：保存词库（数量不足时禁用）或恢复默认全选 -->
       <p
         class="mr-auto text-muted text-[0.72em]"
-        :class="selectedIds.size < store.config.vocabulary.minWords ? '!text-red' : ''"
+        :class="selectedIds.size < store.config.vocabulary.minWords ? 'text-red!' : ''"
       >
         {{ strings.room.vocabMinHint(store.config.vocabulary.minWords) }}
       </p>

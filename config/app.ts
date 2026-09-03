@@ -4,7 +4,6 @@
  */
 export const app = {
   name: '你画我猜',
-  englishName: 'Draw and Guess',
   version: '2.3.0',
   protocolVersion: '6', // 词库富模型（ID 语义/快照结构/规则字段变更），不匹配时拒绝注册
   storageKey: 'draw-and-guess-profile-v1', // localStorage 资料键
@@ -21,6 +20,17 @@ export const network = {
   inviteExpiryMs: 30_000, // 邀请 30 秒有效
   inviteCooldownMs: 5_000, // 同一目标邀请冷却
   pingIntervalMs: 10_000, // Socket.IO 心跳与延迟测量周期
+  /**
+   * 网络按钮延迟档位阈值（毫秒，局域网语义）：
+   * 测得往返延迟 ≤ latencyGoodMs 显示绿色（连接良好）；
+   * 大于该值显示橙色（网络较慢）；断线时无论延迟为何值一律显示红色。
+   * 阈值远大于局域网典型延迟（<10ms），留出抖动余量的同时能感知到明显的网络劣化。
+   */
+  latencyGoodMs: 80,
   guessEventsPerSecond: 5, // 猜词事件限频（滑动窗口）
   requestEventsPerSecond: 25, // 应用层请求限频（每连接每秒，防刷事件触发全量广播）
+  /** 请求限频滑动窗口长度（毫秒）：binder 统计该窗口内的请求数与 requestEventsPerSecond 比较。 */
+  requestRateWindowMs: 1_000,
+  /** 幂等缓存条数上限（FIFO 淘汰）：防止长连接下 session:register 等成功结果无限累积。 */
+  idempotencyCacheMax: 100,
 } as const

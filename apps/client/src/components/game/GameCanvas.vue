@@ -40,7 +40,44 @@ const emit = defineEmits<{
 const canvas = ref<HTMLCanvasElement>() // 画布 DOM 引用
 const activePoints = ref<DrawPoint[]>([]) // 当前未提交的自由笔画本地点列
 const drawing = ref(false) // 是否正在按下画布绘图
+// —— 自定义圆点光标：画笔/橡皮擦工具下隐藏系统光标，改为跟随鼠标的对应粗细圆点 ——
+// 便于作画前预览笔迹粗细与颜色；滚轮调整粗细时圆点同步变化。
+const cursorVisible = ref(false) // 指针是否悬停在画板内（悬停才显示圆点）
+const cursorPos = ref({ x: 0, y: 0 }) // 指针在画板内的 CSS 像素坐标（相对画板左上角）
+/**
+ * 圆点直径（CSS 像素）：与 drawStroke 的实际笔迹宽度保持同一换算口径。
+ * 画布在设备像素上以 width × max(minLineScale, 画布短边/基准分辨率) 描边，
+ * 除以设备像素比后即屏幕上的视觉粗细。
+ */
+const cursorDiameter = computed(() => {
+  void resizeTick.value // 依赖尺寸代次：窗口缩放后强制重算
+  const element = canvas.value
+  if (!element) return props.width
+  const rect = element.getBoundingClientRect()
+  const cssMin = Math.min(rect.width, rect.height)
+  const dpr = window.devicePixelRatio || 1
+  const scale = (cssMin * dpr) / APP_CONFIG.drawing.referenceResolution
+  return (props.width * Math.max(APP_CONFIG.drawing.minLineScale, scale)) / dpr
+})
+/** 圆点颜色：画笔跟随当前选色；橡皮擦用主题 line 令牌（淡灰），避免硬编码。 */
+const cursorColor = computed(() => (props.tool === 'eraser' ? 'var(--color-line)' : props.color))
+/** 是否显示圆点光标：可作画、悬停中且非填充工具（填充保持 crosshair/copy 语义）。 */
+const showCursorDot = computed(() => props.canDraw && cursorVisible.value && props.tool !== 'fill')
+/** 指针移入/移出画板：控制圆点显隐。 */
+function cursorEnter(): void {
+  cursorVisible.value = true
+}
+function cursorLeave(): void {
+  cursorVisible.value = false
+}
+/** 指针在画板内移动：更新圆点位置（同时不影响正常绘图采样）。 */
+function cursorTrack(event: PointerEvent): void {
+  const rect = canvas.value?.getBoundingClientRect()
+  if (!rect) return
+  cursorPos.value = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+}
 let observer: ResizeObserver | undefined // 画布尺寸监听（窗口缩放重建像素缓冲）
+const resizeTick = ref(0) // 画布尺寸代次：窗口缩放后驱动圆点光标直径重新计算
 let sequence = 0 // 本地绘图序号（提交时与权威历史比较取更大值）
 let activeStrokeId = '' // 当前按下动作的笔画 ID（各批次共用）
 /**
@@ -83,6 +120,7 @@ function resizeCanvas(): void {
   const ratio = Math.min(window.devicePixelRatio || 1, APP_CONFIG.drawing.devicePixelRatioCap)
   element.width = Math.max(1, Math.round(rect.width * ratio))
   element.height = Math.max(1, Math.round(rect.height * ratio))
+  resizeTick.value += 1
   redraw()
 }
 
@@ -217,6 +255,31 @@ function drawFill(context: CanvasRenderingContext2D, command: FillCommand): void
     if (x + 1 < width) enqueueIfTarget(pixelIndex + 1)
     if (y > 0) enqueueIfTarget(pixelIndex - width)
     if (y + 1 < height) enqueueIfTarget(pixelIndex + width)
+  }
+  // —— 封边处理：消除填充区与描边线之间的 1px 半透明缝隙 ——
+  // 原因：描边经 Canvas 抗锯齿后，边缘存在一条从背景色渐变到线色的混合像素环；
+  // 洪泛填充只接受与起点色差 ≤ fillTolerance 的像素，遇到混合像素（色差远超容差）即停止，
+  // 于是混合环既不属于填充区也不是纯线色，视觉上呈现为填充与线条之间的 1px 空白。
+  // 修复：对填充区（queue 中全部已填像素）做单遍 8 邻域膨胀，把紧邻的混合像素一并覆盖为填充色。
+  // - 仅膨胀一圈且只处理队列中的已填像素，即使线条细到 1 设备像素也只会吃掉线条靠填充侧
+  //   最多 1 像素（视觉不可察觉），绝不会越过线条泄漏到另一侧同色区域；
+  // - 跳过仍匹配目标色的邻像素：它们属于其他区域的同色背景，不属于抗锯齿混合环，不能覆盖。
+  for (let cursor = 0; cursor < tail; cursor += 1) {
+    const pixelIndex = queue[cursor] ?? 0
+    const x = pixelIndex % width
+    const y = Math.floor(pixelIndex / width)
+    // 8 邻域：4 正方向 + 4 对角。对角混合像素若不处理，封边会在转角处留下点状缺隙。
+    for (let dy = -1; dy <= 1; dy += 1) {
+      const ny = y + dy
+      if (ny < 0 || ny >= height) continue
+      for (let dx = -1; dx <= 1; dx += 1) {
+        const nx = x + dx
+        if (nx < 0 || nx >= width) continue
+        const offset = (ny * width + nx) * 4
+        if (pixelMatches(data, offset, target)) continue
+        setPixel(data, offset, replacement)
+      }
+    }
   }
   context.putImageData(image, 0, 0)
 }
@@ -506,23 +569,51 @@ onBeforeUnmount(() => {
   // useTimeoutFn 已在组件卸载时自动清理定时器，这里显式调用（幂等）以保持原有清理语义
   stopBatchTimer()
 })
+/** 指针在画板内移动：更新圆点位置并继续正常绘图采样。 */
+function handlePointerMove(event: PointerEvent): void {
+  cursorTrack(event)
+  pointerMove(event)
+}
 </script>
 
 <template>
-  <!-- 画布元素：绑定指针/滚轮事件；canDraw 时显示不同光标（绘画/橡皮/填充） -->
-  <canvas
-    ref="canvas"
-    class="block h-full w-full bg-white [touch-action:none]"
+  <!--
+    画板外壳：负责光标形态。画笔/橡皮擦工具下隐藏系统光标并渲染跟随鼠标的圆点
+    （尺寸与实际笔迹一致、颜色与选色一致；橡皮擦圆点为 line 令牌淡灰）；
+    填充工具保持系统光标语义。
+  -->
+  <div
+    class="relative h-full w-full"
     :class="{
-      'cursor-crosshair': canDraw && tool !== 'eraser' && tool !== 'fill',
-      'cursor-cell': canDraw && tool === 'eraser',
+      'cursor-none': showCursorDot,
       'cursor-copy': canDraw && tool === 'fill',
     }"
-    :aria-label="canDraw ? strings.canvas.drawingAria : strings.canvas.watchingAria"
-    @pointerdown="pointerDown"
-    @pointermove="pointerMove"
-    @pointerup="pointerUp"
-    @pointercancel="pointerUp"
-    @wheel="wheelWidth"
-  />
+    @pointerenter="cursorEnter"
+    @pointerleave="cursorLeave"
+  >
+    <canvas
+      ref="canvas"
+      class="block h-full w-full bg-white touch-none"
+      :aria-label="canDraw ? strings.canvas.drawingAria : strings.canvas.watchingAria"
+      @pointerdown="pointerDown"
+      @pointermove="handlePointerMove"
+      @pointerup="pointerUp"
+      @pointercancel="pointerUp"
+      @wheel="wheelWidth"
+    />
+    <!-- 自定义圆点光标：纯展示，不拦截任何指针事件 -->
+    <i
+      v-if="showCursorDot"
+      class="pointer-events-none absolute left-0 top-0 rounded-full border-[0.2cqh] border-navy/40"
+      :style="{
+        width: `${cursorDiameter}px`,
+        height: `${cursorDiameter}px`,
+        backgroundColor: cursorColor,
+        transform: `translate(${cursorPos.x - cursorDiameter / 2}px, ${
+          cursorPos.y - cursorDiameter / 2
+        }px)`,
+      }"
+      aria-hidden="true"
+    ></i>
+  </div>
 </template>

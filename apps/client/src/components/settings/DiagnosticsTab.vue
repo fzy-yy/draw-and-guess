@@ -6,9 +6,9 @@
 <script setup lang="ts">
 import { Clipboard, RotateCcw, Trash2 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
-import AvatarImage from '@/components/AvatarImage.vue'
-import AvatarPickerDialog from '@/components/AvatarPickerDialog.vue'
-import AppButton from '@/components/AppButton.vue'
+import AvatarImage from '@/components/common/AvatarImage.vue'
+import AvatarPickerDialog from '@/components/common/AvatarPickerDialog.vue'
+import AppButton from '@/components/common/AppButton.vue'
 import { useGameStore } from '@/stores/game'
 
 // 诊断文本、服务地址与头像弹窗开关均由父层下发；本组件上报复制与弹窗开关变更事件。
@@ -35,13 +35,17 @@ function onAvatarPickerOpenChange(open: boolean): void {
   <section
     class="min-h-0 px-[9cqw] py-[3cqh] grid grid-cols-[1fr_1.3fr] grid-rows-[1fr_auto] gap-[2cqh_2cqw]"
   >
+    <!--
+      资料卡片：纵向居中排版（头像 → 昵称 → 保存按钮），与资料确认页保持一致的表单动线。
+      所有元素同宽居中，避免左右分栏导致视觉重心偏移。
+    -->
     <div
-      class="grid grid-cols-[auto_1fr] items-center gap-[1.5cqh_1em] border-t-[0.4cqh] border-blue bg-white p-[2cqh_1.5em]"
+      class="flex flex-col items-center justify-center gap-[1.2cqh] border-t-[0.4cqh] border-blue bg-white p-[2cqh_1.5em]"
       :class="{ 'opacity-50': profileEditingDisabled }"
     >
       <button
         type="button"
-        class="row-span-2 flex flex-col items-center gap-[0.7cqh] text-blue bg-transparent text-[0.72em] font-black"
+        class="flex flex-col items-center gap-[0.7cqh] text-blue bg-transparent text-[0.72em] font-black"
         :disabled="profileEditingDisabled"
         :aria-label="strings.profile.changeAvatarAria"
         @click="onAvatarPickerOpenChange(true)"
@@ -49,22 +53,22 @@ function onAvatarPickerOpenChange(open: boolean): void {
         <AvatarImage
           :avatar-id="store.profile.avatarId"
           :label="strings.common.myAvatarAria"
-          class="h-[14cqh] w-[14cqh]"
+          class="h-[13cqh] w-[13cqh]"
         />
         <span>{{ strings.settings.avatarField }}</span>
       </button>
-      <label class="flex flex-col gap-[0.6cqh] font-extrabold"
+      <label class="flex w-full flex-col items-center gap-[0.6cqh] font-extrabold"
         >{{ strings.settings.nicknameField
         }}<input
           v-model="store.profile.nickname"
           :maxlength="store.config.player.nicknameMaxLength"
-          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-navy disabled:cursor-not-allowed disabled:bg-line disabled:text-muted"
+          class="h-[5.2cqh] w-full rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] text-center font-bold text-navy disabled:cursor-not-allowed disabled:bg-line disabled:text-muted"
           :disabled="profileEditingDisabled"
       /></label>
       <AppButton
         variant="primary"
         type="button"
-        class="col-start-2"
+        class="w-full"
         :disabled="profileEditingDisabled"
         @click="store.updateProfile"
       >
@@ -74,7 +78,7 @@ function onAvatarPickerOpenChange(open: boolean): void {
     <div class="border-t-[0.4cqh] border-blue bg-white p-[2cqh_1.5em]">
       <h2>{{ strings.settings.diagnosticsTitle }}</h2>
       <pre
-        class="my-[1.4cqh] rounded-[0.6em] bg-navy p-[1.2cqh_1em] text-sky font-mono text-[0.7em] leading-[1.5] whitespace-pre-wrap"
+        class="my-[1.4cqh] rounded-[0.6em] bg-navy p-[1.2cqh_1em] text-sky font-mono text-[0.7em] leading-normal whitespace-pre-wrap"
         >{{ diagnostic }}</pre>
       <AppButton variant="secondary" type="button" @click="emit('copy')">
         <Clipboard />{{ strings.settings.copyDiagnostics }}
@@ -84,14 +88,14 @@ function onAvatarPickerOpenChange(open: boolean): void {
       <AppButton
         variant="secondary"
         type="button"
-        class="!min-h-[5cqh] !px-[1em] !rounded-[0.6em] !gap-[0.5em]"
+        class="min-h-[5cqh]! px-[1em]! rounded-[0.6em]! gap-[0.5em]!"
         @click="store.resetSettings"
       >
         <RotateCcw />{{ strings.settings.resetSettings }}</AppButton
       ><AppButton
         variant="danger"
         type="button"
-        class="!min-h-[5cqh] !px-[1em] !rounded-[0.6em] !gap-[0.5em]"
+        class="min-h-[5cqh]! px-[1em]! rounded-[0.6em]! gap-[0.5em]!"
         :disabled="profileEditingDisabled"
         @click="store.clearProfile"
       >

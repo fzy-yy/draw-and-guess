@@ -4,8 +4,8 @@
 -->
 <script setup lang="ts">
 import type { FunctionalComponent } from 'vue'
-import BaseDialog from '@/components/BaseDialog.vue'
-import AppButton from '@/components/AppButton.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
+import AppButton from '@/components/common/AppButton.vue'
 
 withDefaults(
   defineProps<{

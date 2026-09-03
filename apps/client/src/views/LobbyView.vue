@@ -14,9 +14,11 @@ import {
 import { clsx } from 'clsx'
 import { strings } from '@draw-guess/strings'
 import type { RoomSettings, RoomVisibility } from '@draw-guess/shared'
-import AppButton from '@/components/AppButton.vue'
-import AvatarImage from '@/components/AvatarImage.vue'
-import BaseDialog from '@/components/BaseDialog.vue'
+import AppButton from '@/components/common/AppButton.vue'
+import AvatarImage from '@/components/common/AvatarImage.vue'
+import NetworkStatusButton from '@/components/common/NetworkStatusButton.vue'
+import SectionHeader from '@/components/common/SectionHeader.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import { useGameStore } from '@/stores/game'
 
 const store = useGameStore()
@@ -62,20 +64,24 @@ const privateCodeValid = computed(
   () => privateCode.value.replace(/[\s-]/gu, '').length === store.config.room.privateCodeLength,
 )
 
-/** 创建请求显式携带可见性；私密房间码只能由服务端生成。 */
+/**
+ * 创建房间：成功后由 store 切换到房间视图并关闭弹窗；
+ * 失败（规则非法/重名等，错误已由请求层 Toast）保留弹窗与表单供修正重试。
+ */
 async function createRoom(): Promise<void> {
-  await store.createRoom({
+  const ok = await store.createRoom({
     name: createForm.name,
     visibility: createForm.visibility,
     settings: { ...roomSettings },
   })
-  showCreate.value = false
+  if (ok) showCreate.value = false
 }
 
 /** 输入短码加入私密房；失败时保留弹窗和输入，方便玩家核对后重试。 */
 async function joinPrivateRoom(): Promise<void> {
   if (!privateCodeValid.value) return
-  await store.joinPrivateRoom(privateCode.value)
+  const ok = await store.joinPrivateRoom(privateCode.value)
+  if (!ok) return
   privateCode.value = ''
   showJoinPrivate.value = false
 }
@@ -90,14 +96,10 @@ async function joinPrivateRoom(): Promise<void> {
         <AvatarImage
           :avatar-id="store.profile.avatarId"
           :label="strings.common.myAvatarAria"
-          class="h-[6cqh] w-[6cqh] !border-sky"
+          class="h-[6cqh] w-[6cqh] border-sky!"
         />
-        <div class="flex min-w-0 flex-col">
-          <strong class="truncate">{{ store.profile.nickname }}</strong
-          ><span class="flex items-center gap-[0.35em] text-sky text-[0.67em]"
-            ><Wifi /> {{ store.connectionLabel }} · {{ store.latency || '—' }} ms</span
-          >
-        </div>
+        <strong class="truncate">{{ store.profile.nickname }}</strong>
+        <!-- 网络状态展示统一收敛到右上角 NetworkStatusButton，此处不再重复显示 -->
       </div>
       <div class="flex items-center gap-[0.6em]">
         <Gamepad2 class="h-[4.2cqh] w-[4.2cqh] text-yellow" />
@@ -108,7 +110,12 @@ async function joinPrivateRoom(): Promise<void> {
           }}</span>
         </div>
       </div>
-      <nav class="flex justify-self-end gap-[0.7em]" :aria-label="strings.lobby.navAria">
+      <nav
+        class="flex justify-self-end items-center gap-[0.7em]"
+        :aria-label="strings.lobby.navAria"
+      >
+        <!-- 网络状态：统一复用 NetworkStatusButton 图标按钮展示，悬浮查看连接详情（与对局顶栏一致） -->
+        <NetworkStatusButton />
         <button
           type="button"
           class="flex items-center gap-[0.4em] rounded-[0.55em] bg-white/5 px-[0.8em] py-[0.8cqh] text-sky"
@@ -121,12 +128,10 @@ async function joinPrivateRoom(): Promise<void> {
 
     <section class="min-w-0 border-r-[0.2cqh] border-line px-[2cqw] py-[3cqh]">
       <div class="flex items-end justify-between">
-        <div>
-          <p class="eyebrow">
-            {{ strings.lobby.roomsLabel }}
-          </p>
-          <h2>{{ strings.lobby.roomsTitle }}</h2>
-        </div>
+        <SectionHeader
+          :eyebrow="strings.lobby.roomsLabel"
+          :title="strings.lobby.roomsTitle"
+        ></SectionHeader>
         <span class="text-muted text-[0.78em]">{{
           strings.lobby.roomCount(store.presence.rooms.length)
         }}</span>
@@ -161,10 +166,15 @@ async function joinPrivateRoom(): Promise<void> {
         class="flex h-[49cqh] flex-col gap-[0.85cqh] overflow-y-auto overscroll-contain"
         :aria-label="strings.lobby.roomListAria"
       >
+        <!--
+          房间卡片：hover 反馈只改上/右/下边框色，左侧蓝条是房间卡片的身份标识，
+          不能被 hover 的 border-color 简写覆盖（曾因 hover:border-sky 把四边一起变色，
+          导致悬浮时蓝条“消失”被视为 bug）。
+        -->
         <article
           v-for="publicRoom in store.presence.rooms"
           :key="publicRoom.id"
-          class="grid min-h-[7.8cqh] grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] items-center gap-[0.9em] border-b-[0.16cqh] border-l-[0.45cqh] border-b-line border-l-blue bg-white px-[0.9em] py-[0.6cqh] ui-feedback hover:border-sky hover-tint"
+          class="grid min-h-[7.8cqh] grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] items-center gap-[0.9em] border-[0.16cqh] border-l-[0.45cqh] border-line border-l-blue bg-white px-[0.9em] py-[0.6cqh] ui-feedback hover:border-t-sky hover:border-r-sky hover:border-b-sky hover-tint"
         >
           <div class="grid h-[5cqh] w-[5cqh] place-items-center rounded-[0.6em] bg-sky text-blue">
             <Gamepad2 />
@@ -219,12 +229,10 @@ async function joinPrivateRoom(): Promise<void> {
 
     <aside class="flex min-w-0 flex-col bg-paper px-[1.6cqw] pb-[2cqh] pt-[3cqh]">
       <div class="flex items-end justify-between">
-        <div>
-          <p class="eyebrow">
-            {{ strings.lobby.playersLabel }}
-          </p>
-          <h2 class="mt-[0.3cqh]">{{ strings.lobby.playersTitle }}</h2>
-        </div>
+        <SectionHeader
+          :eyebrow="strings.lobby.playersLabel"
+          :title="strings.lobby.playersTitle"
+        ></SectionHeader>
         <span
           class="grid h-[3cqh] w-[3cqh] place-items-center rounded-full bg-green text-white text-[0.78em]"
           >{{ store.presence.players.length }}</span
@@ -238,13 +246,12 @@ async function joinPrivateRoom(): Promise<void> {
           :placeholder="strings.lobby.playerFilterPlaceholder"
           :aria-label="strings.lobby.playerFilterAria"
       /></label>
-      <div
-        class="flex min-h-0 flex-1 flex-col gap-[0.7cqh] overflow-y-auto overscroll-contain [scrollbar-gutter:stable]"
-      >
+      <div class="flex min-h-0 flex-1 flex-col gap-[0.7cqh] overflow-y-auto overscroll-contain">
+        <!-- 玩家卡片：与搜索框同宽（滚动容器不再预留滚动条槽位），悬浮时卡片颜色稍变深 -->
         <div
           v-for="player in filteredPlayers"
           :key="player.id"
-          class="flex items-center gap-[0.7em] border-b-[0.14cqh] border-line px-[0.5em] py-[0.55cqh] hover:border-sky hover-tint"
+          class="flex items-center gap-[0.7em] rounded-[0.7em] border-[0.16cqh] border-line bg-white px-[0.7em] py-[0.7cqh] ui-feedback hover:border-sky hover-tint"
         >
           <AvatarImage
             :avatar-id="player.avatarId"
@@ -255,7 +262,7 @@ async function joinPrivateRoom(): Promise<void> {
             <b class="truncate">{{ player.nickname }}</b
             ><span
               class="text-muted text-[0.66em]"
-              :class="clsx(player.status === 'idle' && '!text-green')"
+              :class="clsx(player.status === 'idle' && 'text-green!')"
               >{{ statusText[player.status] }}</span
             >
           </div>
@@ -289,38 +296,34 @@ async function joinPrivateRoom(): Promise<void> {
         <h2 id="create-title">{{ strings.lobby.createDialogTitle }}</h2>
       </template>
       <div class="grid grid-cols-2 gap-[1.8cqh_1.4em] px-[2em] py-[2.8cqh]">
+        <!-- 可见性单选组：两档选项数据驱动渲染，收敛重复的单选卡长类名 -->
         <fieldset class="col-span-full m-0 grid grid-cols-2 gap-[0.8em] border-0 p-0">
           <legend class="mb-[0.7cqh] font-black">{{ strings.lobby.visibilityField }}</legend>
           <label
+            v-for="option in [
+              {
+                value: 'public' as const,
+                title: strings.lobby.visibilityPublic,
+                hint: strings.lobby.visibilityPublicHint,
+              },
+              {
+                value: 'private' as const,
+                title: strings.lobby.visibilityPrivate,
+                hint: strings.lobby.visibilityPrivateHint,
+              },
+            ]"
+            :key="option.value"
             class="flex items-center gap-[0.7em] rounded-[0.7em] border-[0.18cqh] border-line bg-white px-[1em] py-[1cqh]"
           >
             <input
               v-model="createForm.visibility"
               type="radio"
-              value="public"
+              :value="option.value"
               class="h-[2.2cqh] w-[2.2cqh] accent-blue"
             />
             <span class="flex flex-col"
-              ><b>{{ strings.lobby.visibilityPublic }}</b
-              ><small class="text-muted text-[0.68em]">{{
-                strings.lobby.visibilityPublicHint
-              }}</small></span
-            >
-          </label>
-          <label
-            class="flex items-center gap-[0.7em] rounded-[0.7em] border-[0.18cqh] border-line bg-white px-[1em] py-[1cqh]"
-          >
-            <input
-              v-model="createForm.visibility"
-              type="radio"
-              value="private"
-              class="h-[2.2cqh] w-[2.2cqh] accent-blue"
-            />
-            <span class="flex flex-col"
-              ><b>{{ strings.lobby.visibilityPrivate }}</b
-              ><small class="text-muted text-[0.68em]">{{
-                strings.lobby.visibilityPrivateHint
-              }}</small></span
+              ><b>{{ option.title }}</b
+              ><small class="text-muted text-[0.68em]">{{ option.hint }}</small></span
             >
           </label>
         </fieldset>

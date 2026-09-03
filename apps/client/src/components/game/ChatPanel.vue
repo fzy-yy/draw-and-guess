@@ -2,15 +2,16 @@
   右侧聊天区（从 GameView.vue 拆出的子组件）：
   消息列表 + 快捷互动工具 + 猜词输入。猜词输入、消息滚动跟随与自动聚焦逻辑全部收敛到内部；
   是否可猜词由父组件经 canGuess 传入，提交猜词/预设短语直接调用 store。
+  快捷互动收敛为两个悬浮面板：表情反应 + 快捷短语（短语列表来自 config/presets.safeChat，
+  在 config 中可增减），均基于 ActionPopover 复用外壳。
 -->
 <script setup lang="ts">
-import { computed, nextTick, ref, watch, type Component } from 'vue'
-import { Frown, HelpCircle, Lightbulb, Send, SmilePlus, ThumbsUp } from 'lucide-vue-next'
+import { computed, nextTick, ref, watch } from 'vue'
+import { Lightbulb, Send, SmilePlus } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import type { ChatMessage, RoomMember } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
-import ActionPopover from '@/components/ActionPopover.vue'
-import RoundIconButton from '@/components/common/RoundIconButton.vue'
+import ActionPopover from '@/components/common/ActionPopover.vue'
 
 // canGuess 由父组件（useGameHud）计算，这里只用于输入框权限与提交保护。
 const props = defineProps<{
@@ -26,14 +27,6 @@ const messageList = ref<HTMLElement>()
 const shouldFollowMessages = ref(true)
 // 消息数据直接读取房间快照中的聊天记录，无需独立 ticker。
 const messages = computed(() => store.room?.game?.messages ?? [])
-// 快捷短语继续使用服务端白名单；图标仅是客户端表现，不参与协议或裁决。
-const quickPhraseIcons: Component[] = [ThumbsUp, Lightbulb, HelpCircle, Frown]
-const quickPhraseActions = computed(() =>
-  store.config.presets.safeChat.map((text, index) => ({
-    text,
-    icon: quickPhraseIcons[index] ?? SmilePlus,
-  })),
-)
 // 画家、猜词者和已猜中者在作画阶段都能使用受控互动；观战者始终只读。
 const canSendPreset = computed(
   () =>
@@ -148,7 +141,7 @@ watch(
     <!-- 消息列表：猜词、系统、猜中、预设等类型分别高亮 -->
     <div
       ref="messageList"
-      class="flex min-h-0 flex-1 flex-col gap-[0.6cqh] overflow-y-auto overflow-x-hidden py-[1cqh] pl-0 pr-[0.35em] [overscroll-behavior:contain] [scrollbar-gutter:stable]"
+      class="flex min-h-0 flex-1 flex-col gap-[0.6cqh] overflow-y-auto overflow-x-hidden py-[1cqh] pl-0 pr-[0.35em] overscroll-contain scrollbar-gutter-stable"
       aria-live="polite"
       @scroll="handleMessageScroll"
     >
@@ -157,13 +150,15 @@ watch(
         :key="message.id"
         :class="[
           'flex flex-wrap gap-[0.35em] border-l-[0.3cqh] border-line bg-white px-[0.65em] py-[0.6cqh] text-[0.72em] leading-[1.35] text-navy first:mt-auto ui-feedback',
-          message.playerId && '!text-navy font-extrabold',
-          message.type === 'system' && '!text-blue !bg-sky !border-l-blue',
+          message.playerId && 'text-navy! font-extrabold',
+          message.type === 'system' && 'text-blue! bg-sky! border-l-blue!',
         ]"
         :style="messageStyle(message)"
       >
-        <!-- 玩家消息显示发送者昵称 -->
-        <b v-if="message.playerId">{{ memberForMessage(message)?.nickname }}</b>
+        <!-- 玩家消息显示发送者昵称，昵称后接冒号分隔内容（分隔符来自 strings） -->
+        <b v-if="message.playerId"
+          >{{ memberForMessage(message)?.nickname }}{{ strings.game.messageNameSeparator }}</b
+        >
         <span>{{ message.text }}</span>
       </div>
       <div
@@ -183,6 +178,7 @@ watch(
         role="group"
         :aria-label="strings.game.chatActionsAria"
       >
+        <!-- 表情反应面板：表情列表来自 config/presets.chatReactions -->
         <ActionPopover
           :trigger-label="strings.game.reactionPickerAria"
           :panel-aria-label="strings.game.reactionPanelAria"
@@ -204,16 +200,30 @@ watch(
             </div>
           </template>
         </ActionPopover>
-        <RoundIconButton
-          v-for="action in quickPhraseActions"
-          :key="action.text"
+        <!-- 快捷短语面板：原四个独立按钮合并为一个入口，短语列表可在 config 中增减 -->
+        <ActionPopover
+          :trigger-label="strings.game.quickPhrasePickerAria"
+          :panel-aria-label="strings.game.quickPhrasePanelAria"
           :disabled="!canSendPreset"
-          :label="strings.game.sendQuickPhraseAria(action.text)"
-          :title="action.text"
-          @click="store.sendPreset(action.text)"
+          panel-class="w-[16cqw]"
         >
-          <component :is="action.icon" class="h-[2.35cqh] w-[2.35cqh]" />
-        </RoundIconButton>
+          <template #trigger><Lightbulb class="h-[2.4cqh] w-[2.4cqh]" /></template>
+          <template #default="{ close }">
+            <div class="flex flex-col gap-[0.4cqh]">
+              <button
+                v-for="phrase in store.config.presets.safeChat"
+                :key="phrase"
+                type="button"
+                class="min-h-[3.4cqh] truncate rounded-[0.5em] bg-line px-[0.6em] py-[0.35cqh] text-left text-[0.7em] font-extrabold text-navy hover:bg-sky"
+                :aria-label="strings.game.sendQuickPhraseAria(phrase)"
+                :title="phrase"
+                @click="sendPresetAndClose(phrase, close)"
+              >
+                {{ phrase }}
+              </button>
+            </div>
+          </template>
+        </ActionPopover>
       </div>
       <form class="mt-[0.65cqh] flex gap-[0.5em]" @submit.prevent="sendGuess">
         <label for="guess-input" class="sr-only">{{ strings.game.guessLabel }}</label>

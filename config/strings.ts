@@ -30,11 +30,25 @@ export const strings = {
     cancel: '取消', // 弹窗取消按钮
     accept: '接受', // 邀请接受按钮
     decline: '拒绝', // 邀请拒绝按钮
+    declineCountdown: (seconds: number) => `拒绝(${seconds})`, // 邀请拒绝按钮：带自动拒绝倒计时
+    /** 列表项连接符（如多别称展示）。 */
+    listSeparator: '、', // 数组/多值拼接分隔符
+    /** 无值占位符（延迟未测到、空白单元格等）。 */
+    emptyDash: '—', // 空值占位符
+    /** 网络状态图标按钮的无障碍/悬浮文案：统一各顶栏网络 UI（IconButton + 详情）。 */
+    networkStatusAria: (label: string, latency: number) =>
+      `${label} · 延迟 ${latency || strings.common.emptyDash} 毫秒`,
+    /** 顶栏行内的「状态 · 延迟」完整展示文案（如「已连接 · 1 ms」）。 */
+    connectionDetail: (label: string, latency: number) =>
+      `${label} · ${latency || strings.common.emptyDash} ms`,
+    /** 网络按钮内的紧凑延迟数值（如「3ms」）；仅已测得延迟（>0）时展示。 */
+    latencyShort: (latency: number) => `${latency}ms`,
     exit: '退出', // 房间顶栏退出按钮
     scoreUnit: (score: number) => `${score} 分`, // 玩家得分后缀
     playersUnit: (count: number) => `${count} 人`, // 人数单位
     roundsUnit: (count: number) => `${count} 轮`, // 轮数单位
     secondsUnit: (count: number) => `${count} 秒`, // 秒数单位
+    percentUnit: (value: number) => `${value}%`, // 百分比单位（如音量/提示比例展示）
     roundsField: '每人作画次数', // 建房 / 规则表单的轮数字段名
     drawTimeField: '作画时间', // 建房 / 规则表单的作画时间字段名
     myAvatarAria: '我的 SVG 头像', // 自己的头像无障碍标签
@@ -46,6 +60,7 @@ export const strings = {
   connection: {
     connecting: '正在连接', // 初始状态
     connected: '已连接', // 连接成功
+    disconnected: '未连接', // 会话已结束/服务端主动断开且不再自动重连（如资料页展示）
     unstable: '连接不稳定', // io error / 抖动
     reconnecting: '正在重连', // 断线重连中
     unavailable: '无法连接', // 服务端主动断开
@@ -86,6 +101,9 @@ export const strings = {
     inviterAvatarAria: '邀请者 SVG 头像', // 邀请者头像标签
     inviteHeading: '收到房间邀请', // 邀请横幅标题
     inviteReceived: (nickname: string, roomName: string) => `${nickname} 邀请你加入“${roomName}”`, // 邀请横幅正文
+    kickedTitle: '已被移出房间', // 被踢提示弹窗标题
+    kickedBody: '你已被房主移出房间，现返回在线大厅。', // 被踢提示弹窗说明
+    kickedConfirm: '知道了', // 被踢提示弹窗确认按钮
     disconnectDialogAria: '连接中断提示', // 本人断线阻断模态框标签
     disconnectedTitle: '与主机连接已中断', // 传输断开标题
     disconnectedBody: '正在自动重连，请保持页面打开。连接恢复后会继续同步你的身份和未完成对局。', // 传输断开说明
@@ -176,7 +194,6 @@ export const strings = {
     copyPrivateCodeAria: '复制私密房间码', // 房间码按钮标签
     privateCodeCopied: '房间码已复制', // 复制成功
     privateCodeCopyFailed: '无法自动复制，请手动记录房间码', // 复制失败
-    authoritativeConnected: '权威服务已连接', // 连接状态徽章
     playersTitle: '玩家席位', // 席位区标题
     roomEyebrow: 'ROOM', // 房间眉题装饰字
     playersEyebrow: 'PLAYERS', // 席位区眉题装饰字
@@ -185,6 +202,12 @@ export const strings = {
     hostCrownAria: '房主', // 房主皇冠图标标签
     meTag: '我', // 自己的席位标记
     kickAria: '移除该玩家', // 房主踢人按钮
+    kickTitle: '移除该玩家？', // 踢人确认标题
+    kickBody: (nickname: string) => `${nickname} 将立即离开房间并收到移出通知。`, // 踢人确认说明
+    kickConfirm: '确认移除', // 踢人确认提交
+    inviteSendTo: (nickname: string) => `邀请 ${nickname}`, // 邀请弹窗发送按钮无障碍标签
+    inviteCooldownAria: (seconds: number) => `邀请冷却中，${seconds} 秒后可重试`, // 邀请冷却中按钮标签
+    vocabToggleAllAria: '全选或取消当前结果', // 统一复选框（表头/统计栏）无障碍标签
     emptySeatTitle: '等待玩家', // 空席位标题
     emptySeatHint: '可从在线列表邀请', // 空席位说明
     rulesTitle: '本局规则', // 规则区标题
@@ -196,7 +219,6 @@ export const strings = {
     ruleOptionsDt: '候选词', // 规则项：候选词
     ruleOptionsDd: (count: number) => `${count} 选 1`, // 规则项：候选词值
     ruleHintsDt: '提示', // 规则项：提示
-    hintsOn: '逐步提示', // 提示开启
     hintsOff: '关闭', // 提示关闭
     hintsBothOn: '逐字 + 结构化', // 两种提示均开启
     hintsStructuredOnly: '仅结构化提示', // 仅结构化提示开启
@@ -228,19 +250,14 @@ export const strings = {
     vocabSearchPlaceholder: '输入关键词搜索', // 词库搜索占位符
     vocabSearchAria: '搜索词条', // 词库搜索标签
     vocabClearSearchAria: '清空搜索', // 清空搜索按钮
-    selectAll: '全选全部', // 批量选择：全部
-    deselectAll: '取消全选', // 批量取消：全部
-    selectResults: '全选结果', // 批量选择：搜索结果
-    deselectResults: '取消结果', // 批量取消：搜索结果
     vocabMinHint: (min: number) => `至少选择 ${min} 个词条；搜索不会丢失其他选择。`, // 最小词条提示
     restoreDefault: '恢复默认全选', // 恢复默认按钮
     confirmSelection: '确认选择', // 保存词库按钮
     // —— 词库管理：视图切换 / 列显隐 / 筛选 / 表格列 ——
-    vocabViewGrid: '散列陈列', // 散列视图切换按钮（仅词面）
-    vocabViewTable: '表格陈列', // 表格视图切换按钮（多字段陈列）
+    vocabViewGrid: '散列陈列', // 散列视图切换按钮提示（悬浮说明，按钮本体只显示图标）
+    vocabViewTable: '表格陈列', // 表格视图切换按钮提示（悬浮说明，按钮本体只显示图标）
     vocabViewSwitchAria: '切换词条展示形式', // 视图切换按钮组无障碍标签
-    vocabShowColumns: '显示字段', // 列显隐按钮
-    vocabShowColumnsAria: '选择表格中显示的字段列', // 列显隐按钮无障碍标签
+    vocabShowColumns: '显示字段', // 列显隐按钮（悬浮说明，按钮本体只显示图标）
     vocabColumnText: '词面', // 表格列：词面
     vocabColumnCategories: '分类', // 表格列：分类
     vocabColumnDifficulty: '难度', // 表格列：难度
@@ -251,9 +268,8 @@ export const strings = {
     vocabColumnScoreWeight: '权重', // 表格列：计分权重
     vocabSortAria: (name: string) => `按${name}排序`, // 表头排序无障碍标签
     vocabFilterAria: (name: string) => `按${name}筛选`, // 字段筛选按钮无障碍标签
-    vocabFilterAll: (name: string) => `全部${name}`, // 筛选按钮未选中时的默认文案
     vocabSelectAllShort: '全选', // 多选弹层：全选
-    vocabClearAllShort: '清空', // 多选弹层：清空
+    vocabDeselectAllShort: '全不选', // 多选弹层：已全选时点击切换为全不选
     vocabPanelDone: '完成', // 多选弹层：关闭按钮
     vocabColumnHiddenNote: '可在「显示字段」中开启更多列。', // 表格空态说明
     vocabNoMatch: '没有符合条件的词条。', // 筛选/搜索无结果
@@ -271,9 +287,7 @@ export const strings = {
     toggleProgressiveHints: '逐步提示字符', // 规则开关：逐步提示
     toggleStructuredHints: '结构化提示', // 规则开关：结构化提示（词条 hint 按阈值揭示）
     hintStartRatioField: '提示出现时机', // 规则项：结构化提示开始时机
-    hintStartRatioUnit: (percent: number) => `剩余 ${percent}% 时`, // 提示开始时机取值展示
     hintIntervalRatioField: '提示间隔', // 规则项：相邻提示的揭示间隔
-    hintIntervalRatioUnit: (percent: number) => `每隔 ${percent}%`, // 提示间隔取值展示
     guessBaseScoreField: '猜词基础分', // 规则项：统一猜词基础分
     guessBaseScoreUnit: (score: number) => `${score} 分`, // 基础分取值展示
     scoreModeField: '计分方式', // 规则项：猜词分数计算方式
@@ -317,14 +331,14 @@ export const strings = {
     enterFullscreenAria: '进入全屏', // 顶栏全屏按钮
     exitFullscreenAria: '退出全屏', // 顶栏退出全屏按钮
     fullscreenFailed: '当前浏览器或页面环境无法进入全屏', // 全屏失败提示
-    settingsTitle: '对局设置', // 对局内设置弹窗标题
-    settingsCloseAria: '关闭对局设置', // 设置弹窗关闭按钮
     scoreStripAria: '玩家得分', // 得分条无障碍标签
-    hostMarkAria: '房主', // 得分条房主标记
     choosingHint: '画家正在选择题目', // 选词阶段非画家提示
     liveChatLabel: 'LIVE CHAT', // 聊天区英文眉题
     chatTitle: '猜词消息', // 聊天区标题
     noMessages: '回合消息会显示在这里', // 空消息占位
+    messageNameSeparator: '：', // 玩家消息昵称与内容的分隔符
+    quickPhrasePickerAria: '选择快捷短语', // 快捷短语悬浮面板按钮标签
+    quickPhrasePanelAria: '快捷短语列表', // 快捷短语悬浮面板标签
     guessLabel: '输入你的答案', // 猜词输入标签
     guessPlaceholder: '按 Enter 发送猜词', // 猜词输入占位符
     sendGuessAria: '发送猜词', // 发送按钮标签
@@ -348,7 +362,7 @@ export const strings = {
     presetColorAria: (color: string) => `选择预设颜色 ${color}`, // 预设色按钮标签
     customColorTitle: '选择任意画笔或填充颜色', // 自定义颜色提示
     customColorAria: '选择任意绘图颜色', // 自定义颜色标签
-    widthLabel: (width: number) => `线宽 ${width}`, // 线宽标注
+    widthName: '线宽', // 线宽标注前缀（数值单独渲染并固定两位宽度，避免 9→10 时抖动）
     widthAria: '画笔与橡皮擦共用粗细', // 线宽滑块标签
     undoAria: '撤销 Ctrl+Z', // 撤销按钮标签
     undo: '撤销', // 撤销按钮
@@ -406,7 +420,6 @@ export const strings = {
     backToGame: '返回游戏', // 游戏内打开完整设置时的返回按钮
     label: 'SETTINGS', // 顶栏英文眉题
     title: '游戏设置', // 顶栏标题
-    localOnly: '设置仅保存在本机', // 本地存储提示
     categoryAria: '设置分类', // 标签栏无障碍标签
     tabAudio: '声音', // 标签：声音
     tabAccessibility: '显示与操作', // 标签：显示与操作
@@ -483,6 +496,7 @@ export const strings = {
     profileCleared: '本地资料已清除；刷新后将作为新玩家进入', // 清除资料
     profileUpdated: '玩家资料已更新', // 更新资料
     roomLeft: '已安全退出房间', // 退出房间
+    sessionTakenOver: '会话已在新的窗口打开；如需在本窗口继续，请重新进入', // 身份被新连接接管
     vocabularyUpdated: '本局词库已更新，已准备状态保持不变', // 保存词库
     inviteSent: '邀请已发送', // 发送邀请
     pauseReasonHost: '房主暂停了游戏', // 房主暂停请求原因（与服务端通知共用）
@@ -612,7 +626,6 @@ export const serverStrings = {
 
   /* ---- 词库加载错误（服务启动校验，展示给运维 / 终端）---- */
   vocabulary: {
-    wordTooLong: (text: string, max: number) => `词条“${text}…”超过 ${max} 个字符`, // 单词超长
     tooFewWords: (size: number, min: number) => `有效词条仅 ${size} 个，至少需要 ${min} 个`, // 词条过少
     tooManyWords: (size: number, max: number) => `有效词条共 ${size} 个，最多支持 ${max} 个`, // 词条过多
   },

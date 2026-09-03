@@ -29,7 +29,7 @@ const store = useGameStore()
         :min="store.config.audio.volumeRange.min"
         :max="store.config.audio.volumeRange.max"
         :step="store.config.audio.volumeRange.step"
-        :display="`${Math.round(store.settings.masterVolume * 100)}%`"
+        :display="strings.common.percentUnit(Math.round(store.settings.masterVolume * 100))"
         @save="store.saveSettings"
       />
       <SettingSliderRow
@@ -39,7 +39,7 @@ const store = useGameStore()
         :min="store.config.audio.volumeRange.min"
         :max="store.config.audio.volumeRange.max"
         :step="store.config.audio.volumeRange.step"
-        :display="`${Math.round(store.settings.soundVolume * 100)}%`"
+        :display="strings.common.percentUnit(Math.round(store.settings.soundVolume * 100))"
         @save="store.saveSettings"
       />
       <SettingSliderRow
@@ -49,7 +49,7 @@ const store = useGameStore()
         :min="store.config.audio.volumeRange.min"
         :max="store.config.audio.volumeRange.max"
         :step="store.config.audio.volumeRange.step"
-        :display="`${Math.round(store.settings.musicVolume * 100)}%`"
+        :display="strings.common.percentUnit(Math.round(store.settings.musicVolume * 100))"
         @save="store.saveSettings"
       />
       <SettingSwitchRow

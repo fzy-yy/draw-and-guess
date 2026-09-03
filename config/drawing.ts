@@ -16,8 +16,6 @@ export const drawing = {
   minLineScale: 0.6,
   /** 自由笔画采样的去抖距离（归一化坐标），避免一帧内产生大量重复点。 */
   dedupDistance: 0.0015,
-  /** 工具栏线宽预览圆点直径的视觉封顶（像素），避免超出画板高度的最大线宽显示过大。 */
-  widthPreviewCap: 20,
   /** 洪泛填充比较目标像素时允许的单通道误差，用于兼容 Canvas 抗锯齿边缘。 */
   fillTolerance: 8,
   // —— 性能预算（为什么是这些值）：

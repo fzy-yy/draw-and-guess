@@ -12,8 +12,8 @@ import type { GameView } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
 import type { RankedMember } from '@/composables/useGameHud'
-import AppButton from '@/components/AppButton.vue'
-import AvatarImage from '@/components/AvatarImage.vue'
+import AppButton from '@/components/common/AppButton.vue'
+import AvatarImage from '@/components/common/AvatarImage.vue'
 import DifficultyStars from '@/components/common/DifficultyStars.vue'
 import OverlayCard from '@/components/game/OverlayCard.vue'
 
@@ -55,7 +55,8 @@ const store = useGameStore()
     </div>
     <!-- 阶段遮罩：画家选词（只有画家可见候选词按钮） -->
     <OverlayCard v-else-if="store.room.phase === 'choosing_word' && store.isDrawer">
-      <Brush class="h-[8cqh] w-[8cqh] bg-blue p-[1.4cqh] text-white rounded-full" />
+      <!-- 图标与文字留足内边距，避免画笔笔触溢出圆形底座被裁剪 -->
+      <Brush class="h-[7.5cqh] w-[7.5cqh] bg-blue p-[1.9cqh] text-white rounded-full" />
       <p>{{ strings.game.yourTurn }}</p>
       <h2>{{ strings.game.chooseWordTitle }}</h2>
       <div class="flex gap-[1em] my-[2cqh]">
@@ -66,16 +67,22 @@ const store = useGameStore()
           class="flex min-h-[7cqh] min-w-[12cqw] flex-col items-center justify-center gap-[0.3cqh] rounded-[0.7em] bg-yellow border-b-[0.6cqh] border-yellow text-navy px-[1em] text-[1.25em] font-[1000]"
           @click="emit('choose-word', option.id)"
         >
-          <span>{{ option.text }}</span>
-          <!-- 难度星级：1~5 星（上限取自全局配置，见 DifficultyStars 组件） -->
-          <DifficultyStars :value="option.difficulty" class="text-[0.55em]" />
+          <span class="leading-[1.2]">{{ option.text }}</span>
+          <!-- 难度星级：精确星数模式（多少难度就多少颗实心星），与词面居中对齐；
+              黄色按钮上必须用 navy 配色，否则黄星叠黄底不可见 -->
+          <DifficultyStars
+            :value="option.difficulty"
+            exact
+            tone="navy"
+            class="text-[0.55em] w-full justify-center"
+          />
         </button>
       </div>
       <span>{{ strings.game.autoChoose(secondsLeft) }}</span>
     </OverlayCard>
     <!-- 阶段遮罩：游戏暂停（房主可继续或提前结束） -->
     <OverlayCard v-else-if="store.room.phase === 'paused'">
-      <CirclePause class="h-[8cqh] w-[8cqh] bg-blue p-[1.4cqh] text-white rounded-full" />
+      <CirclePause class="h-[7.5cqh] w-[7.5cqh] bg-blue p-[1.9cqh] text-white rounded-full" />
       <p>{{ strings.game.pausedTitle }}</p>
       <h2>{{ strings.game.pausedSubtitle }}</h2>
       <span>{{ strings.game.pausedHint }}</span>
@@ -111,7 +118,13 @@ const store = useGameStore()
     </OverlayCard>
     <!-- 阶段遮罩：最终结算（排行榜、统计） -->
     <OverlayCard v-else-if="store.room.phase === 'game_result'" wide>
-      <Trophy class="h-[8cqh] w-[8cqh] bg-yellow p-[1.4cqh] text-yellow rounded-full" />
+      <!-- 奖杯图标：深色图形配淡黄圆形衬底（黄底黄字会让图标消失），复用 HostCrownBadge 的衬底思路 -->
+      <span
+        class="grid h-[8cqh] w-[8cqh] place-items-center rounded-full bg-yellow/25"
+        aria-hidden="true"
+      >
+        <Trophy class="h-[55%] w-[55%] fill-yellow text-yellow" />
+      </span>
       <p>{{ strings.game.gameResultLabel }}</p>
       <h2>{{ strings.game.finalRanking }}</h2>
       <div class="my-[1cqh] flex w-full flex-col gap-[0.6cqh]">
@@ -119,7 +132,7 @@ const store = useGameStore()
           v-for="member in rankings"
           :key="member.id"
           class="grid grid-cols-[3em_auto_1fr_auto] items-center gap-[0.8em] bg-line px-[1em] py-[0.6cqh] text-left"
-          :class="{ '!text-yellow !bg-yellow/20': member.rank === 1 }"
+          :class="{ 'text-yellow! bg-yellow/20!': member.rank === 1 }"
         >
           <b>#{{ member.rank }}</b
           ><AvatarImage
@@ -142,7 +155,8 @@ const store = useGameStore()
         </article>
       </div>
       <div class="flex gap-[0.8em] mt-[1.5cqh]">
-        <AppButton v-if="store.isHost" variant="primary" @click="emit('return-waiting')">
+        <!-- 最终结算后全员都可返回房间再来一局；不想继续的玩家可退出房间 -->
+        <AppButton variant="primary" @click="emit('return-waiting')">
           {{ strings.game.backToRoom }}</AppButton
         ><AppButton variant="secondary" @click="emit('leave-room')">
           {{ strings.game.leaveRoom }}

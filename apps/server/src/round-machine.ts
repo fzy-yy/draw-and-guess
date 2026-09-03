@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto'
 import { APP_CONFIG } from '../../../config.ts'
 import { serverStrings } from '../../../config/strings.ts'
-import { EVENTS, canTransition, type FinalRankingEntry, type RoundResult } from '@draw-guess/shared'
+import { canTransition, type FinalRankingEntry, type RoundResult } from '@draw-guess/shared'
 import type { MemberState, RoomSecret } from './models.ts'
 import type { GameService } from './game-service.ts'
 import { buildDrawerScore, buildGuessDetail } from './scoring.ts'
@@ -76,12 +76,17 @@ export class RoundMachine {
     room.members.forEach((member) => (member.guessedAt = undefined))
     game.phaseStartedAt = Date.now()
     game.phaseEndsAt = Date.now() + room.settings.chooseSeconds * 1_000
-    // 选词超时：服务端随机选择一个候选词并直接开画
+    // 选词超时：服务端随机选择一个候选词并直接开画。
+    // 候选池按规则在开局前已校验充足（resetWhenExhausted 保障轮转），正常不会为空；
+    // 此处仍作防御：极端情况下（词库被掏空）走弃权流程作废本回合，避免房间滞留 choosing_word。
+    // abandonChoosing 会递归 beginChoosing 并推进回合序号，最终回合耗尽即进入最终结算，递归有界。
     game.timer = setTimeout(
       () =>
         this.service.safeRun('choosingTimeout', () => {
+          if (room.phase !== 'choosing_word') return
           const candidate = game.candidates[Math.floor(Math.random() * game.candidates.length)]
-          if (candidate && room.phase === 'choosing_word') this.beginDrawing(room, candidate)
+          if (candidate) this.beginDrawing(room, candidate)
+          else this.abandonChoosing(room, serverStrings.notices.countdownCanceled)
         }),
       room.settings.chooseSeconds * 1_000,
     )
@@ -157,9 +162,6 @@ export class RoundMachine {
       ),
       playerId: member.playerId,
     })
-    this.service.io
-      .to(room.id)
-      .emit(EVENTS.guessCorrect, { playerId: member.playerId, order: game.correctOrder.length })
     // 所有有效猜词者（可玩成员，排除观战）都已猜中时立即结束本回合，否则刷新房间快照
     const eligible = room.members.filter(
       (candidate) =>

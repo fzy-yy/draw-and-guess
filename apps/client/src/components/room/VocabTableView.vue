@@ -3,9 +3,11 @@
   与散列视图（VocabGridView）共享选择集合与筛选结果，提供多字段陈列：
   - 列定义与显隐由父组件（VocabularyDialog）持有并过滤后传入；
   - 排序状态由父组件维护，点击表头经 DataTable 上抛后由父组件翻转；
+  - 行首复选列与表头三态统一复选框由父组件持有选择集合并裁决批量范围；
   - 各富内容列（分类徽章/难度星级/别称灰字等）通过 DataTable 的具名插槽渲染。
 -->
 <script setup lang="ts">
+import { computed } from 'vue'
 import { strings } from '@draw-guess/strings'
 import type { VocabularyWord } from '@draw-guess/shared'
 import type { DataTableColumn } from '@/components/common/DataTable.vue'
@@ -30,11 +32,21 @@ const emit = defineEmits<{
   sort: [key: string]
   /** 行首复选列勾选透传 */
   toggle: [id: string]
+  /** 表头统一复选框点击透传（批量全选/取消范围由父组件裁决） */
+  'toggle-all': []
 }>()
+
+/** 表头统一复选框三态：全部选中 → all；部分选中 → some；未选 → none */
+const selectAllState = computed<'all' | 'some' | 'none'>(() => {
+  if (!props.rows.length || !props.selectedIds?.size) return 'none'
+  const selectedInRows = props.rows.filter((row) => props.selectedIds!.has(row.id)).length
+  if (selectedInRows === 0) return 'none'
+  return selectedInRows === props.rows.length ? 'all' : 'some'
+})
 </script>
 
 <template>
-  <!-- 表格容器：占满剩余高度，滚动由 DataTable 内部处理 -->
+  <!-- 表格容器：占满剩余高度，滚动与虚拟化由 DataTable 内部处理 -->
   <DataTable
     class="min-h-0 flex-1"
     :columns="props.columns"
@@ -43,9 +55,11 @@ const emit = defineEmits<{
     :sort-key="props.sortKey"
     :sort-dir="props.sortDir"
     :selected-ids="props.selectedIds"
+    :select-all-state="selectAllState"
     :empty-hint="strings.room.vocabColumnHiddenNote"
     @sort="emit('sort', $event)"
     @toggle="emit('toggle', $event)"
+    @toggle-all="emit('toggle-all')"
   >
     <!-- 词面列：主文字加粗突出 -->
     <template #cell-text="{ row }">
@@ -72,8 +86,8 @@ const emit = defineEmits<{
       <span
         v-if="row.aliases.length"
         class="block truncate text-muted"
-        :title="row.aliases.join('、')"
-        >{{ row.aliases.join('、') }}</span
+        :title="row.aliases.join(strings.common.listSeparator)"
+        >{{ row.aliases.join(strings.common.listSeparator) }}</span
       >
       <span v-else class="text-muted">{{ strings.room.vocabAliasEmpty }}</span>
     </template>

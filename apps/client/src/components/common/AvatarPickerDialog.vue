@@ -2,8 +2,8 @@
 <script setup lang="ts">
 import type { AvatarId } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
-import AvatarImage from '@/components/AvatarImage.vue'
-import BaseDialog from '@/components/BaseDialog.vue'
+import AvatarImage from '@/components/common/AvatarImage.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import { useGameStore } from '@/stores/game'
 
 const props = defineProps<{
@@ -39,7 +39,7 @@ function selectAvatar(avatarId: AvatarId): void {
       <h2 id="avatar-picker-title">{{ strings.profile.avatarPickerTitle }}</h2>
     </template>
     <div
-      class="grid min-h-0 grid-cols-[repeat(8,minmax(0,1fr))] gap-[1.4cqh_1cqw] overflow-y-auto px-[2cqw] py-[2.5cqh] [overscroll-behavior:contain]"
+      class="grid min-h-0 grid-cols-8 gap-[1.4cqh_1cqw] overflow-y-auto px-[2cqw] py-[2.5cqh] overscroll-contain"
       role="radiogroup"
       :aria-label="strings.profile.avatarPickerAria"
     >
@@ -50,7 +50,7 @@ function selectAvatar(avatarId: AvatarId): void {
         role="radio"
         class="grid aspect-square place-items-center rounded-full border-[0.22cqh] border-line bg-white p-[0.7cqh]"
         :class="{
-          '!border-navy outline-[0.45cqh] outline-yellow outline-offset-[0.1cqh]':
+          'border-navy! outline-[0.45cqh] outline-yellow outline-offset-[0.1cqh]':
             props.modelValue === avatarId,
         }"
         :aria-checked="props.modelValue === avatarId"
@@ -60,7 +60,7 @@ function selectAvatar(avatarId: AvatarId): void {
         <AvatarImage
           :avatar-id="avatarId"
           :label="strings.profile.avatarOptionAria(avatarId)"
-          class="h-full w-full !border-0 !shadow-none"
+          class="h-full w-full border-0! shadow-none!"
         />
       </button>
     </div>

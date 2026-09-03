@@ -55,7 +55,7 @@ const store = useGameStore()
           :value="store.settings[row.setting]"
           type="text"
           readonly
-          class="h-[3.2em] w-[3.2em] rounded-[0.55em] bg-blue text-center text-white uppercase font-mono font-black leading-none cursor-pointer [text-transform:uppercase] focus:outline-[0.3cqh] focus:outline-yellow focus:outline-offset-[0.2cqh]"
+          class="h-[3.2em] w-[3.2em] rounded-[0.55em] bg-blue text-center text-white uppercase font-mono font-black leading-none cursor-pointer focus:outline-[0.3cqh] focus:outline-yellow focus:outline-offset-[0.2cqh]"
           :aria-label="strings.settings.setShortcutAria(row.name)"
           @keydown.prevent="emit('capture', row.setting, $event)"
         />

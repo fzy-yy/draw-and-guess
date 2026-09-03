@@ -26,7 +26,7 @@ const attrs = useAttrs()
 // 底座 + 尺寸 + 调用处透传的外部 class：只取 attrs.class，避免把 style/onClick 等键名当类名。
 const buttonClass = computed(() =>
   cn(
-    'grid place-items-center rounded-[0.6em] bg-white/10 text-white',
+    'grid place-items-center rounded-[0.6em] bg-white/10 text-white disabled:cursor-not-allowed disabled:opacity-40',
     props.size === 'lg' ? 'h-[4.6cqh] w-[4.6cqh]' : 'h-[4.4cqh] w-[4.4cqh]',
     attrs.class,
   ),

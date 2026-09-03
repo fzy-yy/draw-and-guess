@@ -1,13 +1,16 @@
 <!--
   席位网格（3×2）：展示房间内全部玩家座位、准备状态与空位邀请提示。
-  数据来自 store 的房间快照（members/settings），房主可对非自己的成员执行踢人。
+  数据来自 store 的房间快照（members/settings），房主可对非自己的成员执行踢人（带确认弹窗）。
   原 RoomView.vue 的席位区（header + 网格）整体迁入本组件；只保留渲染逻辑，不裁决游戏。
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Crown, UserPlus, Users, X } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { UserPlus, Users, X } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
-import AvatarImage from '@/components/AvatarImage.vue'
+import AvatarImage from '@/components/common/AvatarImage.vue'
+import SectionHeader from '@/components/common/SectionHeader.vue'
+import HostCrownBadge from '@/components/common/HostCrownBadge.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useGameStore } from '@/stores/game'
 
 const store = useGameStore()
@@ -19,18 +22,22 @@ const slots = computed(() =>
     (_, index) => store.room?.members.find((member) => member.seatIndex === index),
   ),
 )
+
+// 待确认踢出的成员：置位后弹出确认框，确认后调用 store.kick（踢人是广播全员的破坏性操作）。
+const kickTarget = computed(() =>
+  store.room?.members.find((member) => member.id === pendingKickId.value),
+)
+const pendingKickId = ref<string>()
 </script>
 
 <template>
   <!-- 席位区：固定网格展示全部玩家座位与准备状态 -->
   <section v-if="store.room" class="min-w-0 py-[3cqh] px-[2.5cqw] border-r-[0.2cqh] border-r-line">
     <div>
-      <div>
-        <p class="eyebrow">
-          {{ strings.room.playersEyebrow }}
-        </p>
-        <h2>{{ strings.room.playersTitle }}</h2>
-      </div>
+      <SectionHeader
+        :eyebrow="strings.room.playersEyebrow"
+        :title="strings.room.playersTitle"
+      ></SectionHeader>
       <span class="flex items-center gap-[0.45em] text-muted font-extrabold"
         ><Users />
         {{
@@ -48,9 +55,9 @@ const slots = computed(() =>
         :key="member?.id ?? index"
         class="relative flex min-w-0 flex-col items-center justify-center rounded-[1em] border-[0.24cqh] border-line border-b-[0.6cqh] bg-white border-b-line ui-feedback hover-tint"
         :class="[
-          !member ? 'border-dashed !bg-paper !text-muted' : '',
-          member?.ready && member.id !== store.playerId ? '!border-green !border-b-green' : '',
-          member?.id === store.playerId ? '!border-blue !border-b-blue' : '',
+          !member ? 'border-dashed bg-paper! text-muted!' : '',
+          member?.ready && member.id !== store.playerId ? 'border-green! border-b-green!' : '',
+          member?.id === store.playerId ? 'border-blue! border-b-blue!' : '',
         ]"
       >
         <template v-if="member">
@@ -60,10 +67,11 @@ const slots = computed(() =>
               :avatar-id="member.avatarId"
               :label="strings.common.playerAvatarAria(member.nickname)"
             />
-            <Crown
+            <!-- 房主皇冠：淡色圆形衬底保证任何底色上都可见；外扩留出完整圆形不被裁剪 -->
+            <HostCrownBadge
               v-if="member.isHost"
-              class="absolute right-[-0.4cqh] top-[-0.7cqh] h-[3.2cqh] w-[3.2cqh] p-[0.45cqh] text-yellow bg-yellow rounded-full"
-              :aria-label="strings.room.hostCrownAria"
+              :label="strings.room.hostCrownAria"
+              class="absolute right-[-1cqh] top-[-1cqh] h-[3.4cqh] w-[3.4cqh]"
             />
           </div>
           <div class="flex items-center gap-[0.4em] max-w-[90%] mt-[0.7cqh]">
@@ -78,7 +86,7 @@ const slots = computed(() =>
           <span
             v-if="!member.isHost || member.spectating"
             class="min-w-[7em] flex items-center justify-center gap-[0.35em] mt-[0.7cqh] py-[0.4cqh] px-[0.8em] text-muted bg-line rounded-[99em] text-[0.68em] font-black"
-            :class="member.ready ? '!text-green !bg-green/10' : ''"
+            :class="member.ready ? 'text-green! bg-green/10!' : ''"
             >{{
               member.spectating
                 ? strings.status.roleSpectating
@@ -89,13 +97,13 @@ const slots = computed(() =>
                     : strings.status.roleNotReady
             }}</span
           >
-          <!-- 房主移除玩家按钮：只对非自己的成员显示 -->
+          <!-- 房主移除玩家按钮：只对非自己的成员显示；先弹确认再执行（破坏性操作） -->
           <button
             v-if="store.isHost && member.id !== store.playerId"
             class="absolute right-[0.6cqh] top-[0.6cqh] grid place-items-center h-[3cqh] w-[3cqh] text-red bg-red/10 rounded-full"
             type="button"
             :aria-label="strings.room.kickAria"
-            @click="store.kick(member.id)"
+            @click="pendingKickId = member.id"
           >
             <X />
           </button>
@@ -107,5 +115,22 @@ const slots = computed(() =>
         >
       </article>
     </div>
+
+    <!-- 踢人确认弹窗：复用通用 ConfirmDialog；目标已离房（成员列表找不到）时自动不渲染。 -->
+    <ConfirmDialog
+      :open="Boolean(kickTarget)"
+      :title="strings.room.kickTitle"
+      :body="strings.room.kickBody(kickTarget?.nickname ?? '')"
+      :confirm-label="strings.room.kickConfirm"
+      :cancel-label="strings.common.cancel"
+      :icon="X"
+      @cancel="pendingKickId = undefined"
+      @confirm="
+        () => {
+          if (pendingKickId) void store.kick(pendingKickId)
+          pendingKickId = undefined
+        }
+      "
+    />
   </section>
 </template>

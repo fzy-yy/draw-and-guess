@@ -6,7 +6,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { APP_CONFIG, PUBLIC_CONFIG } from '@draw-guess/config'
-import { strings } from '@draw-guess/strings'
+import { strings, serverStrings } from '@draw-guess/strings'
 import {
   EVENTS,
   RecoveryTokenSchema,
@@ -158,6 +158,8 @@ export const useGameStore = defineStore('game', () => {
   const room = ref<RoomSnapshot>() // 当前房间快照（含对局视图）
   const vocabulary = ref<VocabularySnapshot>() // 词库快照（仅房主）
   const invites = ref<Invite[]>([]) // 收到的邀请列表
+  /** 被房主移出房间的待确认标记：置位后由根舞台弹出提示对话框，确认后复位。 */
+  const kickedNotice = ref(false)
   /** 画布渲染代次：每次收到笔画追加/新命令时递增，供画布组件可靠触发增量绘制。 */
   const drawRevision = ref(0)
   const busy = ref(false) // 注册/请求进行中的忙碌标记
@@ -329,6 +331,15 @@ export const useGameStore = defineStore('game', () => {
     notify(strings.store.profileCleared, 'warning')
   }
 
+  /** 同时重抽昵称与内置 SVG 头像；随机结果始终来自前后端共享白名单（资料页「换一组」入口）。 */
+  function randomizeProfile(): void {
+    profile.value = {
+      ...profile.value,
+      nickname: randomItem(APP_CONFIG.player.defaultNicknames),
+      avatarId: randomItem(APP_CONFIG.player.avatarIds),
+    }
+  }
+
   /** 向服务端提交资料修改（不影响当前房间状态）。 */
   async function updateProfile(): Promise<void> {
     const result = await guarded<Profile>(
@@ -342,25 +353,33 @@ export const useGameStore = defineStore('game', () => {
     notify(strings.store.profileUpdated)
   }
 
-  /** 创建公开或私密房间；失败时保持弹窗关闭前的当前页面状态。 */
+  /**
+   * 创建公开或私密房间；返回是否成功，供弹窗在失败时保留输入供重试。
+   */
   async function createRoom(input: {
     name: string
     visibility: RoomVisibility
     settings: RoomSettings
-  }): Promise<void> {
+  }): Promise<boolean> {
     const snapshot = await guarded<RoomSnapshot>(request(EVENTS.roomCreate, input))
-    if (snapshot?.ok) room.value = snapshot.data
+    if (!snapshot?.ok) return false
+    room.value = snapshot.data
+    return true
   }
-  /** 加入大厅中的公开房间。 */
-  async function joinRoom(roomId: string): Promise<void> {
+  /** 加入大厅中的公开房间；返回是否成功。 */
+  async function joinRoom(roomId: string): Promise<boolean> {
     const snapshot = await guarded<RoomSnapshot>(request(EVENTS.roomJoin, { roomId }))
-    if (snapshot?.ok) room.value = snapshot.data
+    if (!snapshot?.ok) return false
+    room.value = snapshot.data
+    return true
   }
 
-  /** 使用服务端生成的短码加入私密房；失败时保留弹窗和输入供重试。 */
-  async function joinPrivateRoom(code: string): Promise<void> {
+  /** 使用服务端生成的短码加入私密房；返回是否成功，失败时弹窗保留输入供重试。 */
+  async function joinPrivateRoom(code: string): Promise<boolean> {
     const snapshot = await guarded<RoomSnapshot>(request(EVENTS.roomJoinPrivate, { code }))
-    if (snapshot?.ok) room.value = snapshot.data
+    if (!snapshot?.ok) return false
+    room.value = snapshot.data
+    return true
   }
 
   /** 退出当前房间并清理本地对局/词库状态。 */
@@ -378,12 +397,16 @@ export const useGameStore = defineStore('game', () => {
     await guarded(request(EVENTS.roomSetReady, { ready }))
   }
 
-  /** 房主更新房间规则（带乐观并发版本号）。 */
-  async function updateRoomSettings(patch: Partial<RoomSettings>): Promise<void> {
-    if (!room.value) return
-    await guarded(
-      request(EVENTS.roomUpdateSettings, { patch, expectedVersion: room.value.stateVersion }),
+  /** 房主更新房间规则（带乐观并发版本号）；返回是否成功，供弹窗失败时保留草稿。 */
+  async function updateRoomSettings(patch: Partial<RoomSettings>): Promise<boolean> {
+    if (!room.value) return false
+    const result = await guarded<RoomSnapshot>(
+      request(EVENTS.roomUpdateSettings, {
+        patch,
+        expectedVersion: room.value.stateVersion,
+      }),
     )
+    return result?.ok ?? false
   }
 
   /** 房主拉取词库快照。 */
@@ -392,18 +415,19 @@ export const useGameStore = defineStore('game', () => {
     if (snapshot?.ok) vocabulary.value = snapshot.data
   }
 
-  /** 房主保存本局词库选择（带版本号，失败会提示重新确认）。 */
-  async function saveVocabulary(ids: string[]): Promise<void> {
-    if (!room.value) return
+  /** 房主保存本局词库选择（带版本号，失败会提示重新确认）；返回是否成功供弹窗保留选择。 */
+  async function saveVocabulary(ids: string[]): Promise<boolean> {
+    if (!room.value) return false
     const snapshot = await guarded<VocabularySnapshot>(
       request(EVENTS.roomUpdateVocabulary, {
         ids,
         expectedVersion: room.value.stateVersion,
       }),
     )
-    if (!snapshot?.ok) return
+    if (!snapshot?.ok) return false
     vocabulary.value = snapshot.data
     notify(strings.store.vocabularyUpdated)
+    return true
   }
 
   /** 房主开始游戏（服务端校验全员准备与规则）。 */
@@ -510,6 +534,8 @@ export const useGameStore = defineStore('game', () => {
    * 注册全部服务端推送事件的监听器（全局唯一的连接生命周期）。
    * 注意：绘图增量事件在这里按回合 ID 与序号直接合并进本地历史，无需等待下一次快照。
    */
+  /** 全量重同步进行中标记：防止断线修复期间多个 stateResync 并发覆盖（见 onRoomSnapshot）。 */
+  let resyncInFlight = false
   /** 注册服务端推送事件：把 socket.ts 的回调桥接回本地 refs（绘图增量合并见 socket.ts 约定）。 */
   const detachSocketListeners = attachSocketListeners({
     onConnect: () => {
@@ -524,6 +550,22 @@ export const useGameStore = defineStore('game', () => {
     onDisconnect: (reason) => {
       connected.value = false
       clearRestoreRetry()
+      // 服务端主动断开（io server disconnect）在本项目只发生在「会话被新连接接管」
+      // （reclaimPlayer 挤掉旧 socket）与「服务优雅关闭」两种场景；此时自动重连会与
+      // 接管方互相挤掉形成乒乓，因此不重连、不放恢复遮罩，而是结束本地会话回到资料页：
+      // 用户在本窗口重新点「进入」即可凭恢复令牌接管回来（后到者赢，与接管语义一致）。
+      if (reason === 'io server disconnect' && (playerId.value || profile.value.recoveryToken)) {
+        sessionState.value = 'idle'
+        room.value = undefined
+        vocabulary.value = undefined
+        page.value = 'profile'
+        // 该分支提前 return，此前漏更新连接文案：connected 已置 false，但标签仍是「已连接」，
+        // 资料页会出现红色 WifiOff 图标 +「已连接」的自相矛盾展示（标注截图中的 bug）。
+        // 此场景服务端不再自动重连，标签固定为「未连接」，直到用户手动重新进入。
+        connectionLabel.value = strings.connection.disconnected
+        notify(strings.store.sessionTakenOver, 'warning')
+        return
+      }
       if (playerId.value || profile.value.recoveryToken) sessionState.value = 'disconnected'
       connectionLabel.value =
         reason === 'io server disconnect'
@@ -551,12 +593,24 @@ export const useGameStore = defineStore('game', () => {
           -1,
         )
         if (localMaxSequence < snapshot.game.lastSequence) {
-          // 中途丢过笔画增量：请求全量画布历史（stateResync 服务端会强制全量下发）
+          // 中途丢过笔画增量：请求全量画布历史（stateResync 服务端会强制全量下发）。
           // 失败时保留当前 room（服务端已弹错误提示），避免画布状态不一致却无任何反馈。
-          void guarded<RoomSnapshot | undefined>(request(EVENTS.stateResync, {})).then((full) => {
-            if (full?.ok) room.value = full.data
-          })
-          return // 修正结果以全量快照为准，不再沿用残缺本地历史
+          // 在修复返回前继续应用后续快照/增量（保持本地推进），返回时按序号判断是否仍落后，
+          // 只有仍落后才覆盖，避免旧的并发响应回滚到过期状态。
+          if (!resyncInFlight) {
+            resyncInFlight = true
+            void guarded<RoomSnapshot | undefined>(request(EVENTS.stateResync, {})).then((full) => {
+              resyncInFlight = false
+              const fullSnapshot = full?.ok ? full.data : undefined
+              if (!fullSnapshot?.game) return
+              const current = room.value?.game
+              const currentMaxSequence =
+                current?.strokes.reduce((max, command) => Math.max(max, command.sequence), -1) ?? -1
+              if (currentMaxSequence >= fullSnapshot.game.lastSequence) return // 已追上，丢弃过期全量
+              room.value = fullSnapshot
+            })
+          }
+          return // 修正结果以全量快照为准，当前这份残缺快照不落入本地
         }
         snapshot = {
           ...snapshot,
@@ -589,6 +643,11 @@ export const useGameStore = defineStore('game', () => {
       // 与 leaveRoom/leaveGame 保持一致：房间关闭时同样清空词库快照，
       // 避免跨房间残留旧词库（词库仅房主可见，残留会造成规则/词库展示错误）。
       vocabulary.value = undefined
+      // 被房主移出：不用一闪而过的 Toast，改弹模态对话框确保玩家知晓被踢原因。
+      if (reason === serverStrings.notices.kickedReason) {
+        kickedNotice.value = true
+        return
+      }
       notify(reason, 'warning')
     },
     onSystemNotice: (text) => notify(text, 'warning'),
@@ -612,15 +671,31 @@ export const useGameStore = defineStore('game', () => {
         // 与服务端权威历史对齐：命令数同样截断，避免本地历史无限增长（内存有界）
         if (game.strokes.length > APP_CONFIG.drawing.maxHistoryCommands) game.strokes.shift()
       }
+      // 与服务端 addStroke 的撤销语义保持一致：任何被接受的新命令都会使重做失效，
+      // 且此前被撤销的命令被永久丢弃（而不是重新显示）——否则继续作画时，
+      // 被撤销的内容会突然回来，与画家预期不符。服务端在物理移除时只广播命令增量、
+      // 不推送快照，因此客户端必须按同一命令流在本地做同样的移除，两端才能一致。
+      //
+      if (game.undoneStrokeIds.length) {
+        const undoneSet = new Set(game.undoneStrokeIds)
+        game.strokes = game.strokes.filter((command) => !undoneSet.has(command.id))
+        game.undoneStrokeIds = []
+      }
       // 同 ID 追加不改变命令数组长度/撤销状态，普通 watch 不会触发；
       // 用显式绘制代次让画布组件可靠增量绘制长笔画的后续批次。
       drawRevision.value += 1
     },
-    // 填充增量：按回合 ID 与命令 ID 去重后追加；同样执行历史上限截断
+    // 填充增量：按回合 ID 与命令 ID 去重后追加；同样执行历史上限截断。
+    // 与笔画增量同理：新命令到达时按同一撤销语义物理移除被撤销命令（详见上方注释）。
     onDrawFillCommit: (roundId, fill) => {
       const game = room.value?.game
       if (!game || game.roundId !== roundId || game.strokes.some((item) => item.id === fill.id))
         return
+      if (game.undoneStrokeIds.length) {
+        const undoneSet = new Set(game.undoneStrokeIds)
+        game.strokes = game.strokes.filter((command) => !undoneSet.has(command.id))
+        game.undoneStrokeIds = []
+      }
       game.strokes.push(fill)
       if (game.strokes.length > APP_CONFIG.drawing.maxHistoryCommands) game.strokes.shift()
       drawRevision.value += 1
@@ -680,6 +755,7 @@ export const useGameStore = defineStore('game', () => {
     room,
     vocabulary,
     invites,
+    kickedNotice,
     drawRevision,
     busy,
     me,
@@ -687,6 +763,7 @@ export const useGameStore = defineStore('game', () => {
     isDrawer,
     notify,
     register,
+    randomizeProfile,
     saveSettings,
     resetSettings,
     clearProfile,
@@ -714,5 +791,9 @@ export const useGameStore = defineStore('game', () => {
     kick,
     invite,
     respondInvite,
+    /** 确认被踢提示对话框（复位标记，关闭弹窗）。 */
+    dismissKickedNotice() {
+      kickedNotice.value = false
+    },
   }
 })

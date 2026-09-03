@@ -9,11 +9,12 @@ import { useGameStore } from '@/stores/game'
 import SeatGrid from '@/components/room/SeatGrid.vue'
 import RuleSummary from '@/components/room/RuleSummary.vue'
 import IconButton from '@/components/common/IconButton.vue'
+import NetworkStatusButton from '@/components/common/NetworkStatusButton.vue'
 import VocabularyDialog from '@/components/room/VocabularyDialog.vue'
 import RulesDialog from '@/components/room/RulesDialog.vue'
 import InviteDialog from '@/components/room/InviteDialog.vue'
-import AppButton from '@/components/AppButton.vue'
-import BaseDialog from '@/components/BaseDialog.vue'
+import AppButton from '@/components/common/AppButton.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import type { RoomSettings } from '@draw-guess/shared'
 
 const store = useGameStore()
@@ -25,21 +26,14 @@ const showLeaveConfirm = ref(false) // 退出确认弹窗
 const settingsDraft = ref<RoomSettings>() // 规则编辑草稿（保存前可取消）
 const vocabularyLoading = ref(false) // 词库拉取中（RuleSummary 禁用按钮 + VocabularyDialog v-model）
 
-// 开局判定：房主由服务端视为隐式准备，只要求所有可玩成员在线且其他成员显式准备。
-const canHostStart = computed(() => {
+// 开局/全员就绪判定：服务端快照已把房主裁剪为「隐式已准备」（见 snapshot.ts 的 ready 字段），
+// 因此房主与非房主共用同一个条件：≥ minPlayers 名可玩成员在线且全部已准备（下限取共享配置，与服务端开局门槛一致）。
+const allSet = computed(() => {
   const active = (store.room?.members ?? []).filter((member) => !member.spectating)
   return Boolean(
     store.room &&
-    active.length >= 2 &&
-    active.every((member) => member.connection === 'online') &&
-    active.filter((member) => !member.isHost).every((member) => member.ready),
-  )
-})
-// 非房主提示仍沿用“全员就绪”语义；服务端快照会把房主裁剪为已准备。
-const allReady = computed(() => {
-  const active = (store.room?.members ?? []).filter((member) => !member.spectating)
-  return (
-    active.length >= 2 && active.every((member) => member.ready && member.connection === 'online')
+    active.length >= store.config.player.minPlayers &&
+    active.every((member) => member.connection === 'online' && member.ready),
   )
 })
 
@@ -80,12 +74,12 @@ function openSettings(): void {
   showSettings.value = true
 }
 
-/** 保存规则：以 RulesDialog 回传的草稿更新房间规则并关闭弹窗。 */
+/** 保存规则：以 RulesDialog 回传的草稿更新房间规则；失败（版本冲突等已 Toast）时保留弹窗供重试。 */
 async function saveSettings(draft: RoomSettings): Promise<void> {
   if (!settingsDraft.value) return
   settingsDraft.value = draft
-  await store.updateRoomSettings(settingsDraft.value)
-  showSettings.value = false
+  const ok = await store.updateRoomSettings(settingsDraft.value)
+  if (ok) showSettings.value = false
 }
 </script>
 
@@ -107,7 +101,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
       </div>
       <div
         class="flex items-center justify-self-center gap-[0.6em] text-yellow text-[0.72em] font-black"
-        :class="clsx(store.room.visibility === 'private' && '!text-red')"
+        :class="clsx(store.room.visibility === 'private' && 'text-red!')"
       >
         <KeyRound v-if="store.room.visibility === 'private'" />
         <ShieldCheck v-else />
@@ -128,10 +122,8 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
         </button>
       </div>
       <div class="justify-self-end flex items-center gap-[0.6em]">
-        <span
-          class="inline-flex items-center gap-[0.55em] py-[0.65cqh] px-[1.05em] rounded-[99em] text-[0.65em] font-extrabold text-green bg-green/10"
-          ><ShieldCheck /> {{ strings.room.authoritativeConnected }}</span
-        >
+        <!-- 网络状态：统一复用 NetworkStatusButton 图标按钮展示（与大厅/对局顶栏一致），悬浮查看详情 -->
+        <NetworkStatusButton size="lg" />
         <IconButton
           size="lg"
           :label="strings.common.exit"
@@ -160,12 +152,10 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
         <p v-if="store.me?.spectating" class="min-h-[2.4cqh] text-muted text-[0.69em]">
           {{ strings.room.spectatorReadyHint }}
         </p>
-        <p
-          v-else-if="!(store.isHost ? canHostStart : allReady)"
-          class="min-h-[2.4cqh] text-muted text-[0.69em]"
-        >
+        <p v-else-if="!allSet" class="min-h-[2.4cqh] text-muted text-[0.69em]">
           {{
-            (store.room.members || []).filter((member) => !member.spectating).length < 2
+            (store.room.members || []).filter((member) => !member.spectating).length <
+            store.config.player.minPlayers
               ? strings.room.needMorePlayers
               : store.isHost
                 ? strings.room.waitForGuestsReady
@@ -178,30 +168,33 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
         >
           <Check /> {{ strings.room.allReady }}
         </p>
-        <button
+        <!-- 准备按钮：复用 AppButton secondary（白底描边），已准备时经外部类切换为绿色高亮。 -->
+        <AppButton
           v-if="!store.isHost && !store.me?.spectating"
-          class="w-full min-h-[5.2cqh] my-[0.8cqh] text-navy bg-white border-[0.22cqh] border-blue rounded-[0.7em] font-[1000]"
-          :class="clsx(store.me?.ready && '!text-green !bg-green/10 !border-green')"
+          variant="secondary"
           type="button"
+          class="w-full my-[0.8cqh]"
+          :class="clsx(store.me?.ready && 'text-green! bg-green/10! border-green!')"
           @click="store.setReady(!store.me?.ready)"
         >
           {{ store.me?.ready ? strings.room.cancelReady : strings.room.readyGo }}
-        </button>
-        <button
+        </AppButton>
+        <AppButton
           v-else-if="!store.isHost"
-          class="w-full min-h-[5.2cqh] my-[0.8cqh] text-navy bg-white border-[0.22cqh] border-blue rounded-[0.7em] font-[1000]"
+          variant="secondary"
           type="button"
+          class="w-full my-[0.8cqh]"
           disabled
           :title="strings.room.spectatorReadyTitle"
         >
           {{ strings.room.spectatorReadyButton }}
-        </button>
+        </AppButton>
         <AppButton
           v-if="store.isHost"
           variant="primary"
           type="button"
           class="w-full"
-          :disabled="!canHostStart"
+          :disabled="!allSet"
           @click="store.startGame"
         >
           <Play /> {{ strings.room.startGame }}
@@ -209,55 +202,41 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
       </div>
     </aside>
 
-    <!-- 弹窗一：本局词库管理（房主）——搜索、批量选择、确认保存 -->
-    <Transition name="modal">
-      <VocabularyDialog
-        v-if="showVocabulary"
-        v-model:loading="vocabularyLoading"
-        :open="showVocabulary"
-        @close="showVocabulary = false"
-      />
-    </Transition>
+    <!--
+      弹窗一：本局词库管理（房主）——搜索、批量选择、确认保存。
+      注意：不要在外层再包 <Transition>：BaseDialog 内部已自带同名的 modal 过渡，
+      双重过渡会嵌套作用在同一个遮罩元素上，导致关闭流程卡死、弹窗变成僵尸 DOM
+      （表现为弹窗内所有按钮“点击没反应”，100% 复现）。出入场动画统一由 BaseDialog 负责。
+    -->
+    <VocabularyDialog
+      v-if="showVocabulary"
+      v-model:loading="vocabularyLoading"
+      :open="showVocabulary"
+      @close="showVocabulary = false"
+    />
 
-    <!-- 弹窗二：房间规则编辑（房主）——滑块与开关修改规则 -->
-    <Transition name="modal">
-      <RulesDialog
-        v-if="showSettings"
-        :open="showSettings"
-        :draft="settingsDraft"
-        @close="showSettings = false"
-        @save="saveSettings"
-      />
-    </Transition>
+    <!-- 弹窗二：房间规则编辑（房主）——滑块与开关修改规则（动画由 BaseDialog 内部负责） -->
+    <RulesDialog
+      v-if="showSettings"
+      :open="showSettings"
+      :draft="settingsDraft"
+      @close="showSettings = false"
+      @save="saveSettings"
+    />
 
     <!-- 弹窗三：邀请在线玩家（房主或允许邀请的成员） -->
-    <Transition name="modal">
-      <InviteDialog v-if="showInvite" :open="showInvite" @close="showInvite = false" />
-    </Transition>
+    <InviteDialog v-if="showInvite" :open="showInvite" @close="showInvite = false" />
 
-    <!-- 弹窗四：退出房间确认（保留在父组件，用 BaseDialog + AppButton 直接实现） -->
-    <Transition name="modal">
-      <BaseDialog
-        v-if="showLeaveConfirm"
-        :open="showLeaveConfirm"
-        width-class="w-[40cqw]"
-        section-class="items-center gap-[1.4cqh] pt-[3cqh] text-center"
-        footer-class="w-full mt-[1cqh]"
-        labelledby="leave-title"
-        @close="showLeaveConfirm = false"
-      >
-        <LogOut class="h-[7cqh] w-[7cqh] rounded-full bg-red/10 p-[1.4cqh] text-red" />
-        <h2 id="leave-title">{{ strings.room.leaveTitle }}</h2>
-        <p class="max-w-[30em] text-muted leading-[1.6]">{{ strings.room.leaveBody }}</p>
-        <template #footer>
-          <AppButton variant="secondary" type="button" @click="showLeaveConfirm = false">
-            {{ strings.room.stayInRoom }}
-          </AppButton>
-          <AppButton variant="danger" type="button" @click="store.leaveRoom">
-            {{ strings.room.confirmLeave }}
-          </AppButton>
-        </template>
-      </BaseDialog>
-    </Transition>
+    <!-- 弹窗四：退出房间确认（复用通用 ConfirmDialog：图标 + 标题 + 正文 + 取消/确认） -->
+    <ConfirmDialog
+      :open="showLeaveConfirm"
+      :title="strings.room.leaveTitle"
+      :body="strings.room.leaveBody"
+      :confirm-label="strings.room.confirmLeave"
+      :cancel-label="strings.room.stayInRoom"
+      :icon="LogOut"
+      @cancel="showLeaveConfirm = false"
+      @confirm="store.leaveRoom"
+    />
   </main>
 </template>

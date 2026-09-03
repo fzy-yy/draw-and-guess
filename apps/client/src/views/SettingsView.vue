@@ -8,7 +8,6 @@ import {
   Eye,
   Keyboard,
   PaintBucket,
-  ShieldCheck,
   SlidersHorizontal,
   Volume2,
 } from 'lucide-vue-next'
@@ -38,6 +37,13 @@ const emit = defineEmits<{
 }>()
 // 当前激活的设置分类标签
 const tab = ref<'audio' | 'accessibility' | 'shortcuts' | 'diagnostics'>('audio')
+// 分类标签数据驱动渲染：收敛四个重复的长类名按钮，图标/文案/键值集中一处维护
+const tabs: Array<{ key: typeof tab.value; label: string; icon: typeof Volume2 }> = [
+  { key: 'audio', label: strings.settings.tabAudio, icon: Volume2 },
+  { key: 'accessibility', label: strings.settings.tabAccessibility, icon: Eye },
+  { key: 'shortcuts', label: strings.settings.tabShortcuts, icon: Keyboard },
+  { key: 'diagnostics', label: strings.settings.tabDiagnostics, icon: SlidersHorizontal },
+]
 const shortcutError = ref('') // 快捷键错误提示文案
 const showAvatarPicker = ref(false) // 资料页复用的内置 SVG 头像选择弹窗
 // 可自定义的快捷键设置键名类型
@@ -159,46 +165,24 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
         <h1 class="text-[1.25em]">{{ strings.settings.title }}</h1>
       </div>
       <div class="justify-self-end">
-        <slot name="header-status">
-          <span class="flex items-center gap-[0.4em] text-sky text-[0.72em]"
-            ><ShieldCheck /> {{ strings.settings.localOnly }}</span
-          >
-        </slot>
+        <!-- 右上角插槽：由使用场景自行决定内容（如对局内设置页放「退出游戏」按钮） -->
+        <slot name="header-status" />
       </div>
     </header>
-    <!-- 分类标签：声音 / 显示与操作 / 快捷键 / 资料与诊断 -->
+    <!-- 分类标签：声音 / 显示与操作 / 快捷键 / 资料与诊断（数据驱动，统一样式） -->
     <nav
       class="flex justify-center gap-[0.5em] border-b-[0.18cqh] border-line bg-white p-[1cqh]"
       :aria-label="strings.settings.categoryAria"
     >
       <button
+        v-for="item in tabs"
+        :key="item.key"
         type="button"
         class="bg-transparent flex min-w-[13cqw] items-center justify-center gap-[0.45em] border-b-[0.35cqh] border-transparent font-extrabold text-muted"
-        :class="{ '!border-b-blue !text-blue': tab === 'audio' }"
-        @click="tab = 'audio'"
+        :class="{ 'border-b-blue! text-blue!': tab === item.key }"
+        @click="tab = item.key"
       >
-        <Volume2 />{{ strings.settings.tabAudio }}</button
-      ><button
-        type="button"
-        class="bg-transparent flex min-w-[13cqw] items-center justify-center gap-[0.45em] border-b-[0.35cqh] border-transparent font-extrabold text-muted"
-        :class="{ '!border-b-blue !text-blue': tab === 'accessibility' }"
-        @click="tab = 'accessibility'"
-      >
-        <Eye />{{ strings.settings.tabAccessibility }}</button
-      ><button
-        type="button"
-        class="bg-transparent flex min-w-[13cqw] items-center justify-center gap-[0.45em] border-b-[0.35cqh] border-transparent font-extrabold text-muted"
-        :class="{ '!border-b-blue !text-blue': tab === 'shortcuts' }"
-        @click="tab = 'shortcuts'"
-      >
-        <Keyboard />{{ strings.settings.tabShortcuts }}</button
-      ><button
-        type="button"
-        class="bg-transparent flex min-w-[13cqw] items-center justify-center gap-[0.45em] border-b-[0.35cqh] border-transparent font-extrabold text-muted"
-        :class="{ '!border-b-blue !text-blue': tab === 'diagnostics' }"
-        @click="tab = 'diagnostics'"
-      >
-        <SlidersHorizontal />{{ strings.settings.tabDiagnostics }}
+        <component :is="item.icon" />{{ item.label }}
       </button>
     </nav>
 

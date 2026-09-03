@@ -20,7 +20,6 @@ export const localSettings = {
 } as const
 
 export const ui = {
-  stageAspectRatio: '16 / 9', // 舞台宽高比
   toastDurationMs: 3_200, // Toast 展示时长
   // 聊天区允许回看最近 80 条消息；服务端按 2 倍裁剪内存队列，兼顾滚动回看与内存上限。
   recentMessageCount: 80,
@@ -32,6 +31,10 @@ export const ui = {
   tickIntervalMs: 200,
   /** 词库管理搜索框的防抖毫秒数，避免每次按键都触发过滤。 */
   searchDebounceMs: 150,
+  /** 邀请横幅「拒绝」按钮的倒计时秒数：倒计时结束后自动拒绝（服务端邀请本身 30 秒过期）。 */
+  inviteRejectCountdownSeconds: 15,
+  /** 邀请按钮点击后的冷却秒数（防止对同一玩家反复发送邀请）；与服务端 network.inviteCooldownMs 保持一致。 */
+  inviteCooldownSeconds: 5,
 } as const
 
 export const presets = {

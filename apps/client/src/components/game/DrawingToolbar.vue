@@ -97,9 +97,9 @@ function clearCanvas(): void {
         v-for="paint in store.config.drawing.colors"
         :key="paint"
         type="button"
-        class="h-[3.5cqh] w-[3.5cqh] rounded-full border-[0.2cqh] border-line bg-[var(--paint)]"
+        class="h-[3.5cqh] w-[3.5cqh] rounded-full border-[0.2cqh] border-line bg-(--paint)"
         :class="{
-          'outline-[0.3cqh] outline-yellow outline-offset-[0.15cqh] !border-navy':
+          'outline-[0.3cqh] outline-yellow outline-offset-[0.15cqh] border-navy!':
             color.toUpperCase() === paint,
         }"
         :style="{ '--paint': paint }"
@@ -113,7 +113,7 @@ function clearCanvas(): void {
       >
         <input
           type="color"
-          class="absolute -inset-[1cqh] h-[6cqh] w-[6cqh] border-0 p-0"
+          class="absolute inset-[-1cqh] h-[6cqh] w-[6cqh] border-0 p-0"
           :value="color"
           :disabled="!store.isDrawer"
           :aria-label="strings.game.customColorAria"
@@ -121,11 +121,13 @@ function clearCanvas(): void {
         />
       </label>
     </div>
-    <!-- 线宽滑块：画笔与橡皮擦共用；填充工具下禁用 -->
+    <!-- 线宽滑块：画笔与橡皮擦共用；填充工具下禁用；数值固定两位宽度避免 9→10 抙动 -->
     <label class="flex items-center gap-[0.45em]">
-      <span class="mr-[0.3em] text-muted text-[0.62em] font-extrabold tabular-nums">{{
-        strings.game.widthLabel(width)
-      }}</span>
+      <span
+        class="mr-[0.3em] flex items-center text-muted text-[0.62em] font-extrabold tabular-nums"
+        >{{ strings.game.widthName
+        }}<span class="inline-block min-w-[2ch] text-center">{{ width }}</span></span
+      >
       <input
         type="range"
         class="w-[10cqw] accent-blue"
@@ -137,16 +139,7 @@ function clearCanvas(): void {
         :aria-label="strings.game.widthAria"
         @input="onWidthInput"
       />
-      <!-- 画笔宽度预览：外包固定尺寸容器，圆点尺寸变化不影响同一行其它组件位置 -->
-      <span class="flex h-[2.5cqh] w-[2.5cqh] shrink-0 items-center justify-center">
-        <i
-          class="block rounded-full bg-navy"
-          :style="{
-            width: `${Math.min(width, store.config.drawing.widthPreviewCap)}px`,
-            height: `${Math.min(width, store.config.drawing.widthPreviewCap)}px`,
-          }"
-        ></i>
-      </span>
+      <!-- 线宽预览圆点已移除：画笔光标已在画板上实时展示实际粗细，此处重复展示无必要 -->
     </label>
     <!-- 历史操作组：撤销 / 重做 / 清空 -->
     <div class="flex items-center gap-[0.45em]">

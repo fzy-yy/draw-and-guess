@@ -45,7 +45,12 @@ export class SnapshotBuilder {
           totalRounds: game.totalRounds,
           drawerId: game.drawerId,
           phaseStartedAt: game.phaseStartedAt,
-          phaseEndsAt: game.phaseEndsAt,
+          // 暂停阶段：phaseEndsAt 已被置 0（服务端停止计时），若原样下发客户端会算出 0 秒。
+          // 这里用冻结的剩余毫秒换算出一个静止的截止时间戳，客户端无需任何协议/DTO 变更
+          // 即可把倒计时冻结在暂停时刻的剩余时间（而非 0），恢复后仍由服务端重建真实截止时间。
+          // pausedRemainingMs 仅是公开倒计时的剩余时长，不属于秘密字段，可安全下发。
+          phaseEndsAt:
+            room.phase === 'paused' ? Date.now() + (game.pausedRemainingMs ?? 0) : game.phaseEndsAt,
           // 答案展示规则：结算阶段公开全文；否则按设置显示遮罩或隐藏字数
           answerMask: game.answer
             ? room.phase === 'round_result' || room.phase === 'game_result'
