@@ -68,6 +68,9 @@ export function useAudioFeedback(): void {
     () => store.room?.phase,
     (phase, previous) => {
       if (!phase || phase === previous) return
+      // 新回合作画开始：复位「上次已响过的末位秒数」，否则新局最后一两秒的警告音
+      // 会与上一局同秒数重合而被跳过（lastWarningSecond 是跨回合共享的变量）。
+      if (phase === 'drawing') lastWarningSecond = -1
       if (phase === 'waiting') play('room')
       else if (phase === 'starting') play('starting')
       else if (phase === 'drawing') play('drawing')
@@ -91,7 +94,7 @@ export function useAudioFeedback(): void {
 
   // 最后十秒按服务端结束时间与全局时钟偏移重新计算：与 useGameHud 的倒计时同一口径，
   // 局域网设备时钟有偏差时警告音不会先于/后于 HUD 数字跳动；标签页恢复后也不会继续错误的本地值。
-  // 最后十秒警告音的轮询定时器（挂载时创建一次，卸载时清理）：与 HUD 倒计时同一时钟口径。
+  // 轮询间隔取自 UI 配置（与 HUD 的 useTimestamp 同源），避免两处各写一个 200ms。
   const warningTimer = window.setInterval(() => {
     const endsAt = store.room?.game?.phaseEndsAt
     if (!endsAt || store.room?.phase !== 'drawing') return
@@ -100,7 +103,7 @@ export function useAudioFeedback(): void {
       lastWarningSecond = second
       play('warning')
     }
-  }, 200)
+  }, store.config.ui.tickIntervalMs)
 
   // 组件卸载时清理定时器、事件监听与音频上下文
   onBeforeUnmount(() => {

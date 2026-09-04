@@ -97,7 +97,8 @@ export const MIGRATIONS: Migration[] = [
   {
     version: 4,
     name: 'create-rounds-and-results',
-    // 回合明细 + 逐局玩家结果：用于展示比分来源与粒度回放。
+    // 逐局玩家结果（game_results）已接入；rounds 表为将来回合级回放预留，
+    // 当前 persistGameResult 不采集回合明细（详见 repositories/archive-repository.ts 与 game-service）。
     up: `
       CREATE TABLE IF NOT EXISTS game_results (
         game_id     TEXT NOT NULL REFERENCES game_archive(id) ON DELETE CASCADE,

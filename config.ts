@@ -95,7 +95,22 @@ export const PUBLIC_CONFIG = {
     privateCodeLength: APP_CONFIG.room.privateCodeLength,
   },
   game: APP_CONFIG.game,
-  drawing: APP_CONFIG.drawing,
+  // 画板公开子集：客户端只消费绘制/展示需要的字段；服务端限频与内存预算
+  // （maxDrawEventsPerSecond/maxPointsPerRound/maxPointsPerStroke 等）不下发。
+  drawing: {
+    colors: APP_CONFIG.drawing.colors,
+    colorPattern: APP_CONFIG.drawing.colorPattern,
+    defaultColor: APP_CONFIG.drawing.defaultColor,
+    width: APP_CONFIG.drawing.width,
+    devicePixelRatioCap: APP_CONFIG.drawing.devicePixelRatioCap,
+    referenceResolution: APP_CONFIG.drawing.referenceResolution,
+    minLineScale: APP_CONFIG.drawing.minLineScale,
+    dedupDistance: APP_CONFIG.drawing.dedupDistance,
+    fillTolerance: APP_CONFIG.drawing.fillTolerance,
+    batchIntervalMs: APP_CONFIG.drawing.batchIntervalMs,
+    maxPointsPerBatch: APP_CONFIG.drawing.maxPointsPerBatch,
+    maxHistoryCommands: APP_CONFIG.drawing.maxHistoryCommands,
+  },
   audio: APP_CONFIG.audio,
   vocabulary: {
     minWords: APP_CONFIG.vocabulary.minWords,

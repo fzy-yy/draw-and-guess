@@ -1,12 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="你画我猜">
-  <!-- 站点图标：深蓝圆角底 + 黄色描边，呼应游戏舞台主题色（见 index.css @theme 的 navy/yellow） -->
-  <rect width="32" height="32" rx="7" fill="#172554" />
-  <g fill="none" stroke="#facc15" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <!-- 手柄主体 -->
-    <path d="M8.5 12.5h15a3.5 3.5 0 0 1 3.4 4.3l-1 4.6a2.6 2.6 0 0 1-4.5 1l-1.9-2.2h-5l-1.9 2.2a2.6 2.6 0 0 1-4.5-1l-1-4.6a3.5 3.5 0 0 1 3.4-4.3Z" />
-    <!-- 方向键与按钮 -->
-    <path d="M11.5 16v3M10 17.5h3" />
-    <circle cx="20.5" cy="16.5" r="0.6" fill="#facc15" />
-    <circle cx="22.5" cy="18.5" r="0.6" fill="#facc15" />
-  </g>
-</svg>
+<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1788447475436" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="13734" xmlns:xlink="http://www.w3.org/1999/xlink" width="128" height="128"><path d="M695.768 300.544a87.896 87.896 0 0 1-173.416 15.4A31.848 31.848 0 0 1 520 304v-32a24 24 0 1 0-48 0v160a32 32 0 1 1-64 0V267.408l0.232 0.048a87.896 87.896 0 0 1 173.416-15.4A31.84 31.84 0 0 1 584 264v32a24 24 0 1 0 48 0V104a32 32 0 1 1 64 0v196.592z" fill="#FEB8AD" p-id="13735"></path><path d="M760 952H264a264 264 0 0 1 0-528h496a264 264 0 1 1 0 528zM392 656h-56v-56a32 32 0 0 0-64 0v56h-56a32 32 0 1 0 0 64h56v56a32 32 0 1 0 64 0v-56h56a32 32 0 1 0 0-64z m368-104a56 56 0 1 0 56 56 56 56 0 0 0-56-56z m0 160a56 56 0 1 0 56 56 56 56 0 0 0-56-56z" fill="#325FD3" p-id="13736"></path></svg>

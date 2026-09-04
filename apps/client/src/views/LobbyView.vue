@@ -13,12 +13,15 @@ import {
 } from 'lucide-vue-next'
 import { clsx } from 'clsx'
 import { strings } from '@draw-guess/strings'
-import type { RoomSettings, RoomVisibility } from '@draw-guess/shared'
+import { PrivateRoomCodeSchema, type RoomSettings, type RoomVisibility } from '@draw-guess/shared'
 import AppButton from '@/components/common/AppButton.vue'
 import AvatarImage from '@/components/common/AvatarImage.vue'
 import NetworkStatusButton from '@/components/common/NetworkStatusButton.vue'
 import SectionHeader from '@/components/common/SectionHeader.vue'
+import StageHeader from '@/components/common/StageHeader.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+import RuleSelectField from '@/components/common/RuleSelectField.vue'
+import RuleSliderField from '@/components/common/RuleSliderField.vue'
 import { useGameStore } from '@/stores/game'
 
 const store = useGameStore()
@@ -40,14 +43,22 @@ const roomSettings = reactive<RoomSettings>({
   progressiveHints: store.config.game.progressiveHints,
   structuredHintsEnabled: store.config.game.structuredHintsEnabled,
   hintStartRatio: store.config.game.hintStartRatio,
-  hintIntervalRatio: store.config.game.hintIntervalRatio,
   guessBaseScore: store.config.game.score.guessBase,
   scoreMode: store.config.game.scoreMode,
-  closeGuessEnabled: store.config.game.closeGuessEnabled,
   allowPlayerInvite: store.config.room.allowPlayerInvite,
   allowPause: store.config.room.allowPause,
   joinPolicy: store.config.room.joinPolicy,
 })
+
+const playerOptions = computed(() =>
+  Array.from(
+    { length: store.config.player.maxPlayers - store.config.player.minPlayers + 1 },
+    (_, i) => {
+      const count = i + store.config.player.minPlayers
+      return { value: count, label: strings.common.playersUnit(count) }
+    },
+  ),
+)
 
 const filteredPlayers = computed(() =>
   store.presence.players.filter(
@@ -60,9 +71,7 @@ const statusText = {
   playing: strings.status.playerPlaying,
   reconnecting: strings.status.playerReconnecting,
 } as const
-const privateCodeValid = computed(
-  () => privateCode.value.replace(/[\s-]/gu, '').length === store.config.room.privateCodeLength,
-)
+const privateCodeValid = computed(() => PrivateRoomCodeSchema.safeParse(privateCode.value).success)
 
 /**
  * 创建房间：成功后由 store 切换到房间视图并关闭弹窗；
@@ -89,10 +98,8 @@ async function joinPrivateRoom(): Promise<void> {
 
 <template>
   <main class="grid h-full grid-cols-[minmax(0,1fr)_28%] grid-rows-[11%_89%] bg-sky">
-    <header
-      class="col-span-full grid grid-cols-[1fr_auto_1fr] items-center border-b-[0.5cqh] border-yellow bg-navy px-[2cqw] text-white"
-    >
-      <div class="flex min-w-0 items-center gap-[0.8em]">
+    <StageHeader>
+      <template #leading>
         <AvatarImage
           :avatar-id="store.profile.avatarId"
           :label="strings.common.myAvatarAria"
@@ -100,31 +107,32 @@ async function joinPrivateRoom(): Promise<void> {
         />
         <strong class="truncate">{{ store.profile.nickname }}</strong>
         <!-- 网络状态展示统一收敛到右上角 NetworkStatusButton，此处不再重复显示 -->
-      </div>
-      <div class="flex items-center gap-[0.6em]">
-        <Gamepad2 class="h-[4.2cqh] w-[4.2cqh] text-yellow" />
-        <div class="flex flex-col leading-[1.05]">
-          <b class="text-[1.2em]">{{ store.config.app.name }}</b
-          ><span class="text-sky text-[0.58em] tracking-[0.18em]">{{
-            strings.lobby.lobbyEnglishTitle
-          }}</span>
+      </template>
+      <template #center>
+        <div class="flex items-center gap-[0.6em]">
+          <Gamepad2 class="h-[4.2cqh] w-[4.2cqh] text-yellow" />
+          <div class="flex flex-col leading-[1.05]">
+            <b class="text-[1.2em]">{{ store.config.app.name }}</b
+            ><span class="text-sky text-[0.58em] tracking-[0.18em]">{{
+              strings.lobby.lobbyEnglishTitle
+            }}</span>
+          </div>
         </div>
-      </div>
-      <nav
-        class="flex justify-self-end items-center gap-[0.7em]"
-        :aria-label="strings.lobby.navAria"
-      >
-        <!-- 网络状态：统一复用 NetworkStatusButton 图标按钮展示，悬浮查看连接详情（与对局顶栏一致） -->
-        <NetworkStatusButton />
-        <button
-          type="button"
-          class="flex items-center gap-[0.4em] rounded-[0.55em] bg-white/5 px-[0.8em] py-[0.8cqh] text-sky"
-          @click="store.page = 'settings'"
-        >
-          <Settings /> {{ strings.lobby.settingsEntry }}
-        </button>
-      </nav>
-    </header>
+      </template>
+      <template #trailing>
+        <nav class="flex items-center gap-[0.7em]" :aria-label="strings.lobby.navAria">
+          <!-- 网络状态：统一复用 NetworkStatusButton 图标按钮展示，悬浮查看连接详情（与对局顶栏一致） -->
+          <NetworkStatusButton />
+          <button
+            type="button"
+            class="flex items-center gap-[0.4em] rounded-[0.55em] bg-white/5 px-[0.8em] py-[0.8cqh] text-sky"
+            @click="store.page = 'settings'"
+          >
+            <Settings /> {{ strings.lobby.settingsEntry }}
+          </button>
+        </nav>
+      </template>
+    </StageHeader>
 
     <section class="min-w-0 border-r-[0.2cqh] border-line px-[2cqw] py-[3cqh]">
       <div class="flex items-end justify-between">
@@ -334,41 +342,27 @@ async function joinPrivateRoom(): Promise<void> {
             class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-navy"
             :maxlength="store.config.player.roomNameMaxLength"
         /></label>
-        <label class="flex flex-col gap-[0.55cqh] font-extrabold"
-          >{{ strings.lobby.maxPlayersField
-          }}<select
-            v-model="roomSettings.maxPlayers"
-            class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-navy"
-          >
-            <option
-              v-for="count in store.config.player.maxPlayers - store.config.player.minPlayers + 1"
-              :key="count"
-              :value="count + store.config.player.minPlayers - 1"
-            >
-              {{ strings.common.playersUnit(count + store.config.player.minPlayers - 1) }}
-            </option>
-          </select></label
-        >
-        <label class="flex flex-col gap-[0.55cqh] font-extrabold"
-          >{{ strings.common.roundsField
-          }}<input
-            v-model.number="roomSettings.roundsPerPlayer"
-            type="range"
-            :min="store.config.game.roundsPerPlayer.min"
-            :max="store.config.game.roundsPerPlayer.max"
-            :step="store.config.game.roundsPerPlayer.step"
-          /><b>{{ strings.common.roundsUnit(roomSettings.roundsPerPlayer) }}</b></label
-        >
-        <label class="flex flex-col gap-[0.55cqh] font-extrabold"
-          >{{ strings.common.drawTimeField
-          }}<input
-            v-model.number="roomSettings.drawSeconds"
-            type="range"
-            :min="store.config.game.drawSeconds.min"
-            :max="store.config.game.drawSeconds.max"
-            :step="store.config.game.drawSeconds.step"
-          /><b>{{ strings.common.secondsUnit(roomSettings.drawSeconds) }}</b></label
-        >
+        <RuleSelectField
+          v-model="roomSettings.maxPlayers"
+          :label="strings.lobby.maxPlayersField"
+          :options="playerOptions"
+        />
+        <RuleSliderField
+          v-model="roomSettings.roundsPerPlayer"
+          :label="strings.common.roundsField"
+          :min="store.config.game.roundsPerPlayer.min"
+          :max="store.config.game.roundsPerPlayer.max"
+          :step="store.config.game.roundsPerPlayer.step"
+          :display="strings.common.roundsUnit(roomSettings.roundsPerPlayer)"
+        />
+        <RuleSliderField
+          v-model="roomSettings.drawSeconds"
+          :label="strings.common.drawTimeField"
+          :min="store.config.game.drawSeconds.min"
+          :max="store.config.game.drawSeconds.max"
+          :step="store.config.game.drawSeconds.step"
+          :display="strings.common.secondsUnit(roomSettings.drawSeconds)"
+        />
         <p class="col-span-full m-0 text-muted text-[0.72em] leading-[1.6]">
           {{
             createForm.visibility === 'public'

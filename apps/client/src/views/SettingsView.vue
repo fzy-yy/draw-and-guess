@@ -11,9 +11,14 @@ import {
   SlidersHorizontal,
   Volume2,
 } from 'lucide-vue-next'
-import { useClipboard } from '@vueuse/core'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
+import { useCopyWithFeedback } from '@/composables/useCopyWithFeedback'
+import {
+  isUnmodifiedPrintableKey,
+  normalizedShortcut,
+  type ShortcutSettingKey,
+} from '@/utils/keyboard'
 import AudioTab from '@/components/settings/AudioTab.vue'
 import AccessibilityTab from '@/components/settings/AccessibilityTab.vue'
 import ShortcutsTab from '@/components/settings/ShortcutsTab.vue'
@@ -46,8 +51,6 @@ const tabs: Array<{ key: typeof tab.value; label: string; icon: typeof Volume2 }
 ]
 const shortcutError = ref('') // 快捷键错误提示文案
 const showAvatarPicker = ref(false) // 资料页复用的内置 SVG 头像选择弹窗
-// 可自定义的快捷键设置键名类型
-type ShortcutSettingKey = 'penShortcut' | 'eraserShortcut' | 'fillShortcut'
 
 // 快捷键配置行：设置键、中文名（来自 strings）、说明与图标
 const shortcutRows: Array<{
@@ -95,39 +98,25 @@ const diagnostic = computed(() =>
   ].join('\n'),
 )
 
-// 剪切板写入交给 @vueuse/core 的 useClipboard 统一处理：优先原生 API，失败后自动走 execCommand 降级（legacy）。
-const { copy: copyToClipboard } = useClipboard({ legacy: true })
+// 复制脱敏诊断信息：useCopyWithFeedback 统一处理剪贴板（原生 API + execCommand 降级）与结果提示。
+const copyDiagnostics = useCopyWithFeedback({
+  text: () => diagnostic.value,
+  success: strings.settings.copied,
+  failure: strings.settings.copyFailed,
+  notify: (text, type) => store.notify(text, type),
+})
 
 /**
- * 复制脱敏后的诊断信息到剪贴板。
- * useClipboard 内置 execCommand 降级（legacy），无需再手写 textarea 分支；
- * 其 copy 在完成写入后标记成功，能力缺失时不产生副作用，据此判断成功与否并提示。
- */
-async function copyDiagnostics(): Promise<void> {
-  // 只声明不初始化：成功/失败两条分支都会在读取前赋值，初始值永远不会被读取，避免 no-useless-assignment。
-  let copied: boolean
-  try {
-    await copyToClipboard(diagnostic.value)
-    copied = true
-  } catch {
-    copied = false
-  }
-  store.notify(
-    copied ? strings.settings.copied : strings.settings.copyFailed,
-    copied ? 'success' : 'warning',
-  )
-}
-
-/**
- * 捕获一个不带修饰键的可打印字符作为工具快捷键。
+ * 捕获一个可用的工具快捷键。
+ * 统一走 utils/keyboard.ts 的「无修饰键单字符」判定，与对局内触发匹配（useShortcuts）严格一致；
  * 重复键会被拒绝，避免一次按键对应多个工具；输入框本身只展示结果，不接收普通文本编辑。
  */
 function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): void {
-  if (event.ctrlKey || event.metaKey || event.altKey || event.key.trim().length !== 1) {
+  if (!isUnmodifiedPrintableKey(event)) {
     shortcutError.value = strings.settings.shortcutErrorSimple
     return
   }
-  const next = event.key.toLocaleLowerCase()
+  const next = normalizedShortcut(event.key)
   const conflict = shortcutRows.find(
     (row) => row.setting !== setting && store.settings[row.setting].toLocaleLowerCase() === next,
   )

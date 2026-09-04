@@ -22,7 +22,7 @@ import {
   type Stroke,
   type VocabularySnapshot,
 } from '@draw-guess/shared'
-import { toast } from 'vue-sonner'
+import { notify as pushToast } from '@/composables/useToasts'
 import { attachSocketListeners, socket } from './socket.ts'
 import { createRequester, type RequestResult } from './request.ts'
 
@@ -172,15 +172,13 @@ export const useGameStore = defineStore('game', () => {
 
   /**
    * 弹出 Toast 通知。
-   * 由 vue-sonner 接管渲染（App.vue 挂载 <Toaster/>），store 只保留统一的 `notify` 入口，
-   * 把类型映射到 toast.success/error/warning，并保留「同内容防抖合并」语义：
-   * 以内容+类型为稳定 id 复用同一条 toast（vue-sonner 会就地更新而非重复堆叠）。
+   * 渲染与动画交给 App.vue 挂载的 <AppToaster />（见 composables/useToasts.ts），
+   * store 只保留统一的 `notify` 入口，把类型与文案转交给通知状态层；
+   * 「同内容防抖合并」语义（同内容+类型未消失时复用同一条、触发左弹跳而非重复堆叠）
+   * 由 useToasts 统一实现。
    */
   function notify(text: string, type: 'success' | 'warning' | 'error' = 'success'): void {
-    const id = `${type}:${text}` // 稳定 id：同内容+类型复用同一条，实现防抖合并
-    // 映射业务类型到 vue-sonner 的方法；默认成功。
-    const push = type === 'error' ? toast.error : type === 'warning' ? toast.warning : toast.success
-    push(text, { id, duration: APP_CONFIG.ui.toastDurationMs })
+    pushToast(text, type)
   }
 
   /** 所有可失败请求使用 timeout + ack，并在这里统一翻译网络失败（实现见 stores/request.ts）。 */
@@ -258,6 +256,14 @@ export const useGameStore = defineStore('game', () => {
           room.value = undefined
           page.value = 'profile'
           notify(result?.error ?? strings.request.genericFailure, 'error')
+        } else if (
+          sessionState.value === 'restoring' &&
+          profile.value.recoveryToken &&
+          retryableTransportFailure
+        ) {
+          // 手动注册失败时仍在恢复阻断框（onConnect 已置 restoring）：继续走静默重试，
+          // 否则阻断框会永久停留且无人重新调度（此前只有 automatic 路径会调度）。
+          scheduleRestoreRetry()
         }
         return
       }
@@ -314,17 +320,16 @@ export const useGameStore = defineStore('game', () => {
 
   /** 清除本地资料：先通知服务端离开房间释放座位（防止占座至宽限期结束），再重置本地状态。 */
   async function clearProfile(): Promise<void> {
-    if (playerId.value) {
-      try {
-        await request(EVENTS.roomLeave)
-      } catch {
-        // 退出失败不阻塞清除；服务端会按 120s 宽限最终清理身份
-      }
-    }
+    // request 层不抛错（返回可判别结果），失败（超时/离线）只是提示，不阻塞清除；
+    // 服务端会按宽限期最终清理身份，因此这里无需 try/catch。
+    if (playerId.value) await guarded(request(EVENTS.roomLeave))
     localStorage.removeItem(APP_CONFIG.app.storageKey)
     profile.value = loadProfile()
     playerId.value = ''
     room.value = undefined
+    vocabulary.value = undefined
+    invites.value = []
+    kickedNotice.value = false
     sessionState.value = 'idle'
     clearRestoreRetry()
     page.value = 'profile'
@@ -382,13 +387,19 @@ export const useGameStore = defineStore('game', () => {
     return true
   }
 
+  /** 服务端确认离房后清空本地房间/词库状态（可选一并回到指定页面）。 */
+  function clearLocalRoomState(nextPage?: ShellPage): void {
+    room.value = undefined
+    vocabulary.value = undefined
+    if (nextPage) page.value = nextPage
+  }
+
   /** 退出当前房间并清理本地对局/词库状态。 */
   async function leaveRoom(): Promise<void> {
     // roomLeave 成功时服务端返回空 data，用 result.ok 区分“请求失败”与“成功但无数据”。
     const result = await guarded<undefined>(request(EVENTS.roomLeave))
     if (!result?.ok) return
-    room.value = undefined
-    vocabulary.value = undefined
+    clearLocalRoomState()
     notify(strings.store.roomLeft)
   }
 
@@ -497,9 +508,7 @@ export const useGameStore = defineStore('game', () => {
   async function leaveGame(): Promise<void> {
     const result = await guarded<undefined>(request(EVENTS.gameLeave))
     if (!result?.ok) return
-    room.value = undefined
-    vocabulary.value = undefined
-    page.value = 'lobby'
+    clearLocalRoomState('lobby')
     notify(strings.store.roomLeft)
   }
   async function returnWaiting(): Promise<void> {
@@ -531,12 +540,25 @@ export const useGameStore = defineStore('game', () => {
   }
 
   /**
+   * 与服务端 addStroke/addFill 的撤销语义保持一致：任何被接受的新命令都会使重做失效，
+   * 且此前被撤销的命令被永久丢弃（而不是重新显示）——否则继续作画时，
+   * 被撤销的内容会突然回来，与画家预期不符。服务端在物理移除时只广播命令增量、
+   * 不推送快照，因此客户端必须按同一命令流在本地做同样的移除，两端才能一致。
+   */
+  function purgeUndone(game: NonNullable<RoomSnapshot['game']>): void {
+    if (game.undoneStrokeIds.length) {
+      const undoneSet = new Set(game.undoneStrokeIds)
+      game.strokes = game.strokes.filter((command) => !undoneSet.has(command.id))
+      game.undoneStrokeIds = []
+    }
+  }
+
+  /**
    * 注册全部服务端推送事件的监听器（全局唯一的连接生命周期）。
    * 注意：绘图增量事件在这里按回合 ID 与序号直接合并进本地历史，无需等待下一次快照。
+   * 把 socket.ts 的推送回调桥接回本地 refs（合并绘图增量见 socket.ts 文件头约定）。
    */
-  /** 全量重同步进行中标记：防止断线修复期间多个 stateResync 并发覆盖（见 onRoomSnapshot）。 */
   let resyncInFlight = false
-  /** 注册服务端推送事件：把 socket.ts 的回调桥接回本地 refs（绘图增量合并见 socket.ts 约定）。 */
   const detachSocketListeners = attachSocketListeners({
     onConnect: () => {
       connected.value = true
@@ -583,7 +605,7 @@ export const useGameStore = defineStore('game', () => {
     },
     onPresence: (snapshot) => (presence.value = snapshot),
     onRooms: (rooms) => (presence.value.rooms = rooms),
-    // E4：快照标记 strokesOmitted 时沿用本地已有画布历史（服务端已用增量补齐），避免画布闪空。
+    // 快照标记 strokesOmitted 时沿用本地已有画布历史（服务端已用增量补齐），避免画布闪空。
     // 若本地落后于权威 lastSequence（曾丢失过增量广播），主动拉一次全量快照修复画面一致性。
     onRoomSnapshot: (snapshot) => {
       if (snapshot.game?.strokesOmitted) {
@@ -651,9 +673,6 @@ export const useGameStore = defineStore('game', () => {
       notify(reason, 'warning')
     },
     onSystemNotice: (text) => notify(text, 'warning'),
-    // “很接近”提示：服务端只单播给猜词者本人且不写入聊天流，
-    // 此前客户端未监听该事件，导致房主开启“近似答案提示”规则后玩家得零反馈。
-    onGuessClose: (text) => notify(text, 'warning'),
     onSystemError: (message) => notify(message, 'error'),
     // 笔画增量：按回合 ID 过滤，同笔画 ID 追加点（丢弃旧序号包），新笔画创建命令
     onDrawStrokeBatch: (roundId, stroke) => {
@@ -662,40 +681,28 @@ export const useGameStore = defineStore('game', () => {
       const existing = game.strokes.find(
         (item): item is Stroke => item.kind === 'stroke' && item.id === stroke.id,
       )
-      if (existing) {
+      // 已被撤销的笔画继续追加时按新命令处理（与服务端同序：先物理移除被撤销命令再追加），
+      // 避免撤销栈丢弃后本地出现「被撤销笔画 + 追加点」的错位历史。
+      if (existing && !game.undoneStrokeIds.includes(existing.id)) {
         if (stroke.sequence <= existing.sequence) return
         existing.points.push(...stroke.points)
         existing.sequence = stroke.sequence
       } else {
+        purgeUndone(game)
         game.strokes.push({ ...stroke, points: [...stroke.points] })
         // 与服务端权威历史对齐：命令数同样截断，避免本地历史无限增长（内存有界）
         if (game.strokes.length > APP_CONFIG.drawing.maxHistoryCommands) game.strokes.shift()
-      }
-      // 与服务端 addStroke 的撤销语义保持一致：任何被接受的新命令都会使重做失效，
-      // 且此前被撤销的命令被永久丢弃（而不是重新显示）——否则继续作画时，
-      // 被撤销的内容会突然回来，与画家预期不符。服务端在物理移除时只广播命令增量、
-      // 不推送快照，因此客户端必须按同一命令流在本地做同样的移除，两端才能一致。
-      //
-      if (game.undoneStrokeIds.length) {
-        const undoneSet = new Set(game.undoneStrokeIds)
-        game.strokes = game.strokes.filter((command) => !undoneSet.has(command.id))
-        game.undoneStrokeIds = []
       }
       // 同 ID 追加不改变命令数组长度/撤销状态，普通 watch 不会触发；
       // 用显式绘制代次让画布组件可靠增量绘制长笔画的后续批次。
       drawRevision.value += 1
     },
-    // 填充增量：按回合 ID 与命令 ID 去重后追加；同样执行历史上限截断。
-    // 与笔画增量同理：新命令到达时按同一撤销语义物理移除被撤销命令（详见上方注释）。
+    // 填充增量：按回合 ID 与命令 ID 去重后追加；同样执行历史上限截断与撤销重放。
     onDrawFillCommit: (roundId, fill) => {
       const game = room.value?.game
       if (!game || game.roundId !== roundId || game.strokes.some((item) => item.id === fill.id))
         return
-      if (game.undoneStrokeIds.length) {
-        const undoneSet = new Set(game.undoneStrokeIds)
-        game.strokes = game.strokes.filter((command) => !undoneSet.has(command.id))
-        game.undoneStrokeIds = []
-      }
+      purgeUndone(game)
       game.strokes.push(fill)
       if (game.strokes.length > APP_CONFIG.drawing.maxHistoryCommands) game.strokes.shift()
       drawRevision.value += 1
@@ -703,7 +710,7 @@ export const useGameStore = defineStore('game', () => {
   })
 
   /**
-   * 测量往返延迟，并顺带估算客户端与服务端的时钟偏移（F2）。
+   * 测量往返延迟，并顺带估算客户端与服务端的时钟偏移。
    * 局域网设备时钟偏差会导致倒计时显示不准；偏移 = serverTime - (clientTime + RTT/2)。
    */
   async function measureLatency(): Promise<void> {

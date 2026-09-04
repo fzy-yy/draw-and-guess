@@ -7,21 +7,18 @@ import { Eye } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
 import SettingSwitchRow from '@/components/common/SettingSwitchRow.vue'
+import SettingsSectionHeader from '@/components/settings/SettingsSectionHeader.vue'
 
 const store = useGameStore()
 </script>
 
 <template>
   <section class="min-h-0 px-[9cqw] py-[3cqh]">
-    <div class="flex items-center gap-[1.2em] mb-[2.5cqh]">
-      <Eye class="h-[6cqh] w-[6cqh] rounded-[0.8em] bg-blue p-[1.2cqh] text-white" />
-      <div>
-        <h2>{{ strings.settings.accessibilityTitle }}</h2>
-        <p class="mt-[0.5cqh] text-muted text-[0.72em]">
-          {{ strings.settings.accessibilityIntro }}
-        </p>
-      </div>
-    </div>
+    <SettingsSectionHeader
+      :icon="Eye"
+      :title="strings.settings.accessibilityTitle"
+      :intro="strings.settings.accessibilityIntro"
+    />
     <div class="grid grid-cols-2 gap-[1.2cqh_1em]">
       <SettingSwitchRow
         v-model="store.settings.animationsEnabled"

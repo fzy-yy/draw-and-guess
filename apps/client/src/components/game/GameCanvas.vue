@@ -40,6 +40,8 @@ const emit = defineEmits<{
 const canvas = ref<HTMLCanvasElement>() // 画布 DOM 引用
 const activePoints = ref<DrawPoint[]>([]) // 当前未提交的自由笔画本地点列
 const drawing = ref(false) // 是否正在按下画布绘图
+let observer: ResizeObserver | undefined // 画布尺寸监听（窗口缩放重建像素缓冲）
+const resizeTick = ref(0) // 画布尺寸代次：窗口缩放后驱动圆点光标直径重新计算
 // —— 自定义圆点光标：画笔/橡皮擦工具下隐藏系统光标，改为跟随鼠标的对应粗细圆点 ——
 // 便于作画前预览笔迹粗细与颜色；滚轮调整粗细时圆点同步变化。
 const cursorVisible = ref(false) // 指针是否悬停在画板内（悬停才显示圆点）
@@ -76,8 +78,6 @@ function cursorTrack(event: PointerEvent): void {
   if (!rect) return
   cursorPos.value = { x: event.clientX - rect.left, y: event.clientY - rect.top }
 }
-let observer: ResizeObserver | undefined // 画布尺寸监听（窗口缩放重建像素缓冲）
-const resizeTick = ref(0) // 画布尺寸代次：窗口缩放后驱动圆点光标直径重新计算
 let sequence = 0 // 本地绘图序号（提交时与权威历史比较取更大值）
 let activeStrokeId = '' // 当前按下动作的笔画 ID（各批次共用）
 /**
@@ -289,7 +289,7 @@ function getContext(): CanvasRenderingContext2D | null {
   return canvas.value?.getContext('2d', { willReadFrequently: true }) ?? null
 }
 
-// —— E2 增量绘制游标：避免高频笔画（约 40 批/秒）每次都全量重绘 1500 条历史 ——
+// —— 增量绘制游标：避免高频笔画（约 40 批/秒）每次都全量重绘整条历史 ——
 let committedCount = 0 // 已绘制到画布的可见命令数
 let committedUndoLen = props.undoneStrokeIds.length // 上次已绘制时的撤销栈长度
 let committedRoundId = props.roundId // 上次完成绘制的回合，用于识别“等长历史替换”
@@ -514,11 +514,14 @@ function wheelWidth(event: WheelEvent): void {
  * 权威历史变化监听：
  * - 撤销栈长度变化 / 命令数减少（撤销、清空、回合切换）→ 全量重绘并重建游标；
  * - 其余情况（笔画批次、同 ID 追加点、填充）→ 增量绘制，避免每帧全量重绘历史。
- * revision 代次保证同 ID 追加点也能可靠触发（命令数组长度不变时普通 watch 不会触发）。
+ * 依赖数组引用 props.strokes：store 全量重同步会用新数组（等长）整体替换历史，
+ * 仅看 length 会漏触发导致画布残留旧画面；同 ID 追加点的实时绘制仍由 revision 代次驱动。
+ * 注：不使用 deep —— getter 每次返回新数组，深度追踪既无必要也会让逐点追加重复触发。
  */
 watch(
   () => [
     props.roundId,
+    props.strokes,
     props.strokes.length,
     props.revision ?? 0,
     props.undoneStrokeIds.length,
@@ -553,7 +556,6 @@ watch(
     if (!context) return
     drawIncoming(context)
   },
-  { deep: true },
 )
 
 // 注：不再监听 tool/color/width 去重绘预览。一条笔画的样式在按下时已锁定（见 activeStyle），

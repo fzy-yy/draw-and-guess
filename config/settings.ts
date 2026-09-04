@@ -23,8 +23,6 @@ export const ui = {
   toastDurationMs: 3_200, // Toast 展示时长
   // 聊天区允许回看最近 80 条消息；服务端按 2 倍裁剪内存队列，兼顾滚动回看与内存上限。
   recentMessageCount: 80,
-  /** 词库管理弹窗默认展示形式：'grid'=散列（仅词面） | 'table'=表格陈列（显式联合类型，避免被 as const 收窄成单值） */
-  vocabDefaultView: 'grid' as 'grid' | 'table',
   /** 难度星级最大值（词库 difficulty 上限，选词星级与难度列共用） */
   difficultyMax: 5,
   /** 对局 HUD 时间刷新的毫秒间隔（useGameHud 的 useTimestamp interval）。 */

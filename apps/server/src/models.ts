@@ -104,9 +104,9 @@ export interface GameSecret {
    */
   correctDetails: ScoreDetail[]
   revealedIndices: Set<number> // 逐步提示已揭示的字符下标
-  /** 结构化提示的揭示顺序（每回合对词条 hints 下标洗牌一次，首条即「随机一条」） */
+  /** 结构化提示的揭示槽位：词库单分类即提示，开局固定为 [0]（揭示一次分类）；分类为空时为空数组 */
   hintOrder: number[]
-  /** 已揭示的结构化提示条数（snapshot 据此切片下发 revealedHints） */
+  /** 已揭示的结构化提示条数（snapshot 据此切片下发 revealedHints，至多 1） */
   revealedHintCount: number
   roundResult?: RoundResult // 回合结算数据
   /** 进入最终结算时冻结；成员随后离房不会改变已公布的排名与统计。 */

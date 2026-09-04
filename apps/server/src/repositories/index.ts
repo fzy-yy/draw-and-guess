@@ -10,6 +10,5 @@ export type {
   ArchiveRepository,
   GameArchiveRecord,
   GameResultRecord,
-  RoundRecord,
 } from './archive-repository.ts'
 export { SqliteArchiveRepository } from './archive-repository.ts'

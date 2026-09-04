@@ -42,18 +42,16 @@ export function buildGuessDetail(input: {
 export function buildDrawerScore(input: {
   game: GameSecret
   room: RoomSecret
-  onlinePlayerIds: ReadonlySet<string>
   drawerAbandoned: boolean
 }): { score: number; allCorrect: boolean; roundGuessers: MemberState[] } {
-  const { game, room, onlinePlayerIds, drawerAbandoned } = input
-  // 参与本回合的可玩成员全集（含已掉线者）：满员奖励必须“确实每个人都猜中”。
-  // 若仅按在线成员判定，3 人局中 1 人掉线后只要剩下 1 人猜中就会发放满员奖，属虚增。
+  const { game, room, drawerAbandoned } = input
+  // 参与本回合的可玩成员全集（含已掉线者）：满员奖励按「每个人都确实猜中」判定。
+  // 只认 guessedAt（猜中瞬间必然在线才置位）：猜中后掉线/离场不取消奖励，
+  // 掉线但未猜中的成员仍会使奖励不成立；同一时刻离场成员（leftGame）不参与判定。
   const roundGuessers = room.members.filter(
     (member) => member.playerId !== game.drawerId && !member.spectating && !member.leftGame,
   )
-  const allCorrect =
-    roundGuessers.length > 0 &&
-    roundGuessers.every((member) => member.guessedAt && onlinePlayerIds.has(member.playerId))
+  const allCorrect = roundGuessers.length > 0 && roundGuessers.every((member) => member.guessedAt)
   const score = drawerAbandoned
     ? 0
     : game.correctOrder.length * APP_CONFIG.game.score.drawerPerCorrect +

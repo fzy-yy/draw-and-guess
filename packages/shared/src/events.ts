@@ -53,7 +53,6 @@ export const EVENTS = {
   roomSnapshot: 'room:snapshot',
   roomMemberConnectionChanged: 'room:memberConnectionChanged',
   roomClosed: 'room:closed',
-  guessClose: 'guess:close',
   systemNotice: 'system:notice',
   systemError: 'system:error',
 } as const

@@ -17,8 +17,9 @@ export class RoundMachine {
 
   /**
    * 画家在选词阶段离开/掉线时废弃当前回合，立即进入下一回合选词。
-   * 先把阶段切到 round_result（从 choosing_word 出发的合法转换），再走统一的开局流程，
-   * 避免选词计时器空转导致整轮挂起。
+   * 先把阶段切到 round_result（从 choosing_word 或 paused 出发的合法转换，见 LEGAL_PHASES），
+   * 并清除暂停残留字段后再走统一开局流程，避免选词计时器空转导致整轮挂起。
+   * 调用方：leaveRoom/leaveGame（含「暂停中选词」场景）与选词超时兜底。
    */
   public abandonChoosing(room: RoomSecret, notice: string): void {
     const game = this.service.requireGame(room)
@@ -76,6 +77,9 @@ export class RoundMachine {
     room.members.forEach((member) => (member.guessedAt = undefined))
     game.phaseStartedAt = Date.now()
     game.phaseEndsAt = Date.now() + room.settings.chooseSeconds * 1_000
+    // 新回合从空画布开始：重置全员绘图差分游标，保证本回合首份快照始终携带完整（空）画布，
+    // 不沿用上一回合的高水位序号（否则新回合第一条笔画可能被误判为「已同步」而差分省略）。
+    room.members.forEach((member) => (member.lastSyncedSeq = undefined))
     // 选词超时：服务端随机选择一个候选词并直接开画。
     // 候选池按规则在开局前已校验充足（resetWhenExhausted 保障轮转），正常不会为空；
     // 此处仍作防御：极端情况下（词库被掏空）走弃权流程作废本回合，避免房间滞留 choosing_word。
@@ -86,7 +90,7 @@ export class RoundMachine {
           if (room.phase !== 'choosing_word') return
           const candidate = game.candidates[Math.floor(Math.random() * game.candidates.length)]
           if (candidate) this.beginDrawing(room, candidate)
-          else this.abandonChoosing(room, serverStrings.notices.countdownCanceled)
+          else this.abandonChoosing(room, serverStrings.notices.candidatesExhausted)
         }),
       room.settings.chooseSeconds * 1_000,
     )
@@ -96,15 +100,13 @@ export class RoundMachine {
     const game = this.service.requireGame(room)
     if (game.timer) clearTimeout(game.timer)
     this.service.transition(room, 'drawing')
-    // 记录富答案：candidates 中的词条即含别称/提示/词条级时限，直接取用
+    // 记录富答案：candidates 中的词条即含别称/分类/词条级时限，直接取用；
+    // 兜底数据在极端情况下（候选被外部改动）保证不引用 undefined。
     const richAnswer = game.candidates.find((candidate) => candidate.id === answer.id) ?? {
       ...answer,
       aliases: [],
-      categories: [],
+      category: '',
       difficulty: 0,
-      hints: [],
-      tags: [],
-      lang: 'zh-CN',
     }
     game.answer = richAnswer
     game.usedWordIds.add(answer.id) // 记录已用词条，避免后续回合重复
@@ -120,11 +122,10 @@ export class RoundMachine {
     game.roundDurationMs = seconds * 1_000
     game.phaseStartedAt = Date.now()
     game.phaseEndsAt = Date.now() + game.roundDurationMs
-    // 结构化提示揭示顺序：每回合对词条 hints 下标洗牌一次，
-    // 首条即「从全部提示中随机选出的一条」，且对全体猜词者一致（随快照下发）。
-    game.hintOrder = this.service
-      .shuffle(richAnswer.hints.map((_hint, index) => index))
-      .slice(0, APP_CONFIG.vocabulary.maxHintsPerWord)
+    // 结构化提示：词库已改为「单分类即提示」，每个答案只有一条提示（其分类），
+    // 不再是数组下标洗牌。这里固定用一个揭示槽位（0 号）表示「将在时机揭示分类」，
+    // 首条即唯一一条，且对全体猜词者一致（随快照下发）；分类为空时不开启提示。
+    game.hintOrder = richAnswer.category ? [0] : []
     // 作画倒计时结束进入回合结算
     game.timer = setTimeout(
       () => this.service.safeRun('drawingTimeout', () => this.finishRound(room, false)),
@@ -192,12 +193,7 @@ export class RoundMachine {
     // 导致结算展示的分数与实际入账不一致。
     const details = [...game.correctDetails]
     // 画家得分：每个猜中者计一件，全员猜中另有满员奖励（均排除观战成员，scoring 模块统一）
-    const onlinePlayerIds = new Set(
-      room.members
-        .filter((member) => this.service.players.get(member.playerId)?.connected)
-        .map((member) => member.playerId),
-    )
-    const drawerScoreInfo = buildDrawerScore({ game, room, onlinePlayerIds, drawerAbandoned })
+    const drawerScoreInfo = buildDrawerScore({ game, room, drawerAbandoned })
     const drawerScore = drawerScoreInfo.score
     const drawer = room.members.find((member) => member.playerId === game.drawerId)
     if (drawer) {
@@ -287,12 +283,13 @@ export class RoundMachine {
     const delay = Math.max(0, game.phaseEndsAt - Date.now())
     if (game.timer) clearTimeout(game.timer)
     if (room.phase === 'choosing_word') {
-      // 恢复选词阶段：超时后取第一个候选词自动开画
+      // 恢复选词阶段：超时后取第一个候选词自动开画；候选池为空时与超时路径同构作废本回合
       game.timer = setTimeout(
         () =>
           this.service.safeRun('resumeChoosing', () => {
             const candidate = game.candidates[0]
             if (candidate) this.beginDrawing(room, candidate)
+            else this.abandonChoosing(room, serverStrings.notices.candidatesExhausted)
           }),
         delay,
       )
@@ -345,18 +342,15 @@ export class RoundMachine {
         )
       }
     }
-    // ② 结构化提示：开始时机 + 间隔均为房间规则可设的剩余比例；揭示顺序已洗牌（hintOrder）
+    // ② 结构化提示：开始时机为房间规则可设的剩余比例；词库单分类即提示，只揭示一次（hintOrder 恒 1 槽）
     if (room.settings.structuredHintsEnabled && game.hintOrder.length > 0) {
       const start = room.settings.hintStartRatio
-      const interval = room.settings.hintIntervalRatio
-      for (let step = 0; step < game.hintOrder.length; step += 1) {
-        const threshold = start - step * interval
-        if (threshold <= 0 || threshold >= remainingRatio) continue
+      if (start > 0 && start < remainingRatio) {
         timers.push(
           setTimeout(
             () =>
               this.service.safeRun('revealStructuredHint', () => this.revealStructuredHint(room)),
-            Math.max(0, (remainingRatio - threshold) * totalMs),
+            Math.max(0, (remainingRatio - start) * totalMs),
           ),
         )
       }
@@ -364,7 +358,7 @@ export class RoundMachine {
     game.hintTimers = timers
   }
 
-  /** 按洗牌顺序揭示下一条结构化提示（受房间规则开关门控）。 */
+  /** 揭示结构化提示：词库单分类即提示，只会揭示一次（受房间规则开关门控）。 */
   private revealStructuredHint(room: RoomSecret): void {
     const game = room.game
     if (!game?.answer || room.phase !== 'drawing') return

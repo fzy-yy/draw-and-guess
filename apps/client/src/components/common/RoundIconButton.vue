@@ -1,10 +1,11 @@
 <!--
   圆形图标按钮：收敛 ActionPopover 触发钮与 ChatPanel 快捷短语按钮的圆形图标底座。
   仅承载图标；尺寸固定为 4.2cqh，disabled 时不透明降级。
+  视觉类引用全局共享类 .round-icon-btn（见 style/index.css @layer components），
+  与 ActionPopover 的触发按钮保持同一来源，避免两处样式漂移。
 -->
 <script setup lang="ts">
-import { computed, useAttrs } from 'vue'
-import { cn } from '@/utils/cn'
+import BaseIconButton from '@/components/common/BaseIconButton.vue'
 
 withDefaults(
   defineProps<{
@@ -15,27 +16,16 @@ withDefaults(
   }>(),
   { disabled: false },
 )
-
 const emit = defineEmits<{ click: [] }>()
-const attrs = useAttrs()
-
-const buttonClass = computed(() =>
-  cn(
-    'grid h-[4.2cqh] w-[4.2cqh] shrink-0 place-items-center rounded-full border-[0.18cqh] border-line bg-white text-blue disabled:cursor-not-allowed disabled:opacity-40',
-    attrs.class,
-  ),
-)
 </script>
 
 <template>
-  <button
-    type="button"
-    :aria-label="label"
+  <BaseIconButton
+    :label="label"
     :disabled="disabled"
-    :class="buttonClass"
-    v-bind="attrs"
+    base-class="round-icon-btn"
     @click="emit('click')"
   >
     <slot />
-  </button>
+  </BaseIconButton>
 </template>

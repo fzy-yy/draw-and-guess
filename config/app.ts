@@ -5,7 +5,7 @@
 export const app = {
   name: '你画我猜',
   version: '2.3.0',
-  protocolVersion: '6', // 词库富模型（ID 语义/快照结构/规则字段变更），不匹配时拒绝注册
+  protocolVersion: '7', // 词库改为 SQLite 并改用单分类作为猜词提示（VocabularyWord 字段变更），不匹配时拒绝注册
   storageKey: 'draw-and-guess-profile-v1', // localStorage 资料键
   settingsStorageKey: 'draw-and-guess-settings-v1', // localStorage 设置键
 } as const

@@ -9,7 +9,7 @@
  * - WAL 让读不阻塞写、写不阻塞读，符合游戏服务「读多写少」的场景；
  * - 单进程单写者，天然满足 SQLite 的库级写锁限制，无需额外并发控制。
  *
- * 路径默认落在 apps/server/data/game.db，可用环境变量 DB_PATH 覆盖，便于部署与备份。
+ * 路径固定落在 apps/server/data/game.db（运行期生成，已被 .gitignore 忽略）。
  */
 import Database from 'better-sqlite3'
 import path from 'node:path'
@@ -18,19 +18,13 @@ import { fileURLToPath } from 'node:url'
 /** 数据库文件默认目录：apps/server/data/。 */
 const DEFAULT_DB_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../data')
 
-/** 解析数据库文件路径：优先取环境变量 DB_PATH，否则用默认目录下的 game.db。 */
-export function resolveDbPath(): string {
-  const configured = process.env.DB_PATH?.trim()
-  return configured ? path.resolve(configured) : path.join(DEFAULT_DB_DIR, 'game.db')
-}
-
 /** 惰性单例连接：只在首次 getDb() 时打开，避免模块加载即建库/占连接。 */
 let db: Database.Database | undefined
 
 /** 获取（必要时创建）SQLite 连接。开启 WAL 与外键约束。 */
 export function getDb(): Database.Database {
   if (db) return db
-  const database = new Database(resolveDbPath())
+  const database = new Database(path.join(DEFAULT_DB_DIR, 'game.db'))
   // WAL：读写互不阻塞；busy_timeout 避免并发写时立即抛错。
   database.pragma('journal_mode = WAL')
   database.pragma('busy_timeout = 5000')

@@ -1,12 +1,12 @@
 /**
  * 对局战报持久化仓储（接口 + SQLite 实现）。
  *
- * 负责每局结束（finishGame）与每回合结算（finishRound）的落盘：
+ * 负责每局结束（finishGame）的落盘：
  * - game_archive：一局一行，冻结最终排名（FinalRankingEntry[]）；
- * - game_results：逐玩家本局结果（名次、总得分、统计）；
- * - rounds：逐回合明细（答案、画家、画作得分、猜中明细），供比分来源回看。
+ * - game_results：逐玩家本局结果（名次、总得分、统计）。
+ * （rounds 表为将来回合级回放预留，本期不写入，见 db/migrate.ts。）
  *
- * 这些数据在领域层结算瞬间已经冻结（finalRanking / roundResult），落盘只是把内存对象序列化，
+ * 这些数据在领域层结算瞬间已经冻结（finalRanking），落盘只是把内存对象序列化，
  * 不改变裁决逻辑，保证「展示分 = 入账分」。战绩为低频写，无性能顾虑。
  */
 import type { Database } from 'better-sqlite3'
@@ -34,31 +34,16 @@ export interface GameResultRecord {
   stats: string // JSON：公开统计
 }
 
-/** 单回合明细（rounds 行）。 */
-export interface RoundRecord {
-  id: string
-  gameId: string
-  roundNo: number
-  drawerId?: string
-  answer: string
-  drawerScore: number
-  correctDetails: string // JSON：ScoreDetail[]
-  startedAt: number
-  endedAt: number
-}
-
 export interface ArchiveRepository {
-  /** 在一个事务内写入整局战报：档案、逐玩家结果、逐回合明细，保证原子。 */
-  saveGame(archive: GameArchiveRecord, results: GameResultRecord[], rounds: RoundRecord[]): void
-  /** 查询某房间的历史战报（倒序）。 */
-  listByRoom(roomId: string, limit: number): GameArchiveRecord[]
+  /** 在一个事务内写入整局战报：档案 + 逐玩家结果，保证原子。 */
+  saveGame(archive: GameArchiveRecord, results: GameResultRecord[]): void
 }
 
-/** SQLite 实现：全部写操作在事务内执行，保证档案/结果/回合三者一致。 */
+/** SQLite 实现：全部写操作在事务内执行，保证档案与结果一致。 */
 export class SqliteArchiveRepository implements ArchiveRepository {
   private readonly db: Database = getDb()
 
-  saveGame(archive: GameArchiveRecord, results: GameResultRecord[], rounds: RoundRecord[]): void {
+  saveGame(archive: GameArchiveRecord, results: GameResultRecord[]): void {
     withTransaction(() => {
       this.db
         .prepare(
@@ -103,50 +88,6 @@ export class SqliteArchiveRepository implements ArchiveRepository {
             stats: result.stats,
           })
       }
-      for (const round of rounds) {
-        this.insertRound(round)
-      }
     })
-  }
-
-  /** 写入/更新单回合明细；仅供 saveGame 在事务内调用，不单独对外暴露。 */
-  private insertRound(round: RoundRecord): void {
-    this.db
-      .prepare(
-        `INSERT INTO rounds(id, game_id, round_no, drawer_id, answer, drawer_score, correct_details, started_at, ended_at)
-         VALUES (@id, @gameId, @roundNo, @drawerId, @answer, @drawerScore, @correctDetails, @startedAt, @endedAt)
-         ON CONFLICT(id) DO UPDATE SET
-           drawer_id = excluded.drawer_id,
-           answer = excluded.answer,
-           drawer_score = excluded.drawer_score,
-           correct_details = excluded.correct_details,
-           ended_at = excluded.ended_at`,
-      )
-      .run({
-        id: round.id,
-        gameId: round.gameId,
-        roundNo: round.roundNo,
-        drawerId: round.drawerId ?? null,
-        answer: round.answer,
-        drawerScore: round.drawerScore,
-        correctDetails: round.correctDetails,
-        startedAt: round.startedAt,
-        endedAt: round.endedAt,
-      })
-  }
-
-  listByRoom(roomId: string, limit = 20): GameArchiveRecord[] {
-    const rows = this.db
-      .prepare('SELECT * FROM game_archive WHERE room_id = ? ORDER BY finished_at DESC LIMIT ?')
-      .all(roomId, limit) as Array<Record<string, unknown>>
-    return rows.map((row) => ({
-      id: String(row.id),
-      roomId: String(row.room_id),
-      startedAt: Number(row.started_at),
-      finishedAt: Number(row.finished_at),
-      totalRounds: Number(row.total_rounds),
-      finalRanking: String(row.final_ranking),
-      reason: row.reason ? String(row.reason) : undefined,
-    }))
   }
 }

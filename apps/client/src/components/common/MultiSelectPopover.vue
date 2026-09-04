@@ -1,17 +1,16 @@
 <!--
   多选筛选弹层组件（可复用，基于 ActionPopover 外壳）。
   职责：一个「触发按钮 + 多选弹层」的受控筛选器——
-  - 词库管理的「显示字段」（列显隐）与「分类/难度/语言」筛选均由本组件承载；
+  - 词库管理的「显示字段」（列显隐）与「分类/难度」筛选均由本组件承载；
   - 触发按钮默认展示当前标签 + 已选数量徽章（选中数 > 0 时高亮）；
     也支持 iconOnly 模式：只展示图标，语义通过悬浮 title 与无障碍标签表达；
   - 弹层内提供「全选/全不选」切换按钮与滚动复选列表，点选即时上抛（父组件持有选中集合）。
-  通用性：options 由调用方给定（值 + 展示文案），组件不感知业务字段含义，
+  通用性：options 与全部文案/语义标签由调用方给定（值 + 展示文案），组件不感知业务字段含义，
   任何「枚举值多选」场景（如将来的战绩筛选）都可直接复用。
 -->
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
 import { ChevronDown, Filter } from 'lucide-vue-next'
-import { strings } from '@draw-guess/strings'
 import ActionPopover from '@/components/common/ActionPopover.vue'
 
 /** 单个可选项：value 为业务值（受控集合内唯一），label 为展示文案 */
@@ -28,6 +27,14 @@ const props = withDefaults(
     options: MultiSelectOption[]
     /** 当前选中值集合（受控：父组件持有并回传，组件不做内部状态） */
     selected: string[]
+    /** 触发按钮的无障碍标签（如「按分类筛选」「显示字段」），语义由调用方注入 */
+    triggerAria: string
+    /** 弹层「全选」按钮文案 */
+    selectAllLabel: string
+    /** 弹层「全不选」按钮文案（已全选时点击切换为全不选） */
+    deselectAllLabel: string
+    /** 弹层关闭按钮文案 */
+    doneLabel: string
     disabled?: boolean
     /** 纯图标触发模式：只显示图标，语义由悬浮 title 与 aria 标签表达 */
     iconOnly?: boolean
@@ -78,7 +85,7 @@ function toggleSelectAll(): void {
 
 <template>
   <ActionPopover
-    :trigger-label="strings.room.vocabFilterAria(label)"
+    :trigger-label="props.triggerAria"
     :panel-aria-label="label"
     :disabled="disabled"
     :placement="placement"
@@ -112,9 +119,7 @@ function toggleSelectAll(): void {
             class="rounded-[0.4em] bg-line px-[0.55em] py-[0.25cqh] text-[0.62em] font-extrabold text-blue hover:bg-sky"
             @click="toggleSelectAll"
           >
-            {{
-              allSelected ? strings.room.vocabDeselectAllShort : strings.room.vocabSelectAllShort
-            }}
+            {{ allSelected ? props.deselectAllLabel : props.selectAllLabel }}
           </button>
         </div>
         <!-- 复选列表：选项较多时限高滚动（如 40 个分类） -->
@@ -141,7 +146,7 @@ function toggleSelectAll(): void {
           class="min-h-[3cqh] rounded-[0.5em] bg-blue px-[0.8em] text-[0.66em] font-black text-white"
           @click="close()"
         >
-          {{ strings.room.vocabPanelDone }}
+          {{ props.doneLabel }}
         </button>
       </div>
     </template>

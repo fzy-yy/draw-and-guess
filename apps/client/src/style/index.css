@@ -68,6 +68,21 @@
   .hover-tint {
     @apply hover:bg-line;
   }
+  /* Toast 单条（自建 AppToaster）：白色长条 + 方角 + 最左橙色小条 + 加粗文字。
+     尺寸全部用容器查询单位 cqh/cqw，随视口缩放（不依赖基准字号 clamp，避免过小/过固定）；
+     小条为弹性子项（self-stretch），由容器 overflow-hidden 裁剪贴合左侧方角。 */
+  .toast-item {
+    @apply pointer-events-auto flex max-w-[44cqw] items-stretch overflow-hidden rounded-none bg-white text-navy shadow-float;
+  }
+  /* 左侧小条：统一为橙色 —— 主题调色板（10 色）不含橙色，这里由现有 yellow 与 red 令牌
+     color-mix 派生，未引入新的 HEX/超出调色板的语义色。 */
+  .toast-bar {
+    @apply w-[0.6cqh] shrink-0 self-stretch;
+    background: color-mix(in srgb, var(--color-yellow) 62%, var(--color-red));
+  }
+  .toast-text {
+    @apply min-w-0 py-[1cqh] pr-[1.6cqh] pl-[1.2cqh] text-[1.85cqh] font-extrabold leading-[1.4];
+  }
 }
 
 /* ===== 全局 base：只能作为全局层存在，无法行内 ===== */
@@ -161,6 +176,55 @@
   }
 }
 
+/* ===== Toast 定位：自建 AppToaster 以游戏画框为定位上下文 =====
+   默认弹出层级：垫在普通弹窗（overlay z-30）之上、系统阻断框（z-90）之下；以 .game-stage
+   （position:relative + overflow-hidden）为定位与裁剪边缘，天然收在画框内右上角。
+   容器整体用 cqh/cqw（容器查询单位）定位与缩放，随视口放大缩小，尺寸不受基准字号 clamp 限制。 */
+@layer base {
+  .app-toaster {
+    position: absolute;
+    /* 顶部留出空间，避免紧贴舞台顶边；整体随画框高度缩放。 */
+    top: 5cqh;
+    right: 2.5cqh;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1cqh;
+    /* 容器不拦截点击；具体 toast 恢复 pointer-events:auto 以便点击关闭。 */
+    pointer-events: none;
+  }
+}
+
+/* ===== 夜空背景（StageBackdrop）：画框以外的纯代码星空视觉底层 ===== */
+@layer base {
+  /* 深色天空：复用主题 navy 令牌的椭圆渐变再熔黑色，形成有深度的夜穹（只属于背景装饰，不参与业务配色）。 */
+  .night-sky {
+    background:
+      radial-gradient(
+        ellipse 130% 90% at 50% 0%,
+        color-mix(in srgb, var(--color-navy) 62%, black) 0%,
+        black 62%
+      ),
+      #000;
+  }
+  /* 星点容器：绝对定位铺满视口，垫在游戏舞台之下，不拦截任何交互。 */
+  .starfield {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  /* 单颗星：圆形星点 + 交错闪烁（仅动 opacity，只触发合成器重绘，不做布局/绘制重排）。 */
+  .star {
+    position: absolute;
+    border-radius: 50%;
+    background: #fff;
+    animation: star-twinkle var(--tw-duration, 4s) ease-in-out infinite;
+    animation-delay: var(--tw-delay, 0s);
+  }
+}
+
 /* ===== 全局交互反馈：跨组件统一变色手感（仅用通用元素选择器；卡片级 hover 由组件行内类实现） =====
    约定：全站悬浮/按下只改变颜色（亮度/背景/边框/文字），不位移、不缩放、不加阴影，保证手感一致。 */
 @layer base {
@@ -186,16 +250,16 @@
 
 /* ===== Vue 运行时过渡钩子：Vue 动态切换类名，无法行内化 ===== */
 @layer base {
-  /* 遮罩淡入淡出，对话框同步执行缩放。 */
+  /* 遮罩淡入淡出，对话框同步执行缩放。动效时长与全局 160ms 反馈统一（见 .game-stage button 过渡）。 */
   .modal-enter-active,
   .modal-leave-active {
-    transition: opacity 180ms ease;
+    transition: opacity 160ms ease;
   }
   .modal-enter-active .game-dialog,
   .modal-leave-active .game-dialog {
     transition:
-      transform 180ms ease,
-      opacity 180ms ease;
+      transform 160ms ease,
+      opacity 160ms ease;
   }
   .modal-enter-from,
   .modal-leave-to {
@@ -211,19 +275,23 @@
   .toast-enter-active,
   .toast-leave-active {
     transition:
-      transform 180ms ease,
-      opacity 180ms ease;
+      transform 160ms ease,
+      opacity 160ms ease;
   }
   .toast-enter-from,
   .toast-leave-to {
     opacity: 0;
     transform: translateX(2cqw) scale(0.96);
   }
+  /* 相邻 toast 推挤重排（AppToaster 的 TransitionGroup move），与进出场同节奏。 */
+  .toast-move {
+    transition: transform 160ms ease;
+  }
   .banner-enter-active,
   .banner-leave-active {
     transition:
-      opacity 180ms ease,
-      transform 180ms ease;
+      opacity 160ms ease,
+      transform 160ms ease;
   }
   .banner-enter-from,
   .banner-leave-to {
@@ -232,24 +300,27 @@
   }
 }
 
-/* ===== 关键帧：重复 Toast 的轻微脉动 ===== */
-@keyframes toast-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.03);
-  }
-}
-
-/* 当前画家角色文字沿固定席位色流动；关闭动画设置时会被全局 motion-disabled 规则停用。 */
+/* ===== 关键帧：当前画家角色文字沿固定席位色流动 ===== */
+/* 关闭动画设置时会被全局 motion-disabled 规则停用。 */
 @keyframes drawer-role-flow {
   from {
     background-position: 200% 50%;
   }
   to {
     background-position: 0% 50%;
+  }
+}
+
+/* ===== 关键帧：星点闪烁（StageBackdrop 的夜空背景） =====
+   "最暗"为固定 0.06，"最亮"由每颗星经 CSS 变量 --tw-max 逐颗注入；
+   相位错开用 --tw-delay，避免所有星同频跳动。关闭动画时由 motion-disabled / 系统偏好停用。 */
+@keyframes star-twinkle {
+  0%,
+  100% {
+    opacity: var(--tw-min, 0.06);
+  }
+  50% {
+    opacity: var(--tw-max, 0.9);
   }
 }
 
@@ -290,7 +361,10 @@
 @layer base {
   .motion-disabled .game-stage *,
   .motion-disabled .game-stage *::before,
-  .motion-disabled .game-stage *::after {
+  .motion-disabled .game-stage *::after,
+  .motion-disabled .night-sky .star,
+  .motion-disabled .night-sky .star::before,
+  .motion-disabled .night-sky .star::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
@@ -299,7 +373,10 @@
   @media (prefers-reduced-motion: reduce) {
     .game-stage *,
     .game-stage *::before,
-    .game-stage *::after {
+    .game-stage *::after,
+    .night-sky .star,
+    .night-sky .star::before,
+    .night-sky .star::after {
       animation-duration: 0.001ms !important;
       animation-iteration-count: 1 !important;
       scroll-behavior: auto !important;

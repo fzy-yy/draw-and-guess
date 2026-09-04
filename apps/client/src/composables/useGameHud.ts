@@ -20,7 +20,7 @@ export function useGameHud(store: GameStore) {
   const now = useTimestamp({ interval: store.config.ui.tickIntervalMs })
 
   const game = computed(() => store.room?.game)
-  // 校正后的本地时钟：叠加了与服务端的时钟偏移，避免设备时钟偏差导致倒计时不准（F2）
+  // 校正后的本地时钟：叠加了与服务端的时钟偏移，避免设备时钟偏差导致倒计时不准
   const correctedNow = computed(() => now.value + store.clockOffset)
   // 剩余秒数：按服务端权威截止时间向上取整
   const secondsLeft = computed(() =>

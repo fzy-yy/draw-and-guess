@@ -1,9 +1,10 @@
 <!--
   词库管理·表格视图（从 VocabularyDialog 拆出的子组件，基于通用 DataTable 组件）。
-  与散列视图（VocabGridView）共享选择集合与筛选结果，提供多字段陈列：
-  - 列定义与显隐由父组件（VocabularyDialog）持有并过滤后传入；
+  作为统一的词库列表视图提供多字段陈列（全部字段恒显示）：
+  - 列定义由父组件（VocabularyDialog）持有并传入；
   - 排序状态由父组件维护，点击表头经 DataTable 上抛后由父组件翻转；
-  - 行首复选列与表头三态统一复选框由父组件持有选择集合并裁决批量范围；
+  - 行首复选列与表头三态统一复选框由父组件持有选择集合并裁决批量范围
+    （非房主只读时不传 selectedIds，复选列整体隐藏）；
   - 各富内容列（分类徽章/难度星级/别称灰字等）通过 DataTable 的具名插槽渲染。
 -->
 <script setup lang="ts">
@@ -13,14 +14,15 @@ import type { VocabularyWord } from '@draw-guess/shared'
 import type { DataTableColumn } from '@/components/common/DataTable.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import DifficultyStars from '@/components/common/DifficultyStars.vue'
+import { useSelectAllState } from '@/composables/useSelectAllState'
 
 const props = defineProps<{
   /** 待展示词条（父组件已完成搜索/筛选/排序） */
   rows: VocabularyWord[]
-  /** 可见列定义（父组件按「显示字段」过滤后的结果） */
+  /** 列定义（父组件持有；全部字段恒显示） */
   columns: DataTableColumn<VocabularyWord>[]
-  /** 已选词条 ID 集合（受控） */
-  selectedIds: Set<string>
+  /** 已选词条 ID 集合（受控）；不传（非房主只读）时复选列与表头统一选框整体隐藏 */
+  selectedIds?: Set<string>
   /** 当前排序字段（null = 未排序） */
   sortKey: string | null
   /** 当前排序方向 */
@@ -36,13 +38,13 @@ const emit = defineEmits<{
   'toggle-all': []
 }>()
 
-/** 表头统一复选框三态：全部选中 → all；部分选中 → some；未选 → none */
-const selectAllState = computed<'all' | 'some' | 'none'>(() => {
-  if (!props.rows.length || !props.selectedIds?.size) return 'none'
-  const selectedInRows = props.rows.filter((row) => props.selectedIds!.has(row.id)).length
-  if (selectedInRows === 0) return 'none'
-  return selectedInRows === props.rows.length ? 'all' : 'some'
-})
+/** 表头统一复选框三态：房主可选中时由父组件选择集合判定；只读（无 selectedIds）时恒为未选。
+ *  空集合兜底为「未选」，保证三态逻辑在无选中数据时不抛错。 */
+const selectedSet = computed(() => props.selectedIds ?? new Set<string>())
+const selectAllState = useSelectAllState(
+  computed(() => props.rows),
+  selectedSet,
+)
 </script>
 
 <template>
@@ -56,7 +58,9 @@ const selectAllState = computed<'all' | 'some' | 'none'>(() => {
     :sort-dir="props.sortDir"
     :selected-ids="props.selectedIds"
     :select-all-state="selectAllState"
-    :empty-hint="strings.room.vocabColumnHiddenNote"
+    :select-all-aria="strings.room.vocabToggleAllAria"
+    :empty-text="strings.room.vocabNoMatch"
+    :row-aria="(row) => row.text"
     @sort="emit('sort', $event)"
     @toggle="emit('toggle', $event)"
     @toggle-all="emit('toggle-all')"
@@ -65,14 +69,12 @@ const selectAllState = computed<'all' | 'some' | 'none'>(() => {
     <template #cell-text="{ row }">
       <span class="block truncate font-black text-navy" :title="row.text">{{ row.text }}</span>
     </template>
-    <!-- 分类列：蓝色小徽章（允许多分类并排） -->
-    <template #cell-categories="{ row }">
-      <span v-if="row.categories.length" class="flex flex-wrap gap-[0.25em]">
+    <!-- 分类列：蓝色小徽章（词库单词条仅一个分类） -->
+    <template #cell-category="{ row }">
+      <span v-if="row.category" class="inline-flex max-w-full">
         <span
-          v-for="category in row.categories"
-          :key="category"
           class="rounded-full bg-sky px-[0.5em] py-[0.08cqh] text-[0.9em] font-extrabold text-blue"
-          >{{ category }}</span
+          >{{ row.category }}</span
         >
       </span>
       <span v-else class="text-muted">{{ strings.room.vocabAliasEmpty }}</span>
@@ -89,18 +91,6 @@ const selectAllState = computed<'all' | 'some' | 'none'>(() => {
         :title="row.aliases.join(strings.common.listSeparator)"
         >{{ row.aliases.join(strings.common.listSeparator) }}</span
       >
-      <span v-else class="text-muted">{{ strings.room.vocabAliasEmpty }}</span>
-    </template>
-    <!-- 标签列：石板色小徽章 -->
-    <template #cell-tags="{ row }">
-      <span v-if="row.tags.length" class="flex flex-wrap gap-[0.25em]">
-        <span
-          v-for="tag in row.tags"
-          :key="tag"
-          class="rounded-full bg-line px-[0.5em] py-[0.08cqh] text-[0.9em] font-bold text-muted"
-          >{{ tag }}</span
-        >
-      </span>
       <span v-else class="text-muted">{{ strings.room.vocabAliasEmpty }}</span>
     </template>
     <!-- 时限列：词条级作画秒数 -->

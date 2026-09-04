@@ -40,6 +40,13 @@ function cooldownSeconds(playerId: string): number {
   return Math.max(0, Math.ceil((endsAt - nowTick.value) / 1_000))
 }
 
+/** 邀请按钮的语义文案：冷却期展示「冷却 N 秒」，可邀请时展示「邀请 昵称」（label 与 title 共用）。 */
+function inviteButtonLabel(player: { id: string; nickname: string }): string {
+  return cooldownSeconds(player.id) > 0
+    ? strings.room.inviteCooldownAria(cooldownSeconds(player.id))
+    : strings.room.inviteSendTo(player.nickname)
+}
+
 /** 发送邀请：进入冷却并交给 store（失败也会 Toast，冷却照常走完防止连点）。 */
 async function sendInvite(playerId: string): Promise<void> {
   if (cooldownSeconds(playerId) > 0) return
@@ -99,16 +106,8 @@ onBeforeUnmount(() => window.clearInterval(tickTimer))
           <b class="flex-1">{{ player.nickname }}</b>
           <RoundIconButton
             :disabled="cooldownSeconds(player.id) > 0"
-            :label="
-              cooldownSeconds(player.id) > 0
-                ? strings.room.inviteCooldownAria(cooldownSeconds(player.id))
-                : strings.room.inviteSendTo(player.nickname)
-            "
-            :title="
-              cooldownSeconds(player.id) > 0
-                ? strings.room.inviteCooldownAria(cooldownSeconds(player.id))
-                : strings.room.inviteSendTo(player.nickname)
-            "
+            :label="inviteButtonLabel(player)"
+            :title="inviteButtonLabel(player)"
             @click="sendInvite(player.id)"
           >
             <!-- 冷却期展示剩余秒数，冷却结束恢复发送图标 -->

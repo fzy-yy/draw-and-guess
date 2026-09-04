@@ -40,20 +40,18 @@ function selectAvatar(avatarId: AvatarId): void {
     </template>
     <div
       class="grid min-h-0 grid-cols-8 gap-[1.4cqh_1cqw] overflow-y-auto px-[2cqw] py-[2.5cqh] overscroll-contain"
-      role="radiogroup"
-      :aria-label="strings.profile.avatarPickerAria"
     >
+      <!-- 按钮组语义：单选即点即选并关闭，无需 radiogroup 的键盘约定（按钮均为独立 Tab 停靠点） -->
       <button
         v-for="avatarId in store.config.player.avatarIds"
         :key="avatarId"
         type="button"
-        role="radio"
         class="grid aspect-square place-items-center rounded-full border-[0.22cqh] border-line bg-white p-[0.7cqh]"
         :class="{
           'border-navy! outline-[0.45cqh] outline-yellow outline-offset-[0.1cqh]':
             props.modelValue === avatarId,
         }"
-        :aria-checked="props.modelValue === avatarId"
+        :aria-pressed="props.modelValue === avatarId"
         :aria-label="strings.profile.avatarOptionAria(avatarId)"
         @click="selectAvatar(avatarId)"
       >

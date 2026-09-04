@@ -25,7 +25,7 @@ const variantClasses = computed(() => {
     'inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black'
   switch (props.variant) {
     case 'secondary':
-      return `${base} text-navy bg-white !border !border-[0.18cqh] !border-line`
+      return `${base} text-navy bg-white border! border-[0.18cqh]! border-line!`
     case 'danger':
       return `${base} text-white bg-red`
     default:

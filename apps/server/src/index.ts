@@ -5,12 +5,13 @@
 import { execSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs'
 import { networkInterfaces } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pino from 'pino'
 import { z } from 'zod'
 import { APP_CONFIG, getDeploymentConfig, type DeploymentConfig } from '../../../config.ts'
 import { serverStrings } from '../../../config/strings.ts'
+import { EVENTS } from '@draw-guess/shared'
 import { createApplication } from './app.ts'
 import { closeDb } from './db/index.ts'
 import { SILENT_LOGGER, type RuntimeLogger } from './errors.ts'
@@ -52,9 +53,7 @@ function validateBusinessConfig(): void {
       minWords: z.number().int().min(1),
       maxWordLength: z.number().int().min(1),
       maxAliasesPerWord: z.number().int().min(1),
-      maxHintsPerWord: z.number().int().min(1),
       difficultyRange: z.object({ min: z.number().int().min(1), max: z.number().int().min(1) }),
-      languages: z.array(z.string().min(2)).min(1),
     }),
   })
   schema.parse(APP_CONFIG)
@@ -164,11 +163,16 @@ function logFileName(date: Date = new Date()): string {
 /**
  * 准备日志目录：确保目录存在，并裁剪日志文件总数（含本次即将新建的文件）不超过 maxFiles。
  * 文件名是固定宽度的秒级时间戳，字典序即时间序，因此按文件名排序即可定位最老文件并删除。
+ * 同秒内连续启动会撞名：若目标文件名已存在，追加 -2/-3 序号避免覆盖上一份日志。
  * @returns 本次启动新建的日志文件完整路径。
  */
 function prepareLogDir(maxFiles: number): string {
   mkdirSync(LOG_DIR, { recursive: true })
-  const newPath = join(LOG_DIR, logFileName())
+  const existing = new Set(readdirSync(LOG_DIR))
+  const base = logFileName()
+  let newPath = join(LOG_DIR, base)
+  for (let suffix = 2; existing.has(basename(newPath)); suffix += 1)
+    newPath = join(LOG_DIR, base.replace(/\.log$/u, `-${suffix}.log`))
   const logs = readdirSync(LOG_DIR)
     .filter((name) => name.endsWith('.log'))
     .sort() // 字典序 = 时间序（定宽时间戳）
@@ -238,7 +242,7 @@ async function main(): Promise<void> {
   // 优雅关闭：先通知所有客户端，再关闭 Socket.IO 与 HTTP 服务器
   const shutdown = (signal: string) => {
     logger.info({ signal }, '正在优雅关闭服务')
-    application.io.emit('system:error', {
+    application.io.emit(EVENTS.systemError, {
       code: 'SERVER_SHUTDOWN',
       message: serverStrings.notices.serverShutdown,
     })

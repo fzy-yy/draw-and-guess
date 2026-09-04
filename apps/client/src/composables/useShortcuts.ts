@@ -1,9 +1,11 @@
 /**
  * 画板快捷键与工具切换组合式逻辑：自定义单键切工具 + 撤销/重做组合键。
  * 从 GameView 拆出；输入框等可编辑元素拥有键盘优先权，避免打断猜词或设置编辑。
+ * 按键判定与设置页的捕获校验共用 utils/keyboard.ts 的同一规则。
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { EVENTS, type ToolKind } from '@draw-guess/shared'
+import { normalizedShortcut } from '@/utils/keyboard'
 import type { useGameStore } from '@/stores/game'
 
 type GameStore = ReturnType<typeof useGameStore>
@@ -15,11 +17,6 @@ function isEditableTarget(target: EventTarget | null): boolean {
     element?.isContentEditable === true ||
     ['INPUT', 'TEXTAREA', 'SELECT'].includes(element?.tagName ?? '')
   )
-}
-
-/** 对比快捷键时统一忽略大小写和首尾空白。 */
-function normalizedShortcut(value: string): string {
-  return value.trim().toLocaleLowerCase()
 }
 
 /** 画家画板快捷键状态：当前工具选择与快捷键监听生命周期。 */

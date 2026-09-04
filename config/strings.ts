@@ -33,6 +33,8 @@ export const strings = {
     declineCountdown: (seconds: number) => `拒绝(${seconds})`, // 邀请拒绝按钮：带自动拒绝倒计时
     /** 列表项连接符（如多别称展示）。 */
     listSeparator: '、', // 数组/多值拼接分隔符
+    /** 表头排序按钮的无障碍标签（通用数据表格组件使用）。 */
+    sortByAria: (name: string) => `按${name}排序`, // 数据表格：排序语义
     /** 无值占位符（延迟未测到、空白单元格等）。 */
     emptyDash: '—', // 空值占位符
     /** 网络状态图标按钮的无障碍/悬浮文案：统一各顶栏网络 UI（IconButton + 详情）。 */
@@ -132,7 +134,6 @@ export const strings = {
     avatarPickerLabel: 'AVATARS', // 头像弹窗眉题
     avatarPickerTitle: '选择你的头像', // 头像弹窗标题
     avatarPickerCloseAria: '关闭头像选择', // 头像弹窗关闭按钮
-    avatarPickerAria: '全部可用 SVG 头像', // 头像选择列表标签
     avatarOptionAria: (id: string) => `选择第 ${id} 号头像`, // 单个头像选项标签
     busy: '正在登记身份…', // 登记进行中的按钮文字
     enterLobby: '进入在线大厅', // 进入大厅按钮
@@ -226,7 +227,7 @@ export const strings = {
     vocabularyTitle: '本局词库', // 词库管理入口标题
     vocabularyCount: (selected: number, total: number) => `${selected} / ${total} 个词条`, // 词库数量
     vocabularyManage: '管理', // 房主的管理入口
-    vocabularyHostOnly: '仅房主可编辑', // 非房主只读提示
+    vocabularyReadOnly: '仅可查看', // 非房主只读入口（可打开但不可改）
     inviteDisabledFull: '房间已满员', // 邀请禁用提示：满员
     inviteDisabledHostOnly: '本房间仅房主可邀请', // 邀请禁用提示：仅房主
     inviteDisabledTip: '邀请当前服务中的空闲玩家', // 邀请可用提示
@@ -242,7 +243,9 @@ export const strings = {
     spectatorReadyTitle: '观战成员不能参与准备', // 观战者禁用按钮提示
     startGame: '开始游戏', // 开始游戏按钮
     vocabLabel: 'VOCABULARY', // 词库弹窗眉题
-    vocabTitle: '选择本局词库', // 词库弹窗标题
+    vocabTitle: '选择本局词库', // 词库弹窗标题（房主可编辑）
+    vocabTitleReadonly: '查看本局词库', // 词库弹窗标题（非房主只读）
+    vocabReadonlyHint: '词库仅房主可编辑，你现在只能查看，无法选择词条。', // 非房主只读提示
     vocabCloseAria: '关闭词库', // 词库弹窗关闭按钮
     vocabAll: '全部', // 词库统计：全部
     vocabResults: '搜索结果', // 词库统计：搜索结果
@@ -253,25 +256,17 @@ export const strings = {
     vocabMinHint: (min: number) => `至少选择 ${min} 个词条；搜索不会丢失其他选择。`, // 最小词条提示
     restoreDefault: '恢复默认全选', // 恢复默认按钮
     confirmSelection: '确认选择', // 保存词库按钮
-    // —— 词库管理：视图切换 / 列显隐 / 筛选 / 表格列 ——
-    vocabViewGrid: '散列陈列', // 散列视图切换按钮提示（悬浮说明，按钮本体只显示图标）
-    vocabViewTable: '表格陈列', // 表格视图切换按钮提示（悬浮说明，按钮本体只显示图标）
-    vocabViewSwitchAria: '切换词条展示形式', // 视图切换按钮组无障碍标签
-    vocabShowColumns: '显示字段', // 列显隐按钮（悬浮说明，按钮本体只显示图标）
+    // —— 词库管理：筛选 / 表格列 ——
     vocabColumnText: '词面', // 表格列：词面
-    vocabColumnCategories: '分类', // 表格列：分类
+    vocabColumnCategories: '分类', // 表格列：分类（单词条仅一个分类，同时是猜词提示）
     vocabColumnDifficulty: '难度', // 表格列：难度
     vocabColumnAliases: '别称', // 表格列：别称
-    vocabColumnTags: '标签', // 表格列：标签
-    vocabColumnLang: '语言', // 表格列：语言
     vocabColumnTimeLimit: '时限', // 表格列：作画时限（秒）
     vocabColumnScoreWeight: '权重', // 表格列：计分权重
-    vocabSortAria: (name: string) => `按${name}排序`, // 表头排序无障碍标签
     vocabFilterAria: (name: string) => `按${name}筛选`, // 字段筛选按钮无障碍标签
     vocabSelectAllShort: '全选', // 多选弹层：全选
     vocabDeselectAllShort: '全不选', // 多选弹层：已全选时点击切换为全不选
     vocabPanelDone: '完成', // 多选弹层：关闭按钮
-    vocabColumnHiddenNote: '可在「显示字段」中开启更多列。', // 表格空态说明
     vocabNoMatch: '没有符合条件的词条。', // 筛选/搜索无结果
     vocabDifficultyLabel: (value: number) => `${value} 星`, // 难度值文案（筛选选项/表格）
     vocabAliasEmpty: '—', // 空列表占位
@@ -285,15 +280,13 @@ export const strings = {
     optionCountUnit: (count: number) => `${count} 个`, // 候选词数量单位
     toggleShowWordLength: '显示答案字数', // 规则开关：字数显示
     toggleProgressiveHints: '逐步提示字符', // 规则开关：逐步提示
-    toggleStructuredHints: '结构化提示', // 规则开关：结构化提示（词条 hint 按阈值揭示）
+    toggleStructuredHints: '结构化提示', // 规则开关：结构化提示（按阈值揭示词条分类）
     hintStartRatioField: '提示出现时机', // 规则项：结构化提示开始时机
-    hintIntervalRatioField: '提示间隔', // 规则项：相邻提示的揭示间隔
     guessBaseScoreField: '猜词基础分', // 规则项：统一猜词基础分
     guessBaseScoreUnit: (score: number) => `${score} 分`, // 基础分取值展示
     scoreModeField: '计分方式', // 规则项：猜词分数计算方式
     scoreModeStandard: '标准（基础+速度+顺序）', // 计分方式：标准
     scoreModeFlat: '固定分（仅基础分）', // 计分方式：固定
-    toggleCloseGuess: '近似答案提示', // 规则开关：近似提示
     togglePlayerInvite: '普通玩家可邀请', // 规则开关：成员邀请
     togglePause: '房主可暂停', // 规则开关：暂停权限
     joinPolicyField: '中途加入', // 加入策略字段
@@ -394,7 +387,7 @@ export const strings = {
     finalRanking: '最终排行', // 最终排行标题
     playerStats: (correct: number, avgSeconds: number, drawing: number) =>
       `猜中 ${correct} 次 · 平均 ${avgSeconds} 秒 · 作画带猜中 ${drawing} 人次`, // 排行统计行
-    backToRoom: '返回房间 · 再来一局', // 房主返回房间按钮
+    backToRoom: '返回房间 · 再来一局', // 结算返回房间按钮（任意玩家可点）
     leaveRoom: '退出房间', // 退出房间按钮
     leaveGame: '退出游戏', // 游戏内设置顶栏退出按钮
     leaveGameTitle: '退出本局游戏？', // 游戏内退出确认标题
@@ -456,7 +449,7 @@ export const strings = {
     fill: '区域填充', // 填充工具名
     fillDetail: '填充点击位置的封闭区域', // 填充工具说明
     setShortcutAria: (name: string) => `设置${name}快捷键`, // 快捷键输入标签
-    shortcutErrorSimple: '请直接按一个字母、数字或符号，不要组合 Ctrl、Alt 或 Command。', // 快捷键错误：组合键
+    shortcutErrorSimple: '请直接按一个字母、数字或符号，不要同时按 Ctrl、Alt、Shift 或 Command。', // 快捷键错误：组合键或非单字符
     shortcutErrorConflict: (key: string, name: string) => `“${key}”已用于${name}，请换一个按键。`, // 快捷键错误：重复
     shortcutNote:
       '撤销固定为 Ctrl/Command + Z，重做固定为 Ctrl/Command + Shift + Z 或 Ctrl/Command + Y。', // 快捷键说明
@@ -547,6 +540,7 @@ export const serverStrings = {
     INVALID_PHASE_PAUSE: '开局倒计时阶段不能暂停', // starting 不在可暂停白名单内
     DRAW_BUDGET_EXCEEDED: '本回合画布细节已达上限，请撤销或清空后再继续', // 点数预算超限
     INVALID_PHASE_END_EARLY: '当前没有可提前结束的比赛', // 无对局时提前结束
+    INVALID_PHASE_KICK: '仅等待阶段可以移出成员', // 游戏中不能踢人
     INVALID_PHASE_TRANSFER_HOST: '仅等待阶段可以主动移交房主', // 非等待阶段移交
     INVALID_PHASE_RETURN_WAITING: '只有最终结算后才能返回房间', // 非结算阶段返回房间
     INVALID_PHASE_LEAVE_GAME: '当前没有可退出的对局', // 等待阶段误发离局
@@ -604,6 +598,7 @@ export const serverStrings = {
     playerLeft: (nickname: string) => `${nickname} 离开了房间`, // 成员离开
     leaveReasonDefault: '主动离开房间', // 默认离开原因
     countdownCanceled: '开始倒计时因成员变化而取消', // 成员变化取消倒计时
+    candidatesExhausted: '候选词已耗尽，本回合作废', // 选词候选池为空时的弃权通知
     drawerLeftChoosing: (nickname: string) => `${nickname} 在选词时离开，本回合作废`, // 画家选词时离开
     autoPaused: '在线玩家不足，比赛已自动暂停', // 人数不足自动暂停
     rulesUpdated: '房间规则已修改，所有人需重新准备', // 规则修改
@@ -617,7 +612,6 @@ export const serverStrings = {
     endEarlyByHost: '房主提前结束了本局游戏', // 房主提前结束
     drawingStarted: '作画开始，猜词玩家请在右侧输入答案', // 开画系统提示
     guessCorrect: (nickname: string) => `${nickname} 猜中了！`, // 猜中聊天消息
-    guessClose: '很接近！再想一想', // 接近答案提示
     allRoundsDone: '全部回合完成', // 全部回合结束
     noDrawerAvailable: '没有可继续作画的在线玩家', // 无可用画家
     playerDisconnectedLeave: (nickname: string) => `${nickname} 已断线并退出房间`, // 非作画阶段断线立即离房

@@ -52,28 +52,6 @@ export function calculateGuessScore(input: {
   return { base: input.base, speed, order, total: input.base + speed + order }
 }
 
-/** 轻量编辑距离仅用于“很接近”私有提示，不会返回差异位置。 */
-export function isCloseAnswer(guess: string, answer: string): boolean {
-  const left = Array.from(normalizeAnswer(guess))
-  const right = Array.from(normalizeAnswer(answer))
-  if (!left.length || Math.abs(left.length - right.length) > 1) return false
-  const rows = Array.from({ length: left.length + 1 }, (_, index) => index)
-  for (let y = 1; y <= right.length; y += 1) {
-    let previous = rows[0] ?? 0
-    rows[0] = y
-    for (let x = 1; x <= left.length; x += 1) {
-      const before = rows[x] ?? x
-      rows[x] = Math.min(
-        (rows[x] ?? 0) + 1,
-        (rows[x - 1] ?? 0) + 1,
-        previous + (left[x - 1] === right[y - 1] ? 0 : 1),
-      )
-      previous = before
-    }
-  }
-  return (rows[left.length] ?? 2) === 1
-}
-
 /**
  * 房间阶段合法转换表：每个阶段列出的目标阶段都是显式允许的。
  * 任何未列出的转换都会被服务端拒绝并返回 INVALID_TRANSITION。

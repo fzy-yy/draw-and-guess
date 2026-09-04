@@ -6,12 +6,11 @@
  */
 import { randomBytes, randomInt, randomUUID } from 'node:crypto'
 import type { Server, Socket } from 'socket.io'
-import { APP_CONFIG, PUBLIC_CONFIG, type PublicConfig } from '../../../config.ts'
+import { APP_CONFIG } from '../../../config.ts'
 import { serverStrings } from '../../../config/strings.ts'
 import {
   EVENTS,
   canTransition,
-  isCloseAnswer,
   normalizeAnswer,
   normalizeHexColor,
   type ChatMessage,
@@ -54,10 +53,8 @@ export function createDefaultRoomSettings(): RoomSettings {
     progressiveHints: APP_CONFIG.game.progressiveHints,
     structuredHintsEnabled: APP_CONFIG.game.structuredHintsEnabled,
     hintStartRatio: APP_CONFIG.game.hintStartRatio,
-    hintIntervalRatio: APP_CONFIG.game.hintIntervalRatio,
     guessBaseScore: APP_CONFIG.game.score.guessBase,
     scoreMode: APP_CONFIG.game.scoreMode,
-    closeGuessEnabled: APP_CONFIG.game.closeGuessEnabled,
     allowPlayerInvite: APP_CONFIG.room.allowPlayerInvite,
     allowPause: APP_CONFIG.room.allowPause,
     joinPolicy: APP_CONFIG.room.joinPolicy,
@@ -91,10 +88,6 @@ export class GameService {
     },
     readonly logger: RuntimeLogger = SILENT_LOGGER,
   ) {}
-
-  get publicConfig(): PublicConfig {
-    return PUBLIC_CONFIG
-  }
 
   /** 记录未预期的服务器内部错误（脱敏到错误名），供排查 bindRequest 兜底返回的 INTERNAL_ERROR。 */
   logUnexpectedError(error: unknown, context: Record<string, unknown> = {}): void {
@@ -288,7 +281,7 @@ export class GameService {
    * 把整局战报落盘：game_archive（一成行，冻结最终排名）+ game_results（逐玩家结果）。
    * 在 finishGame（进入 game_result）时由 RoundMachine 调用。
    * 数据直接取用结算瞬间冻结的 finalRanking（同分并列、成员中途离房不影响），保证与展示一致。
-   * 回合明细（rounds）暂不逐回合采集，此处预留空数组，后续如需回合级回放再接入。
+   * rounds 表为将来回合级回放预留，本期不采集（见 db/migrate.ts 与 archive 仓储注释）。
    */
   public persistGameResult(room: RoomSecret, reason: string): void {
     const game = room.game
@@ -315,7 +308,6 @@ export class GameService {
         reason,
       },
       results,
-      [],
     )
   }
 
@@ -687,9 +679,12 @@ export class GameService {
     return this.snapshotter.snapshot(room, playerId)
   }
 
-  /** 房主读取本局词库快照（全部词条、当前选择、词库版本与分类白名单）。 */
+  /**
+   * 读取本局词库快照（全部词条、当前选择、词库版本与分类白名单）。
+   * 房主与普通成员都可读（普通成员只能查看，不能修改；修改仍走 updateVocabulary 仅房主）。
+   */
   getVocabulary(playerId: string): VocabularySnapshot {
-    const room = this.requireHostRoom(playerId)
+    const { room } = this.requireMembership(playerId)
     return {
       items: this.vocabulary.items,
       selectedIds: [...room.selectedWordIds],
@@ -804,11 +799,7 @@ export class GameService {
     this.round.beginDrawing(room, answer)
   }
 
-  submitGuess(
-    playerId: string,
-    roundId: string,
-    rawText: string,
-  ): { correct: boolean; close: boolean } {
+  submitGuess(playerId: string, roundId: string, rawText: string): { correct: boolean } {
     const { room, member } = this.requireMembership(playerId)
     const game = this.requireGame(room)
     // 仅作画阶段可猜词，且必须在当前回合，且答案已确定；观战者不能猜词
@@ -829,20 +820,14 @@ export class GameService {
     // 命中正确答案：词面与全部别称均可判对（规范化后比较）
     const acceptedAnswers = [answer, ...game.answer.aliases.map((alias) => normalizeAnswer(alias))]
     if (acceptedAnswers.includes(normalized)) {
+      // markCorrect 内部已负责广播（全员猜中时 finishRound，否则刷新快照），无需再重复广播
       this.round.markCorrect(room, member)
-      return { correct: true, close: false }
+      return { correct: true }
     }
-    // 未命中但很接近：与词面/别称逐一比较取最近者；只提示原发送者，不进入聊天流，避免刷屏泄露
-    const close =
-      room.settings.closeGuessEnabled &&
-      acceptedAnswers.some((candidate) => isCloseAnswer(normalized, candidate))
-    if (close) {
-      this.emitToPlayer(playerId, EVENTS.guessClose, { text: serverStrings.notices.guessClose })
-    } else {
-      this.addMessage(room, { type: 'guess', text, playerId })
-    }
+    // 未命中正确答案：作为普通猜词进入聊天流并广播全员（不提供近似词提示）
+    this.addMessage(room, { type: 'guess', text, playerId })
     this.emitRoom(room.id)
-    return { correct: false, close }
+    return { correct: false }
   }
 
   sendPreset(playerId: string, roundId: string, preset: string): void {
@@ -883,6 +868,20 @@ export class GameService {
     ) {
       throw new GameError('INVALID_DRAW_STYLE', serverStrings.errors.INVALID_DRAW_STYLE)
     }
+    // 撤销语义：新命令使重做失效，且此前被撤销的命令被永久丢弃（而不是重新显示），
+    // 与主流画板一致：撤销即移除，继续作画不会让被撤销的内容回来。
+    // 必须先物理移除被撤销命令，再查找「续画笔画的已有笔画」与校验点数预算：
+    // - 预算按清理后的实际点数计算（否则被撤销笔画占用额度，正常续画会被提前拒绝）；
+    // - 正在被撤销的笔画若继续追加（极端时序），会作为新命令创建而不是向已移除对象追加点数。
+    if (game.undoneStrokeIds.length) {
+      const undoneSet = new Set(game.undoneStrokeIds)
+      for (const command of game.strokes) {
+        if (undoneSet.has(command.id))
+          game.strokePointTotal -= command.kind === 'stroke' ? command.points.length : 1
+      }
+      game.strokes = game.strokes.filter((command) => !undoneSet.has(command.id))
+      game.undoneStrokeIds = []
+    }
     // 同一笔画 ID 的后续批次会追加到已有笔画上，而不是新建命令
     const existing = game.strokes.find(
       (candidate): candidate is Stroke => candidate.kind === 'stroke' && candidate.id === stroke.id,
@@ -899,18 +898,6 @@ export class GameService {
     }
     game.lastSequence = stroke.sequence
     game.strokePointTotal = nextPointTotal
-    // 撤销语义：新命令使重做失效，且此前被撤销的命令被永久丢弃（而不是重新显示），
-    // 与主流画板一致：撤销即移除，继续作画不会让被撤销的内容回来。
-    // 从历史中物理移除并同步回收点数预算；客户端按同一命令流在本地做同样的移除。
-    if (game.undoneStrokeIds.length) {
-      const undoneSet = new Set(game.undoneStrokeIds)
-      for (const command of game.strokes) {
-        if (undoneSet.has(command.id))
-          game.strokePointTotal -= command.kind === 'stroke' ? command.points.length : 1
-      }
-      game.strokes = game.strokes.filter((command) => !undoneSet.has(command.id))
-      game.undoneStrokeIds = []
-    }
     if (existing) {
       // 同一按下动作的后续批次沿用笔画 ID；只追加新增点，撤销仍能一次移除完整笔画。
       existing.points.push(...stroke.points)
@@ -924,7 +911,7 @@ export class GameService {
       }
     }
     // 撤销栈已在上方随新命令一并处置（物理移除被撤销命令），无需重复清空
-    // E4：增量广播前标记房间全部成员已同步到该序号，快照可省略画布历史（差分下发）
+    // 增量广播前标记房间全部成员已同步到该序号：下一次快照可省略画布历史（差分下发，见 snapshot.ts）
     room.members.forEach((member) => (member.lastSyncedSeq = game.lastSequence))
     // 标准化颜色后广播给房间所有成员（画家自身也会收到并用于纠正本地预览）
     this.io.to(room.id).emit(EVENTS.drawStrokeBatch, { roundId, stroke: { ...stroke, color } })
@@ -944,12 +931,8 @@ export class GameService {
       throw new GameError('STALE_DRAW_EVENT', serverStrings.errors.STALE_DRAW_EVENT_FILL)
     const color = normalizeHexColor(fill.color)
     if (!color) throw new GameError('INVALID_FILL', serverStrings.errors.INVALID_FILL)
-    // 与笔画共用回合点数预算（填充按 1 计）；超限时先拒绝，不修改任何状态
-    if (game.strokePointTotal + 1 > APP_CONFIG.drawing.maxPointsPerRound)
-      throw new GameError('DRAW_BUDGET_EXCEEDED', serverStrings.errors.DRAW_BUDGET_EXCEEDED)
-    game.lastSequence = fill.sequence
-    game.strokePointTotal += 1
-    // 与 addStroke 同一撤销语义：新命令永久丢弃此前被撤销的命令（同步回收点数预算）
+    // 与 addStroke 同一撤销语义：先物理移除被撤销命令（同步回收点数预算），
+    // 让预算校验基于清理后的实际点数，也避免后续向已移除对象追加。
     if (game.undoneStrokeIds.length) {
       const undoneSet = new Set(game.undoneStrokeIds)
       for (const command of game.strokes) {
@@ -959,14 +942,18 @@ export class GameService {
       game.strokes = game.strokes.filter((command) => !undoneSet.has(command.id))
       game.undoneStrokeIds = []
     }
+    // 与笔画共用回合点数预算（填充按 1 计）；超限时先拒绝，不修改任何状态
+    if (game.strokePointTotal + 1 > APP_CONFIG.drawing.maxPointsPerRound)
+      throw new GameError('DRAW_BUDGET_EXCEEDED', serverStrings.errors.DRAW_BUDGET_EXCEEDED)
+    game.lastSequence = fill.sequence
+    game.strokePointTotal += 1
     game.strokes.push({ ...fill, color })
     // 丢弃最早命令时同步回收其点数预算
     if (game.strokes.length > APP_CONFIG.drawing.maxHistoryCommands) {
       const dropped = game.strokes.shift()
       if (dropped) game.strokePointTotal -= dropped.kind === 'stroke' ? dropped.points.length : 1
     }
-    // 撤销栈已在上方随新命令一并处置，无需重复清空
-    // E4：标记房间全部成员同步到该序号（与笔画增量同一套差分机制）
+    // 标记房间全部成员同步到该序号（与笔画增量同一套差分机制）
     room.members.forEach((member) => (member.lastSyncedSeq = game.lastSequence))
     this.io.to(room.id).emit(EVENTS.drawFillCommit, {
       roundId,
@@ -1048,8 +1035,16 @@ export class GameService {
     // 先校验目标阶段合法，再清理暂停现场：否则转换失败会丢失 phaseBeforePause，房间无法再次恢复
     if (!canTransition(room.phase, next))
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_RESUME)
-    game.phaseStartedAt = Date.now()
-    game.phaseEndsAt = Date.now() + (game.pausedRemainingMs ?? 1_000)
+    const remainingMs = game.pausedRemainingMs ?? 1_000
+    const totalDurationMs =
+      next === 'drawing'
+        ? game.roundDurationMs
+        : next === 'choosing_word'
+          ? room.settings.chooseSeconds * 1_000
+          : remainingMs
+    const effectiveElapsedMs = Math.max(0, totalDurationMs - remainingMs)
+    game.phaseStartedAt = Date.now() - effectiveElapsedMs
+    game.phaseEndsAt = Date.now() + remainingMs
     delete game.phaseBeforePause
     delete game.pausedRemainingMs
     this.transition(room, next)
@@ -1057,10 +1052,14 @@ export class GameService {
     this.emitRoom(room.id)
   }
 
-  /** 房主提前结束比赛：仅对局进行中或暂停时可触发，直接进入最终结算。 */
+  /** 房主提前结束比赛：仅对局进行中（不含开局倒计时，尚未正式开赛）或暂停时可触发，直接进入最终结算。 */
   endEarly(playerId: string): void {
     const room = this.requireHostRoom(playerId)
-    if (!this.isPlaying(room.phase) && room.phase !== 'paused')
+    // starting（3 秒开局倒计时）不算可提前结束的比赛：此时 game 已预建但没有进行中的回合，
+    // 若放行，finishGame 会经 phase='drawing' 兜底生成一场「从未作画即结算」的异常流程。
+    const inProgress =
+      (this.isPlaying(room.phase) && room.phase !== 'starting') || room.phase === 'paused'
+    if (!inProgress)
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_END_EARLY)
     this.round.finishGame(room, serverStrings.notices.endEarlyByHost)
   }
@@ -1084,6 +1083,8 @@ export class GameService {
 
   kick(playerId: string, targetId: string): void {
     const room = this.requireHostRoom(playerId)
+    if (room.phase !== 'waiting')
+      throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_KICK)
     if (targetId === playerId)
       throw new GameError('INVALID_TARGET', serverStrings.errors.INVALID_TARGET_SELF)
     if (!room.members.some((member) => member.playerId === targetId))
@@ -1217,16 +1218,21 @@ export class GameService {
       this.io.to(room.id).emit(EVENTS.roomMemberConnectionChanged, payload)
 
       // 当前画家断线：保留短宽限；超时仍未恢复则由权威状态机废弃本回合。
+      // 宽限期间房间可能被暂停（保留席位语义仍指向作画），因此暂停中同样认定「本回合未完成」：
+      // 否则超时回调因阶段不是 drawing 而静默跳过，恢复后回合将无人作画直至自然超时。
       if (room.game?.drawerId === playerId) {
         setTimeout(
           () =>
             this.safeRun('drawerReconnectTimeout', () => {
+              const phaseIsRoundDrawing =
+                room.phase === 'drawing' ||
+                (room.phase === 'paused' && room.game?.phaseBeforePause === 'drawing')
               if (
                 !player.connected &&
                 player.disconnectGeneration === disconnectGeneration &&
                 player.roomId === room.id &&
                 room.game?.drawerId === playerId &&
-                room.phase === 'drawing'
+                phaseIsRoundDrawing
               )
                 this.round.finishRound(room, true)
             }),
@@ -1588,6 +1594,8 @@ export class GameService {
   }
 
   private validateSettings(settings: RoomSettings): void {
+    // 数值区间与协议层一样读配置单一来源（config/game.ts），不要在服务层写第二套硬编码边界。
+    const { hintStartRatioRange, score } = APP_CONFIG.game
     const valid =
       Number.isInteger(settings.maxPlayers) &&
       settings.maxPlayers >= APP_CONFIG.player.minPlayers &&
@@ -1600,13 +1608,11 @@ export class GameService {
       settings.chooseSeconds <= APP_CONFIG.game.chooseSeconds.max &&
       settings.optionCount >= APP_CONFIG.game.optionCount.min &&
       settings.optionCount <= APP_CONFIG.game.optionCount.max &&
-      settings.hintStartRatio >= 0.05 &&
-      settings.hintStartRatio <= 0.9 &&
-      settings.hintIntervalRatio >= 0.05 &&
-      settings.hintIntervalRatio <= 0.45 &&
+      settings.hintStartRatio >= hintStartRatioRange.min &&
+      settings.hintStartRatio <= hintStartRatioRange.max &&
       Number.isInteger(settings.guessBaseScore) &&
-      settings.guessBaseScore >= 50 &&
-      settings.guessBaseScore <= 2_000 &&
+      settings.guessBaseScore >= score.guessBaseRange.min &&
+      settings.guessBaseScore <= score.guessBaseRange.max &&
       (settings.scoreMode === 'standard' || settings.scoreMode === 'flat')
     if (!valid) throw new GameError('INVALID_SETTINGS', serverStrings.errors.INVALID_SETTINGS)
   }

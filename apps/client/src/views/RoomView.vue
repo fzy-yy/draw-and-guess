@@ -2,14 +2,15 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Check, ClipboardCopy, KeyRound, LogOut, Play, ShieldCheck } from 'lucide-vue-next'
-import { useClipboard } from '@vueuse/core'
 import { clsx } from 'clsx'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
+import { useCopyWithFeedback } from '@/composables/useCopyWithFeedback'
 import SeatGrid from '@/components/room/SeatGrid.vue'
 import RuleSummary from '@/components/room/RuleSummary.vue'
 import IconButton from '@/components/common/IconButton.vue'
 import NetworkStatusButton from '@/components/common/NetworkStatusButton.vue'
+import StageHeader from '@/components/common/StageHeader.vue'
 import VocabularyDialog from '@/components/room/VocabularyDialog.vue'
 import RulesDialog from '@/components/room/RulesDialog.vue'
 import InviteDialog from '@/components/room/InviteDialog.vue'
@@ -42,29 +43,18 @@ function openVocabulary(): void {
   showVocabulary.value = true
 }
 
-// 剪切板写入交给 @vueuse/core 的 useClipboard 统一处理：优先原生 API，失败后自动走 execCommand 降级（legacy）。
-const { copy: copyToClipboard } = useClipboard({ legacy: true })
+// 复制私密房间码：useCopyWithFeedback 统一处理剪贴板（原生 API + execCommand 降级）
+// 与成功/失败提示；无房间码时直接跳过（服务端仅向房主下发该字段）。
+const copyPrivateCode = useCopyWithFeedback({
+  text: () => store.room?.privateJoinCode ?? '',
+  success: strings.room.privateCodeCopied,
+  failure: strings.room.privateCodeCopyFailed,
+  notify: (text, type) => store.notify(text, type),
+})
 
-/**
- * 复制私密房间码。
- * useClipboard 内置 execCommand 降级（legacy），无需再手写 textarea 分支；
- * 其 copy 在完成写入后标记成功，能力缺失时不产生副作用，据此判断成功与否并提示。
- */
-async function copyPrivateCode(): Promise<void> {
-  const code = store.room?.privateJoinCode
-  if (!code) return
-  // 只声明不初始化：成功/失败两条分支都会在读取前赋值，初始值永远不会被读取，避免 no-useless-assignment。
-  let copied: boolean
-  try {
-    await copyToClipboard(code)
-    copied = true
-  } catch {
-    copied = false
-  }
-  store.notify(
-    copied ? strings.room.privateCodeCopied : strings.room.privateCodeCopyFailed,
-    copied ? 'success' : 'warning',
-  )
+/** 复制私密房间码（无房间码时静默跳过）。 */
+function handleCopyPrivateCode(): void {
+  if (store.room?.privateJoinCode) void copyPrivateCode()
 }
 
 /** 打开规则弹窗：以当前房间规则初始化草稿。 */
@@ -89,39 +79,43 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
     v-if="store.room"
     class="grid h-full grid-cols-[minmax(0,67%)_33%] grid-rows-[11%_89%] bg-sky"
   >
-    <!-- 顶栏：房间名、房间可见性标识、连接状态与退出按钮 -->
-    <header
-      class="col-span-full grid grid-cols-[1fr_auto_1fr] items-center border-b-[0.5cqh] border-yellow bg-navy px-[2cqw] text-white"
-    >
-      <div class="flex items-baseline gap-[0.8em] min-w-0">
-        <span class="text-sky text-[0.65em] tracking-[0.15em]">{{ strings.room.roomEyebrow }}</span>
-        <h1 class="overflow-hidden text-ellipsis whitespace-nowrap text-[1.35em]">
-          {{ store.room.name }}
-        </h1>
-      </div>
-      <div
-        class="flex items-center justify-self-center gap-[0.6em] text-yellow text-[0.72em] font-black"
-        :class="clsx(store.room.visibility === 'private' && 'text-red!')"
-      >
-        <KeyRound v-if="store.room.visibility === 'private'" />
-        <ShieldCheck v-else />
-        {{
-          store.room.visibility === 'private'
-            ? strings.room.privateRoomBadge
-            : strings.room.publicRoomBadge
-        }}
-        <button
-          v-if="store.room.privateJoinCode"
-          type="button"
-          class="flex items-center gap-[0.4em] py-[0.55cqh] px-[0.75em] text-navy bg-yellow rounded-[0.55em] tracking-[0.16em]"
-          :aria-label="strings.room.copyPrivateCodeAria"
-          @click="copyPrivateCode"
+    <!-- 顶栏：房间名、房间可见性标识、连接状态与退出按钮（共享 StageHeader 骨架） -->
+    <StageHeader>
+      <template #leading>
+        <div class="flex items-baseline gap-[0.8em] min-w-0">
+          <span class="text-sky text-[0.65em] tracking-[0.15em]">{{
+            strings.room.roomEyebrow
+          }}</span>
+          <h1 class="overflow-hidden text-ellipsis whitespace-nowrap text-[1.35em]">
+            {{ store.room.name }}
+          </h1>
+        </div>
+      </template>
+      <template #center>
+        <div
+          class="flex items-center justify-self-center gap-[0.6em] text-yellow text-[0.72em] font-black"
+          :class="clsx(store.room.visibility === 'private' && 'text-red!')"
         >
-          <b>{{ store.room.privateJoinCode }}</b
-          ><ClipboardCopy />
-        </button>
-      </div>
-      <div class="justify-self-end flex items-center gap-[0.6em]">
+          <KeyRound v-if="store.room.visibility === 'private'" />
+          <ShieldCheck v-else />
+          {{
+            store.room.visibility === 'private'
+              ? strings.room.privateRoomBadge
+              : strings.room.publicRoomBadge
+          }}
+          <button
+            v-if="store.room.privateJoinCode"
+            type="button"
+            class="flex items-center gap-[0.4em] py-[0.55cqh] px-[0.75em] text-navy bg-yellow rounded-[0.55em] tracking-[0.16em]"
+            :aria-label="strings.room.copyPrivateCodeAria"
+            @click="handleCopyPrivateCode"
+          >
+            <b>{{ store.room.privateJoinCode }}</b
+            ><ClipboardCopy />
+          </button>
+        </div>
+      </template>
+      <template #trailing>
         <!-- 网络状态：统一复用 NetworkStatusButton 图标按钮展示（与大厅/对局顶栏一致），悬浮查看详情 -->
         <NetworkStatusButton size="lg" />
         <IconButton
@@ -132,8 +126,8 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
         >
           <LogOut class="h-[2.6cqh] w-[2.6cqh]" />
         </IconButton>
-      </div>
-    </header>
+      </template>
+    </StageHeader>
 
     <!-- 席位区：固定网格展示全部玩家座位与准备状态 -->
     <SeatGrid />
@@ -204,12 +198,11 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
 
     <!--
       弹窗一：本局词库管理（房主）——搜索、批量选择、确认保存。
-      注意：不要在外层再包 <Transition>：BaseDialog 内部已自带同名的 modal 过渡，
-      双重过渡会嵌套作用在同一个遮罩元素上，导致关闭流程卡死、弹窗变成僵尸 DOM
-      （表现为弹窗内所有按钮“点击没反应”，100% 复现）。出入场动画统一由 BaseDialog 负责。
+      只由 :open 控制显隐（不要在外层再包 <Transition> 或 v-if：BaseDialog 内部已自带 modal 过渡，
+      双层包裹会让关闭流程卡死、弹窗变成僵尸 DOM——表现为弹窗内所有按钮“点击没反应”，100% 复现；
+      父级 v-if 还会切断 leave 动画，导致三个弹窗退出时无过渡而 ConfirmDialog 有过渡，手感不一致）。
     -->
     <VocabularyDialog
-      v-if="showVocabulary"
       v-model:loading="vocabularyLoading"
       :open="showVocabulary"
       @close="showVocabulary = false"
@@ -217,7 +210,6 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
 
     <!-- 弹窗二：房间规则编辑（房主）——滑块与开关修改规则（动画由 BaseDialog 内部负责） -->
     <RulesDialog
-      v-if="showSettings"
       :open="showSettings"
       :draft="settingsDraft"
       @close="showSettings = false"
@@ -225,7 +217,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
     />
 
     <!-- 弹窗三：邀请在线玩家（房主或允许邀请的成员） -->
-    <InviteDialog v-if="showInvite" :open="showInvite" @close="showInvite = false" />
+    <InviteDialog :open="showInvite" @close="showInvite = false" />
 
     <!-- 弹窗四：退出房间确认（复用通用 ConfirmDialog：图标 + 标题 + 正文 + 取消/确认） -->
     <ConfirmDialog

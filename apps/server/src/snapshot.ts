@@ -25,7 +25,7 @@ export class SnapshotBuilder {
   snapshot(room: RoomSecret, viewerId: string): RoomSnapshot {
     const game = room.game
     const viewerIsDrawer = game?.drawerId === viewerId
-    // E4 快照差分：若观看者已在线同步全部绘图增量（lastSyncedSeq 追平 lastSequence），
+    // 快照差分：若观看者已在线同步全部绘图增量（lastSyncedSeq 追平 lastSequence），
     // 快照用空数组 + strokesOmitted 标记省略画布历史，由客户端沿用本地已有笔画，降低序列化开销。
     const viewerMember = room.members.find((member) => member.playerId === viewerId)
     if (!viewerMember) throw new GameError('NOT_IN_ROOM', serverStrings.errors.NOT_IN_ROOM)
@@ -70,14 +70,14 @@ export class SnapshotBuilder {
                 })),
               }
             : {}),
-          // 已揭示的结构化提示：按服务端每回合洗牌后的顺序切片下发；
-          // 客户端只渲染首条（即「从全部提示中随机选出的一条」，且全体猜词者一致）。
+          // 已揭示的结构化提示：词库单分类即提示，揭示时下发词条分类；
+          // 客户端只渲染首值，且对全体猜词者一致。
           ...(game.answer && game.revealedHintCount > 0
             ? {
                 revealedHints: game.hintOrder
                   .slice(0, game.revealedHintCount)
-                  .map((hintIndex) => game.answer!.hints[hintIndex])
-                  .filter((hint): hint is string => hint !== undefined),
+                  .map(() => game.answer!.category)
+                  .filter((hint): hint is string => hint !== ''),
               }
             : {}),
           strokes: canOmitStrokes ? [] : game.strokes,
@@ -158,7 +158,8 @@ export class SnapshotBuilder {
     }
   }
 
-  /** 大厅行：只接受公开房并暴露无敏感信息的摘要字段。 */
+  /** 大厅行：只接受公开房并暴露无敏感信息的摘要字段。
+   * 注意：presenceSnapshot 已先按 visibility 过滤，本分支是防御性兜底（公开房转私密等极端时序）。 */
   toPublicRoom(room: RoomSecret): PublicRoom {
     if (room.visibility !== 'public')
       throw new GameError('PRIVATE_ROOM_HIDDEN', serverStrings.errors.ROOM_NOT_FOUND)
@@ -169,7 +170,7 @@ export class SnapshotBuilder {
       hostName:
         this.service.players.get(room.hostId)?.profile.nickname ??
         serverStrings.notices.hostUnknown,
-      playerCount: room.members.length,
+      playerCount: room.members.filter((member) => !member.leftGame).length,
       maxPlayers: room.settings.maxPlayers,
       phase: room.phase,
       roundsPerPlayer: room.settings.roundsPerPlayer,

@@ -49,10 +49,14 @@ const props = defineProps<{
   selectedIds?: Set<string>
   /** 表头统一复选框的三态：'all' 全选 / 'some' 部分选中（半选样式）/ 'none' 未选 */
   selectAllState?: 'all' | 'some' | 'none'
-  /** 空态文案 */
-  emptyText?: string
+  /** 表头统一复选框的无障碍标签（语义由调用方注入，组件不感知业务命名空间） */
+  selectAllAria: string
+  /** 空态标题文案（语义由调用方注入，组件不感知业务命名空间） */
+  emptyText: string
   /** 空态补充说明（如「可在显示字段中开启更多列」） */
   emptyHint?: string
+  /** 行首复选框的无障碍标签取值（默认取行唯一键的字符串化；建议传入更可读的字段） */
+  rowAria?: (row: T) => string
 }>()
 
 // 注意：泛型组件不用 withDefaults —— 它会破坏 vue-tsc 对 T 的推断（回落到约束类型），
@@ -143,7 +147,7 @@ const bottomSpacerHeight = computed(() => {
                 class="h-[1.6cqh] w-[1.6cqh] accent-blue"
                 :checked="props.selectAllState === 'all'"
                 :indeterminate="props.selectAllState === 'some'"
-                :aria-label="strings.room.vocabToggleAllAria"
+                :aria-label="selectAllAria"
                 @change="emit('toggle-all')"
               />
             </th>
@@ -172,7 +176,7 @@ const bottomSpacerHeight = computed(() => {
                 v-if="column.sortable !== false"
                 type="button"
                 class="inline-flex items-center gap-[0.25em] rounded-[0.3em] px-[0.25em] py-[0.1cqh] hover:bg-line"
-                :aria-label="strings.room.vocabSortAria(column.label)"
+                :aria-label="strings.common.sortByAria(column.label)"
                 @click="emit('sort', column.key)"
               >
                 {{ column.label }}
@@ -199,7 +203,7 @@ const bottomSpacerHeight = computed(() => {
             :key="String(virtualRow.key)"
             :ref="measureElementRef"
             :data-index="virtualRow.index"
-            class="border-t-[0.12cqh] border-t-line transition-colors duration-120 hover:bg-sky"
+            class="border-t-[0.12cqh] border-t-line ui-feedback hover:bg-sky"
             :class="
               rowAt(virtualRow.index) && isSelected(rowAt(virtualRow.index)!) ? 'bg-sky!' : ''
             "
@@ -212,7 +216,9 @@ const bottomSpacerHeight = computed(() => {
                 :checked="rowAt(virtualRow.index) ? isSelected(rowAt(virtualRow.index)!) : false"
                 :aria-label="
                   rowAt(virtualRow.index)
-                    ? String(rowAt(virtualRow.index)![props.rowKey])
+                    ? props.rowAria
+                      ? props.rowAria(rowAt(virtualRow.index)!)
+                      : String(rowAt(virtualRow.index)![props.rowKey])
                     : undefined
                 "
                 @change="
@@ -256,7 +262,7 @@ const bottomSpacerHeight = computed(() => {
         v-if="!props.rows.length"
         class="flex flex-col items-center gap-[0.4cqh] px-[1em] py-[3cqh] text-center text-[0.72em] text-muted"
       >
-        <b>{{ props.emptyText || strings.room.vocabNoMatch }}</b>
+        <b>{{ emptyText }}</b>
         <span v-if="props.emptyHint">{{ props.emptyHint }}</span>
       </div>
     </div>

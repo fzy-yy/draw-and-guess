@@ -4,19 +4,40 @@
   父组件持有草稿（draft prop），本组件用本地副本编辑（避免修改 props），保存时把副本通过 save 上抛。
 -->
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { strings } from '@draw-guess/strings'
 import type { RoomSettings } from '@draw-guess/shared'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import SectionHeader from '@/components/common/SectionHeader.vue'
 import RuleSliderField from '@/components/common/RuleSliderField.vue'
+import RuleSelectField from '@/components/common/RuleSelectField.vue'
 import RuleToggleField from '@/components/common/RuleToggleField.vue'
 import { useGameStore } from '@/stores/game'
 
 const props = defineProps<{ open: boolean; draft?: RoomSettings }>()
 const emit = defineEmits<{ close: []; save: [draft: RoomSettings] }>()
 const store = useGameStore()
+
+/** 下拉选项：数值范围/枚举值一律来自公开配置与 strings，禁止另写一套。 */
+const maxPlayerOptions = computed(() =>
+  Array.from(
+    { length: store.config.player.maxPlayers - store.config.player.minPlayers + 1 },
+    (_, index) => {
+      const count = store.config.player.minPlayers + index
+      return { value: count, label: strings.common.playersUnit(count) }
+    },
+  ),
+)
+const scoreModeOptions = [
+  { value: 'standard', label: strings.room.scoreModeStandard },
+  { value: 'flat', label: strings.room.scoreModeFlat },
+]
+const joinPolicyOptions = [
+  { value: 'forbid', label: strings.room.joinPolicyForbid },
+  { value: 'spectate', label: strings.room.joinPolicySpectate },
+  { value: 'next_game', label: strings.room.joinPolicyNextGame },
+]
 
 // 本地编辑副本：所有字段均为原始值，浅拷贝即可；每次打开（draft 变化）时重新同步。
 const localDraft = ref<RoomSettings>({} as RoomSettings)
@@ -47,21 +68,13 @@ watch(
     </template>
 
     <div class="grid grid-cols-3 gap-[1.2cqh_1.3em] py-[2cqh] px-[1.8em]">
-      <label class="min-w-0 flex flex-col gap-[0.5cqh] text-[0.76em] font-extrabold"
-        >{{ strings.room.maxPlayersField }}
-        <select
-          v-model="localDraft.maxPlayers"
-          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-navy"
-        >
-          <option
-            v-for="n in store.config.player.maxPlayers - store.config.player.minPlayers + 1"
-            :key="n"
-            :value="store.config.player.minPlayers + n - 1"
-          >
-            {{ strings.common.playersUnit(store.config.player.minPlayers + n - 1) }}
-          </option></select
-        ><small class="text-muted text-[0.8em]">{{ strings.room.maxPlayersNote }}</small></label
+      <RuleSelectField
+        v-model="localDraft.maxPlayers"
+        :label="strings.room.maxPlayersField"
+        :options="maxPlayerOptions"
       >
+        <small class="text-muted text-[0.8em]">{{ strings.room.maxPlayersNote }}</small>
+      </RuleSelectField>
       <RuleSliderField
         v-model="localDraft.roundsPerPlayer"
         :label="strings.common.roundsField"
@@ -116,16 +129,6 @@ watch(
         :display="strings.common.percentUnit(Math.round(localDraft.hintStartRatio * 100))"
         :disabled="!localDraft.structuredHintsEnabled"
       />
-      <!-- 提示间隔：相邻提示揭示时机之间的剩余比例（5%~45%，步进 5%） -->
-      <RuleSliderField
-        v-model="localDraft.hintIntervalRatio"
-        :label="strings.room.hintIntervalRatioField"
-        :min="store.config.game.hintIntervalRatioRange.min"
-        :max="store.config.game.hintIntervalRatioRange.max"
-        :step="store.config.game.hintIntervalRatioRange.step"
-        :display="strings.common.percentUnit(Math.round(localDraft.hintIntervalRatio * 100))"
-        :disabled="!localDraft.structuredHintsEnabled"
-      />
       <!-- 统一猜词基础分：覆盖全局默认值（flat 模式下即为唯一得分） -->
       <RuleSliderField
         v-model="localDraft.guessBaseScore"
@@ -136,36 +139,21 @@ watch(
         :display="strings.room.guessBaseScoreUnit(localDraft.guessBaseScore)"
       />
       <!-- 计分方式：标准（基础+速度+顺序）/ 固定分（仅基础分） -->
-      <label class="min-w-0 flex flex-col gap-[0.5cqh] text-[0.76em] font-extrabold"
-        >{{ strings.room.scoreModeField }}
-        <select
-          v-model="localDraft.scoreMode"
-          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-navy"
-        >
-          <option value="standard">{{ strings.room.scoreModeStandard }}</option>
-          <option value="flat">{{ strings.room.scoreModeFlat }}</option>
-        </select></label
-      >
-      <RuleToggleField
-        v-model="localDraft.closeGuessEnabled"
-        :label="strings.room.toggleCloseGuess"
+      <RuleSelectField
+        v-model="localDraft.scoreMode"
+        :label="strings.room.scoreModeField"
+        :options="scoreModeOptions"
       />
       <RuleToggleField
         v-model="localDraft.allowPlayerInvite"
         :label="strings.room.togglePlayerInvite"
       />
       <RuleToggleField v-model="localDraft.allowPause" :label="strings.room.togglePause" />
-      <label class="min-w-0 flex flex-col gap-[0.5cqh] text-[0.76em] font-extrabold"
-        >{{ strings.room.joinPolicyField }}
-        <select
-          v-model="localDraft.joinPolicy"
-          class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-navy"
-        >
-          <option value="forbid">{{ strings.room.joinPolicyForbid }}</option>
-          <option value="spectate">{{ strings.room.joinPolicySpectate }}</option>
-          <option value="next_game">{{ strings.room.joinPolicyNextGame }}</option>
-        </select></label
-      >
+      <RuleSelectField
+        v-model="localDraft.joinPolicy"
+        :label="strings.room.joinPolicyField"
+        :options="joinPolicyOptions"
+      />
     </div>
 
     <template #footer>

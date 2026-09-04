@@ -7,20 +7,11 @@
 <script setup lang="ts">
 import { Brush, Eye } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
-import type { RoomMember } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
 import AvatarImage from '@/components/common/AvatarImage.vue'
+import { roleTextFor } from '@/utils/roleText'
 
 const store = useGameStore()
-
-/** 当前成员在局内的角色文案（与聊天区角色标签一致）。 */
-function roleText(member: RoomMember): string {
-  if (member.leftGame) return strings.status.roleLeftGame
-  if (member.isDrawer) return strings.status.roleDrawing
-  if (member.guessed) return strings.status.roleGuessed
-  if (member.spectating) return strings.status.roleSpectating
-  return strings.status.roleGuessing
-}
 </script>
 
 <template>
@@ -74,7 +65,7 @@ function roleText(member: RoomMember): string {
               ? 'bg-[linear-gradient(90deg,var(--seat-color),var(--color-navy),var(--seat-color))] bg-size-[200%_100%] bg-clip-text text-transparent animate-[drawer-role-flow_1.4s_linear_infinite]'
               : ''
           "
-          >{{ roleText(member) }}</span
+          >{{ roleTextFor(member) }}</span
         >
       </div>
       <!-- 行尾标记：自己的「我」标记（游戏内不展示房主皇冠） -->

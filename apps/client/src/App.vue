@@ -9,7 +9,6 @@
 // 图标库：系统/操作提示/邀请横幅使用的图标
 import { ref, watch } from 'vue'
 import { Gamepad2, LoaderCircle, LogOut, RotateCw, WifiOff } from 'lucide-vue-next'
-import { Toaster } from 'vue-sonner'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
 import { useAudioFeedback } from '@/composables/useAudioFeedback'
@@ -17,6 +16,7 @@ import AvatarImage from '@/components/common/AvatarImage.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import StageBackdrop from '@/components/common/StageBackdrop.vue'
+import AppToaster from '@/components/common/AppToaster.vue'
 // 五个视图组件：对局、房间等待、设置、大厅、资料确认
 import ProfileView from '@/views/ProfileView.vue'
 import LobbyView from '@/views/LobbyView.vue'
@@ -41,31 +41,41 @@ function stopRejectCountdown(): void {
   rejectTimer = undefined
 }
 
+/**
+ * 启动（或重新启动）队首邀请的拒绝倒计时。
+ * 从配置秒数重新计时：新邀请到达、以及「进房又退出后横幅重新出现」两种场景
+ * （此时队首邀请未变，仅靠 watch id 不会重启定时器，倒计时会冻结在旧值）。
+ */
+function startRejectCountdown(): void {
+  stopRejectCountdown()
+  const current = store.invites[0]
+  if (!current || store.room) return
+  rejectCountdown.value = store.config.ui.inviteRejectCountdownSeconds
+  rejectTimer = window.setInterval(() => {
+    rejectCountdown.value -= 1
+    if (rejectCountdown.value <= 0) {
+      stopRejectCountdown()
+      // 倒计时归零：自动拒绝队首邀请（服务端会同步清理邀请状态）。
+      // 队首可能在计时期间已被应答/失效，先确认仍存在再发送。
+      const pending = store.invites[0]
+      if (pending) void store.respondInvite(pending.id, false)
+    }
+  }, 1_000)
+}
+
+// 队首邀请变化时重新开始倒计时（含初始化）。
 watch(
   () => store.invites[0]?.id,
-  (inviteId) => {
-    stopRejectCountdown()
-    if (!inviteId || store.room) return
-    rejectCountdown.value = store.config.ui.inviteRejectCountdownSeconds
-    rejectTimer = window.setInterval(() => {
-      rejectCountdown.value -= 1
-      if (rejectCountdown.value <= 0) {
-        stopRejectCountdown()
-        // 倒计时归零：自动拒绝队首邀请（服务端会同步清理邀请状态）。
-        // 队首可能在计时期间已被应答/失效，先确认仍存在再发送。
-        const current = store.invites[0]
-        if (current) void store.respondInvite(current.id, false)
-      }
-    }, 1_000)
-  },
+  () => startRejectCountdown(),
   { immediate: true },
 )
 
-// 拒绝/接受后横幅可能消失（无剩余邀请）：停表并复位秒数。
+// 横幅可见性变化：邀请消失（接受/拒绝/过期）时停表；进房又退房后横幅重新出现时重开倒计时。
 watch(
   () => store.invites.length && !store.room,
   (visible) => {
-    if (!visible) stopRejectCountdown()
+    if (visible) startRejectCountdown()
+    else stopRejectCountdown()
   },
 )
 
@@ -124,24 +134,9 @@ function declineCurrentInvite(): void {
         </p>
       </BaseDialog>
 
-      <!-- 操作通知 Toast 堆栈：由 vue-sonner 的 <Toaster /> 承载渲染与堆栈动画，
-           通知内容通过 store.notify 触发（见 stores/game.ts 的 vue-sonner 转译）。
-           自定义容器单位定位，保证与旧版 Toast 一样落在舞台内右上角。 -->
-      <Toaster
-        :position="'top-right'"
-        :toast-options="{
-          style: {
-            fontSize: '0.75em',
-            fontWeight: 800,
-            // 颜色全部引用主题令牌变量（见 index.css @theme），不在组件内硬编码色值
-            background: 'var(--color-paper)',
-            color: 'var(--color-navy)',
-            borderLeft: '0.45cqh solid var(--color-yellow)',
-            borderRadius: '0.7em',
-            boxShadow: 'var(--shadow-float)',
-          },
-        }"
-      />
+      <!-- 操作通知 Toast 堆栈：自实现了 AppToaster（使用 useToasts 状态层），
+           通知内容通过 store.notify 触发（见 stores/game.ts）。它在画框内右上角渲染。 -->
+      <AppToaster />
 
       <!-- 房间邀请横幅：不在房间时收到邀请才会显示，可接受或拒绝 -->
       <Transition name="banner">

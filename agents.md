@@ -1,7 +1,7 @@
 # AGENTS.md
 
 > 本文件是所有后续开发（人工或 AI）的**第一入口**。下列内容以**当前代码为准**；原始需求文档已删除，若与本文件或代码冲突，一律以代码与本文件为准。
-> 仓库内其它根级文档：`README.md`（项目总览/十分钟启动）、`vocabulary/`（JSON 词库目录）。`开发建议.md`、`样式重构与代码审查报告.md`、根级 `docs/` 目录均已删除，不再维护；历史要点已并入本文件/README。**注意：`README.md` 部分章节（依赖清单、持久化/日志说明、已被删除的文档引用）已过时，与代码不一致时以本文件与代码为准。**
+> 仓库内其它根级文档：`README.md`（项目总览/十分钟启动）、`vocabulary/`（SQLite 词库目录）。`开发建议.md`、`样式重构与代码审查报告.md`、根级 `docs/` 目录均已删除，不再维护；历史要点已并入本文件/README。**注意：`README.md` 部分章节（依赖清单、持久化/日志说明、已被删除的文档引用）已过时，与代码不一致时以本文件与代码为准。**
 
 ---
 
@@ -15,16 +15,16 @@
 - **日志文件化**：服务端日志**不输出到控制台**（规避 Windows 控制台 GBK 解码 UTF-8 中文乱码），默认写入 `apps/server/log/app-<秒级时间戳>.log`（每次启动新建一个、最多保留 `LOG_MAX_FILES` 条）；可通过 `.env` 的 `LOG_ENABLED` 完全关闭（零内存开销）。
 - **画板**：高 DPI 实时画布，支持自由画笔、橡皮擦（`destination-out`）与封闭区域洪泛填充；画笔/橡皮擦共用连续粗细，可滚轮调整；支持预设或任意 HEX 颜色，工具可自定义单键切换。**渲染模型为「归一化点列 + 直线段描边」增量同步**（不引入轮廓填充型平滑库，曾因此导致白边/闪烁/空心缺陷）。
 - **头像**：仅允许从 40 个内置 SVG 白名单编号中选择，协议只传编号；禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像。
-- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '6'`（见 `config/app.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。
+- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '7'`（见 `config/app.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。
 
 ### 技术栈与运行环境
 
 - Node.js 当前维护中的 LTS（建议 22 或 24）、pnpm 10+、pnpm workspace 单仓库。
 - 现代 Chromium / Edge / Firefox（支持 CSS `container queries`，因为整屏缩放依赖 `cqh/cqw`）。
 - 后端子包依赖（`apps/server/package.json`）：`express@5`、`socket.io`、`zod`、`pino`、`tsx`、`helmet`、`cors`、**`better-sqlite3`（本地持久化，WAL）**、**`compression`（静态 gzip）**；开发依赖 `@types/better-sqlite3`、`@types/compression` 等。
-- 前端子包依赖（`apps/client/package.json`）：`vue@3`、`pinia`、`socket.io-client`、`tailwindcss@4`（`@tailwindcss/vite`）、`lucide-vue-next`、`@tanstack/vue-virtual`（虚拟列表）、`@vueuse/core` + `@vueuse/integrations`（组合式工具，含 `useFocusTrap`）、`nanoid`、`clsx` + `tailwind-merge`（类名合并 `cn()`）、`vue-sonner`（Toast）、`focus-trap`（弹窗焦点陷阱 peer）。
+- 前端子包依赖（`apps/client/package.json`）：`vue@3`、`pinia`、`socket.io-client`、`tailwindcss@4`（`@tailwindcss/vite`）、`lucide-vue-next`、`@tanstack/vue-virtual`（虚拟列表）、`@vueuse/core` + `@vueuse/integrations`（组合式工具，含 `useFocusTrap`）、`nanoid`、`clsx` + `tailwind-merge`（类名合并 `cn()`）、`focus-trap`（弹窗焦点陷阱 peer）。**Toast 为自建组件（`components/common/AppToaster.vue` + `composables/useToasts.ts`）**，不依赖第三方通知库。
 - 共享包子包：`zod`（唯一运行时依赖）。
-- 已移除依赖（勿回引入）：`perfect-freehand`（轮廓填充渲染与增量同步架构冲突）、`pino-pretty`（改为文件 JSON 日志后不再使用）。
+- 已移除依赖（勿回引入）：`perfect-freehand`（轮廓填充渲染与增量同步架构冲突）、`pino-pretty`（改为文件 JSON 日志后不再使用）、`vue-sonner`（Toast 已由自建 AppToaster/useToasts 替换，未来统一走自建方案）。
 
 ---
 
@@ -53,8 +53,8 @@ draw_and_guess/
 │   ├── audio.ts                  # 音效合成 cue（频率序列与时长）与增益
 │   ├── settings.ts               # 本地设置（音量/动画/快捷键/发现偏好/自动聚焦）、UI 参数、预设安全短语
 │   └── strings.ts                # ★唯一 UI 文案表：客户端 strings / 服务端 serverStrings；含模板函数，不纳入 PUBLIC_CONFIG
-├── vocabulary/                   # ★唯一权威词库目录：JSON 格式（version/category_enum/words 富字段）
-│   └── draw_guess_words_zh-CN_v2.json
+├── vocabulary/                   # ★唯一权威词库目录：SQLite 数据库（metadata/words 表）
+│   └── draw_guess_words.db
 ├── README.md                     # 项目总览、十分钟启动（注意：部分章节已过时，见顶部声明）
 ├── AGENTS.md                     # 本文件：导读、硬性限制、启动方法、编码/测试/提交流程
 │
@@ -81,7 +81,7 @@ draw_and_guess/
 │       ├── rate-limit.ts          # 猜词/绘图滑动窗口限频
 │       ├── errors.ts              # GameError / success / failure / RuntimeLogger / SILENT_LOGGER（避免循环依赖）
 │       ├── models.ts              # 服务端内存秘密模型（PlayerSecret/RoomSecret/GameSecret/InviteSecret…）
-│       ├── vocabulary/            # 词库 Provider 架构：contract（接口）/normalize（共享纯函数）/json-file.provider（JSON 实现）/index（分发入口）；新增 SQLite 等来源只需实现 VocabularyProvider 并在 config 切换
+│       ├── vocabulary/            # 词库 Provider 架构：contract（接口）/normalize（共享纯函数）/sqlite.provider（SQLite 实现）/index（分发入口）；新增其它来源只需实现 VocabularyProvider 并在 config 切换
 │       ├── db/                    # SQLite 持久化：连接（WAL + 事务辅助）/ 版本化迁移（db/index.ts、db/migrate.ts）
 │       ├── repositories/          # 仓储接口 + SQLite 实现（player/room/archive，领域层只依赖接口）
 │       ├── protocol/binder.ts     # 统一请求绑定：schema 校验、会话限频、幂等缓存、统一 ack
@@ -98,18 +98,19 @@ draw_and_guess/
 │   ├── vite.config.ts             # Vite 配置：@draw-guess/config 虚拟公开模块裁剪、/@、@draw-guess/strings 别名、开发代理（/api 与 /socket.io → 5174）
 │   ├── index.html                 # 入口 HTML（#app 挂载点，标题/描述由 vite.config 从 strings.ts 注入）
 │   └── src/
-│       ├── main.ts                # 客户端入口：创建 App 并挂载 #app；仅引入 ./style/index.css
-│       ├── App.vue                # 根舞台：页面互斥渲染（对局>房间>设置>大厅>资料）、vue-sonner `<Toaster/>`、邀请横幅、竖屏提示、断线恢复阻断框
+│       ├── main.ts                # 客户端入口：创建 App 并挂载 #app；仅引入 ./style/index.css（Toast 为自建，无需第三方样式）
+│       ├── App.vue                # 根舞台：页面互斥渲染（对局>房间>设置>大厅>资料）、自建 `<AppToaster/>`、邀请横幅、竖屏提示、断线恢复阻断框
 │       ├── style/
 │       │   └── index.css          # ★唯一全局样式文件：@import tailwindcss + @theme 令牌 + @layer base + @layer components（.dialog-shell/.eyebrow/.round-icon-btn/.ui-feedback 等）
 │       ├── stores/
-│       │   ├── game.ts            # Pinia store：本地资料/设置、房间与对局状态、业务操作请求（发送方）、vue-sonner notify 转译
+│       │   ├── game.ts            # Pinia store：本地资料/设置、房间与对局状态、业务操作请求（发送方）、notify 转译（自建 useToasts）
 │       │   ├── socket.ts          # Socket 单例 + 推送事件桥接（HMR dispose）
 │       │   └── request.ts         # 请求封装：timeout+ack+错误翻译+quiet 静默降级
 │       ├── composables/
 │       │   ├── useAudioFeedback.ts # Web Audio 合成提示音（自动播放入口解锁、音量实时读取）
 │       │   ├── useGameHud.ts      # 对局 HUD 计算（useTimestamp 驱动）：剩余时间/进度/猜词权限/阶段标签/排行
-│       │   └── useShortcuts.ts    # 画板快捷键：自定义单键切换工具、撤销/重做组合键
+│       │   ├── useShortcuts.ts    # 画板快捷键：自定义单键切换工具、撤销/重做组合键
+│       │   └── useToasts.ts       # 自建 Toast 状态层：队列/去重合并(key=type:text)/超时消失/弹跳事件（小条配色统一走 index.css 橙色）
 │       ├── components/
 │       │   ├── AppButton.vue      # 统一动作按钮（primary/secondary/danger），内置类与外部类用 cn() 合并
 │       │   ├── BaseDialog.vue     # 通用弹窗外壳，焦点陷阱用 useFocusTrap（fallbackFocus 兜底）+ Esc 关闭 + 多弹窗顶层仲裁
@@ -117,6 +118,7 @@ draw_and_guess/
 │       │   ├── AvatarImage.vue    # 内置 SVG 头像统一安全展示（只接收白名单编号）
 │       │   ├── AvatarPickerDialog.vue # 40 个 SVG 头像选择模态框
 │       │   ├── ActionPopover.vue  # 悬浮操作面板（聊天快捷互动用）
+│       │   ├── AppToaster.vue     # 自建 Toast 堆栈渲染：画框内右上角、白色长条+橙色小条+加粗文字、点击消失、淡入淡出、去重左弹跳（WAAPI）
 │       │   ├── GameCanvas.vue     # 高 DPI 实时画板：直线段描边增量绘制、橡皮擦/destination-out、洪泛填充、滚轮线宽
 │       │   ├── game/              # 对局组件：GameHud / ChatPanel / DrawingToolbar / PhaseOverlay / OverlayCard / ScoreStrip
 │       │   ├── room/              # 房间组件：SeatGrid / RuleSummary / RuleRow / RulesDialog / InviteDialog / VocabularyDialog
@@ -195,7 +197,7 @@ pnpm format:check  # 仅检查格式
 - **计分统一口径**：`scoring.ts` 与 `pure.ts` 的 `calculateGuessScore` 使用同一规则（基础 + 速度 + 顺序；两人局禁用顺序奖）。
 - **画布增量绘制**（`GameCanvas.vue`）：坐标一律**归一化 0～1**；绘图序号单调递增，服务端拒绝旧包；橡皮擦/填充只传「点击位置 + 颜色」，不传像素，客户端按同一历史重放；`lastSequence` 用于重连续接。**渲染为直线段描边（`stroke()` + `round` 线帽），增量只补画新增段（fromIndex）**。
 - **持久化分层**：`db/` 管连接与迁移（`runMigrations` 幂等）；`repositories/` 提供 `PlayerRepository`/`RoomRepository`/`ArchiveRepository` 接口 + SQLite 实现，领域层（`game-service.ts`）只依赖接口。游戏结束时经 `finishGame → persistGameResult` 落盘战报；重启时 `recoverOnStartup` 标记玩家断线（身份可宽限恢复）并作废进行中房间。
-- **配置单一来源**：业务规则只写在 `config/` + `config.ts` 聚合；UI 文案只写在 `config/strings.ts`；词库只写在 `vocabulary/`（JSON，经 Provider 加载）；部署覆盖只写在 `.env`（HOST/PORT/LOG_LEVEL/LOG_ENABLED/LOG_MAX_FILES）。
+- **配置单一来源**：业务规则只写在 `config/` + `config.ts` 聚合；UI 文案只写在 `config/strings.ts`；词库只写在 `vocabulary/`（SQLite，经 Provider 加载）；部署覆盖只写在 `.env`（HOST/PORT/LOG_LEVEL/LOG_ENABLED/LOG_MAX_FILES）。
 
 ---
 
@@ -276,7 +278,8 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
    - 客户端请求必须带 `requestId`（幂等）与统一 `ack`；非法阶段/角色/序号/频率由 `binder.ts` 与领域服务拒绝。
    - 头像只允许 `config/player.ts` 白名单中的内置 SVG 编号；**禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像**。
 3. **词库与内容**
-   - `vocabulary/*.json` 是唯一词库来源：顶层含 version/updated_at/default_time_limit/default_score_weight/category_enum/words；词条含 id/type/text/category/difficulty/hint/tags/lang/enabled/time_limit/score_weight/aliases；**分类必须 ⊆ category_enum**、type 仅支持 word/phrase/scene（白名单见 config/vocabulary.ts 的 wordTypes）、enabled=false 词条不进入候选池；修改后需重启服务，异常数据以中文错误阻止启动。
+   - `vocabulary/draw_guess_words.db` 是唯一词库来源（SQLite）：`metadata` 表存 version/updated_at/category_enum/difficulty_enum/time_limit_enum/score_weight_enum/default_time_limit/default_score_weight；`words` 表词条含 id/text/**category**（单词条仅一个分类）/difficulty/enabled/time_limit/score_weight/aliases（JSON）。**分类必须 ⊆ category_enum**、difficulty 必须在合法区间、enabled=0 词条不进入候选池；修改后需重启服务，异常数据以中文错误阻止启动。
+   - **猜词提示使用词条分类**：结构化提示揭示的是 `category` 字段（单条），而非旧版 `hint` 列表；词库已不再包含 `type/hint/tags/lang` 字段。
    - 猜词判定固定用 `normalizeAnswer`（NFKC + 去空白 + 折叠空白 + 忽略拉丁大小写），不要在别处另写一套比较。
 4. **配置治理**
    - 业务规则**只允许**写在 `config/` 目录 + `config.ts` 聚合；环境变量仅覆盖 `HOST / PORT / LOG_LEVEL / LOG_ENABLED / LOG_MAX_FILES`，禁止环境变量覆盖游戏规则。
@@ -359,8 +362,8 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 | 应用名/版本/端口/协议/限频参数 | `config/app.ts`（经 `config.ts` 聚合）                                                                                                   |
 | 对局轮数/时间/分数/提示        | `config/game.ts`                                                                                                                         |
 | 画板颜色/粗细/批次/历史上限    | `config/drawing.ts`                                                                                                                      |
-| 词库内容                       | `vocabulary/*.json`（改后重启服务）                                                                                                      |
-| 新增词库来源（如 SQLite）      | `apps/server/src/vocabulary/` 实现 VocabularyProvider → `config/vocabulary.ts` 切 provider                                               |     |
+| 词库内容                       | `vocabulary/draw_guess_words.db`（SQLite；改后重启服务）                                                                                 |
+| 新增词库来源                   | `apps/server/src/vocabulary/` 实现 VocabularyProvider → `config/vocabulary.ts` 切 provider                                               |     |
 | 新增一个请求事件               | `packages/shared/src/events.ts` → `schemas.ts` → `game-service.ts` 或对应 `handler` → `handlers/*.ts` 注册 → `stores/game.ts` 客户端方法 |
 | 回合流转/阶段                  | `apps/server/src/round-machine.ts`                                                                                                       |
 | 计分规则                       | `apps/server/src/scoring.ts`                                                                                                             |

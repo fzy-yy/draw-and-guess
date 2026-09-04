@@ -8,19 +8,18 @@ import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
 import SettingSliderRow from '@/components/common/SettingSliderRow.vue'
 import SettingSwitchRow from '@/components/common/SettingSwitchRow.vue'
+import SettingsSectionHeader from '@/components/settings/SettingsSectionHeader.vue'
 
 const store = useGameStore()
 </script>
 
 <template>
   <section class="min-h-0 px-[9cqw] py-[3cqh]">
-    <div class="flex items-center gap-[1.2em] mb-[2.5cqh]">
-      <Music2 class="h-[6cqh] w-[6cqh] rounded-[0.8em] bg-blue p-[1.2cqh] text-white" />
-      <div>
-        <h2>{{ strings.settings.audioTitle }}</h2>
-        <p class="mt-[0.5cqh] text-muted text-[0.72em]">{{ strings.settings.audioIntro }}</p>
-      </div>
-    </div>
+    <SettingsSectionHeader
+      :icon="Music2"
+      :title="strings.settings.audioTitle"
+      :intro="strings.settings.audioIntro"
+    />
     <div class="flex flex-col gap-[1.2cqh]">
       <SettingSliderRow
         v-model="store.settings.masterVolume"

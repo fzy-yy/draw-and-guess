@@ -135,11 +135,12 @@ onBeforeUnmount(releaseFocus)
         :class="[widthClass, sectionClass]"
       >
         <header
-          v-if="closeAria && dismissible"
+          v-if="closeAria || $slots.header"
           class="flex min-h-[9cqh] items-center justify-between bg-navy px-[1.7em] py-[1.3cqh] text-white"
         >
           <div><slot name="header" /></div>
           <button
+            v-if="closeAria && dismissible"
             type="button"
             class="grid h-[4cqh] w-[4cqh] place-items-center rounded-full bg-white/10 text-white text-[1.2em]"
             :aria-label="closeAria"

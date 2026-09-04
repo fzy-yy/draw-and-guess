@@ -8,8 +8,8 @@ import { APP_CONFIG } from '../../../config.ts'
 /** 客户端请求统一带 UUID requestId，以便服务端对重试请求执行幂等返回。 */
 export const RequestSchema = z.object({ requestId: z.string().uuid() }).strict()
 /**
- * 词库词条 ID 校验：格式与词库来源解耦（JSON 实现为数字主键字符串化，
- * 将来 SQLite 实现可是任意主键串），仅限定可见 ASCII 字符集与长度。
+ * 词库词条 ID 校验：格式与词库来源解耦（SQLite 实现为「sqlite:正整数主键」字符串化，
+ * 将来其它来源可以是任意可打印主键串），仅限定可见 ASCII 字符集与长度。
  */
 export const WordIdSchema = z
   .string()
@@ -70,11 +70,18 @@ export const RoomSettingsSchema = z
     showWordLength: z.boolean(),
     progressiveHints: z.boolean(),
     structuredHintsEnabled: z.boolean(),
-    hintStartRatio: z.number().min(0.05).max(0.9),
-    hintIntervalRatio: z.number().min(0.05).max(0.45),
-    guessBaseScore: z.number().int().min(50).max(2_000),
+    // 区间一律读自配置单一来源（config/game.ts 的 hintStartRatioRange / guessBaseRange），
+    // 禁止在协议层另写一套允许范围。
+    hintStartRatio: z
+      .number()
+      .min(APP_CONFIG.game.hintStartRatioRange.min)
+      .max(APP_CONFIG.game.hintStartRatioRange.max),
+    guessBaseScore: z
+      .number()
+      .int()
+      .min(APP_CONFIG.game.score.guessBaseRange.min)
+      .max(APP_CONFIG.game.score.guessBaseRange.max),
     scoreMode: z.enum(['standard', 'flat']),
-    closeGuessEnabled: z.boolean(),
     allowPlayerInvite: z.boolean(),
     allowPause: z.boolean(),
     joinPolicy: z.enum(['forbid', 'spectate', 'next_game']),

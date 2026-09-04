@@ -3,8 +3,9 @@
   仅承载图标；文字或更复杂内容请使用 AppButton。尺寸提供 default（4.4cqh）与 lg（4.6cqh）两档。
 -->
 <script setup lang="ts">
-import { computed, useAttrs } from 'vue'
+import { computed } from 'vue'
 import { cn } from '@/utils/cn'
+import BaseIconButton from '@/components/common/BaseIconButton.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -17,31 +18,23 @@ const props = withDefaults(
   }>(),
   { size: 'default', disabled: false },
 )
-
 const emit = defineEmits<{ click: [] }>()
 
-// 在 setup 顶层取响应式 attrs，供下方 computed 读取外部透传的 class（调用处可用 class 追加布局类）。
-const attrs = useAttrs()
-
-// 底座 + 尺寸 + 调用处透传的外部 class：只取 attrs.class，避免把 style/onClick 等键名当类名。
-const buttonClass = computed(() =>
+const baseClass = computed(() =>
   cn(
     'grid place-items-center rounded-[0.6em] bg-white/10 text-white disabled:cursor-not-allowed disabled:opacity-40',
     props.size === 'lg' ? 'h-[4.6cqh] w-[4.6cqh]' : 'h-[4.4cqh] w-[4.4cqh]',
-    attrs.class,
   ),
 )
 </script>
 
 <template>
-  <button
-    type="button"
-    :aria-label="label"
+  <BaseIconButton
+    :label="label"
     :disabled="disabled"
-    :class="buttonClass"
-    v-bind="attrs"
+    :base-class="baseClass"
     @click="emit('click')"
   >
     <slot />
-  </button>
+  </BaseIconButton>
 </template>

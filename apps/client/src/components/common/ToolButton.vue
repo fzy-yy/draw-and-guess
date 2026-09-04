@@ -1,10 +1,11 @@
 <!--
   绘图工具栏工具按钮：收敛 DrawingToolbar 中 6 个长串行内类（画笔/橡皮擦/填充/撤销/重做/清空）。
-  统一底座样式、激活态（!bg-blue !text-white）与可选快捷键 kbd；内容（图标/文字）经默认插槽传入。
+  统一底座样式、激活态（bg-blue! text-white!）与可选快捷键 kbd；内容（图标/文字）经默认插槽传入。
 -->
 <script setup lang="ts">
-import { computed, useAttrs } from 'vue'
+import { computed } from 'vue'
 import { cn } from '@/utils/cn'
+import BaseIconButton from '@/components/common/BaseIconButton.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -19,26 +20,21 @@ const props = withDefaults(
   }>(),
   { active: false, disabled: false, ariaLabel: undefined, shortcut: undefined },
 )
-
 const emit = defineEmits<{ click: [] }>()
-const attrs = useAttrs()
 
-const buttonClass = computed(() =>
+const baseClass = computed(() =>
   cn(
     'flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] px-[0.7em] text-[0.72em] font-extrabold',
-    props.active ? '!text-white !bg-blue' : 'bg-line text-navy',
-    attrs.class,
+    props.active ? 'text-white! bg-blue!' : 'bg-line text-navy',
   ),
 )
 </script>
 
 <template>
-  <button
-    type="button"
+  <BaseIconButton
+    :label="ariaLabel"
     :disabled="disabled"
-    :aria-label="ariaLabel"
-    :class="buttonClass"
-    v-bind="attrs"
+    :base-class="baseClass"
     @click="emit('click')"
   >
     <slot />
@@ -47,5 +43,5 @@ const buttonClass = computed(() =>
       class="bg-white px-[0.35em] py-[0.1em] min-w-[1.6em] rounded-[0.35em] border-[0.12em] text-navy text-[0.82em] uppercase font-[ui-monospace,SFMono-Regular,Consolas,monospace]"
       >{{ shortcut }}</kbd
     >
-  </button>
+  </BaseIconButton>
 </template>

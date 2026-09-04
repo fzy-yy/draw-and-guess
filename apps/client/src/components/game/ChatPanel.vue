@@ -11,6 +11,7 @@ import { Lightbulb, Send, SmilePlus } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import type { ChatMessage, RoomMember } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
+import { roleTextFor } from '@/utils/roleText'
 import ActionPopover from '@/components/common/ActionPopover.vue'
 
 // canGuess 由父组件（useGameHud）计算，这里只用于输入框权限与提交保护。
@@ -96,7 +97,7 @@ watch(
   { immediate: true },
 )
 
-// D2：按「自动聚焦猜词框」开关在进入可猜词状态时聚焦输入框（替代静态 autofocus）。
+// 按「自动聚焦猜词框」开关在进入可猜词状态时聚焦输入框（替代静态 autofocus）。
 const guessInput = ref<HTMLInputElement>()
 watch(
   () =>
@@ -124,18 +125,10 @@ watch(
         }}</span>
         <h2 class="text-[1.05em]">{{ strings.game.chatTitle }}</h2>
       </div>
-      <!-- 当前角色标签：观战中 / 已猜中 / 作画中 / 猜词中 -->
+      <!-- 当前角色标签：观战中 / 已猜中 / 作画中 / 猜词中（与得分条共用同一映射） -->
       <span
         class="bg-sky px-[0.6em] py-[0.35cqh] text-blue rounded-[99em] text-[0.62em] font-extrabold"
-        >{{
-          store.me?.spectating
-            ? strings.status.roleSpectating
-            : store.me?.guessed
-              ? strings.status.roleGuessed
-              : store.isDrawer
-                ? strings.status.roleDrawing
-                : strings.status.roleGuessing
-        }}</span
+        >{{ roleTextFor(store.me ?? undefined) }}</span
       >
     </header>
     <!-- 消息列表：猜词、系统、猜中、预设等类型分别高亮 -->

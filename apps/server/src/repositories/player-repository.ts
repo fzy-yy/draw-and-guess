@@ -27,22 +27,9 @@ export interface PlayerRecord {
 /** 玩家身份仓储接口：领域层与存储层之间的边界。 */
 export interface PlayerRepository {
   upsert(record: PlayerRecord): void
-  findById(id: string): PlayerRecord | undefined
   findByToken(token: string): PlayerRecord | undefined
   /** 更新连接状态与宽限时间戳（断线/上线时调用）。 */
   setConnection(id: string, connected: boolean, disconnectedAt?: number): void
-  /** 更新玩家所在房间（入房/离房/出局）。 */
-  setRoom(id: string, roomId?: string): void
-  /** 更新资料与偏好（改名/换头像/切换发现/邀请设置）。 */
-  setProfile(
-    id: string,
-    field: {
-      nickname?: string
-      avatarId?: string
-      discoverable?: boolean
-      acceptsInvites?: boolean
-    },
-  ): void
   remove(id: string): void
   /** 启动恢复：把全部玩家标记为断线（connected=0）并清空房间归属，身份保留供宽限恢复。 */
   markAllDisconnected(disconnectedAt: number): void
@@ -75,12 +62,6 @@ export class SqlitePlayerRepository implements PlayerRepository {
       .run(this.toRow(record))
   }
 
-  findById(id: string): PlayerRecord | undefined {
-    const row = this.db.prepare('SELECT * FROM players WHERE id = ?').get(id) as
-      PlayerRow | undefined
-    return row ? this.fromRow(row) : undefined
-  }
-
   findByToken(token: string): PlayerRecord | undefined {
     const row = this.db.prepare('SELECT * FROM players WHERE token = ?').get(token) as
       PlayerRow | undefined
@@ -91,43 +72,6 @@ export class SqlitePlayerRepository implements PlayerRepository {
     this.db
       .prepare('UPDATE players SET connected = ?, disconnected_at = ? WHERE id = ?')
       .run(connected ? 1 : 0, disconnectedAt ?? null, id)
-  }
-
-  setRoom(id: string, roomId?: string): void {
-    this.db.prepare('UPDATE players SET room_id = ? WHERE id = ?').run(roomId ?? null, id)
-  }
-
-  setProfile(
-    id: string,
-    field: {
-      nickname?: string
-      avatarId?: string
-      discoverable?: boolean
-      acceptsInvites?: boolean
-    },
-  ): void {
-    // 动态拼接仅在字段存在时更新对应列，避免把未变更字段覆盖为 undefined。
-    const sets: string[] = []
-    const values: unknown[] = []
-    if (field.nickname !== undefined) {
-      sets.push('nickname = ?')
-      values.push(field.nickname)
-    }
-    if (field.avatarId !== undefined) {
-      sets.push('avatar_id = ?')
-      values.push(field.avatarId)
-    }
-    if (field.discoverable !== undefined) {
-      sets.push('discoverable = ?')
-      values.push(field.discoverable ? 1 : 0)
-    }
-    if (field.acceptsInvites !== undefined) {
-      sets.push('accepts_invites = ?')
-      values.push(field.acceptsInvites ? 1 : 0)
-    }
-    if (!sets.length) return
-    values.push(id)
-    this.db.prepare(`UPDATE players SET ${sets.join(', ')} WHERE id = ?`).run(...values)
   }
 
   remove(id: string): void {

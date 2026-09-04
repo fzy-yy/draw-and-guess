@@ -29,8 +29,6 @@ export interface SocketHandlers {
   onRoomClosed(reason: string): void
   onSystemNotice(text: string): void
   onSystemError(message: string): void
-  /** 服务端定向推送给猜词者的“很接近”提示（不进入聊天流，避免刷屏与泄露答案）。 */
-  onGuessClose(text: string): void
   onDrawStrokeBatch(roundId: string, stroke: Stroke): void
   onDrawFillCommit(roundId: string, fill: FillCommand): void
 }
@@ -42,7 +40,7 @@ export const socket: Socket = io({
   reconnectionAttempts: Infinity,
 })
 
-// F3：开发模式 HMR 热替换时关闭旧 socket，避免残留连接叠加（生产构建无影响）
+// 开发模式 HMR 热替换时关闭旧 socket，避免残留连接叠加（生产构建无影响）
 if (import.meta.hot) {
   import.meta.hot.dispose(() => socket.close())
 }
@@ -69,7 +67,6 @@ export function attachSocketListeners(handlers: SocketHandlers): () => void {
   socket.on(EVENTS.systemError, ({ message }: { message: string }) =>
     handlers.onSystemError(message),
   )
-  socket.on(EVENTS.guessClose, ({ text }: { text: string }) => handlers.onGuessClose(text))
   socket.on(EVENTS.drawStrokeBatch, ({ roundId, stroke }: { roundId: string; stroke: Stroke }) =>
     handlers.onDrawStrokeBatch(roundId, stroke),
   )
@@ -100,7 +97,6 @@ export function attachSocketListeners(handlers: SocketHandlers): () => void {
       EVENTS.roomClosed,
       EVENTS.systemNotice,
       EVENTS.systemError,
-      EVENTS.guessClose,
       EVENTS.drawStrokeBatch,
       EVENTS.drawFillCommit,
     ])

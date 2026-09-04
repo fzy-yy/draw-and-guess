@@ -8,6 +8,7 @@ import { computed } from 'vue'
 import { BookOpenCheck, Send, Settings2 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
+import AppButton from '@/components/common/AppButton.vue'
 import RuleRow from '@/components/room/RuleRow.vue'
 
 const props = defineProps<{
@@ -71,11 +72,11 @@ const hintsSummary = computed(() => {
       </dl>
     </div>
 
-    <!-- 词库管理入口：仅房主可编辑，展示已选/总词条数 -->
+    <!-- 词库管理入口：房主可编辑、非房主可打开查看（只读），展示已选/总词条数 -->
     <button
       class="flex items-center gap-[0.75em] min-h-[7cqh] py-[0.8cqh] px-[0.8em] text-blue bg-sky border-l-[0.45cqh]! border-l-blue! text-left"
       type="button"
-      :disabled="!store.isHost || props.vocabularyLoading"
+      :disabled="props.vocabularyLoading"
       @click="emit('open-vocabulary')"
     >
       <BookOpenCheck class="h-[3.4cqh] w-[3.4cqh]" /><span class="flex-1 flex flex-col"
@@ -87,15 +88,15 @@ const hintsSummary = computed(() => {
           )
         }}</small></span
       ><span class="text-[0.68em] font-extrabold">{{
-        store.isHost ? strings.room.vocabularyManage : strings.room.vocabularyHostOnly
+        store.isHost ? strings.room.vocabularyManage : strings.room.vocabularyReadOnly
       }}</span>
     </button>
 
     <!-- 邀请在线玩家：满员或无权限时禁用 -->
     <div class="grid grid-cols-1 gap-[0.6em] my-[1.3cqh]">
-      <button
-        class="inline-flex min-h-[4.6cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[0.5em] font-black text-navy bg-white border-[0.18cqh]! border-line! text-[0.72em]"
-        type="button"
+      <AppButton
+        variant="secondary"
+        class="min-h-[4.6cqh] px-[0.5em] text-[0.72em]"
         :disabled="
           (store.room?.members.length ?? 0) >= (store.room?.settings.maxPlayers ?? 0) ||
           (!store.isHost && !(store.room?.settings.allowPlayerInvite ?? false))
@@ -110,7 +111,7 @@ const hintsSummary = computed(() => {
         @click="emit('open-invite')"
       >
         <Send /> {{ strings.room.invitePlayers }}
-      </button>
+      </AppButton>
     </div>
   </template>
 </template>

@@ -13,17 +13,13 @@ export const game = {
   warningSeconds: 10,
   finalHintThresholds: [0.35, 0.2], // 逐字揭示遮罩的剩余时间比例阈值（独立于结构化提示）
   // —— 房间规则可设置项的默认值（RulesDialog/LobbyView 初始值均从这取，禁止另写一套）——
-  structuredHintsEnabled: true, // 默认开启结构化提示（词条 hint 按阈值揭示）
-  hintStartRatio: 0.35, // 结构化提示开始时机：剩余比例降到该值时揭示第一条
-  hintIntervalRatio: 0.15, // 词条多条提示时相邻两条揭示时机的剩余比例间隔
+  structuredHintsEnabled: true, // 默认开启结构化提示（词条分类按阈值揭示一次）
+  hintStartRatio: 0.35, // 结构化提示开始时机：剩余比例降到该值时揭示分类
   /** 结构化提示开始时机滑块的合法区间（剩余时间比例 10%~90%，步进 5%）。 */
   hintStartRatioRange: { min: 0.1, max: 0.9, step: 0.05 },
-  /** 结构化提示相邻揭示时机间隔滑块的合法区间（5%~45%，步进 5%）。 */
-  hintIntervalRatioRange: { min: 0.05, max: 0.45, step: 0.05 },
   scoreMode: 'standard' as const, // 猜词分数计算方式默认值（standard=基础+速度+顺序）
   showWordLength: true, // 默认显示答案字数
   progressiveHints: true, // 默认开启逐步提示
-  closeGuessEnabled: true, // 默认开启近似答案提示
   // 猜词比较固定为：NFKC 规范化 → 去首尾空白 → 折叠连续空白 → 忽略拉丁大小写（由 shared normalizeAnswer 内置）
   score: {
     guessBase: 300, // 猜中基础分（全局默认值；房间规则可用 guessBaseScore 覆盖）

@@ -7,10 +7,9 @@
 import type { Component } from 'vue'
 import { Keyboard } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
+import type { ShortcutSettingKey } from '@/utils/keyboard'
 import { useGameStore } from '@/stores/game'
-
-// 快捷键设置键类型（与父组件一致的字符串字面量联合，便于按类型索引 store.settings）
-type ShortcutSettingKey = 'penShortcut' | 'eraserShortcut' | 'fillShortcut'
+import SettingsSectionHeader from '@/components/settings/SettingsSectionHeader.vue'
 
 interface ShortcutRow {
   setting: ShortcutSettingKey
@@ -33,13 +32,11 @@ const store = useGameStore()
 
 <template>
   <section class="min-h-0 px-[9cqw] py-[3cqh]">
-    <div class="flex items-center gap-[1.2em] mb-[2.5cqh]">
-      <Keyboard class="h-[6cqh] w-[6cqh] rounded-[0.8em] bg-blue p-[1.2cqh] text-white" />
-      <div>
-        <h2>{{ strings.settings.shortcutsTitle }}</h2>
-        <p class="mt-[0.5cqh] text-muted text-[0.72em]">{{ strings.settings.shortcutsIntro }}</p>
-      </div>
-    </div>
+    <SettingsSectionHeader
+      :icon="Keyboard"
+      :title="strings.settings.shortcutsTitle"
+      :intro="strings.settings.shortcutsIntro"
+    />
     <div class="grid grid-cols-3 gap-[1em]">
       <label
         v-for="row in rows"

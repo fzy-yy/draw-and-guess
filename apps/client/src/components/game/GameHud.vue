@@ -48,6 +48,11 @@ const roundDisplay = computed(() => {
   if (!game) return 0
   return Math.min(Math.max(game.currentRound, 1), game.totalRounds)
 })
+
+/** 最后 10 秒（且未归零）进入紧急样式：计时器底色与进度条同步变红。 */
+const isUrgent = computed(
+  () => props.secondsLeft <= store.config.game.warningSeconds && props.secondsLeft > 0,
+)
 </script>
 
 <template>
@@ -88,8 +93,8 @@ const roundDisplay = computed(() => {
         store.isDrawer && game?.answer ? game.answer : game?.answerMask || strings.game.awaitingWord
       }}</b>
       <!--
-        结构化提示区：服务端每回合对词条 hints 洗牌后按房间规则的时机逐条揭示，
-        这里只渲染随机选定的首条（全体猜词者一致）；未揭示时不渲染、不占位。
+        结构化提示区：服务端按房间规则的时机揭示词条分类作为提示（单分类即单条提示），
+        全体猜词者一致；未揭示时不渲染、不占位。
         画家已知答案，不重复展示提示。
       -->
       <p
@@ -108,19 +113,15 @@ const roundDisplay = computed(() => {
     <!-- 计时器：剩余秒数 + 进度条；底部胶囊底衬与回合/画家指示统一（HudPill）；最后 10 秒进入紧急样式 -->
     <HudPill
       class="relative box-border justify-center gap-[0.3em] overflow-hidden px-[0.55em]"
-      :class="{
-        'bg-red!': secondsLeft <= store.config.game.warningSeconds && secondsLeft > 0,
-      }"
+      :class="{ 'bg-red!': isUrgent }"
     >
       <Clock3 class="h-[2.5cqh] w-[2.5cqh] shrink-0" /><b
         class="min-w-0 text-center text-[1.65em] tabular-nums"
         >{{ secondsLeft }}</b
       ><span class="shrink-0 text-[0.6em] text-sky">{{ strings.game.secondsSuffix }}</span>
       <i
-        class="absolute bottom-0 left-0 h-[0.45cqh] w-full bg-green origin-[left]"
-        :class="{
-          'bg-yellow!': secondsLeft <= store.config.game.warningSeconds && secondsLeft > 0,
-        }"
+        class="absolute bottom-0 left-0 h-[0.45cqh] w-full bg-green origin-left"
+        :class="{ 'bg-yellow!': isUrgent }"
         :style="{ transform: `scaleX(${progress})` }"
       ></i>
     </HudPill>

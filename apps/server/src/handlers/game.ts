@@ -2,7 +2,7 @@
  * 对局控制事件处理器：开始、选词、暂停/恢复、提前结束、返回房间。
  */
 import { z } from 'zod'
-import { EVENTS, RequestSchema } from '@draw-guess/shared'
+import { EVENTS, RequestSchema, WordIdSchema } from '@draw-guess/shared'
 import { bindRequest } from '../protocol/binder.ts'
 import type { GameService } from '../game-service.ts'
 
@@ -20,7 +20,7 @@ export function registerGameHandlers(
   bindRequest(
     socket,
     EVENTS.gameChooseWord,
-    RequestSchema.extend({ roundId: z.string().uuid(), wordId: z.string() }),
+    RequestSchema.extend({ roundId: z.string().uuid(), wordId: WordIdSchema }),
     (input, playerId) => service.chooseWord(playerId, input.roundId, input.wordId),
   )
   bindRequest(
