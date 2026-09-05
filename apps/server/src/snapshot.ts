@@ -3,8 +3,8 @@
  * 所有公开数据结构都由此模块按观看者角色生成，服务端秘密字段（答案、令牌、计时、候选）绝不外泄；
  * 与 GameService 组合使用，方便对“角色裁剪规则”独立测试。
  */
-import { APP_CONFIG } from '../../../config.ts'
-import { serverStrings } from '../../../config/strings.ts'
+import { APP_CONFIG } from '../../../config/index.ts'
+import { serverStrings } from '../../../string/index.ts'
 import {
   createAnswerMask,
   type GameView,
@@ -65,8 +65,10 @@ export class SnapshotBuilder {
                 ? createAnswerMask(game.answer.text, game.revealedIndices)
                 : serverStrings.notices.answerHidden
             : '',
-          // 画家才可看到真实答案与候选词（候选词携带难度供选词星级展示，以及换一组权限标识）
-          ...(viewerIsDrawer && game.answer ? { answer: game.answer.text } : {}),
+          // 画家才可看到真实答案、真实分类与候选词（候选词携带难度供选词星级展示，以及换一组权限标识）
+          ...(viewerIsDrawer && game.answer
+            ? { answer: game.answer.text, wordCategory: game.answer.category }
+            : {}),
           ...(viewerIsDrawer && room.phase === 'choosing_word'
             ? {
                 canReroll: !game.rerollUsed && (room.settings.allowWordReroll ?? true),
@@ -91,6 +93,7 @@ export class SnapshotBuilder {
           ...(canOmitStrokes ? { strokesOmitted: true } : {}),
           undoneStrokeIds: game.undoneStrokeIds,
           lastSequence: game.lastSequence, // 下发已接受的最大绘图序号，供重连客户端续起
+          drawingRevision: game.drawingRevision,
           messages: game.messages.slice(-APP_CONFIG.ui.recentMessageCount),
           ...(game.roundResult ? { roundResult: game.roundResult } : {}),
           ...(game.finalRanking ? { finalRanking: game.finalRanking } : {}),

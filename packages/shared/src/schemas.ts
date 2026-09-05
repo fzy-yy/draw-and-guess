@@ -3,7 +3,7 @@
  * 校验范围直接取自根级 config.ts，服务端对每个事件执行严格 parse。
  */
 import { z } from 'zod'
-import { APP_CONFIG } from '../../../config.ts'
+import { APP_CONFIG } from '../../../config/index.ts'
 
 /** 客户端请求统一带 UUID requestId，以便服务端对重试请求执行幂等返回。 */
 export const RequestSchema = z.object({ requestId: z.string().uuid() }).strict()
@@ -128,6 +128,7 @@ export const StrokeSchema = z.object({
   tool: z.enum(['pen', 'eraser']),
   ...DrawStyleSchema,
   points: z.array(DrawPointSchema).min(1).max(APP_CONFIG.drawing.maxPointsPerBatch),
+  startPointIndex: z.number().int().nonnegative().optional(),
 })
 /** 区域填充命令 schema：只有点击坐标与颜色，不携带任何像素数据。 */
 export const FillCommandSchema = z.object({
@@ -197,4 +198,10 @@ export const RerollWordsSchema = RequestSchema.extend({
 })
 export const PauseGameSchema = RequestSchema.extend({
   reason: z.string().max(40),
+})
+export const LogoutSchema = RequestSchema
+export const StateResyncSchema = RequestSchema.extend({
+  roomId: z.string().uuid().optional(),
+  gameId: z.string().uuid().optional(),
+  roundId: z.string().uuid().optional(),
 })

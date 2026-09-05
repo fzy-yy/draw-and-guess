@@ -3,8 +3,8 @@
  * 领域服务只负责执行，是否允许、是否重复由这一层统一处理。
  */
 import { z, type ZodType } from 'zod'
-import { APP_CONFIG } from '../../../../config.ts'
-import { serverStrings } from '../../../../config/strings.ts'
+import { APP_CONFIG } from '../../../../config/index.ts'
+import { serverStrings } from '../../../../string/index.ts'
 import type { Ack } from '@draw-guess/shared'
 import { failure, GameError, success } from '../errors.ts'
 

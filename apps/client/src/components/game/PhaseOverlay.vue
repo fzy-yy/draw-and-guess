@@ -143,8 +143,8 @@ const store = useGameStore()
         <article
           v-for="member in rankings"
           :key="member.id"
-          class="grid grid-cols-[3em_auto_1fr_auto] items-center gap-[0.8em] bg-line px-[1em] py-[0.6cqh] text-left"
-          :class="{ 'text-yellow! bg-yellow/20!': member.rank === 1 }"
+          class="grid grid-cols-[3em_auto_1fr_auto] items-center gap-[0.8em] px-[1em] py-[0.6cqh] text-left"
+          :class="member.rank === 1 ? 'text-yellow bg-yellow/20' : 'bg-line text-navy'"
         >
           <b>{{ strings.game.rankPrefix(member.rank) }}</b
           ><AvatarImage

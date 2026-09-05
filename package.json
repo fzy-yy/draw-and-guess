@@ -5,16 +5,18 @@
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "scripts": {
-    "dev": "concurrently -n client,server -c cyan,magenta \"pnpm --filter @draw-guess/client dev\" \"pnpm --filter @draw-guess/server dev\"",
+    "dev": "concurrently -k -n client,server -c cyan,magenta \"pnpm --filter @draw-guess/client dev\" \"pnpm --filter @draw-guess/server dev\"",
     "build": "pnpm typecheck && pnpm --filter @draw-guess/client build",
     "start": "pnpm --filter @draw-guess/server start",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test:e2e": "playwright test -c test/e2e/playwright.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^24.10.0",
     "@typescript-eslint/eslint-plugin": "^8.46.0",
     "@typescript-eslint/parser": "^8.46.0",

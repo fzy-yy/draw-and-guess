@@ -4,6 +4,7 @@
 import { z } from 'zod'
 import {
   EVENTS,
+  LogoutSchema,
   ProfileSchema,
   RegisterSchema,
   RequestSchema,
@@ -32,6 +33,17 @@ export function registerSessionHandlers(
       socket.emit(EVENTS.presenceSnapshot, service.presenceSnapshot())
       if (room) socket.emit(EVENTS.roomSnapshot, room)
       return result
+    },
+    { registration: true },
+  )
+
+  bindRequest(
+    socket,
+    EVENTS.sessionLogout,
+    LogoutSchema,
+    (_input) => {
+      service.logout(socket)
+      return { success: true }
     },
     { registration: true },
   )

@@ -8,3 +8,18 @@ pnpm-lock.yaml
 
 # 权威词库：必须保持「每个非空行一个词」，禁止被 markdown 段落重排合并
 vocabulary.md
+vocabulary/*.db*
+
+# 本地工具运行产物与数据库/日志文件
+.claude/
+.playwright-mcp/
+apps/server/data/
+apps/server/log/
+
+# Playwright E2E 测试结果与报告（支持根级与 test/ 内部统一管理）
+test/test-results/
+test/playwright-report/
+**/test-results/
+**/playwright-report/
+**/blob-report/
+coverage/

@@ -56,7 +56,7 @@ onBeforeUnmount(unbindBump)
   <TransitionGroup
     name="toast"
     tag="div"
-    class="pointer-events-none absolute top-[12.5cqh] right-[2.5cqh] z-40 flex flex-col items-end gap-[1cqh]"
+    class="pointer-events-none absolute top-[12.5cqh] right-[2.5cqh] z-[95] flex flex-col items-end gap-[1cqh]"
     aria-live="polite"
     aria-atomic="false"
   >
@@ -64,10 +64,11 @@ onBeforeUnmount(unbindBump)
       v-for="toast in toasts"
       :key="toast.id"
       :ref="(el) => setToastRef(toast.id, el)"
-      class="pointer-events-auto flex max-w-[44cqw] cursor-pointer items-stretch overflow-hidden rounded-none bg-white text-navy shadow-float"
+      class="pointer-events-auto flex max-w-[44cqw] cursor-pointer items-stretch overflow-hidden rounded-none bg-white text-navy shadow-float select-none"
       role="status"
       :aria-label="toast.text"
-      @click="dismiss(toast.id)"
+      @click.stop="dismiss(toast.id)"
+      @pointerdown.stop
     >
       <span
         class="w-[0.6cqh] shrink-0 self-stretch bg-[color-mix(in_srgb,var(--color-yellow)_62%,var(--color-red))]"

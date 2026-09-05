@@ -50,7 +50,7 @@ const sfcConventions = {
               context.report({
                 node,
                 message:
-                  '禁止在 .vue 组件/业务代码中硬编码中文展示文案，请改用 config/strings.ts 的 strings 导入。',
+                  '禁止在 .vue 组件/业务代码中硬编码中文展示文案，请改用 string/ 的 strings 导入。',
               })
             }
           },

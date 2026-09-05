@@ -69,6 +69,8 @@ const { activate: activateTrap, deactivate: deactivateTrap } = useFocusTrap(dial
   initialFocus: false,
   // 失活后把焦点还给打开前的触发元素，避免键盘用户丢失位置。
   returnFocusOnDeactivate: true,
+  // 允许点击弹窗外部元素（如 Toast 提示条），避免 focus-trap 在捕获阶段吞掉外部点击
+  allowOutsideClick: true,
   // 无任何可聚焦节点时兜底聚焦容器，避免 focus-trap 抛“至少一个 tabbable 节点”错误。
   fallbackFocus: () => dialogRef.value as HTMLElement,
 })

@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { Clock3, CirclePause, CirclePlay, Settings, Maximize, Minimize } from 'lucide-vue-next'
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { strings } from '@draw-guess/strings'
 import type { GameView, RoomMember } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
@@ -65,6 +65,52 @@ function handlePauseToggle(): void {
     void store.pause(store.isHost ? strings.game.pauseReasonHost : strings.game.pauseReasonGuest)
   }
 }
+
+/**
+ * 画家答案显示状态：
+ * 默认遵循用户设置（store.settings.drawerDefaultReveal，默认 false 和猜词玩家一致）；
+ * 画家可点击答案胶囊底框切换明文/遮罩，以便查看猜词玩家的逐字提示进度。
+ */
+const drawerRevealed = ref(store.settings.drawerDefaultReveal)
+
+// 题目变更或设置变更时，按最新设置重置显隐状态
+watch(
+  () => [props.game?.answer, store.settings.drawerDefaultReveal],
+  () => {
+    drawerRevealed.value = store.settings.drawerDefaultReveal
+  },
+)
+
+function toggleDrawerAnswerReveal(): void {
+  if (!store.isDrawer) return
+  drawerRevealed.value = !drawerRevealed.value
+}
+
+/** 结构化类别提示：已揭示时展示真实分类，未揭示（15秒前）时展示下划线占位符 */
+const categoryHint = computed(() => props.game?.revealedHints?.[0] || '')
+
+/**
+ * 类别提示展示内容：
+ * 画家在显示状态（drawerRevealed === true）下同时显示题目与真实提示类别；
+ * 画家切换后（drawerRevealed === false）或猜词玩家，显示猜词玩家当前看到的提示内容（揭示前为占位下划线，揭示后为真实类别）。
+ */
+const displayedCategoryHint = computed(() => {
+  if (store.isDrawer && drawerRevealed.value) {
+    return props.game?.wordCategory || categoryHint.value || ''
+  }
+  return categoryHint.value || ''
+})
+
+/** 答案区展示文本：画家按显隐状态决定明文或遮罩，猜词者恒为遮罩 */
+const displayedAnswer = computed(() => {
+  if (store.isDrawer) {
+    if (drawerRevealed.value && props.game?.answer) {
+      return props.game.answer
+    }
+    return props.game?.answerMask || strings.game.awaitingWord
+  }
+  return props.game?.answerMask || strings.game.awaitingWord
+})
 </script>
 
 <template>
@@ -84,8 +130,8 @@ function handlePauseToggle(): void {
         >
       </b>
     </HudPill>
-    <!-- 当前画家指示：胶囊底衬，头像 + 「当前画家/昵称」两行 -->
-    <HudPill>
+    <!-- 当前画家：胶囊底衬 + 头像 + 昵称 -->
+    <HudPill class="max-w-[20cqw]">
       <AvatarImage
         class="h-[4.6cqh] w-[4.6cqh]"
         :avatar-id="drawer?.avatarId"
@@ -99,42 +145,60 @@ function handlePauseToggle(): void {
       </span>
     </HudPill>
     <!-- 答案展示：提示行在上、答案（或遮罩）行在下。
-         画家看自己的题目，猜词者看遮罩；猜词者额外可见已揭示的结构化提示。
-         不展示「你的题目/猜猜这是什么」标签行：答案本身语义自明，减少顶栏冗余文字。 -->
-    <div class="justify-self-center min-w-[16cqw] flex flex-col items-center">
+         底衬统一复用 HudPill 胶囊底衬（与计时器底框一致）；
+         猜词玩家与画家视觉底框一致，画家额外支持点击切换明文/遮罩（以便观察猜词玩家逐字提示进度）。 -->
+    <HudPill
+      class="justify-self-center min-w-[16cqw] flex-col justify-center px-[1.2em] py-[0.3cqh] h-auto min-h-[6.5cqh] transition-colors"
+      :class="{
+        'cursor-pointer hover:bg-white/15 active:bg-white/20 select-none': store.isDrawer,
+      }"
+      :role="store.isDrawer ? 'button' : undefined"
+      :tabindex="store.isDrawer ? 0 : undefined"
+      :aria-label="store.isDrawer ? strings.game.toggleAnswerVisibilityAria : undefined"
+      :title="store.isDrawer ? strings.game.toggleAnswerVisibilityHint : undefined"
+      @click="toggleDrawerAnswerReveal"
+      @keydown.enter.prevent="toggleDrawerAnswerReveal"
+      @keydown.space.prevent="toggleDrawerAnswerReveal"
+    >
       <!--
-        结构化提示区（位于答案上方）：服务端按房间规则的时机揭示词条分类作为提示（单分类即单条提示），
-        全体猜词者一致；未揭示时不渲染、不占位。
-        画家已知答案，不重复展示提示。
+        结构化提示区（位于答案上方）：单分类作为提示。
+        画家在显示状态下同时显示真实词与提示类别；切换后或猜词玩家显示猜词玩家视角（未揭示时显示下划线占位符，揭示后显示真实分类）。
       -->
       <p
-        v-if="!store.isDrawer && game?.revealedHints?.length"
-        class="flex min-h-[2.2cqh] items-center gap-[0.35em] rounded-[0.5em] bg-white/10 px-[0.6em] py-[0.15cqh] text-fs-10 font-bold leading-[1.3] text-sky"
+        v-if="
+          store.room?.settings.structuredHintsEnabled &&
+          (props.game?.answerMask || props.game?.answer)
+        "
+        class="flex min-h-[2.2cqh] items-center gap-[0.35em] text-fs-10 font-bold leading-[1.3] text-sky"
         role="status"
       >
         <span class="rounded-[0.35em] bg-yellow px-[0.4em] py-[0.05cqh] font-bold text-navy">{{
           strings.game.hintBadgeLabel
         }}</span>
-        <span class="min-w-0 flex-1 truncate" :title="game!.revealedHints![0]">{{
-          game!.revealedHints![0]
-        }}</span>
+        <span
+          class="min-w-0 max-w-[12cqw] truncate"
+          :class="displayedCategoryHint ? 'text-sky' : 'text-sky/70 tracking-[0.12em]'"
+          :title="displayedCategoryHint || strings.game.hintUnrevealed"
+        >
+          {{ displayedCategoryHint || strings.game.hintUnrevealed }}
+        </span>
       </p>
       <b class="min-h-[3.8cqh] flex items-center text-yellow text-fs-24 tracking-[0.16em]">{{
-        store.isDrawer && game?.answer ? game.answer : game?.answerMask || strings.game.awaitingWord
+        displayedAnswer
       }}</b>
-    </div>
+    </HudPill>
     <!-- 计时器：剩余秒数 + 进度条；底部胶囊底衬与回合/画家指示统一（HudPill）；最后 10 秒进入紧急样式 -->
     <HudPill
       class="relative box-border justify-center gap-[0.3em] overflow-hidden px-[0.55em]"
-      :class="{ 'bg-red!': isUrgent }"
+      :class="{ 'bg-red': isUrgent }"
     >
       <Clock3 class="h-[2.5cqh] w-[2.5cqh] shrink-0" /><b
         class="min-w-0 text-center text-fs-24 tabular-nums"
         >{{ secondsLeft }}</b
       ><span class="shrink-0 text-fs-10 text-sky">{{ strings.game.secondsSuffix }}</span>
       <i
-        class="absolute bottom-0 left-0 h-[0.45cqh] w-full bg-green origin-left"
-        :class="{ 'bg-yellow!': isUrgent }"
+        class="absolute bottom-0 left-0 h-[0.45cqh] w-full origin-left"
+        :class="isUrgent ? 'bg-yellow' : 'bg-green'"
         :style="{ transform: `scaleX(${progress})` }"
       ></i>
     </HudPill>

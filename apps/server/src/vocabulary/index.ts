@@ -8,7 +8,7 @@
  * 内存 Store 结构对领域层保持稳定：{ items, byId, version, meta }。
  * 加载失败抛出带中文文案的 Error，由启动流程阻止服务带病运行。
  */
-import { APP_CONFIG } from '../../../../config.ts'
+import { APP_CONFIG } from '../../../../config/index.ts'
 import type { VocabularyWord } from '@draw-guess/shared'
 import type { VocabularyMeta, VocabularyProvider } from './contract.ts'
 import { SqliteProvider } from './sqlite.provider.ts'

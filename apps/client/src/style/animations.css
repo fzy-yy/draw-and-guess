@@ -2,6 +2,15 @@
  * 动画效果组合类（animations.css）：交互动效、Vue 运行时过渡钩子、关键帧与系统/全局减弱动画。
  */
 
+/* ===== 横幅（邀请弹窗 / 操作提示横幅）动画变量 ===== */
+:root {
+  --banner-duration-enter: 280ms;
+  --banner-duration-leave: 220ms;
+  --banner-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --banner-ease-leave: cubic-bezier(0.4, 0, 1, 1);
+  --banner-translate-y: calc(100% + 4cqh);
+}
+
 /* ===== 全局交互反馈：跨组件统一变色手感（仅用通用元素选择器） =====
    约定：全站悬浮/按下只改变颜色（亮度/背景/边框/文字），不位移、不缩放、不加阴影，保证手感一致。 */
 @layer base {
@@ -53,18 +62,32 @@
     transform: scale(0.92);
   }
 
-  /* 邀请横幅的进入/离开动画。 */
-  .banner-enter-active,
+  /* 邀请横幅/底部操作弹窗过渡：
+     出现：从画框底部渐显复出（fade-in + slide-up）
+     消失：向画框底部渐隐下沉退出（fade-out + slide-down）
+     全程水平居中（translate: -50%），仅垂直方向位移与透明度变化 */
+  .banner-enter-active {
+    transition:
+      opacity var(--banner-duration-enter) var(--banner-ease-enter),
+      translate var(--banner-duration-enter) var(--banner-ease-enter);
+  }
+
   .banner-leave-active {
     transition:
-      opacity 160ms ease,
-      transform 160ms ease;
+      opacity var(--banner-duration-leave) var(--banner-ease-leave),
+      translate var(--banner-duration-leave) var(--banner-ease-leave);
   }
 
   .banner-enter-from,
   .banner-leave-to {
     opacity: 0;
-    transform: translate(-50%, 2cqh) scale(0.96);
+    translate: -50% var(--banner-translate-y);
+  }
+
+  .banner-enter-to,
+  .banner-leave-from {
+    opacity: 1;
+    translate: -50% 0;
   }
 
   /* Toast 提示堆栈过渡动画（Vue TransitionGroup）
@@ -103,25 +126,56 @@
   }
 }
 
-/* ===== 减少动态效果：把非必要过渡压缩为瞬时 ===== */
-@layer base {
+/* ===== 关键帧：底部横幅从画框底部渐显复出与渐隐下沉退出 ===== */
+@keyframes banner-slide-up {
+  from {
+    opacity: 0;
+    translate: -50% var(--banner-translate-y);
+  }
+  to {
+    opacity: 1;
+    translate: -50% 0;
+  }
+}
+
+@keyframes banner-slide-down {
+  from {
+    opacity: 1;
+    translate: -50% 0;
+  }
+  to {
+    opacity: 0;
+    translate: -50% var(--banner-translate-y);
+  }
+}
+
+/* ===== 减少动态效果：把非必要过渡压缩为瞬时（基于 utilities 层级自然覆盖，0 !important） ===== */
+@layer utilities {
+  .animate-banner-in {
+    animation: banner-slide-up var(--banner-duration-enter) var(--banner-ease-enter) both;
+  }
+
+  .animate-banner-out {
+    animation: banner-slide-down var(--banner-duration-leave) var(--banner-ease-leave) both;
+  }
+
   .motion-disabled .game-stage *,
   .motion-disabled .game-stage *::before,
   .motion-disabled .game-stage *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
-    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms;
+    animation-iteration-count: 1;
+    scroll-behavior: auto;
+    transition-duration: 0.001ms;
   }
 
   @media (prefers-reduced-motion: reduce) {
     .game-stage *,
     .game-stage *::before,
     .game-stage *::after {
-      animation-duration: 0.001ms !important;
-      animation-iteration-count: 1 !important;
-      scroll-behavior: auto !important;
-      transition-duration: 0.001ms !important;
+      animation-duration: 0.001ms;
+      animation-iteration-count: 1;
+      scroll-behavior: auto;
+      transition-duration: 0.001ms;
     }
   }
 }

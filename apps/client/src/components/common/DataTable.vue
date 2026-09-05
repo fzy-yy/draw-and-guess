@@ -246,7 +246,9 @@ const bottomSpacerHeight = computed(() => {
             :data-index="virtualRow.index"
             class="border-t-[0.12cqh] border-t-line ui-feedback hover:bg-sky"
             :class="
-              rowAt(virtualRow.index) && isSelected(rowAt(virtualRow.index)!) ? 'bg-sky!' : ''
+              rowAt(virtualRow.index) && isSelected(rowAt(virtualRow.index)!)
+                ? 'bg-sky'
+                : 'bg-white'
             "
           >
             <!-- 行首复选列：词库选择与表格浏览共存，勾选即写入父组件的已选集合 -->

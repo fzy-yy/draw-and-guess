@@ -6,8 +6,8 @@
   },
   "include": [
     "src/**/*.ts",
-    "../../config.ts",
-    "../../config/strings.ts",
+    "../../config/**/*.ts",
+    "../../string/**/*.ts",
     "../../packages/shared/src/**/*.ts"
   ]
 }

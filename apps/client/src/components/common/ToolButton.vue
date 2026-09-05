@@ -1,6 +1,6 @@
 <!--
   绘图工具栏工具按钮：收敛 DrawingToolbar 中 6 个长串行内类（画笔/橡皮擦/填充/撤销/重做/清空）。
-  统一底座样式、激活态（bg-blue! text-white!）与可选快捷键 kbd；内容（图标/文字）经默认插槽传入。
+  统一底座样式、激活态（bg-blue text-white）与可选快捷键 kbd；内容（图标/文字）经默认插槽传入。
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
@@ -25,7 +25,7 @@ const emit = defineEmits<{ click: [] }>()
 const baseClass = computed(() =>
   cn(
     'flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] px-[0.7em] text-fs-12 font-bold',
-    props.active ? 'text-white! bg-blue!' : 'bg-line text-navy',
+    props.active ? 'text-white bg-blue' : 'bg-line text-navy',
   ),
 )
 </script>

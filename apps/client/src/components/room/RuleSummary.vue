@@ -81,7 +81,7 @@ const hintsSummary = computed(() => {
 
     <!-- 词库管理入口：房主可编辑、非房主可打开查看（只读），展示已选/总词条数 -->
     <button
-      class="flex items-center gap-[0.75em] min-h-[7cqh] py-[0.8cqh] px-[0.8em] text-blue bg-sky border-l-[0.45cqh]! border-l-blue! text-left"
+      class="flex items-center gap-[0.75em] min-h-[7cqh] py-[0.8cqh] px-[0.8em] text-blue bg-sky border-l-[0.45cqh] border-l-blue text-left"
       type="button"
       :disabled="props.vocabularyLoading"
       @click="emit('open-vocabulary')"

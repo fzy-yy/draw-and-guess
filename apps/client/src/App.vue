@@ -7,12 +7,12 @@
 -->
 <script setup lang="ts">
 // 图标库：系统/操作提示/邀请横幅使用的图标
-import { ref, watch } from 'vue'
-import { Gamepad2, LoaderCircle, LogOut, RotateCw, WifiOff } from 'lucide-vue-next'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { Gamepad2, LoaderCircle, LogOut, Maximize, RotateCw, WifiOff } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
 import { useAudioFeedback } from '@/composables/useAudioFeedback'
-import { AppButton, AppToaster, AvatarImage, BaseDialog } from '@/components/common'
+import { ActionBanner, AppButton, AppToaster, AvatarImage, BaseDialog } from '@/components/common'
 // 五个视图组件：对局、房间等待、设置、大厅、资料确认
 import ProfileView from '@/views/ProfileView.vue'
 import LobbyView from '@/views/LobbyView.vue'
@@ -81,6 +81,76 @@ function declineCurrentInvite(): void {
   const current = store.invites[0]
   if (current) void store.respondInvite(current.id, false)
 }
+
+// ---- 首次进入大厅全屏提示横幅 ----
+const showFullscreenPrompt = ref(false)
+
+function checkFullscreenPrompt(): void {
+  // 必须身处大厅且未在房间中
+  if (!store.playerId || store.page !== 'lobby' || store.room) {
+    showFullscreenPrompt.value = false
+    return
+  }
+  // 已全屏：无需提示，静默记录已处理
+  if (document.fullscreenElement) {
+    window.sessionStorage.setItem(store.config.app.fullscreenPromptSessionKey, '1')
+    showFullscreenPrompt.value = false
+    return
+  }
+  // 未全屏且本次会话未提示过
+  if (!window.sessionStorage.getItem(store.config.app.fullscreenPromptSessionKey)) {
+    showFullscreenPrompt.value = true
+  }
+}
+
+// 监听大厅页面与房间状态，在首次进入大厅时触发检测
+watch(
+  () => [store.playerId, store.page, store.room, store.invites.length],
+  () => {
+    // 若当前有邀请横幅，优先让位给邀请横幅
+    if (store.invites.length && !store.room) {
+      showFullscreenPrompt.value = false
+    } else {
+      checkFullscreenPrompt()
+    }
+  },
+  { immediate: true },
+)
+
+function handleFullscreenChange(): void {
+  if (document.fullscreenElement) {
+    window.sessionStorage.setItem(store.config.app.fullscreenPromptSessionKey, '1')
+    showFullscreenPrompt.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('fullscreenchange', handleFullscreenChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
+})
+
+/** 确定进入全屏：调用舞台全屏并记录本次会话已处理。 */
+async function confirmFullscreen(): Promise<void> {
+  window.sessionStorage.setItem(store.config.app.fullscreenPromptSessionKey, '1')
+  showFullscreenPrompt.value = false
+  const stage = document.querySelector<HTMLElement>('.game-stage')
+  if (stage && !document.fullscreenElement) {
+    try {
+      await stage.requestFullscreen()
+    } catch {
+      // 浏览器权限策略静默降级
+    }
+  }
+}
+
+/** 暂不开启全屏：关闭提示横幅并记录本次会话已处理，避免后续重复打扰。 */
+function dismissFullscreenPrompt(): void {
+  window.sessionStorage.setItem(store.config.app.fullscreenPromptSessionKey, '1')
+  showFullscreenPrompt.value = false
+}
 </script>
 
 <template>
@@ -135,28 +205,26 @@ function declineCurrentInvite(): void {
       <AppToaster />
 
       <!-- 房间邀请横幅：不在房间时收到邀请才会显示，可接受或拒绝 -->
-      <Transition name="banner">
-        <div
-          v-if="store.invites.length && !store.room"
-          class="absolute bottom-[3cqh] left-1/2 z-50 grid min-h-[10cqh] w-[66cqw] grid-cols-[auto_1fr_auto_auto] items-center gap-[1em] border-[0.3cqh] border-blue border-l-[1cqh] bg-white px-[1em] py-[1cqh] shadow-float -translate-x-1/2"
-          role="dialog"
-          :aria-label="strings.app.inviteDialogAria"
-        >
+      <ActionBanner
+        :open="Boolean(store.invites.length && !store.room)"
+        :aria-label="strings.app.inviteDialogAria"
+        :heading="strings.app.inviteHeading"
+        :message="
+          strings.app.inviteReceived(
+            store.invites[0]?.from.nickname ?? '',
+            store.invites[0]?.roomName ?? '',
+          )
+        "
+      >
+        <template #leading>
           <!-- 邀请者内置 SVG 头像 -->
           <AvatarImage
             :avatar-id="store.invites[0]?.from.avatarId"
             :label="strings.app.inviterAvatarAria"
             class="h-[6.5cqh] w-[6.5cqh]"
           />
-          <div class="flex flex-col">
-            <span class="text-blue text-fs-12">{{ strings.app.inviteHeading }}</span
-            ><b>{{
-              strings.app.inviteReceived(
-                store.invites[0]?.from.nickname ?? '',
-                store.invites[0]?.roomName ?? '',
-              )
-            }}</b>
-          </div>
+        </template>
+        <template #actions>
           <AppButton
             variant="secondary"
             :aria-label="strings.common.declineCountdown(Math.max(0, rejectCountdown))"
@@ -178,8 +246,33 @@ function declineCurrentInvite(): void {
           >
             <Gamepad2 />{{ strings.common.accept }}
           </AppButton>
-        </div>
-      </Transition>
+        </template>
+      </ActionBanner>
+
+      <!-- 大厅首次全屏提示横幅：首次进入大厅且当前未全屏时弹出 -->
+      <ActionBanner
+        :open="showFullscreenPrompt"
+        :aria-label="strings.lobby.fullscreenPromptAria"
+        :heading="strings.lobby.fullscreenPromptHeading"
+        :message="strings.lobby.fullscreenPromptBody"
+      >
+        <template #leading>
+          <div
+            class="grid h-[6.5cqh] w-[6.5cqh] place-items-center rounded-full bg-sky/30 text-blue"
+            aria-hidden="true"
+          >
+            <Maximize class="h-[3.6cqh] w-[3.6cqh]" />
+          </div>
+        </template>
+        <template #actions>
+          <AppButton variant="secondary" @click="dismissFullscreenPrompt">
+            {{ strings.lobby.fullscreenPromptDismiss }}
+          </AppButton>
+          <AppButton @click="confirmFullscreen">
+            <Maximize />{{ strings.lobby.fullscreenPromptConfirm }}
+          </AppButton>
+        </template>
+      </ActionBanner>
 
       <!-- 被房主移出房间提示框：模态弹窗确保玩家知晓被踢（此前仅一闪而过的 Toast）。
            footer-class 必须占满整行：section 为 items-center 时 footer 会收缩成按钮宽度，

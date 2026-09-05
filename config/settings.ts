@@ -17,6 +17,8 @@ export const localSettings = {
   autoFocusGuess: true,
   discoverable: true,
   acceptsInvites: true,
+  /** 画家默认显示答案：开启后作画时默认显示答案与提示类别，关闭则与猜词玩家一致（下划线遮罩与未揭示提示）。 */
+  drawerDefaultReveal: true,
 } as const
 
 export const ui = {

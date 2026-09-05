@@ -14,6 +14,7 @@
  */
 export const EVENTS = {
   sessionRegister: 'session:register',
+  sessionLogout: 'session:logout',
   sessionUpdateProfile: 'session:updateProfile',
   presenceUpdatePreferences: 'presence:updatePreferences',
   roomList: 'room:list',

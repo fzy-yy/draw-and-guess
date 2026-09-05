@@ -76,7 +76,7 @@ export const useGameStore = defineStore('game', () => {
   async function clearProfile(): Promise<void> {
     if (sessionStore.playerId) {
       try {
-        await request(EVENTS.roomLeave, {}, { quiet: true })
+        await request(EVENTS.sessionLogout, {}, { quiet: true })
       } catch {
         // 忽略静默错误
       }
@@ -84,6 +84,7 @@ export const useGameStore = defineStore('game', () => {
     localStorage.removeItem(APP_CONFIG.app.storageKey)
     profileStore.profile = loadProfile()
     sessionStore.playerId = ''
+    sessionStore.incrementGeneration()
     roomStore.clearLocalRoomState()
     vocabularyStore.clear()
     lobbyStore.invites = []
@@ -91,6 +92,10 @@ export const useGameStore = defineStore('game', () => {
     sessionStore.sessionState = 'idle'
     sessionStore.clearRestoreRetry()
     sessionStore.page = 'profile'
+    if (socket.connected) {
+      socket.disconnect()
+      socket.connect()
+    }
     notify(strings.store.profileCleared, 'warning')
   }
 
@@ -163,14 +168,31 @@ export const useGameStore = defineStore('game', () => {
         if (localMaxSequence < snapshot.game.lastSequence) {
           if (!resyncInFlight) {
             resyncInFlight = true
+            const requestContext = {
+              generation: sessionStore.generation,
+              roomId: snapshot.id,
+              gameId: snapshot.game.gameId,
+              roundId: snapshot.game.roundId,
+              drawingRevision: snapshot.game.drawingRevision,
+            }
             void request<RoomSnapshot | undefined>(EVENTS.stateResync, {}).then((full) => {
               resyncInFlight = false
               const fullSnapshot = full.ok ? full.data : undefined
               if (!fullSnapshot?.game) return
+              // 验证请求上下文：防止异步重同步返回时房间/对局/回合已变更，或旧请求覆盖新状态
+              if (
+                sessionStore.generation !== requestContext.generation ||
+                roomStore.room?.id !== requestContext.roomId ||
+                roomStore.room?.game?.gameId !== requestContext.gameId ||
+                roomStore.room?.game?.roundId !== requestContext.roundId ||
+                fullSnapshot.id !== requestContext.roomId ||
+                fullSnapshot.game.gameId !== requestContext.gameId ||
+                fullSnapshot.game.roundId !== requestContext.roundId
+              ) {
+                return
+              }
               const current = roomStore.room?.game
-              const currentMaxSequence =
-                current?.strokes.reduce((max, command) => Math.max(max, command.sequence), -1) ?? -1
-              if (currentMaxSequence >= fullSnapshot.game.lastSequence) return
+              if (current && current.drawingRevision > fullSnapshot.game.drawingRevision) return
               roomStore.room = fullSnapshot
             })
           }
@@ -204,11 +226,11 @@ export const useGameStore = defineStore('game', () => {
       lobbyStore.invites = lobbyStore.invites.filter((invite) => invite.id !== id)
     },
     onRoomClosed: (reason) => {
+      sessionStore.incrementGeneration()
       roomStore.clearLocalRoomState()
       vocabularyStore.clear()
       if (reason === serverStrings.notices.kickedReason) {
         sessionStore.kickedNotice = true
-        return
       }
       notify(reason, 'warning')
     },

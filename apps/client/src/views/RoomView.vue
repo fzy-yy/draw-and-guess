@@ -94,8 +94,8 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
       </template>
       <template #center>
         <div
-          class="flex items-center justify-self-center gap-[0.6em] text-yellow text-fs-12 font-bold"
-          :class="{ 'text-red!': store.room.visibility === 'private' }"
+          class="flex items-center justify-self-center gap-[0.6em] text-fs-12 font-bold"
+          :class="store.room.visibility === 'private' ? 'text-red' : 'text-yellow'"
         >
           <KeyRound v-if="store.room.visibility === 'private'" />
           <ShieldCheck v-else />
@@ -169,7 +169,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           variant="secondary"
           type="button"
           class="w-full my-[0.8cqh]"
-          :class="{ 'text-green! bg-green/10! border-green!': store.me?.ready }"
+          :class="{ 'text-green bg-green/10 border-green': store.me?.ready }"
           @click="store.setReady(!store.me?.ready)"
         >
           {{ store.me?.ready ? strings.room.cancelReady : strings.room.readyGo }}
@@ -201,7 +201,11 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
       弹窗一：本局词库管理（房主）——搜索、批量选择、确认保存。
       只由 v-model:open 控制显隐。
     -->
-    <VocabularyDialog v-model:open="showVocabulary" v-model:loading="vocabularyLoading" />
+    <VocabularyDialog
+      v-model:open="showVocabulary"
+      v-model:loading="vocabularyLoading"
+      @close="showVocabulary = false"
+    />
 
     <!-- 弹窗二：房间规则编辑（房主）——滑块与开关修改规则（动画由 BaseDialog 内部负责） -->
     <RulesDialog v-model:open="showSettings" :draft="settingsDraft" @save="saveSettings" />

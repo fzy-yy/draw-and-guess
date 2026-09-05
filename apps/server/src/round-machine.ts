@@ -4,8 +4,8 @@
  * 便于把“回合规则”与“会话/成员/传输”职责分离、独立单测。
  */
 import { randomUUID } from 'node:crypto'
-import { APP_CONFIG } from '../../../config.ts'
-import { serverStrings } from '../../../config/strings.ts'
+import { APP_CONFIG } from '../../../config/index.ts'
+import { serverStrings } from '../../../string/index.ts'
 import { canTransition, type FinalRankingEntry, type RoundResult } from '@draw-guess/shared'
 import type { MemberState, RoomSecret } from './models.ts'
 import type { GameService } from './game-service.ts'
@@ -75,9 +75,10 @@ export class RoundMachine {
     game.hintOrder = [] // 结构化提示顺序在 beginDrawing（答案确定后）洗牌
     game.revealedHintCount = 0
     game.roundResult = undefined
+    game.roundSettled = false
     room.members.forEach((member) => (member.guessedAt = undefined))
-    game.phaseStartedAt = Date.now()
-    game.phaseEndsAt = Date.now() + room.settings.chooseSeconds * 1_000
+    game.phaseStartedAt = this.service.clock.now()
+    game.phaseEndsAt = this.service.clock.now() + room.settings.chooseSeconds * 1_000
     // 新回合从空画布开始：重置全员绘图差分游标，保证本回合首份快照始终携带完整（空）画布，
     // 不沿用上一回合的高水位序号（否则新回合第一条笔画可能被误判为「已同步」而差分省略）。
     room.members.forEach((member) => (member.lastSyncedSeq = undefined))
@@ -121,8 +122,9 @@ export class RoundMachine {
       Math.min(APP_CONFIG.game.drawSeconds.max, configuredSeconds),
     )
     game.roundDurationMs = seconds * 1_000
-    game.phaseStartedAt = Date.now()
-    game.phaseEndsAt = Date.now() + game.roundDurationMs
+    game.phaseStartedAt = this.service.clock.now()
+    game.phaseEndsAt = this.service.clock.now() + game.roundDurationMs
+    game.roundSettled = false
     // 结构化提示：词库已改为「单分类即提示」，每个答案只有一条提示（其分类），
     // 不再是数组下标洗牌。这里固定用一个揭示槽位（0 号）表示「将在时机揭示分类」，
     // 首条即唯一一条，且对全体猜词者一致（随快照下发）；分类为空时不开启提示。
@@ -178,8 +180,12 @@ export class RoundMachine {
   }
   public finishRound(room: RoomSecret, drawerAbandoned: boolean): void {
     const game = room.game
-    // 只有回合进行中（含暂停兜底）且答案已定时才结算
-    if (!game || !game.answer || !['drawing', 'paused'].includes(room.phase)) return
+    // 只有未结算的回合进行中（含暂停且暂停前确为 drawing）且答案已定时才结算；已结算的回合绝不二次结算
+    if (!game || !game.answer || game.roundSettled || Boolean(game.roundResult)) return
+    if (room.phase === 'paused' && game.phaseBeforePause !== 'drawing') return
+    if (!['drawing', 'paused'].includes(room.phase)) return
+
+    game.roundSettled = true
     this.service.clearHintTimers(game)
     if (game.timer) clearTimeout(game.timer)
     // 若从暂停态结算，先复位到 drawing 以走合法转换，并清理暂停残留字段
@@ -204,8 +210,8 @@ export class RoundMachine {
     // 保存结算数据并开启 6 秒结算展示窗口，之后进入下一回合选词
     const result: RoundResult = { answer: game.answer.text, details, drawerScore }
     game.roundResult = result
-    game.phaseStartedAt = Date.now()
-    game.phaseEndsAt = Date.now() + APP_CONFIG.game.roundResultSeconds * 1_000
+    game.phaseStartedAt = this.service.clock.now()
+    game.phaseEndsAt = this.service.clock.now() + APP_CONFIG.game.roundResultSeconds * 1_000
     game.timer = setTimeout(
       () => this.service.safeRun('roundResultTimeout', () => this.beginChoosing(room)),
       APP_CONFIG.game.roundResultSeconds * 1_000,
@@ -259,7 +265,12 @@ export class RoundMachine {
     game.currentRound = Math.min(game.currentRound, game.totalRounds)
     this.service.addSystemNotice(room, reason)
     // 战绩落盘：进入最终结算时把冻结的最终排名与玩家结果写入 SQLite（低频，无性能顾虑）。
-    this.service.persistGameResult(room, reason)
+    // 若落盘异常，记录错误并确保结算广播正常发出，客户端不因数据库错误卡死。
+    try {
+      this.service.persistGameResult(room, reason)
+    } catch (err) {
+      this.service.logger.error({ err, roomId: room.id }, '战绩落盘失败，已保障结算广播正常进行')
+    }
     this.service.emitRoom(room.id)
     this.service.broadcastPresence()
   }

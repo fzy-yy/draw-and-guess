@@ -6,8 +6,8 @@
  */
 import { randomBytes, randomInt, randomUUID } from 'node:crypto'
 import type { Server, Socket } from 'socket.io'
-import { APP_CONFIG } from '../../../config.ts'
-import { serverStrings } from '../../../config/strings.ts'
+import { APP_CONFIG } from '../../../config/index.ts'
+import { serverStrings } from '../../../string/index.ts'
 import {
   EVENTS,
   MIN_SELECTED_VOCABULARY_WORDS,
@@ -27,6 +27,7 @@ import {
   type RoomVisibility,
   type RoomSnapshot,
   type Stroke,
+  type StrokeAck,
   type VocabularySnapshot,
   type VocabularyWord,
 } from '@draw-guess/shared'
@@ -90,6 +91,7 @@ export class GameService {
       archive: ArchiveRepository
     },
     readonly logger: RuntimeLogger = SILENT_LOGGER,
+    readonly clock: { now: () => number } = { now: () => Date.now() },
   ) {}
 
   /** 记录未预期的服务器内部错误（脱敏到错误名），供排查 bindRequest 兜底返回的 INTERNAL_ERROR。 */
@@ -181,12 +183,12 @@ export class GameService {
       drawEventTimes: [],
       privateJoinAttemptTimes: [],
     }
+    // 身份持久化：准备变更后先落盘，保证跨重启仍可按令牌恢复同一 UUID；失败则不污染内存与 socket。
+    this.persistPlayer(player)
     socket.data.playerId = player.id
     this.players.set(player.id, player)
     this.playersByToken.set(player.token, player)
     this.logger.info({ playerId: player.id }, '玩家会话已注册')
-    // 身份持久化：注册即落盘，保证跨重启仍可按令牌恢复同一 UUID。
-    this.persistPlayer(player)
     this.broadcastPresence()
     return {
       player: this.snapshotter.toPublicPlayer(player),
@@ -322,6 +324,13 @@ export class GameService {
    * 这样不会出现「重启后房间仍在库但无人可接管」的僵尸状态。
    */
   recoverOnStartup(): void {
+    // 作废全部进行中房间：对局在内存，重启即数据丢失，作废关闭避免残留。
+    // 必须在清理过期玩家之前执行，确保 room_members 从表先清空，避免外键依赖阻碍玩家清理。
+    for (const room of this.repositories.rooms.listRooms()) {
+      this.repositories.rooms.removeRoom(room.id)
+    }
+    this.repositories.players.clearAllRoomIds()
+
     // 先清理「上一次运行前就已超过恢复宽限期」的过期身份行，防止 players 表随重启无限增长；
     // 再把剩余行（含崩溃时 connected=1 的行）全部标记为断线，给它们一个全新的恢复宽限窗口。
     this.repositories.players.deleteStaleDisconnected(
@@ -329,11 +338,6 @@ export class GameService {
     )
     // 全部玩家视为断线，开始身份宽限计时（宽限期由 APP_CONFIG.network.reconnectGraceMs 定义）。
     this.repositories.players.markAllDisconnected(Date.now())
-    // 作废全部进行中房间：对局在内存，重启即数据丢失，作废关闭避免残留。
-    for (const room of this.repositories.rooms.listRooms()) {
-      this.repositories.rooms.removeRoom(room.id)
-    }
-    this.repositories.players.clearAllRoomIds()
   }
 
   /**
@@ -382,6 +386,37 @@ export class GameService {
       player: this.snapshotter.toPublicPlayer(player),
       recoveryToken: player.token,
       restored: true,
+    }
+  }
+
+  /**
+   * 玩家主动注销会话：解除 Socket 绑定、清理房间归属、移除内存与数据库记录。
+   * 确保清除本地资料后，无需刷新页面即可在同一连接上注册为全新身份。
+   */
+  logout(socket: Socket): void {
+    const playerId = socket.data.playerId as string | undefined
+    if (playerId) {
+      const player = this.players.get(playerId)
+      if (player) {
+        if (player.disconnectTimer) clearTimeout(player.disconnectTimer)
+        if (player.roomId) {
+          try {
+            this.leaveRoom(playerId)
+          } catch (err) {
+            this.logger.error({ err, playerId }, '玩家注销离房失败')
+          }
+        }
+        this.players.delete(playerId)
+        this.playersByToken.delete(player.token)
+        try {
+          this.repositories.players.remove(playerId)
+        } catch (err) {
+          this.logger.error({ err, playerId }, '清理玩家持久化记录失败')
+        }
+      }
+      delete socket.data.playerId
+      socket.data.requestCache = new Map()
+      this.broadcastPresence()
     }
   }
 
@@ -437,15 +472,19 @@ export class GameService {
       createdAt: Date.now(),
     }
     room.members.push(this.createMember(player, room))
+    // 持久化优先：先写数据库，成功后再提交到内存 Map 与加入 Socket 房间
+    player.roomId = room.id
+    try {
+      this.persistRoom(room)
+      this.persistPlayer(player)
+    } catch (err) {
+      delete player.roomId
+      throw err
+    }
     this.rooms.set(room.id, room)
     if (privateJoinCode) this.roomsByPrivateCode.set(privateJoinCode, room.id)
     this.logger.info({ roomId: room.id, playerId, visibility: room.visibility }, '房间已创建')
-    // 房主加入 Socket 房间并广播大厅更新
-    player.roomId = room.id
     player.socket?.join(room.id)
-    // 持久化：房间、成员与玩家房间归属写库，供重启后作废/恢复判定。
-    this.persistPlayer(player)
-    this.persistRoom(room)
     this.emitRoom(room.id)
     this.broadcastPresence()
     return this.snapshotter.snapshot(room, player.id)
@@ -489,7 +528,8 @@ export class GameService {
   ): RoomSnapshot {
     if (room.members.some((member) => member.playerId === player.id && member.leftGame))
       throw new GameError('GAME_ALREADY_LEFT', serverStrings.errors.GAME_ALREADY_LEFT)
-    if (room.members.length >= room.settings.maxPlayers)
+    const activeMembers = room.members.filter((member) => !member.leftGame)
+    if (activeMembers.length >= room.settings.maxPlayers)
       throw new GameError('ROOM_FULL', serverStrings.errors.ROOM_FULL)
     const spectating = room.phase !== 'waiting'
     if (spectating) {
@@ -536,6 +576,11 @@ export class GameService {
     }
     player.socket?.leave(room.id)
     room.members = room.members.filter((member) => member.playerId !== playerId)
+    if (room.phase === 'waiting') {
+      room.members.forEach((member, index) => {
+        member.seatIndex = index
+      })
+    }
     this.logger.info({ roomId: room.id, playerId, reason }, '玩家已离开房间')
     delete player.roomId
     room.stateVersion += 1
@@ -568,7 +613,12 @@ export class GameService {
         room,
         serverStrings.notices.drawerLeftChoosing(player.profile.nickname),
       )
-    else if (room.game?.drawerId === playerId) this.round.finishRound(room, true) // 画家离开，本回合作废
+    else if (
+      room.game?.drawerId === playerId &&
+      (room.phase === 'drawing' ||
+        (room.phase === 'paused' && room.game.phaseBeforePause === 'drawing'))
+    )
+      this.round.finishRound(room, true) // 画家在作画阶段离开，本回合作废
 
     // 在线人数不足 2 人时自动暂停比赛
     if (this.onlineMemberCount(room) < APP_CONFIG.player.minPlayers && this.isPlaying(room.phase)) {
@@ -632,7 +682,11 @@ export class GameService {
         room,
         serverStrings.notices.drawerLeftChoosing(player.profile.nickname),
       )
-    else if (room.game?.drawerId === playerId && room.phase !== 'game_result')
+    else if (
+      room.game?.drawerId === playerId &&
+      (room.phase === 'drawing' ||
+        (room.phase === 'paused' && room.game.phaseBeforePause === 'drawing'))
+    )
       this.round.finishRound(room, true)
 
     if (this.onlineMemberCount(room) < APP_CONFIG.player.minPlayers && this.isPlaying(room.phase))
@@ -670,10 +724,16 @@ export class GameService {
       throw new GameError('VERSION_CONFLICT', serverStrings.errors.VERSION_CONFLICT_SETTINGS)
     const next = { ...room.settings, ...patch }
     this.validateSettings(next)
-    // 最大人数不能小于当前坐席数，否则会出现超员
-    if (next.maxPlayers < room.members.length)
+    // 最大人数不能小于当前活跃成员数，否则会出现超员
+    const activeMembers = room.members.filter((member) => !member.leftGame)
+    if (next.maxPlayers < activeMembers.length)
       throw new GameError('INVALID_SETTINGS', serverStrings.errors.INVALID_SETTINGS_MAX_PLAYERS)
     room.settings = next
+    if (room.phase === 'waiting') {
+      room.members.forEach((member, index) => {
+        member.seatIndex = index
+      })
+    }
     this.invalidateReady(room, serverStrings.notices.rulesUpdated)
     this.persistRoom(room)
     this.emitRoom(room.id)
@@ -763,10 +823,10 @@ export class GameService {
     // 预建本局秘密状态：洗牌确定画家顺序（只含可玩成员），清空所有历史与计时
     room.game = {
       id: gameId,
-      startedAt: Date.now(),
+      startedAt: this.clock.now(),
       roundId: '',
-      phaseStartedAt: Date.now(),
-      phaseEndsAt: Date.now() + APP_CONFIG.game.startingCountdownSeconds * 1_000,
+      phaseStartedAt: this.clock.now(),
+      phaseEndsAt: this.clock.now() + APP_CONFIG.game.startingCountdownSeconds * 1_000,
       currentRound: 0,
       totalRounds: activeMembers.length * room.settings.roundsPerPlayer,
       roundDurationMs: room.settings.drawSeconds * 1_000, // 开局默认房间时长；每回合 beginDrawing 按词条时限刷新
@@ -778,6 +838,7 @@ export class GameService {
       strokePointTotal: 0,
       undoneStrokeIds: [],
       lastSequence: -1,
+      drawingRevision: 0,
       messages: [],
       correctOrder: [],
       correctDetails: [],
@@ -798,6 +859,9 @@ export class GameService {
     if (room.phase !== 'choosing_word' || game.drawerId !== playerId || game.roundId !== roundId) {
       throw new GameError('NOT_DRAWER', serverStrings.errors.NOT_DRAWER_CHOOSE)
     }
+    if (game.phaseEndsAt > 0 && this.clock.now() >= game.phaseEndsAt) {
+      throw new GameError('PHASE_EXPIRED', serverStrings.errors.PHASE_EXPIRED)
+    }
     const answer = game.candidates.find((word) => word.id === wordId)
     if (!answer) throw new GameError('INVALID_WORD_ID', serverStrings.errors.INVALID_WORD_ID_CHOOSE)
     this.round.beginDrawing(room, answer)
@@ -809,6 +873,9 @@ export class GameService {
     const game = this.requireGame(room)
     if (room.phase !== 'choosing_word' || game.drawerId !== playerId || game.roundId !== roundId) {
       throw new GameError('NOT_DRAWER', serverStrings.errors.NOT_DRAWER_CHOOSE)
+    }
+    if (game.phaseEndsAt > 0 && this.clock.now() >= game.phaseEndsAt) {
+      throw new GameError('PHASE_EXPIRED', serverStrings.errors.PHASE_EXPIRED)
     }
     if (!room.settings.allowWordReroll) {
       throw new GameError('REROLL_DISABLED', serverStrings.errors.REROLL_DISABLED)
@@ -829,6 +896,8 @@ export class GameService {
     // 仅作画阶段可猜词，且必须在当前回合，且答案已确定；观战者不能猜词
     if (room.phase !== 'drawing' || game.roundId !== roundId || !game.answer)
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_GUESS)
+    if (game.phaseEndsAt > 0 && this.clock.now() >= game.phaseEndsAt)
+      throw new GameError('PHASE_EXPIRED', serverStrings.errors.PHASE_EXPIRED)
     if (game.drawerId === playerId)
       throw new GameError('DRAWER_CANNOT_GUESS', serverStrings.errors.DRAWER_CANNOT_GUESS)
     if (member.spectating)
@@ -872,13 +941,9 @@ export class GameService {
     this.emitRoom(room.id)
   }
 
-  addStroke(playerId: string, roundId: string, stroke: Stroke): void {
+  addStroke(playerId: string, roundId: string, stroke: Stroke): StrokeAck {
     const { room } = this.requireMembership(playerId)
-    const game = this.requireGame(room)
-    // 只有当前画家在作画阶段可以修改画板
-    if (room.phase !== 'drawing' || game.drawerId !== playerId || game.roundId !== roundId) {
-      throw new GameError('NOT_DRAWER', serverStrings.errors.NOT_DRAWER_ACTION)
-    }
+    const game = this.requireDrawerGame(room, playerId, roundId)
     enforceEventRate(this.requirePlayer(playerId), 'draw')
     // 序号必须严格递增，服务端拒绝迟到的旧包（网络乱序/重复发包）
     if (stroke.sequence <= game.lastSequence)
@@ -892,11 +957,7 @@ export class GameService {
     ) {
       throw new GameError('INVALID_DRAW_STYLE', serverStrings.errors.INVALID_DRAW_STYLE)
     }
-    // 撤销语义：新命令使重做失效，且此前被撤销的命令被永久丢弃（而不是重新显示），
-    // 与主流画板一致：撤销即移除，继续作画不会让被撤销的内容回来。
-    // 必须先物理移除被撤销命令，再查找「续画笔画的已有笔画」与校验点数预算：
-    // - 预算按清理后的实际点数计算（否则被撤销笔画占用额度，正常续画会被提前拒绝）；
-    // - 正在被撤销的笔画若继续追加（极端时序），会作为新命令创建而不是向已移除对象追加点数。
+    // 撤销语义：新命令使重做失效，且此前被撤销的命令被永久丢弃
     if (game.undoneStrokeIds.length) {
       const undoneSet = new Set(game.undoneStrokeIds)
       for (const command of game.strokes) {
@@ -910,13 +971,18 @@ export class GameService {
     const existing = game.strokes.find(
       (candidate): candidate is Stroke => candidate.kind === 'stroke' && candidate.id === stroke.id,
     )
-    // 点数预算：`maxHistoryCommands` 只数命令条数，对「同一笔画不断追加」完全不生效；
-    // 这里按单笔画与整回合两个维度限额，并在修改任何状态（含 lastSequence）前完成校验，
-    // 避免被拒的无效包白白消耗序号、导致后续合法包被判为旧包。
-    const nextPointTotal = game.strokePointTotal + stroke.points.length
+    // 依据 startPointIndex 计算实际新增点，杜绝重复连接点混入权威点数
+    const newPoints =
+      existing &&
+      stroke.startPointIndex !== undefined &&
+      stroke.startPointIndex < existing.points.length
+        ? stroke.points.slice(existing.points.length - stroke.startPointIndex)
+        : stroke.points
+
+    const nextPointTotal = game.strokePointTotal + newPoints.length
     if (
       nextPointTotal > APP_CONFIG.drawing.maxPointsPerRound ||
-      (existing?.points.length ?? 0) + stroke.points.length > APP_CONFIG.drawing.maxPointsPerStroke
+      (existing?.points.length ?? 0) + newPoints.length > APP_CONFIG.drawing.maxPointsPerStroke
     ) {
       throw new GameError('DRAW_BUDGET_EXCEEDED', serverStrings.errors.DRAW_BUDGET_EXCEEDED)
     }
@@ -924,39 +990,44 @@ export class GameService {
     game.strokePointTotal = nextPointTotal
     if (existing) {
       // 同一按下动作的后续批次沿用笔画 ID；只追加新增点，撤销仍能一次移除完整笔画。
-      existing.points.push(...stroke.points)
+      existing.points.push(...newPoints)
       existing.sequence = stroke.sequence
     } else {
-      game.strokes.push({ ...stroke, color, points: [...stroke.points] })
+      game.strokes.push({ ...stroke, color, points: [...newPoints] })
       // 历史命令超限时丢弃最早的命令，并同步回收其点数预算，保护内存有界
       if (game.strokes.length > APP_CONFIG.drawing.maxHistoryCommands) {
         const dropped = game.strokes.shift()
         if (dropped) game.strokePointTotal -= dropped.kind === 'stroke' ? dropped.points.length : 1
       }
     }
-    // 撤销栈已在上方随新命令一并处置（物理移除被撤销命令），无需重复清空
+    game.drawingRevision += 1
     // 增量广播前标记房间全部成员已同步到该序号：下一次快照可省略画布历史（差分下发，见 snapshot.ts）
     room.members.forEach((member) => (member.lastSyncedSeq = game.lastSequence))
     // 标准化颜色后广播给房间所有成员（画家自身也会收到并用于纠正本地预览）
-    this.io.to(room.id).emit(EVENTS.drawStrokeBatch, { roundId, stroke: { ...stroke, color } })
+    this.io.to(room.id).emit(EVENTS.drawStrokeBatch, {
+      roundId,
+      stroke: { ...stroke, color, points: newPoints },
+      drawingRevision: game.drawingRevision,
+    })
+    return {
+      strokeId: stroke.id,
+      pointCount: existing ? existing.points.length : newPoints.length,
+      drawingRevision: game.drawingRevision,
+      remainingBudget: Math.max(0, APP_CONFIG.drawing.maxPointsPerRound - game.strokePointTotal),
+    }
   }
 
   /** 校验并提交封闭区域填充命令；客户端只上传点击位置和颜色，不上传像素数据。 */
   addFill(playerId: string, roundId: string, fill: FillCommand): void {
     const { room } = this.requireMembership(playerId)
-    const game = this.requireGame(room)
-    // 只有当前画家在作画阶段可以执行填充
-    if (room.phase !== 'drawing' || game.drawerId !== playerId || game.roundId !== roundId) {
-      throw new GameError('NOT_DRAWER', serverStrings.errors.NOT_DRAWER_ACTION)
-    }
+    const game = this.requireDrawerGame(room, playerId, roundId)
     enforceEventRate(this.requirePlayer(playerId), 'draw')
     // 序号必须严格递增，拒绝旧包
     if (fill.sequence <= game.lastSequence)
       throw new GameError('STALE_DRAW_EVENT', serverStrings.errors.STALE_DRAW_EVENT_FILL)
     const color = normalizeHexColor(fill.color)
     if (!color) throw new GameError('INVALID_FILL', serverStrings.errors.INVALID_FILL)
-    // 与 addStroke 同一撤销语义：先物理移除被撤销命令（同步回收点数预算），
-    // 让预算校验基于清理后的实际点数，也避免后续向已移除对象追加。
+    // 与 addStroke 同一撤销语义：先物理移除被撤销命令（同步回收点数预算）
     if (game.undoneStrokeIds.length) {
       const undoneSet = new Set(game.undoneStrokeIds)
       for (const command of game.strokes) {
@@ -977,11 +1048,13 @@ export class GameService {
       const dropped = game.strokes.shift()
       if (dropped) game.strokePointTotal -= dropped.kind === 'stroke' ? dropped.points.length : 1
     }
+    game.drawingRevision += 1
     // 标记房间全部成员同步到该序号（与笔画增量同一套差分机制）
     room.members.forEach((member) => (member.lastSyncedSeq = game.lastSequence))
     this.io.to(room.id).emit(EVENTS.drawFillCommit, {
       roundId,
       fill: { ...fill, color },
+      drawingRevision: game.drawingRevision,
     })
   }
 
@@ -990,9 +1063,6 @@ export class GameService {
     const game = this.requireDrawerGame(room, playerId, roundId)
     // 与笔画/填充同样受绘图限频保护：否则单请求可无限触发全员快照广播
     enforceEventRate(this.requirePlayer(playerId), 'draw')
-    // 从最新命令倒序找第一条未撤销的命令（倒向遍历避免拷贝整个历史数组）。
-    // 撤销只是把命令移入撤销集合（仍留在历史中供重做与丢弃判定），
-    // 真正的物理移除发生在下一个新命令被接受时（见 addStroke/addFill 的撤销语义）。
     const undoneSet = new Set(game.undoneStrokeIds)
     let target: (typeof game.strokes)[number] | undefined
     for (let index = game.strokes.length - 1; index >= 0; index -= 1) {
@@ -1004,6 +1074,7 @@ export class GameService {
     }
     if (!target) return // 无可撤销内容时不广播，避免无意义的快照扇出
     game.undoneStrokeIds.push(target.id)
+    game.drawingRevision += 1
     this.emitRoom(room.id)
   }
 
@@ -1013,6 +1084,7 @@ export class GameService {
     enforceEventRate(this.requirePlayer(playerId), 'draw')
     if (!game.undoneStrokeIds.length) return // 撤销栈为空时不广播
     game.undoneStrokeIds.pop() // 撤销栈是先进后出，重做即弹出最后一条
+    game.drawingRevision += 1
     this.emitRoom(room.id)
   }
 
@@ -1025,6 +1097,7 @@ export class GameService {
     game.strokePointTotal = 0 // 清空画布同步释放点数预算
     game.undoneStrokeIds = []
     game.lastSequence += 1 // 清空后跳号，保证后续命令仍大于历史序号
+    game.drawingRevision += 1
     this.emitRoom(room.id)
   }
 
@@ -1067,8 +1140,8 @@ export class GameService {
           ? room.settings.chooseSeconds * 1_000
           : remainingMs
     const effectiveElapsedMs = Math.max(0, totalDurationMs - remainingMs)
-    game.phaseStartedAt = Date.now() - effectiveElapsedMs
-    game.phaseEndsAt = Date.now() + remainingMs
+    game.phaseStartedAt = this.clock.now() - effectiveElapsedMs
+    game.phaseEndsAt = this.clock.now() + remainingMs
     delete game.phaseBeforePause
     delete game.pausedRemainingMs
     this.transition(room, next)
@@ -1230,7 +1303,11 @@ export class GameService {
     player.socketId = undefined
     player.disconnectedAt = Date.now()
     // 持久化连接状态与断线时间：跨重启宽限判断依赖它（宽限内可凭令牌恢复）。
-    this.repositories.players.setConnection(player.id, false, player.disconnectedAt)
+    try {
+      this.repositories.players.setConnection(player.id, false, player.disconnectedAt)
+    } catch (err) {
+      this.logger.error({ err, playerId: player.id }, '断线状态持久化异常')
+    }
     this.logger.info(
       { playerId, roomId: player.roomId, retainedSeat: retainDrawingSeat },
       retainDrawingSeat ? '玩家作画阶段断线并保留席位' : '玩家断线并进入身份恢复宽限',
@@ -1640,7 +1717,9 @@ export class GameService {
 
   private createMember(player: PlayerSecret, room: RoomSecret, spectating = false): MemberState {
     // 玩家加入房间时创建初始席位状态（spectating=true 表示观战身份）
-    const occupied = new Set(room.members.map((member) => member.seatIndex))
+    const occupied = new Set(
+      room.members.filter((member) => !member.leftGame).map((member) => member.seatIndex),
+    )
     const seatIndex = APP_CONFIG.room.seatColors.findIndex((_color, index) => !occupied.has(index))
     if (seatIndex < 0) throw new GameError('ROOM_FULL', serverStrings.errors.ROOM_FULL)
     return {
@@ -1763,6 +1842,8 @@ export class GameService {
     const game = this.requireGame(room)
     if (room.phase !== 'drawing' || game.drawerId !== playerId || game.roundId !== roundId)
       throw new GameError('NOT_DRAWER', serverStrings.errors.NOT_DRAWER)
+    if (game.phaseEndsAt > 0 && this.clock.now() >= game.phaseEndsAt)
+      throw new GameError('PHASE_EXPIRED', serverStrings.errors.PHASE_EXPIRED)
     return game
   }
 

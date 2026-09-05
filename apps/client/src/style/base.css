@@ -26,15 +26,17 @@
     overflow: hidden;
   }
 
-  /* 表单控件继承全局字体设置。 */
+  /* 表单控件继承全局字体设置；按钮重置默认边框与阴影。 */
   button,
   input,
   select {
     font: inherit;
   }
 
-  /* 可点击按钮显示手型光标。 */
+  /* 可点击按钮显示手型光标；按钮重置默认边框与阴影。 */
   button {
+    border: 0;
+    box-shadow: none;
     cursor: pointer;
   }
 
@@ -84,12 +86,6 @@
   .game-stage h2 {
     font-size: 1.45em;
     line-height: 1.15;
-  }
-
-  /* 舞台内按钮去掉默认边框，由各按钮样式自行定义。 */
-  .game-stage button {
-    border: 0;
-    box-shadow: none !important;
   }
 
   /* 浏览器全屏时舞台铺满屏幕，并移除窗口模式装饰。 */

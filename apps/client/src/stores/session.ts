@@ -31,7 +31,12 @@ export const useSessionStore = defineStore('session', () => {
   const clockOffset = ref(0)
   const busy = ref(false)
   const kickedNotice = ref(false)
+  const generation = ref(0)
   let restoreRetryTimer: number | undefined
+
+  function incrementGeneration(): void {
+    generation.value += 1
+  }
 
   function clearRestoreRetry(): void {
     window.clearTimeout(restoreRetryTimer)
@@ -156,6 +161,8 @@ export const useSessionStore = defineStore('session', () => {
     clockOffset,
     busy,
     kickedNotice,
+    generation,
+    incrementGeneration,
     register,
     measureLatency,
     clearRestoreRetry,

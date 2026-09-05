@@ -154,7 +154,7 @@ function toggleSelectAll(): void {
 async function saveVocabulary(): Promise<void> {
   if (isReadOnly.value) return
   const ok = await store.saveVocabulary([...selectedIds.value])
-  if (ok) emit('close')
+  if (ok) handleClose()
 }
 
 /**

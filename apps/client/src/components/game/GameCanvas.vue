@@ -11,6 +11,7 @@ import {
   type DrawPoint,
   type FillCommand,
   type Stroke,
+  type StrokeAck,
   type ToolKind,
 } from '@draw-guess/shared'
 import { APP_CONFIG } from '@draw-guess/config'
@@ -33,7 +34,7 @@ const props = defineProps<{
   revision?: number
 }>()
 const emit = defineEmits<{
-  stroke: [stroke: Stroke]
+  stroke: [stroke: Stroke, onAck?: (ack?: StrokeAck) => void]
   fill: [fill: FillCommand]
 }>()
 
@@ -256,14 +257,9 @@ function drawFill(context: CanvasRenderingContext2D, command: FillCommand): void
     if (y > 0) enqueueIfTarget(pixelIndex - width)
     if (y + 1 < height) enqueueIfTarget(pixelIndex + width)
   }
-  // —— 封边处理：消除填充区与描边线之间的 1px 半透明缝隙 ——
-  // 原因：描边经 Canvas 抗锯齿后，边缘存在一条从背景色渐变到线色的混合像素环；
-  // 洪泛填充只接受与起点色差 ≤ fillTolerance 的像素，遇到混合像素（色差远超容差）即停止，
-  // 于是混合环既不属于填充区也不是纯线色，视觉上呈现为填充与线条之间的 1px 空白。
-  // 修复：对填充区（queue 中全部已填像素）做单遍 8 邻域膨胀，把紧邻的混合像素一并覆盖为填充色。
-  // - 仅膨胀一圈且只处理队列中的已填像素，即使线条细到 1 设备像素也只会吃掉线条靠填充侧
-  //   最多 1 像素（视觉不可察觉），绝不会越过线条泄漏到另一侧同色区域；
-  // - 跳过仍匹配目标色的邻像素：它们属于其他区域的同色背景，不属于抗锯齿混合环，不能覆盖。
+  // —— 封边处理：消除填充区与描边线之间的半透明缝隙 ——
+  // 仅针对抗锯齿半透明混合像素（0 < alpha < 255）做底层混合，将填充色垫在半透明线条下方；
+  // 绝不覆盖 alpha === 255 的完整不透明墨线/色块，防止吃线。
   for (let cursor = 0; cursor < tail; cursor += 1) {
     const pixelIndex = queue[cursor] ?? 0
     const x = pixelIndex % width
@@ -277,7 +273,20 @@ function drawFill(context: CanvasRenderingContext2D, command: FillCommand): void
         if (nx < 0 || nx >= width) continue
         const offset = (ny * width + nx) * 4
         if (pixelMatches(data, offset, target)) continue
-        setPixel(data, offset, replacement)
+        const currentAlpha = data[offset + 3] ?? 0
+        // 仅对半透明抗锯齿像素进行底层混合，不透明墨线（currentAlpha === 255）保持完整
+        if (currentAlpha > 0 && currentAlpha < 255) {
+          const alphaNorm = currentAlpha / 255
+          const invAlpha = 1 - alphaNorm
+          data[offset] = Math.round((data[offset] ?? 0) * alphaNorm + replacement[0] * invAlpha)
+          data[offset + 1] = Math.round(
+            (data[offset + 1] ?? 0) * alphaNorm + replacement[1] * invAlpha,
+          )
+          data[offset + 2] = Math.round(
+            (data[offset + 2] ?? 0) * alphaNorm + replacement[2] * invAlpha,
+          )
+          data[offset + 3] = 255
+        }
       }
     }
   }
@@ -438,6 +447,17 @@ function pointerMove(event: PointerEvent): void {
     Math.hypot(point.x - previous.x, point.y - previous.y) < APP_CONFIG.drawing.dedupDistance
   )
     return
+
+  // 连续长笔画自动分段：达到单笔上限前自动切出新 strokeId，保证画布无缝绘制且不超预算
+  if (activePoints.value.length >= APP_CONFIG.drawing.maxPointsPerStroke) {
+    flushPointBatch()
+    const lastPoint = activePoints.value.at(-1) ?? point
+    activeStrokeId = createUuid()
+    sentPointCount = 0
+    activePoints.value = [lastPoint]
+    drawnPoints.set(activeStrokeId, 1)
+  }
+
   const from = activePoints.value.length
   activePoints.value.push(point)
   drawnPoints.set(activeStrokeId, activePoints.value.length)
@@ -463,18 +483,40 @@ function pointerMove(event: PointerEvent): void {
 function flushPointBatch(): void {
   // useTimeoutFn 在定时器触发后已自动将 isPending 置为 false 并清除句柄，无需手动清理
   if (!activeStrokeId || sentPointCount >= activePoints.value.length) return
-  const start = Math.max(0, sentPointCount - (sentPointCount > 0 ? 1 : 0))
-  const unsent = activePoints.value.slice(start)
+  const fromIndex = sentPointCount
+  const unsent = activePoints.value.slice(fromIndex)
+  if (!unsent.length) return
+
   for (let index = 0; index < unsent.length; index += APP_CONFIG.drawing.maxPointsPerBatch) {
     const points = unsent.slice(index, index + APP_CONFIG.drawing.maxPointsPerBatch)
     if (!points.length) continue
-    emit('stroke', {
-      kind: 'stroke',
-      id: activeStrokeId,
-      ...currentStrokeStyle(),
-      points,
-      sequence: nextSequence(),
-    })
+    const batchStartIndex = fromIndex + index
+    const currentBatchStrokeId = activeStrokeId
+    emit(
+      'stroke',
+      {
+        kind: 'stroke',
+        id: activeStrokeId,
+        ...currentStrokeStyle(),
+        points,
+        startPointIndex: batchStartIndex,
+        sequence: nextSequence(),
+      },
+      (ack?: StrokeAck) => {
+        if (!ack) {
+          // 服务端拒绝或网络失败：回滚未确认的本地绘制，恢复到权威历史画面
+          if (activeStrokeId === currentBatchStrokeId) {
+            drawing.value = false
+            activePoints.value = []
+            activeStrokeId = ''
+            activeStyle = null
+            sentPointCount = 0
+            stopBatchTimer()
+          }
+          redraw()
+        }
+      },
+    )
   }
   sentPointCount = activePoints.value.length
 }

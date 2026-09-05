@@ -9,8 +9,8 @@ import { dirname, join, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pino from 'pino'
 import { z } from 'zod'
-import { APP_CONFIG, getDeploymentConfig, type DeploymentConfig } from '../../../config.ts'
-import { serverStrings } from '../../../config/strings.ts'
+import { APP_CONFIG, getDeploymentConfig, type DeploymentConfig } from '../../../config/index.ts'
+import { serverStrings } from '../../../string/index.ts'
 import { EVENTS } from '@draw-guess/shared'
 import { createApplication } from './app.ts'
 import { closeDb } from './db/index.ts'
@@ -216,7 +216,7 @@ async function main(): Promise<void> {
       console.error('服务器启动失败:', error)
       logger.error({ err: error }, '服务器启动失败')
     }
-    process.exitCode = 1
+    process.exit(1)
   })
 
   // 监听成功后打印局域网访问地址清单，方便同网段玩家加入

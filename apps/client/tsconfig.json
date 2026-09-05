@@ -4,5 +4,11 @@
     "types": ["vite/client"],
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "../../config.ts", "../../packages/shared/src/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.vue",
+    "../../config/**/*.ts",
+    "../../string/**/*.ts",
+    "../../packages/shared/src/**/*.ts"
+  ]
 }

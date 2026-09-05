@@ -75,7 +75,11 @@ export class SqlitePlayerRepository implements PlayerRepository {
   }
 
   remove(id: string): void {
-    this.db.prepare('DELETE FROM players WHERE id = ?').run(id)
+    const transaction = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM room_members WHERE player_id = ?').run(id)
+      this.db.prepare('DELETE FROM players WHERE id = ?').run(id)
+    })
+    transaction()
   }
 
   markAllDisconnected(disconnectedAt: number): void {
@@ -89,9 +93,17 @@ export class SqlitePlayerRepository implements PlayerRepository {
   }
 
   deleteStaleDisconnected(before: number): void {
-    this.db
-      .prepare('DELETE FROM players WHERE disconnected_at IS NOT NULL AND disconnected_at < ?')
-      .run(before)
+    const transaction = this.db.transaction(() => {
+      this.db
+        .prepare(
+          'DELETE FROM room_members WHERE player_id IN (SELECT id FROM players WHERE disconnected_at IS NOT NULL AND disconnected_at < ?)',
+        )
+        .run(before)
+      this.db
+        .prepare('DELETE FROM players WHERE disconnected_at IS NOT NULL AND disconnected_at < ?')
+        .run(before)
+    })
+    transaction()
   }
 
   /** 内存记录（驼峰）→ 表行（蛇形），供 SQL 命名参数使用。 */

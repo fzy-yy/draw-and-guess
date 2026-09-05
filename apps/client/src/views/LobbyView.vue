@@ -48,7 +48,7 @@ const statusText = {
         <AvatarImage
           :avatar-id="store.profile.avatarId"
           :label="strings.common.myAvatarAria"
-          class="h-[6cqh] w-[6cqh] border-sky!"
+          class="h-[6cqh] w-[6cqh] border-sky"
         />
         <strong class="truncate">{{ store.profile.nickname }}</strong>
       </template>
@@ -212,8 +212,8 @@ const statusText = {
           <div class="flex min-w-0 flex-col">
             <b class="truncate">{{ player.nickname }}</b>
             <span
-              class="text-muted text-fs-12"
-              :class="{ 'text-green! font-bold': player.status === 'idle' }"
+              class="text-fs-12"
+              :class="player.status === 'idle' ? 'text-green font-bold' : 'text-muted'"
             >
               {{ statusText[player.status] }}
             </span>

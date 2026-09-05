@@ -129,9 +129,11 @@ watch(
         v-for="message in messages"
         :key="message.id"
         :class="[
-          'flex flex-wrap gap-[0.35em] border-l-[0.3cqh] border-line bg-white px-[0.65em] py-[0.6cqh] text-fs-12 leading-[1.35] text-navy first:mt-auto ui-feedback',
-          message.playerId && 'text-navy! font-bold',
-          message.type === 'system' && 'text-blue! bg-sky! border-l-blue!',
+          'flex flex-wrap gap-[0.35em] border-l-[0.3cqh] px-[0.65em] py-[0.6cqh] text-fs-12 leading-[1.35] first:mt-auto ui-feedback',
+          message.type === 'system'
+            ? 'text-blue bg-sky border-l-blue'
+            : 'border-line bg-white text-navy',
+          message.playerId && 'font-bold',
         ]"
         :style="messageStyle(message)"
       >

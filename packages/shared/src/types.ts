@@ -18,7 +18,8 @@ export type ToolKind = 'pen' | 'eraser' | 'fill'
 /** 房间可见性：公开房进入大厅列表，私密房只能通过房间码或定向邀请加入。 */
 export type RoomVisibility = 'public' | 'private'
 /** 内置 SVG 头像的稳定白名单编号；具体图形仅由客户端本地资源映射。 */
-export type AvatarId = (typeof import('../../../config.ts').APP_CONFIG.player.avatarIds)[number]
+export type AvatarId =
+  (typeof import('../../../config/index.ts').APP_CONFIG.player.avatarIds)[number]
 
 /** 玩家的公开身份资料：昵称 + 内置 SVG 头像编号。 */
 export interface Profile {
@@ -135,6 +136,15 @@ export interface Stroke {
   width: number
   points: DrawPoint[]
   sequence: number
+  startPointIndex?: number // 批次续接起始点索引
+}
+
+/** 绘图批次确认响应 */
+export interface StrokeAck {
+  strokeId: string
+  pointCount: number
+  drawingRevision: number
+  remainingBudget: number
 }
 
 /** 封闭区域填充命令；点击位置使用归一化坐标，实际像素区域由各客户端重放历史后计算。 */
@@ -178,6 +188,7 @@ export interface GameView {
   pausedRemainingMs?: number // 暂停时的剩余毫秒数，供客户端冻结倒计时与进度条
   answerMask: string // 猜词者可见的答案遮罩（画家可见真实答案）
   answer?: string // 仅当前画家可见
+  wordCategory?: string // 仅当前画家可见：当前题目的分类提示（画家随时可见真实分类）
   wordOptions?: Array<{ id: string; text: string; difficulty: number }> // 仅画家选词阶段可见（含难度星级）
   canReroll?: boolean // 仅画家选词阶段可见：是否允许换一组（已用或房间未开启时为 false）
   /** 已揭示的结构化提示（词库改为单分类即提示，按阈值揭示词条分类；列表至多一条） */
@@ -187,6 +198,7 @@ export interface GameView {
   strokesOmitted?: boolean
   undoneStrokeIds: string[] // 已撤销的命令 ID（用于重放过滤）
   lastSequence: number // 服务端已接受的绘图序号（供重连客户端续起 seq，避免被当旧包拒绝）
+  drawingRevision: number // 画布修订代次，增量操作单调递增
   messages: ChatMessage[] // 最近消息（服务端裁剪数量）
   roundResult?: RoundResult // 回合结算数据
   finalRanking?: FinalRankingEntry[] // 最终结算时冻结的权威排行

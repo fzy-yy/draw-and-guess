@@ -8,18 +8,55 @@ import confetti from 'canvas-confetti'
 export function fireGuessCorrectConfetti(): void {
   // 左下侧斜上方喷射
   confetti({
-    particleCount: 50,
+    // 整数（默认值：50）：发射的彩纸数量
+    particleCount: 200,
+    // 数值（默认值：90）：以度为单位的发射角度，90 表示垂直向上发射
     angle: 60,
-    spread: 55,
-    origin: { x: 0.1, y: 0.7 },
+    // 数值（默认值：45）：彩纸偏离中心的最大角度，单位为度
+    spread: 90,
+    // 数字（默认值：45）：礼花开始运动的速度，单位为像素
+    startVelocity: 60,
+    // 数字（默认值：0.9）：礼花速度衰减的快慢
+    decay: 0.9,
+    // 数字（默认值：1）：粒子下落的加速度
+    gravity: 1,
+    // 数字（默认值：0）：礼花向侧方漂移的程度
+    drift: 0,
+    // 布尔值（默认：false）：可选地关闭三维彩带在真实世界中应有的倾斜和晃动效果
+    flat: false,
+    // 数字（默认值：200）：彩纸将移动的次数
+    ticks: 400,
+    // Number（默认值：1）：每个礼花粒子的缩放系数
+    scalar: 1,
+    // 对象 ：从何处开始发射彩纸
+    origin: { x: 0, y: 0.7 },
     zIndex: 9999,
   })
+
   // 右下侧斜上方喷射
   confetti({
-    particleCount: 50,
+    // 整数（默认值：50）：发射的彩纸数量
+    particleCount: 200,
+    // 数值（默认值：90）：以度为单位的发射角度，90 表示垂直向上发射
     angle: 120,
-    spread: 55,
-    origin: { x: 0.9, y: 0.7 },
+    // 数值（默认值：45）：彩纸偏离中心的最大角度，单位为度
+    spread: 90,
+    // 数字（默认值：45）：礼花开始运动的速度，单位为像素
+    startVelocity: 60,
+    // 数字（默认值：0.9）：礼花速度衰减的快慢
+    decay: 0.9,
+    // 数字（默认值：1）：粒子下落的加速度
+    gravity: 1,
+    // 数字（默认值：0）：礼花向侧方漂移的程度
+    drift: 0,
+    // 布尔值（默认：false）：可选地关闭三维彩带在真实世界中应有的倾斜和晃动效果
+    flat: false,
+    // 数字（默认值：200）：彩纸将移动的次数
+    ticks: 400,
+    // Number（默认值：1）：每个礼花粒子的缩放系数
+    scalar: 1,
+    // 对象 ：从何处开始发射彩纸
+    origin: { x: 1, y: 0.7 },
     zIndex: 9999,
   })
 }

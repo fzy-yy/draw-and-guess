@@ -1,5 +1,5 @@
 <!--
-  显示与操作设置页：动画 / 快捷键提示 / 自动聚焦 / 可被发现 / 接收邀请 共 5 个开关。
+  显示与操作设置页：动画 / 快捷键提示 / 自动聚焦 / 可被发现 / 接收邀请 / 画家默认显示答案 共 6 个开关。
   复用 SettingSwitchRow，直接读写 store.settings 并在保存时调用 store.saveSettings。
 -->
 <script setup lang="ts">
@@ -53,6 +53,13 @@ const store = useGameStore()
         class="border-l-[0.35cqh] border-line"
         :title="strings.settings.acceptsInvites"
         :hint="strings.settings.acceptsInvitesHint"
+        @save="store.saveSettings"
+      />
+      <SettingSwitchRow
+        v-model="store.settings.drawerDefaultReveal"
+        class="border-l-[0.35cqh] border-line"
+        :title="strings.settings.drawerDefaultReveal"
+        :hint="strings.settings.drawerDefaultRevealHint"
         @save="store.saveSettings"
       />
     </div>

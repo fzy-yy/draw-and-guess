@@ -86,11 +86,12 @@ function clearCanvas(): void {
         v-for="paint in store.config.drawing.colors"
         :key="paint"
         type="button"
-        class="h-[3.5cqh] w-[3.5cqh] rounded-full border-[0.2cqh] border-line bg-(--paint)"
-        :class="{
-          'outline-[0.3cqh] outline-yellow outline-offset-[0.15cqh] border-navy!':
-            color.toUpperCase() === paint,
-        }"
+        class="h-[3.5cqh] w-[3.5cqh] rounded-full border-[0.2cqh] bg-(--paint)"
+        :class="
+          color.toUpperCase() === paint
+            ? 'outline-[0.3cqh] outline-yellow outline-offset-[0.15cqh] border-navy'
+            : 'border-line'
+        "
         :style="{ '--paint': paint }"
         :aria-label="strings.game.presetColorAria(paint)"
         :disabled="!store.isDrawer"

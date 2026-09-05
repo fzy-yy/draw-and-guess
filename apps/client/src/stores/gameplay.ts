@@ -5,7 +5,13 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { APP_CONFIG } from '@draw-guess/config'
-import { EVENTS, type FillCommand, type RoomSnapshot, type Stroke } from '@draw-guess/shared'
+import {
+  EVENTS,
+  type FillCommand,
+  type RoomSnapshot,
+  type Stroke,
+  type StrokeAck,
+} from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { notify } from '@/composables/useToasts'
 import { socket } from './socket.ts'
@@ -44,7 +50,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
 
   async function submitGuess(text: string): Promise<boolean> {
     if (!roomStore.room?.game) return false
-    const result = await request(EVENTS.guessSubmit, {
+    const result = await request<undefined>(EVENTS.guessSubmit, {
       roundId: roomStore.room.game.roundId,
       text,
     })
@@ -56,13 +62,20 @@ export const useGameplayStore = defineStore('gameplay', () => {
     await request(EVENTS.chatPreset, { roundId: roomStore.room.game.roundId, preset })
   }
 
-  async function sendStroke(stroke: Stroke): Promise<void> {
-    if (!roomStore.room?.game) return
-    await request(
+  async function sendStroke(stroke: Stroke): Promise<StrokeAck | undefined> {
+    if (!roomStore.room?.game) return undefined
+    const result = await request<StrokeAck>(
       EVENTS.drawStrokeBatch,
       { roundId: roomStore.room.game.roundId, stroke },
       { quiet: true },
     )
+    if (!result.ok) {
+      if (result.code === 'DRAW_BUDGET_EXCEEDED') {
+        notify(result.error ?? strings.request.genericFailure, 'warning')
+      }
+      return undefined
+    }
+    return result.data
   }
 
   async function sendFill(fill: FillCommand): Promise<void> {

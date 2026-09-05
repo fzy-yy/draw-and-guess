@@ -2,7 +2,7 @@
  * 共享领域纯函数：答案规范化、遮罩生成、计分与状态机转换表。
  * 无任何运行时依赖，可在 Node 与浏览器中直接单测。
  */
-import { APP_CONFIG } from '../../../config.ts'
+import { APP_CONFIG } from '../../../config/index.ts'
 import type { RoomPhase, ScoreDetail } from './types.ts'
 
 export function normalizeHexColor(value: string): string | undefined {

@@ -15,13 +15,17 @@ import { useGameStore } from '@/stores/game'
 
 const store = useGameStore()
 
-// 席位展示：按最大人数生成槽位，空位填空（undefined）
-const slots = computed(() =>
-  Array.from(
-    { length: store.room?.settings.maxPlayers ?? store.config.player.defaultMaxPlayers },
-    (_, index) => store.room?.members.find((member) => member.seatIndex === index),
-  ),
-)
+// 席位展示：解耦界面槽位与底层物理 seatIndex。
+// 优先稳定呈现全部已有成员（防止历史跳号或缩容后丢失），并在不足最大人数时用空位补齐。
+const slots = computed(() => {
+  const members = store.room?.members ?? []
+  const max = store.room?.settings.maxPlayers ?? store.config.player.defaultMaxPlayers
+  const result: ((typeof members)[number] | undefined)[] = [...members]
+  while (result.length < max) {
+    result.push(undefined)
+  }
+  return result.slice(0, Math.max(result.length, max))
+})
 
 // 待确认踢出的成员：置位后弹出确认框，确认后调用 store.kick（踢人是广播全员的破坏性操作）。
 const kickTarget = computed(() =>
@@ -53,12 +57,16 @@ const pendingKickId = ref<string>()
       <article
         v-for="(member, index) in slots"
         :key="member?.id ?? index"
-        class="relative flex min-w-0 flex-col items-center justify-center rounded-[1em] border-[0.24cqh] border-line border-b-[0.6cqh] bg-white border-b-line ui-feedback hover-tint"
-        :class="[
-          !member ? 'border-dashed bg-paper! text-muted!' : '',
-          member?.ready && member.id !== store.playerId ? 'border-green! border-b-green!' : '',
-          member?.id === store.playerId ? 'border-blue! border-b-blue!' : '',
-        ]"
+        class="relative flex min-w-0 flex-col items-center justify-center rounded-[1em] border-[0.24cqh] border-b-[0.6cqh] ui-feedback hover-tint"
+        :class="
+          !member
+            ? 'border-dashed bg-paper text-muted border-line border-b-line'
+            : member.id === store.playerId
+              ? 'border-blue border-b-blue bg-white text-navy'
+              : member.ready
+                ? 'border-green border-b-green bg-white text-navy'
+                : 'border-line border-b-line bg-white text-navy'
+        "
       >
         <template v-if="member">
           <div class="relative h-[10cqh] w-[10cqh]">
@@ -85,8 +93,8 @@ const pendingKickId = ref<string>()
           <!-- 准备状态标签：观战 / 已准备 / 重连中 / 未准备 -->
           <span
             v-if="!member.isHost || member.spectating"
-            class="min-w-[7em] flex items-center justify-center gap-[0.35em] mt-[0.7cqh] py-[0.4cqh] px-[0.8em] text-muted bg-line rounded-[99em] text-fs-12 font-bold"
-            :class="member.ready ? 'text-green! bg-green/10!' : ''"
+            class="min-w-[7em] flex items-center justify-center gap-[0.35em] mt-[0.7cqh] py-[0.4cqh] px-[0.8em] rounded-[99em] text-fs-12 font-bold"
+            :class="member.ready ? 'text-green bg-green/10' : 'text-muted bg-line'"
             >{{
               member.spectating
                 ? strings.status.roleSpectating

@@ -43,6 +43,7 @@ export function loadSettings(): LocalSettings {
         'autoFocusGuess',
         'discoverable',
         'acceptsInvites',
+        'drawerDefaultReveal',
       ] as const
       for (const key of booleanKeys) {
         if (typeof parsed[key] !== 'boolean') loaded[key] = PUBLIC_CONFIG.localSettings[key]

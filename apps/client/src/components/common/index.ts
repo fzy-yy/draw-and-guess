@@ -1,3 +1,4 @@
+export { default as ActionBanner } from './ActionBanner.vue'
 export { default as ActionPopover } from './ActionPopover.vue'
 export { default as AppButton } from './AppButton.vue'
 export { default as AppInput } from './AppInput.vue'

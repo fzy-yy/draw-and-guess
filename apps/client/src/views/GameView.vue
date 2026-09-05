@@ -9,7 +9,7 @@ import { useFullscreen } from '@vueuse/core'
 import { Brush, LogOut, Trash2, X } from 'lucide-vue-next'
 import { APP_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
-import { EVENTS, type FillCommand, type Stroke } from '@draw-guess/shared'
+import { EVENTS, type FillCommand, type Stroke, type StrokeAck } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
 import { AppButton, ConfirmDialog } from '@/components/common'
 import {
@@ -62,9 +62,10 @@ const fullscreenTarget = computed<HTMLElement | null>(() =>
 )
 const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(fullscreenTarget)
 
-function submitStroke(stroke: Stroke): void {
-  // 本地 Canvas 已即时显示笔画；网络失败时下一个权威快照会纠正画面。
-  void store.sendStroke(stroke)
+function submitStroke(stroke: Stroke, callback?: (ack?: StrokeAck) => void): void {
+  void store.sendStroke(stroke).then((ack) => {
+    if (callback) callback(ack)
+  })
 }
 /** 填充点击由服务端校验并广播，所有客户端按相同历史重放封闭区域。 */
 function submitFill(command: FillCommand): void {

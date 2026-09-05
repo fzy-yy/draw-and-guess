@@ -106,7 +106,11 @@ export class SqliteRoomRepository implements RoomRepository {
   }
 
   removeRoom(id: string): void {
-    this.db.prepare('DELETE FROM rooms WHERE id = ?').run(id)
+    const transaction = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM room_members WHERE room_id = ?').run(id)
+      this.db.prepare('DELETE FROM rooms WHERE id = ?').run(id)
+    })
+    transaction()
   }
 
   replaceMembers(roomId: string, members: RoomMemberRecord[]): void {

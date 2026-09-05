@@ -64,7 +64,7 @@ export const MIGRATIONS: Migration[] = [
 
       CREATE TABLE IF NOT EXISTS room_members (
         room_id     TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
-        player_id   TEXT NOT NULL REFERENCES players(id),
+        player_id   TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
         seat_index  INTEGER NOT NULL,                    -- 席位号（0~5，整局稳定）
         spectating  INTEGER NOT NULL DEFAULT 0,          -- 是否观战（游戏中加入）
         left_game   INTEGER NOT NULL DEFAULT 0,          -- 是否已退出本局（保留成绩卡）

@@ -42,11 +42,12 @@ function selectAvatar(avatarId: AvatarId): void {
         v-for="avatarId in store.config.player.avatarIds"
         :key="avatarId"
         type="button"
-        class="grid aspect-square place-items-center rounded-full border-[0.22cqh] border-line bg-white p-[0.7cqh]"
-        :class="{
-          'border-navy! outline-[0.45cqh] outline-yellow outline-offset-[0.1cqh]':
-            modelValue === avatarId,
-        }"
+        class="grid aspect-square place-items-center rounded-full border-[0.22cqh] bg-white p-[0.7cqh]"
+        :class="
+          modelValue === avatarId
+            ? 'border-navy outline-[0.45cqh] outline-yellow outline-offset-[0.1cqh]'
+            : 'border-line'
+        "
         :aria-pressed="modelValue === avatarId"
         :aria-label="strings.profile.avatarOptionAria(avatarId)"
         @click="selectAvatar(avatarId)"
@@ -54,7 +55,7 @@ function selectAvatar(avatarId: AvatarId): void {
         <AvatarImage
           :avatar-id="avatarId"
           :label="strings.profile.avatarOptionAria(avatarId)"
-          class="h-full w-full border-0! shadow-none!"
+          class="h-full w-full border-0 shadow-none"
         />
       </button>
     </div>

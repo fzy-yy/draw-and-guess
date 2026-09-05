@@ -24,11 +24,11 @@ const store = useGameStore()
     <article
       v-for="member in store.room.members"
       :key="member.id"
-      class="grid min-h-[8.5cqh] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[0.55em] border-l-[0.35cqh] border-line bg-white px-[0.5em] py-[0.55cqh]"
-      :class="{
-        'bg-green/10!': member.guessed,
-        'opacity-55 border-dashed': member.connection !== 'online',
-      }"
+      class="grid min-h-[8.5cqh] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[0.55em] border-l-[0.35cqh] border-line px-[0.5em] py-[0.55cqh]"
+      :class="[
+        member.guessed ? 'bg-green/10' : 'bg-white',
+        member.connection !== 'online' && 'opacity-55 border-dashed',
+      ]"
       :style="{
         '--seat-color': member.seatColor,
         borderLeftColor: member.seatColor,
@@ -59,12 +59,13 @@ const store = useGameStore()
           strings.common.scoreUnit(member.score)
         }}</span>
         <span
-          class="text-muted text-fs-10 font-bold"
+          class="text-fs-10 font-bold"
           :class="[
             member.isDrawer
               ? 'bg-[linear-gradient(90deg,var(--seat-color),var(--color-navy),var(--seat-color))] bg-size-[200%_100%] bg-clip-text text-transparent animate-[drawer-role-flow_1.4s_linear_infinite]'
-              : '',
-            member.guessed ? 'text-yellow! font-bold' : '',
+              : member.guessed
+                ? 'text-yellow'
+                : 'text-muted',
           ]"
           >{{ roleTextFor(member) }}</span
         >

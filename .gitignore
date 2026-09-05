@@ -24,8 +24,9 @@ dist-ssr
 *.sln
 *.sw?
 
-# Playwright MCP 浏览器输出目录
+# Playwright MCP 浏览器输出目录与 AI 缓存
 .playwright-mcp/
+.claude/
 
 # SQLite 数据库（运行期生成，不入库）
 apps/server/data/*.db
@@ -38,3 +39,14 @@ apps/server/log/*.log-*
 
 # 本地环境变量（部署参数，不入库）
 .env
+.env.*.local
+
+# Playwright E2E 测试结果与报告（支持根级与 test/ 内部统一管理）
+test/test-results/
+test/playwright-report/
+**/test-results/
+**/playwright-report/
+**/blob-report/
+coverage/
+*.tsbuildinfo
+.turbo/

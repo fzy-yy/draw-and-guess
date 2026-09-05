@@ -3,7 +3,7 @@
  * 独立成文件避免游戏服务、回合流转、限频、协议绑定之间产生循环依赖。
  */
 import type { Ack } from '@draw-guess/shared'
-import { serverStrings } from '../../../config/strings.ts'
+import { serverStrings } from '../../../string/index.ts'
 
 /** 业务错误：带机器可读错误码，ack 回传时不会泄露内部堆栈。 */
 export class GameError extends Error {
