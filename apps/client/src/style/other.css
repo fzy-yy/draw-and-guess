@@ -1,0 +1,37 @@
+/*
+ * 其他未分类内容（other.css）：竖屏警告与设备方向适配规则。
+ */
+@layer base {
+  .portrait-warning {
+    display: none;
+  }
+
+  @media (orientation: portrait) {
+    /* 竖屏时隐藏舞台其他内容，只保留旋转提示。 */
+    .game-stage > *:not(.portrait-warning) {
+      visibility: hidden;
+    }
+
+    .portrait-warning {
+      position: absolute;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.2cqh;
+      color: white;
+      background: var(--color-navy);
+      text-align: center;
+      visibility: visible;
+    }
+
+    /* 竖屏警告内的旋转提示图标。 */
+    .portrait-warning svg {
+      width: 10cqh;
+      height: 10cqh;
+      color: var(--color-yellow);
+    }
+  }
+}

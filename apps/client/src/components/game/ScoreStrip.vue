@@ -52,26 +52,27 @@ const store = useGameStore()
         />
       </div>
       <div class="min-w-0 flex flex-col">
-        <b class="overflow-hidden text-ellipsis whitespace-nowrap text-[0.75em] text-navy">{{
+        <b class="overflow-hidden text-ellipsis whitespace-nowrap text-fs-12 text-navy">{{
           member.nickname
-        }}</b
-        ><span class="text-blue text-[0.7em] font-black">{{
+        }}</b>
+        <span class="text-blue text-fs-12 font-bold">{{
           strings.common.scoreUnit(member.score)
-        }}</span
-        ><span
-          class="text-muted text-[0.58em] font-extrabold"
-          :class="
+        }}</span>
+        <span
+          class="text-muted text-fs-10 font-bold"
+          :class="[
             member.isDrawer
               ? 'bg-[linear-gradient(90deg,var(--seat-color),var(--color-navy),var(--seat-color))] bg-size-[200%_100%] bg-clip-text text-transparent animate-[drawer-role-flow_1.4s_linear_infinite]'
-              : ''
-          "
+              : '',
+            member.guessed ? 'text-yellow! font-bold' : '',
+          ]"
           >{{ roleTextFor(member) }}</span
         >
       </div>
       <!-- 行尾标记：自己的「我」标记（游戏内不展示房主皇冠） -->
       <span
         v-if="member.id === store.playerId"
-        class="grid h-[2.6cqh] w-[2.6cqh] shrink-0 place-items-center rounded-full bg-blue text-[0.58em] font-black text-white"
+        class="grid h-[2.6cqh] w-[2.6cqh] shrink-0 place-items-center rounded-full bg-blue text-fs-10 font-bold text-white"
         >{{ strings.room.meTag }}</span
       >
     </article>

@@ -1,8 +1,14 @@
 /**
  * 对局控制事件处理器：开始、选词、暂停/恢复、提前结束、返回房间。
  */
-import { z } from 'zod'
-import { EVENTS, RequestSchema, WordIdSchema } from '@draw-guess/shared'
+import {
+  ChooseWordSchema,
+  EVENTS,
+  PauseGameSchema,
+  RerollWordsSchema,
+  RequestSchema,
+  StartGameSchema,
+} from '@draw-guess/shared'
 import { bindRequest } from '../protocol/binder.ts'
 import type { GameService } from '../game-service.ts'
 
@@ -11,23 +17,17 @@ export function registerGameHandlers(
   socket: import('socket.io').Socket,
   service: GameService,
 ): void {
-  bindRequest(
-    socket,
-    EVENTS.gameStart,
-    RequestSchema.extend({ expectedVersion: z.number().int().nonnegative() }),
-    (input, playerId) => service.startGame(playerId, input.expectedVersion),
+  bindRequest(socket, EVENTS.gameStart, StartGameSchema, (input, playerId) =>
+    service.startGame(playerId, input.expectedVersion),
   )
-  bindRequest(
-    socket,
-    EVENTS.gameChooseWord,
-    RequestSchema.extend({ roundId: z.string().uuid(), wordId: WordIdSchema }),
-    (input, playerId) => service.chooseWord(playerId, input.roundId, input.wordId),
+  bindRequest(socket, EVENTS.gameChooseWord, ChooseWordSchema, (input, playerId) =>
+    service.chooseWord(playerId, input.roundId, input.wordId),
   )
-  bindRequest(
-    socket,
-    EVENTS.gamePauseRequest,
-    RequestSchema.extend({ reason: z.string().max(40) }),
-    (input, playerId) => service.pause(playerId, input.reason),
+  bindRequest(socket, EVENTS.gameRerollWords, RerollWordsSchema, (input, playerId) =>
+    service.rerollWordOptions(playerId, input.roundId),
+  )
+  bindRequest(socket, EVENTS.gamePauseRequest, PauseGameSchema, (input, playerId) =>
+    service.pause(playerId, input.reason),
   )
   bindRequest(socket, EVENTS.gameResume, RequestSchema, (_input, playerId) =>
     service.resume(playerId),

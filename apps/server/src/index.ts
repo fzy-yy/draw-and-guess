@@ -207,11 +207,15 @@ async function main(): Promise<void> {
   // 端口被占用等监听错误给出可操作的中文提示
   application.httpServer.on('error', (error: NodeJS.ErrnoException) => {
     if (error.code === 'EADDRINUSE') {
+      console.error(`端口 ${deployment.port} 已被占用。请通过 PORT 环境变量更换端口。`)
       logger.error(
         { port: deployment.port },
         `端口 ${deployment.port} 已被占用。请通过 PORT 环境变量或根级 config.ts 更换端口。`,
       )
-    } else logger.error({ err: error }, '服务器启动失败')
+    } else {
+      console.error('服务器启动失败:', error)
+      logger.error({ err: error }, '服务器启动失败')
+    }
     process.exitCode = 1
   })
 

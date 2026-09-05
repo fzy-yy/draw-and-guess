@@ -3,18 +3,18 @@
   通过 v-model（modelValue + update:modelValue）双向绑定数值，拖拽结束时发出 save 由父级持久化。
 -->
 <script setup lang="ts">
+const model = defineModel<number>({ required: true })
+
 // 标题、说明、当前值、滑块区间/步进与右侧展示文本均由调用方传入，保证行外观统一。
 defineProps<{
   title: string
   hint: string
-  modelValue: number
   min: number
   max: number
   step: number
   display: string
 }>()
 const emit = defineEmits<{
-  'update:modelValue': [value: number]
   save: []
 }>()
 
@@ -23,7 +23,7 @@ const emit = defineEmits<{
  * range 的值是字符串，这里用 Number 还原为数值以保持数值语义。
  */
 function onInput(event: Event): void {
-  emit('update:modelValue', Number((event.target as HTMLInputElement).value))
+  model.value = Number((event.target as HTMLInputElement).value)
 }
 </script>
 
@@ -33,14 +33,14 @@ function onInput(event: Event): void {
   >
     <span class="flex flex-col">
       <b>{{ title }}</b>
-      <small class="text-muted text-[0.7em]">{{ hint }}</small>
+      <small class="text-muted text-fs-12">{{ hint }}</small>
     </span>
     <input
       type="range"
       :min="min"
       :max="max"
       :step="step"
-      :value="modelValue"
+      :value="model"
       class="accent-blue"
       @input="onInput"
       @change="emit('save')"

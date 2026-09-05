@@ -24,7 +24,7 @@ const emit = defineEmits<{ click: [] }>()
 
 const baseClass = computed(() =>
   cn(
-    'flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] px-[0.7em] text-[0.72em] font-extrabold',
+    'flex min-h-[4.6cqh] items-center gap-[0.35em] rounded-[0.55em] px-[0.7em] text-fs-12 font-bold',
     props.active ? 'text-white! bg-blue!' : 'bg-line text-navy',
   ),
 )
@@ -40,7 +40,7 @@ const baseClass = computed(() =>
     <slot />
     <kbd
       v-if="shortcut"
-      class="bg-white px-[0.35em] py-[0.1em] min-w-[1.6em] rounded-[0.35em] border-[0.12em] text-navy text-[0.82em] uppercase font-[ui-monospace,SFMono-Regular,Consolas,monospace]"
+      class="bg-white px-[0.35em] py-[0.1em] min-w-[1.6em] rounded-[0.35em] border-[0.12em] text-navy text-fs-12 uppercase font-mono"
       >{{ shortcut }}</kbd
     >
   </BaseIconButton>

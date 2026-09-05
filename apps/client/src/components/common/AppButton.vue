@@ -15,20 +15,31 @@ const props = withDefaults(
     type?: 'button' | 'submit' | 'reset'
     /** 禁用态 */
     disabled?: boolean
+    /** 激活态（如导航栏选中、切换按钮选中） */
+    active?: boolean
   }>(),
-  { variant: 'primary', type: 'button', disabled: false },
+  { variant: 'primary', type: 'button', disabled: false, active: false },
 )
 
-// 三色动作按钮共用底座 + 各自颜色/描边；按钮统一不使用阴影。
+// 三色动作按钮共用底座 + 各自颜色/描边；按钮统一不使用阴影；支持激活态扩展。
 const variantClasses = computed(() => {
   const base =
-    'inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-black'
+    'inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-bold'
   switch (props.variant) {
     case 'secondary':
+      if (props.active) {
+        return `${base} text-blue bg-sky border! border-[0.18cqh]! border-blue!`
+      }
       return `${base} text-navy bg-white border! border-[0.18cqh]! border-line!`
     case 'danger':
+      if (props.active) {
+        return `${base} text-white bg-red ring-2 ring-red/40`
+      }
       return `${base} text-white bg-red`
     default:
+      if (props.active) {
+        return `${base} text-white bg-blue ring-2 ring-blue/40`
+      }
       return `${base} text-white bg-blue`
   }
 })

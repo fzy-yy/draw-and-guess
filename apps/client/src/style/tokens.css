@@ -1,0 +1,51 @@
+/*
+ * 设计令牌（tokens.css）：行内 Tailwind 类与各模块据此生成语义化颜色、字体与阴影。
+ */
+@theme {
+  --font-sans: Inter, ui-rounded, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+
+  /* ========== 偶数字号标尺（基准 1em = 16px @ 1080p 舞台） ==========
+     字号均为偶数（10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 96），底层使用相对比例 em 随舞台等比缩放 */
+  --text-fs-10: 0.625em;
+  --text-fs-12: 0.75em;
+  --text-fs-14: 0.875em;
+  --text-fs-16: 1em;
+  --text-fs-18: 1.125em;
+  --text-fs-20: 1.25em;
+  --text-fs-24: 1.5em;
+  --text-fs-28: 1.75em;
+  --text-fs-36: 2.25em;
+  --text-fs-48: 3em;
+  --text-fs-96: 6em;
+
+  /* ========== 背景与基色令牌 ========== */
+  --color-black: #000000;
+
+  /* ========== 10 色设计调色板（全应用视觉颜色唯一来源） ==========
+     约定：
+     - 应用内所有“自定义”颜色（含 config/room.ts 的座位颜色 seatColors）必须取自这 10 个变量；
+     - #fff / #000 / 透明度（如 bg-navy/80、bg-blue/10）视为通用基色与透明度衍生，不计入调色板；
+     - 归类原则：相近色阶合并为同一语义色，避免“相似但不同”的漂移，保证全站视觉一致。 */
+  --color-navy: #172554;
+  --color-muted: #64748b;
+  --color-line: #cbd5e1;
+  --color-paper: #f8fafc;
+  --color-blue: #2563eb;
+  --color-sky: #dbeafe;
+  --color-yellow: #facc15;
+  --color-green: #16a34a;
+  --color-red: #dc2626;
+  --color-purple: #c026d3;
+
+  /* ========== 阴影令牌（投影类功能色，统一以主题色 navy 衍生，不使用额外色相） ==========
+     约定：全站统一使用下列语义类（shadow-float / shadow-block / shadow-ring），严禁自定义任意阴影值。 */
+  /* 浮层柔和投影：舞台外壳、弹窗、悬浮面板、Toast与邀请横幅（现代双层层次感，细腻无浑浊光晕）。 */
+  --shadow-float:
+    0 0.8cqh 2.4cqh -0.3cqh color-mix(in srgb, var(--color-navy) 14%, transparent),
+    0 0.2cqh 0.6cqh color-mix(in srgb, var(--color-navy) 8%, transparent);
+  /* 实体硬投影：画板外框与品牌卡片（纯净利落的 2D 纸质层叠质感）。 */
+  --shadow-block: 0.45cqh 0.45cqh 0 color-mix(in srgb, var(--color-navy) 20%, transparent);
+  /* 微轮廓环投影：白色头像与圆形图标衬底外圈描边（替代 border，保留精致双边框）。 */
+  --shadow-ring: 0 0 0 0.18cqh color-mix(in srgb, var(--color-navy) 12%, transparent);
+}

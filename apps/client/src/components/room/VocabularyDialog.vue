@@ -4,18 +4,25 @@
   - 房主：可搜索/筛选、复选框批量选择、确认保存（恢复默认全选）；
   - 非房主：可打开查看本局词库，但不可选择（只读：无复选框、无保存，仅能搜索/筛选浏览）。
   两类筛选（分类/难度）与搜索框可叠加生效（取交集）。
+  工具栏单行布局：搜索框占左半行，右半行为筛选功能按钮。
   批量选择收敛为一个「统一三态复选框」放于表格表头，作用于当前搜索+筛选结果（无筛选时即全部词条）。
+  词库统计（全部/搜索结果/已选）合并到底部操作栏左侧，表格区不单独占行。
   选择集合由父组件持有；全部展示文案来自 config/strings.ts，全部上限/默认值来自 config。
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch, type Component } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
-import { Search, Star, Tags, X } from 'lucide-vue-next'
+import { Star, Tags } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
-import type { VocabularyWord } from '@draw-guess/shared'
+import {
+  MIN_SELECTED_VOCABULARY_WORDS,
+  normalizeAnswer,
+  type VocabularyWord,
+} from '@draw-guess/shared'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import SectionHeader from '@/components/common/SectionHeader.vue'
+import SearchInput from '@/components/common/SearchInput.vue'
 import MultiSelectPopover, {
   type MultiSelectOption,
 } from '@/components/common/MultiSelectPopover.vue'
@@ -23,10 +30,9 @@ import type { DataTableColumn } from '@/components/common/DataTable.vue'
 import VocabTableView from '@/components/room/VocabTableView.vue'
 import { useGameStore } from '@/stores/game'
 
-// 弹窗的 loading 声明仅供 v-model:loading 契约使用（父组件监听 update:loading 驱动界面禁用态），
-// 弹窗内部自行维护拉取状态（vocabularyLoading），不读取该 prop。
-const props = defineProps<{ open: boolean; loading?: boolean }>()
-const emit = defineEmits<{ close: []; 'update:loading': [value: boolean] }>()
+const open = defineModel<boolean>('open', { default: false })
+const loading = defineModel<boolean>('loading', { default: false })
+const emit = defineEmits<{ close: [] }>()
 const store = useGameStore()
 
 // ---- 词库弹窗内部状态 ----
@@ -61,15 +67,14 @@ const SEARCH_SEP = String.fromCharCode(0)
 const searchableWords = computed(() =>
   (store.vocabulary?.items ?? []).map((word) => ({
     word,
-    searchText: [word.text, ...word.aliases]
-      .map((text) => text.normalize('NFKC').toLocaleLowerCase())
-      .join(SEARCH_SEP),
+    searchText: [word.text, ...word.aliases].map((text) => normalizeAnswer(text)).join(SEARCH_SEP),
   })),
 )
 
 /** 第一层过滤：关键词搜索（匹配词面或任一别称）。 */
 const searchedWords = computed<VocabularyWord[]>(() => {
-  const keyword = searchKeyword.value.normalize('NFKC').trim().toLocaleLowerCase()
+  // 关键词与索引同一规范化口径（NFKC + 折叠空白 + 忽略大小写），与猜词判定的 normalizeAnswer 一致
+  const keyword = normalizeAnswer(searchKeyword.value)
   return searchableWords.value
     .filter((entry) => !keyword || entry.searchText.includes(keyword))
     .map((entry) => entry.word)
@@ -219,23 +224,28 @@ const debouncedSearch = useDebounceFn((value: string) => {
 }, store.config.ui.searchDebounceMs)
 watch(search, (value) => debouncedSearch(value))
 
+function handleClose(): void {
+  open.value = false
+  emit('close')
+}
+
 /** 打开弹窗：拉取词库成功后初始化选择与搜索，并让虚拟器基于当前内容重新测量。 */
 watch(
-  () => props.open,
-  async (open) => {
-    if (!open || vocabularyLoading.value) return
+  open,
+  async (isOpen) => {
+    if (!isOpen || vocabularyLoading.value) return
     vocabularyLoading.value = true
-    emit('update:loading', true)
+    loading.value = true
     try {
       await store.loadVocabulary()
     } finally {
       vocabularyLoading.value = false
-      emit('update:loading', false)
+      loading.value = false
     }
     // 首次拉取失败时 store.vocabulary 为空：不显示弹窗，由父组件收下 close 供重试。
     const vocab = store.vocabulary
     if (!vocab) {
-      emit('close')
+      handleClose()
       return
     }
     selectedIds.value = new Set(vocab.selectedIds)
@@ -250,12 +260,12 @@ watch(
 <template>
   <!-- 弹窗基于 BaseDialog 外壳；仅在「已打开且词库已拉取」时渲染内容，避免加载中的空遮罩。 -->
   <BaseDialog
-    :open="props.open && !!store.vocabulary"
+    :open="open && !!store.vocabulary"
     width-class="w-[88cqw]"
     section-class="h-[84cqh]"
     labelledby="vocab-title"
     :close-aria="strings.room.vocabCloseAria"
-    @close="emit('close')"
+    @close="handleClose"
   >
     <template #header>
       <SectionHeader
@@ -267,57 +277,35 @@ watch(
 
     <template v-if="store.vocabulary">
       <div class="flex min-h-0 flex-1 flex-col">
-        <!-- 工具栏：搜索 + 字段筛选（纯图标，悬浮说明语义） -->
+        <!-- 工具栏：搜索框占左半行，右半行为功能按钮区（分类/难度筛选，纯图标，悬浮说明语义） -->
         <div
-          class="flex flex-wrap items-center gap-[0.6em] py-[1.1cqh] px-[1.7em] border-b-[0.18cqh] border-b-line"
+          class="flex items-center gap-[0.6em] py-[1.1cqh] px-[1.7em] border-b-[0.18cqh] border-b-line"
         >
-          <label
-            class="flex h-[4.8cqh] min-w-[16cqw] flex-2 items-center gap-[0.6em] rounded-[0.65em] border-[0.18cqh] border-line bg-white px-[0.75em]"
-            ><Search aria-hidden="true" /><input
+          <div class="w-1/2 min-w-0">
+            <SearchInput
               v-model="search"
-              class="w-full min-w-0 border-0 outline-0 bg-transparent"
               :placeholder="strings.room.vocabSearchPlaceholder"
-              :aria-label="strings.room.vocabSearchAria" /><button
-              v-if="search"
-              type="button"
-              :aria-label="strings.room.vocabClearSearchAria"
-              class="grid place-items-center bg-transparent"
-              @click="search = ''"
-            >
-              <X /></button
-          ></label>
+              :aria-label="strings.room.vocabSearchAria"
+            />
+          </div>
           <!-- 字段筛选：分类 / 难度（多选，可叠加搜索）；纯图标 + 悬浮说明 -->
-          <MultiSelectPopover
-            v-for="filter in filterDefs"
-            :key="filter.key"
-            :label="filter.label"
-            :trigger-aria="strings.room.vocabFilterAria(filter.label)"
-            :select-all-label="strings.room.vocabSelectAllShort"
-            :deselect-all-label="strings.room.vocabDeselectAllShort"
-            :done-label="strings.room.vocabPanelDone"
-            :options="filter.options"
-            :selected="filterSelections[filter.key] ?? []"
-            icon-only
-            :icon="filter.icon"
-            :highlight="true"
-            placement="bottom"
-            @update:selected="updateFilter(filter.key, $event)"
-          />
-        </div>
-
-        <!-- 词库统计：全部 / 搜索结果 / 已选（房主与只读玩家都可见，用于确认当前范围） -->
-        <div
-          class="flex gap-[2em] items-center py-[1cqh] px-[1.7em] text-muted bg-sky text-[0.78em]"
-        >
-          <span v-if="!isReadOnly">
-            {{ strings.room.vocabAll }}
-            <b class="text-blue">{{ store.vocabulary?.items.length ?? 0 }}</b></span
-          ><span
-            >{{ strings.room.vocabResults }}
-            <b class="text-blue">{{ filteredWords.length }}</b></span
-          ><span v-if="!isReadOnly"
-            >{{ strings.room.vocabSelected }} <b class="text-blue">{{ selectedIds.size }}</b></span
-          >
+          <div class="flex w-1/2 min-w-0 items-center gap-[0.45em]">
+            <MultiSelectPopover
+              v-for="filter in filterDefs"
+              :key="filter.key"
+              :label="filter.label"
+              :trigger-aria="strings.room.vocabFilterAria(filter.label)"
+              :select-all-label="strings.room.vocabSelectAllShort"
+              :deselect-all-label="strings.room.vocabDeselectAllShort"
+              :options="filter.options"
+              :selected="filterSelections[filter.key] ?? []"
+              icon-only
+              :icon="filter.icon"
+              :highlight="true"
+              placement="bottom"
+              @update:selected="updateFilter(filter.key, $event)"
+            />
+          </div>
         </div>
 
         <!-- 内容区：统一列表（表格）视图，经 DataTable 虚拟滚动承载大词库。 -->
@@ -335,16 +323,32 @@ watch(
     </template>
 
     <template #footer>
-      <!-- 底部操作：房主显示保存/恢复默认；只读玩家仅提示不可编辑 -->
-      <p v-if="isReadOnly" class="mr-auto text-muted text-[0.72em]" role="status">
-        {{ strings.room.vocabReadonlyHint }}
-      </p>
+      <!-- 底部操作：左侧词库统计（全部/搜索结果/已选），右侧保存/恢复默认；只读玩家仅提示不可编辑 -->
+      <template v-if="isReadOnly">
+        <p class="mr-auto text-muted text-fs-12" role="status">
+          {{ strings.room.vocabReadonlyHint }}
+        </p>
+      </template>
       <template v-else>
-        <p
-          class="mr-auto text-muted text-[0.72em]"
-          :class="selectedIds.size < store.config.vocabulary.minWords ? 'text-red!' : ''"
-        >
-          {{ strings.room.vocabMinHint(store.config.vocabulary.minWords) }}
+        <!-- 统计：全部 / 搜索结果 / 已选（移到页脚左侧，数字固定 4 位等宽防抖） -->
+        <p class="mr-auto min-w-0 text-muted text-fs-12" role="status">
+          {{ strings.room.vocabAll }}
+          <b class="inline-block min-w-[4ch] text-center tabular-nums text-blue">{{
+            store.vocabulary?.items.length ?? 0
+          }}</b>
+          {{ strings.common.listSeparator }} {{ strings.room.vocabResults }}
+          <b class="inline-block min-w-[4ch] text-center tabular-nums text-blue">{{
+            filteredWords.length
+          }}</b>
+          {{ strings.common.listSeparator }} {{ strings.room.vocabSelected }}
+          <b class="inline-block min-w-[4ch] text-center tabular-nums text-blue">{{
+            selectedIds.size
+          }}</b>
+          <span
+            v-if="selectedIds.size < MIN_SELECTED_VOCABULARY_WORDS"
+            class="ml-[1em] font-bold text-red"
+            >{{ strings.room.vocabMinHint(MIN_SELECTED_VOCABULARY_WORDS) }}</span
+          >
         </p>
         <AppButton variant="secondary" type="button" @click="setSelection(allWordIds, true)">
           {{ strings.room.restoreDefault }}
@@ -352,7 +356,7 @@ watch(
         <AppButton
           variant="primary"
           type="button"
-          :disabled="selectedIds.size < store.config.vocabulary.minWords"
+          :disabled="selectedIds.size < MIN_SELECTED_VOCABULARY_WORDS"
           @click="saveVocabulary"
         >
           {{ strings.room.confirmSelection }}

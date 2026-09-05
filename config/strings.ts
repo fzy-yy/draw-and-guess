@@ -51,6 +51,8 @@ export const strings = {
     roundsUnit: (count: number) => `${count} 轮`, // 轮数单位
     secondsUnit: (count: number) => `${count} 秒`, // 秒数单位
     percentUnit: (value: number) => `${value}%`, // 百分比单位（如音量/提示比例展示）
+    /** 「标签 · 数量」计数徽章：多选悬浮面板/触发按钮展示当前选中数（如「分类 · 2」）。 */
+    countBadge: (label: string, count: number) => `${label} · ${count}`,
     roundsField: '每人作画次数', // 建房 / 规则表单的轮数字段名
     drawTimeField: '作画时间', // 建房 / 规则表单的作画时间字段名
     myAvatarAria: '我的 SVG 头像', // 自己的头像无障碍标签
@@ -217,8 +219,12 @@ export const strings = {
     ruleRoundsDd: (rounds: number) => `每人 ${rounds} 轮`, // 规则项：轮数值
     ruleDrawDt: '作画时间', // 规则项：作画时间
     ruleDrawDd: (seconds: number) => `${seconds} 秒`, // 规则项：作画时间值
+    ruleDrawByVocab: '按词库设定', // 规则项：作画时间由词库决定
     ruleOptionsDt: '候选词', // 规则项：候选词
     ruleOptionsDd: (count: number) => `${count} 选 1`, // 规则项：候选词值
+    ruleRerollDt: '选词换组', // 规则项：选词换组
+    ruleRerollOn: '允许一次', // 规则摘要：允许换一组
+    ruleRerollOff: '禁用', // 规则摘要：禁用换一组
     ruleHintsDt: '提示', // 规则项：提示
     hintsOff: '关闭', // 提示关闭
     hintsBothOn: '逐字 + 结构化', // 两种提示均开启
@@ -289,6 +295,7 @@ export const strings = {
     scoreModeFlat: '固定分（仅基础分）', // 计分方式：固定
     togglePlayerInvite: '普通玩家可邀请', // 规则开关：成员邀请
     togglePause: '房主可暂停', // 规则开关：暂停权限
+    toggleAllowWordReroll: '允许选词换一组', // 规则开关：选词换一组
     joinPolicyField: '中途加入', // 加入策略字段
     joinPolicyForbid: '禁止', // 加入策略：禁止
     joinPolicySpectate: '仅观战', // 加入策略：仅观战
@@ -308,11 +315,11 @@ export const strings = {
   /* ============================= 对局 GameView.vue ============================= */
   game: {
     roundLabel: 'ROUND', // 回合指示英文
+    roundSeparator: ' / ', // 回合计数分隔符（「ROUND 1 / 4」）
+    rankPrefix: (rank: number) => `#${rank}`, // 最终排行名次前缀（如「#1」）
     drawerAvatarAria: '当前画家 SVG 头像', // 当前画家头像标签
     drawerLabel: '当前画家', // 画家指示标题
     drawerPending: '即将揭晓', // 画家未揭晓
-    yourWord: '你的题目', // 画家视角答案标题
-    guessPrompt: '猜猜这是什么', // 猜词者视角标题
     awaitingWord: '等待选词…', // 答案未揭晓占位
     secondsSuffix: '秒', // 计时器单位
     pauseAriaHost: '暂停游戏', // 房主暂停按钮标签
@@ -340,10 +347,6 @@ export const strings = {
     reactionPanelAria: '表情反应列表', // 表情悬浮面板
     sendReactionAria: (reaction: string) => `发送表情 ${reaction}`, // 表情选项标签
     sendQuickPhraseAria: (phrase: string) => `发送快捷短语：${phrase}`, // 快捷短语图标标签
-    drawerChatHint: '画家不能输入答案，可使用上方快捷互动', // 画家禁言提示
-    spectatorChatHint: '观战成员只能观看，不能发言或猜词', // 观战禁言提示
-    guessedChatHint: '你已猜中，可继续使用上方快捷互动', // 已猜中提示
-    waitingChatHint: '等待作画阶段开始', // 开局前提示
     toolGroup: '工具', // 工具栏分组
     penTool: '画笔', // 画笔工具
     penAria: (key: string) => `画笔，快捷键 ${key}`, // 画笔按钮标签
@@ -367,6 +370,8 @@ export const strings = {
     countdownHint: '画家顺序和首个回合由服务器统一确定', // 开局倒计时说明
     yourTurn: '轮到你作画了', // 选词面板提示
     chooseWordTitle: '选择一个词', // 选词面板标题
+    rerollWords: '换一组', // 选词面板换一组按钮
+    rerollUsed: '每回合仅能更换一次候选词', // 换一组已使用提示
     wordDifficultyAria: (value: number) => `难度 ${value} 星`, // 候选词难度星级无障碍标签
     hintBadgeLabel: '提示', // HUD 结构化提示前缀
     autoChoose: (seconds: number) => `${seconds} 秒后将自动选择`, // 选词倒计时提示
@@ -459,7 +464,13 @@ export const strings = {
     diagnosticsTitle: '关于与连接诊断', // 诊断区标题
     copyDiagnostics: '复制诊断信息', // 复制诊断按钮
     resetSettings: '恢复本地默认设置', // 恢复默认按钮
+    resetSettingsTitle: '恢复默认设置', // 恢复默认确认弹窗标题
+    resetSettingsBody: '将音量、快捷键与偏好恢复为初始状态，此操作不会清除您的昵称与头像。', // 恢复默认确认说明
+    confirmResetSettings: '确认恢复', // 恢复默认确认按钮
     clearProfile: '清除本地资料', // 清除资料按钮
+    clearProfileTitle: '清除本地资料', // 清除资料确认弹窗标题
+    clearProfileBody: '将清除您的昵称、头像与自动重连凭证并退出房间，确定继续吗？', // 清除资料确认说明
+    confirmClearProfile: '确认清除', // 清除资料确认按钮
     copied: '脱敏诊断信息已复制', // 复制成功提示
     copyFailed: '当前环境不支持复制，请手动选择文本', // 复制失败提示
     // 诊断文本模板（多行汇总）
@@ -568,6 +579,9 @@ export const serverStrings = {
     INVALID_DRAW_STYLE: '画笔颜色或线宽无效', // 笔画样式非法
     INVALID_FILL: '填充颜色无效', // 填充颜色非法
     PAUSE_DISABLED: '本房间未开启暂停权限', // 暂停权限关闭
+    REROLL_DISABLED: '本房间未开启选词换一组功能', // 选词换一组权限关闭
+    REROLL_ALREADY_USED: '本回合已更换过一次候选词', // 换一组已用完
+    INVALID_PHASE_REROLL: '只有在选词阶段才能更换候选词', // 阶段不匹配
     INVALID_TARGET_SELF: '房主不能移除自己，请使用退出房间', // 踢自己
     SPECTATOR_CANNOT_HOST: '观战成员不能成为房主', // 移交目标非法
     ROOM_NOT_JOINABLE_INVITE: '房间已开始或已满员，不能邀请', // 邀请前置失败
@@ -577,6 +591,7 @@ export const serverStrings = {
     INVITE_ROOM_CLOSED: '邀请房间已关闭', // 邀请视图生成时房间已关（snapshot）
     ROOM_NOT_FOUND: '房间不存在或已经关闭，请从大厅选择其他房间', // 加入失败
     PRIVATE_ROOM_NOT_FOUND: '房间码无效或私密房间已经关闭', // 私密房加入统一失败文案
+    PRIVATE_CODE_EXHAUSTED: '私密房间码生成失败，请重试', // 私密房码碰撞耗尽（极端情况下，不降级到弱随机）
     ROOM_FULL: '房间已经满员，请加入其他房间', // 房间满员
     GAME_IN_PROGRESS_FORBID: '本房间不允许中途加入，请等待下一局', // 禁止中途加入
     GAME_IN_PROGRESS_NEXT: '游戏进行中，请等待下一局开始后再加入', // 下一局加入

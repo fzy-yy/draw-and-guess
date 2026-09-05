@@ -90,6 +90,7 @@ export default [
         PointerEvent: 'readonly',
         WheelEvent: 'readonly',
         KeyboardEvent: 'readonly',
+        FocusEvent: 'readonly',
         Event: 'readonly',
         EventTarget: 'readonly',
         getComputedStyle: 'readonly',

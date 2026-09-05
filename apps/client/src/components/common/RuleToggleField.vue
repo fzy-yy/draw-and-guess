@@ -4,31 +4,19 @@
   v-model 双向绑定布尔值，组件不感知业务字段。
 -->
 <script setup lang="ts">
+const model = defineModel<boolean>({ required: true })
+
 defineProps<{
   /** 字段标签文案（来自 strings） */
   label: string
-  modelValue: boolean
 }>()
-const emit = defineEmits<{
-  'update:modelValue': [value: boolean]
-}>()
-
-/** 复选框切换：把勾选状态即时上抛给父级（父级持有草稿状态）。 */
-function onToggle(event: Event): void {
-  emit('update:modelValue', (event.target as HTMLInputElement).checked)
-}
 </script>
 
 <template>
   <label
-    class="min-w-0 flex min-h-[4.8cqh] flex-row items-center gap-[0.5cqh] rounded-[0.5em] bg-line px-[0.8em] text-[0.76em] font-extrabold"
+    class="min-w-0 flex min-h-[4.8cqh] flex-row items-center gap-[0.5cqh] rounded-[0.5em] bg-line px-[0.8em] text-fs-14 font-bold cursor-pointer"
   >
-    <input
-      type="checkbox"
-      class="h-[2.2cqh] w-[2.2cqh] accent-blue"
-      :checked="modelValue"
-      @change="onToggle"
-    />
+    <input v-model="model" type="checkbox" class="h-[2.2cqh] w-[2.2cqh] accent-blue" />
     {{ label }}
   </label>
 </template>

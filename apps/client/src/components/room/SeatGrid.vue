@@ -38,7 +38,7 @@ const pendingKickId = ref<string>()
         :eyebrow="strings.room.playersEyebrow"
         :title="strings.room.playersTitle"
       ></SectionHeader>
-      <span class="flex items-center gap-[0.45em] text-muted font-extrabold"
+      <span class="flex items-center gap-[0.45em] text-muted font-bold"
         ><Users />
         {{
           strings.room.seatCount(
@@ -78,14 +78,14 @@ const pendingKickId = ref<string>()
             <b class="overflow-hidden text-ellipsis whitespace-nowrap">{{ member.nickname }}</b
             ><span
               v-if="member.id === store.playerId"
-              class="py-[0.1cqh] px-[0.45em] text-white bg-blue rounded-[99em] text-[0.55em]"
+              class="py-[0.1cqh] px-[0.45em] text-white bg-blue rounded-[99em] text-fs-10"
               >{{ strings.room.meTag }}</span
             >
           </div>
           <!-- 准备状态标签：观战 / 已准备 / 重连中 / 未准备 -->
           <span
             v-if="!member.isHost || member.spectating"
-            class="min-w-[7em] flex items-center justify-center gap-[0.35em] mt-[0.7cqh] py-[0.4cqh] px-[0.8em] text-muted bg-line rounded-[99em] text-[0.68em] font-black"
+            class="min-w-[7em] flex items-center justify-center gap-[0.35em] mt-[0.7cqh] py-[0.4cqh] px-[0.8em] text-muted bg-line rounded-[99em] text-fs-12 font-bold"
             :class="member.ready ? 'text-green! bg-green/10!' : ''"
             >{{
               member.spectating
@@ -111,7 +111,7 @@ const pendingKickId = ref<string>()
         <!-- 空席位占位提示 -->
         <template v-else
           ><UserPlus class="h-[5cqh] w-[5cqh]" /><b>{{ strings.room.emptySeatTitle }}</b
-          ><span class="text-[0.65em]">{{ strings.room.emptySeatHint }}</span></template
+          ><span class="text-fs-12">{{ strings.room.emptySeatHint }}</span></template
         >
       </article>
     </div>

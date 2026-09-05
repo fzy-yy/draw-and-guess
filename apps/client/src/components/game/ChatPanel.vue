@@ -2,6 +2,7 @@
   右侧聊天区（从 GameView.vue 拆出的子组件）：
   消息列表 + 快捷互动工具 + 猜词输入。猜词输入、消息滚动跟随与自动聚焦逻辑全部收敛到内部；
   是否可猜词由父组件经 canGuess 传入，提交猜词/预设短语直接调用 store。
+  输入框对无权限角色直接禁用（禁用样式已表达状态，不再渲染冗余的文字提示行）。
   快捷互动收敛为两个悬浮面板：表情反应 + 快捷短语（短语列表来自 config/presets.safeChat，
   在 config 中可增减），均基于 ActionPopover 复用外壳。
 -->
@@ -32,17 +33,6 @@ const messages = computed(() => store.room?.game?.messages ?? [])
 const canSendPreset = computed(
   () =>
     store.room?.phase === 'drawing' && !store.me?.spectating && store.me?.connection === 'online',
-)
-const interactionHint = computed(() =>
-  props.canGuess
-    ? strings.game.guessLabel
-    : store.isDrawer
-      ? strings.game.drawerChatHint
-      : store.me?.spectating
-        ? strings.game.spectatorChatHint
-        : store.me?.guessed
-          ? strings.game.guessedChatHint
-          : strings.game.waitingChatHint,
 )
 
 function memberForMessage(message: ChatMessage): RoomMember | undefined {
@@ -120,16 +110,13 @@ watch(
   >
     <header class="flex items-center justify-between border-b-[0.18cqh] border-line pb-[1cqh]">
       <div>
-        <span class="text-blue text-[0.56em] tracking-[0.15em]">{{
-          strings.game.liveChatLabel
-        }}</span>
-        <h2 class="text-[1.05em]">{{ strings.game.chatTitle }}</h2>
+        <span class="text-blue text-fs-10 tracking-[0.15em]">{{ strings.game.liveChatLabel }}</span>
+        <h2 class="text-fs-18">{{ strings.game.chatTitle }}</h2>
       </div>
       <!-- 当前角色标签：观战中 / 已猜中 / 作画中 / 猜词中（与得分条共用同一映射） -->
-      <span
-        class="bg-sky px-[0.6em] py-[0.35cqh] text-blue rounded-[99em] text-[0.62em] font-extrabold"
-        >{{ roleTextFor(store.me ?? undefined) }}</span
-      >
+      <span class="bg-sky px-[0.6em] py-[0.35cqh] text-blue rounded-[99em] text-fs-10 font-bold">{{
+        roleTextFor(store.me ?? undefined)
+      }}</span>
     </header>
     <!-- 消息列表：猜词、系统、猜中、预设等类型分别高亮 -->
     <div
@@ -142,8 +129,8 @@ watch(
         v-for="message in messages"
         :key="message.id"
         :class="[
-          'flex flex-wrap gap-[0.35em] border-l-[0.3cqh] border-line bg-white px-[0.65em] py-[0.6cqh] text-[0.72em] leading-[1.35] text-navy first:mt-auto ui-feedback',
-          message.playerId && 'text-navy! font-extrabold',
+          'flex flex-wrap gap-[0.35em] border-l-[0.3cqh] border-line bg-white px-[0.65em] py-[0.6cqh] text-fs-12 leading-[1.35] text-navy first:mt-auto ui-feedback',
+          message.playerId && 'text-navy! font-bold',
           message.type === 'system' && 'text-blue! bg-sky! border-l-blue!',
         ]"
         :style="messageStyle(message)"
@@ -154,18 +141,12 @@ watch(
         >
         <span>{{ message.text }}</span>
       </div>
-      <div
-        v-if="!messages.length"
-        class="m-auto flex flex-col items-center text-muted text-[0.7em]"
-      >
+      <div v-if="!messages.length" class="m-auto flex flex-col items-center text-muted text-fs-12">
         <Send class="h-[4cqh] w-[4cqh]" /><span>{{ strings.game.noMessages }}</span>
       </div>
     </div>
     <!-- 所有角色共享同一操作布局：上排快捷互动，下排输入；无猜词权限时仅禁用输入。 -->
     <div class="border-t-[0.18cqh] border-line pt-[0.8cqh]">
-      <p class="text-muted min-h-[1.3em] text-[0.6em] leading-[1.3]">
-        {{ interactionHint }}
-      </p>
       <div
         class="mt-[0.55cqh] flex items-center gap-[0.45em]"
         role="group"
@@ -184,7 +165,7 @@ watch(
                 v-for="reaction in store.config.presets.chatReactions"
                 :key="reaction"
                 type="button"
-                class="grid h-[4.2cqh] w-[4.2cqh] place-items-center rounded-full bg-line text-[1.05em] hover:bg-sky"
+                class="grid h-[4.2cqh] w-[4.2cqh] place-items-center rounded-full bg-line text-fs-18 hover:bg-sky"
                 :aria-label="strings.game.sendReactionAria(reaction)"
                 @click="sendPresetAndClose(reaction, close)"
               >
@@ -207,7 +188,7 @@ watch(
                 v-for="phrase in store.config.presets.safeChat"
                 :key="phrase"
                 type="button"
-                class="min-h-[3.4cqh] truncate rounded-[0.5em] bg-line px-[0.6em] py-[0.35cqh] text-left text-[0.7em] font-extrabold text-navy hover:bg-sky"
+                class="min-h-[3.4cqh] truncate rounded-[0.5em] bg-line px-[0.6em] py-[0.35cqh] text-left text-fs-12 font-bold text-navy hover:bg-sky"
                 :aria-label="strings.game.sendQuickPhraseAria(phrase)"
                 :title="phrase"
                 @click="sendPresetAndClose(phrase, close)"

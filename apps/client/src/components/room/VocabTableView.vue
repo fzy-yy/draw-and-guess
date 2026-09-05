@@ -67,15 +67,14 @@ const selectAllState = useSelectAllState(
   >
     <!-- 词面列：主文字加粗突出 -->
     <template #cell-text="{ row }">
-      <span class="block truncate font-black text-navy" :title="row.text">{{ row.text }}</span>
+      <span class="block truncate font-bold text-navy" :title="row.text">{{ row.text }}</span>
     </template>
-    <!-- 分类列：蓝色小徽章（词库单词条仅一个分类） -->
+    <!-- 分类列：蓝色小方角徽章（词库单词条仅一个分类） -->
     <template #cell-category="{ row }">
-      <span v-if="row.category" class="inline-flex max-w-full">
-        <span
-          class="rounded-full bg-sky px-[0.5em] py-[0.08cqh] text-[0.9em] font-extrabold text-blue"
-          >{{ row.category }}</span
-        >
+      <span v-if="row.category" class="inline-block max-w-full">
+        <span class="rounded-none bg-sky px-[0.5em] py-[0.08cqh] text-fs-10 font-bold text-blue">{{
+          row.category
+        }}</span>
       </span>
       <span v-else class="text-muted">{{ strings.room.vocabAliasEmpty }}</span>
     </template>

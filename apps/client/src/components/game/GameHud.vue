@@ -3,6 +3,7 @@
   回合数、当前画家、答案、计时器、网络状态与暂停/设置/全屏操作。
   该组件只读 store 的公开状态；HUD 派生值（计时/进度/画家/答案）由父组件经 props 传入，
   整局的 ticker 只在 GameView 持有。仅把「设置」「全屏」作为事件抛给父组件。
+  答案区不渲染标签行（如「你的题目」）：答案文字本身语义自明，避免顶栏文字冗余。
 -->
 <script setup lang="ts">
 import { Clock3, CirclePause, CirclePlay, Settings, Maximize, Minimize } from 'lucide-vue-next'
@@ -53,6 +54,17 @@ const roundDisplay = computed(() => {
 const isUrgent = computed(
   () => props.secondsLeft <= store.config.game.warningSeconds && props.secondsLeft > 0,
 )
+
+/** 单按钮处理暂停与恢复切换：暂停时房主点击恢复，运行中点击暂停或请求暂停 */
+function handlePauseToggle(): void {
+  if (store.room?.phase === 'paused') {
+    if (store.isHost) {
+      void store.resume()
+    }
+  } else {
+    void store.pause(store.isHost ? strings.game.pauseReasonHost : strings.game.pauseReasonGuest)
+  }
+}
 </script>
 
 <template>
@@ -63,11 +75,13 @@ const isUrgent = computed(
   >
     <!-- 回合指示：胶囊底衬（与计时器一致），横排「ROUND 1 / 4」 -->
     <HudPill>
-      <span class="text-sky text-[0.65em]">{{ strings.game.roundLabel }}</span>
-      <b class="text-white text-[1.6em] leading-none tabular-nums">
+      <span class="text-sky text-fs-12">{{ strings.game.roundLabel }}</span>
+      <b class="text-white text-fs-24 leading-none tabular-nums">
         <!-- 当前回合固定 2ch 宽：两位数回合（如 9→10）不会挤动顶栏后续栏目 -->
         <span class="inline-block min-w-[2ch] text-center">{{ roundDisplay }}</span>
-        <small class="text-[0.5em] text-sky">/ {{ game?.totalRounds }}</small>
+        <small class="text-fs-10 text-sky"
+          >{{ strings.game.roundSeparator }}{{ game?.totalRounds }}</small
+        >
       </b>
     </HudPill>
     <!-- 当前画家指示：胶囊底衬，头像 + 「当前画家/昵称」两行 -->
@@ -77,38 +91,37 @@ const isUrgent = computed(
         :avatar-id="drawer?.avatarId"
         :label="strings.game.drawerAvatarAria"
       />
-      <span class="min-w-0 flex flex-col text-sky text-[0.62em]">
+      <span class="min-w-0 flex flex-col text-sky text-fs-10">
         {{ strings.game.drawerLabel }}
-        <b class="overflow-hidden text-ellipsis whitespace-nowrap text-white text-[1.5em]">{{
+        <b class="overflow-hidden text-ellipsis whitespace-nowrap text-white text-fs-24">{{
           drawer?.nickname || strings.game.drawerPending
         }}</b>
       </span>
     </HudPill>
-    <!-- 答案展示：画家看自己的题目，猜词者看遮罩；猜词者额外可见已揭示的结构化提示 -->
+    <!-- 答案展示：提示行在上、答案（或遮罩）行在下。
+         画家看自己的题目，猜词者看遮罩；猜词者额外可见已揭示的结构化提示。
+         不展示「你的题目/猜猜这是什么」标签行：答案本身语义自明，减少顶栏冗余文字。 -->
     <div class="justify-self-center min-w-[16cqw] flex flex-col items-center">
-      <span class="text-sky text-[0.6em]">{{
-        store.isDrawer && game?.answer ? strings.game.yourWord : strings.game.guessPrompt
-      }}</span
-      ><b class="min-h-[3.8cqh] flex items-center text-yellow text-[1.45em] tracking-[0.16em]">{{
-        store.isDrawer && game?.answer ? game.answer : game?.answerMask || strings.game.awaitingWord
-      }}</b>
       <!--
-        结构化提示区：服务端按房间规则的时机揭示词条分类作为提示（单分类即单条提示），
+        结构化提示区（位于答案上方）：服务端按房间规则的时机揭示词条分类作为提示（单分类即单条提示），
         全体猜词者一致；未揭示时不渲染、不占位。
         画家已知答案，不重复展示提示。
       -->
       <p
         v-if="!store.isDrawer && game?.revealedHints?.length"
-        class="flex min-h-[2.2cqh] items-center gap-[0.35em] rounded-[0.5em] bg-white/10 px-[0.6em] py-[0.15cqh] text-[0.62em] font-bold leading-[1.3] text-sky"
+        class="flex min-h-[2.2cqh] items-center gap-[0.35em] rounded-[0.5em] bg-white/10 px-[0.6em] py-[0.15cqh] text-fs-10 font-bold leading-[1.3] text-sky"
         role="status"
       >
-        <span class="rounded-[0.35em] bg-yellow px-[0.4em] py-[0.05cqh] font-black text-navy">{{
+        <span class="rounded-[0.35em] bg-yellow px-[0.4em] py-[0.05cqh] font-bold text-navy">{{
           strings.game.hintBadgeLabel
         }}</span>
         <span class="min-w-0 flex-1 truncate" :title="game!.revealedHints![0]">{{
           game!.revealedHints![0]
         }}</span>
       </p>
+      <b class="min-h-[3.8cqh] flex items-center text-yellow text-fs-24 tracking-[0.16em]">{{
+        store.isDrawer && game?.answer ? game.answer : game?.answerMask || strings.game.awaitingWord
+      }}</b>
     </div>
     <!-- 计时器：剩余秒数 + 进度条；底部胶囊底衬与回合/画家指示统一（HudPill）；最后 10 秒进入紧急样式 -->
     <HudPill
@@ -116,9 +129,9 @@ const isUrgent = computed(
       :class="{ 'bg-red!': isUrgent }"
     >
       <Clock3 class="h-[2.5cqh] w-[2.5cqh] shrink-0" /><b
-        class="min-w-0 text-center text-[1.65em] tabular-nums"
+        class="min-w-0 text-center text-fs-24 tabular-nums"
         >{{ secondsLeft }}</b
-      ><span class="shrink-0 text-[0.6em] text-sky">{{ strings.game.secondsSuffix }}</span>
+      ><span class="shrink-0 text-fs-10 text-sky">{{ strings.game.secondsSuffix }}</span>
       <i
         class="absolute bottom-0 left-0 h-[0.45cqh] w-full bg-green origin-left"
         :class="{ 'bg-yellow!': isUrgent }"
@@ -130,27 +143,25 @@ const isUrgent = computed(
     <!-- 右上角操作组：暂停/继续、设置、进入或退出全屏。 -->
     <div class="flex items-center gap-[0.45em]">
       <!--
-        暂停/请求暂停按钮：开局倒计时阶段不可暂停（服务端亦不在合法转换白名单内），故不展示。
-        暂停阶段按钮保持可见但禁用：暂停已生效，重复请求只会被服务端拒绝（INVALID_PHASE），
-        但直接隐藏会让成员侧顶栏在暂停瞬间“少一个按钮”，看起来像界面跳变（标注截图中的 bug）。
-        房主在暂停阶段的继续操作由旁边单独的恢复按钮承担。
+        暂停/恢复单按钮切换：
+        - 游戏进行中（非 starting/paused）：显示暂停图标（CirclePause），点击暂停或请求暂停；
+        - 游戏暂停中（paused）：图标切换为继续（CirclePlay），房主点击恢复对局，非房主置灰禁用；
+        - 开局倒计时阶段（starting）：不在 pausable 状态，不展示。
       -->
       <IconButton
         v-if="store.room.phase !== 'starting'"
-        :disabled="store.room.phase === 'paused'"
-        :label="store.isHost ? strings.game.pauseAriaHost : strings.game.pauseAriaGuest"
-        @click="
-          store.pause(store.isHost ? strings.game.pauseReasonHost : strings.game.pauseReasonGuest)
+        :disabled="store.room.phase === 'paused' && !store.isHost"
+        :label="
+          store.room.phase === 'paused'
+            ? strings.game.resumeAria
+            : store.isHost
+              ? strings.game.pauseAriaHost
+              : strings.game.pauseAriaGuest
         "
+        @click="handlePauseToggle"
       >
-        <CirclePause />
-      </IconButton>
-      <IconButton
-        v-if="store.isHost && store.room.phase === 'paused'"
-        :label="strings.game.resumeAria"
-        @click="store.resume"
-      >
-        <CirclePlay />
+        <CirclePlay v-if="store.room.phase === 'paused'" />
+        <CirclePause v-else />
       </IconButton>
       <IconButton :label="strings.game.settingsAria" @click="emit('settings')">
         <Settings />

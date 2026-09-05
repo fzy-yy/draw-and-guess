@@ -64,7 +64,7 @@ draw_and_guess/
 │       ├── events.ts              # 全部 Socket.IO 事件名常量 EVENTS（前后端唯一事件名来源）
 │       ├── types.ts               # 领域类型：房间阶段/成员/规则/快照/绘图命令/邀请等 DTO（含 spectating）
 │       ├── schemas.ts             # Zod 运行时校验：注册/资料/建房/规则/绘图等请求载荷
-│       └── pure.ts                # 纯函数：答案规范化、遮罩生成、计分、近似判断、状态机转换表
+│       └── pure.ts                # 纯函数：答案规范化、遮罩生成、计分、状态机转换表
 │
 ├── apps/server/                   # 服务端（Express 5 + Socket.IO + Zod + SQLite，权威领域）
 │   ├── package.json               # 依赖见「技术栈与运行环境」
@@ -100,30 +100,45 @@ draw_and_guess/
 │   └── src/
 │       ├── main.ts                # 客户端入口：创建 App 并挂载 #app；仅引入 ./style/index.css（Toast 为自建，无需第三方样式）
 │       ├── App.vue                # 根舞台：页面互斥渲染（对局>房间>设置>大厅>资料）、自建 `<AppToaster/>`、邀请横幅、竖屏提示、断线恢复阻断框
-│       ├── style/
-│       │   └── index.css          # ★唯一全局样式文件：@import tailwindcss + @theme 令牌 + @layer base + @layer components（.dialog-shell/.eyebrow/.round-icon-btn/.ui-feedback 等）
+│       ├── style/                 # 全局样式模块目录（由 index.css 聚合导出）
+│       │   ├── index.css          # ★主入口：依次导入 tailwindcss 与各分模块样式
+│       │   ├── tokens.css         # 设计令牌：@theme（字体、10 语义色、黑色变量、阴影令牌）
+│       │   ├── base.css           # 全局 base：reset、表单控件基础状态、舞台外壳与容器单位上下文、全屏
+│       │   ├── components.css     # 共享组件类（.dialog-shell/.eyebrow/.eyebrow-light/.round-icon-btn）
+│       │   ├── utilities.css      # Tailwind 组合类（.ui-feedback/.hover-tint 等交互修饰类）
+│       │   ├── animations.css     # 交互反馈动效、Vue 过渡钩子、关键帧与减弱动画
+│       │   └── other.css          # 设备方向（竖屏警告）等未分类规则
 │       ├── stores/
-│       │   ├── game.ts            # Pinia store：本地资料/设置、房间与对局状态、业务操作请求（发送方）、notify 转译（自建 useToasts）
+│       │   ├── index.ts           # ★Store 统一 Barrel 出口（re-export 领域 stores 与统一 Facade）
+│       │   ├── game.ts            # 组合 Facade Store：聚合所有领域 Store，提供向后兼容、单一引用的统一接口 useGameStore()
+│       │   ├── profile.ts         # 玩家个人资料 Store（持久化存储与修改）
+│       │   ├── settings.ts        # 本地偏好设置 Store（音量/动画/快捷键等）
+│       │   ├── session.ts         # 连接与服务端会话 Store（注册、鉴权、在线状态）
+│       │   ├── lobby.ts           # 大厅与房间发现 Store（公开房间列表、在线玩家、刷新与加入）
+│       │   ├── room.ts            # 房间内生命周期 Store（成员席位、准备、房主权限与规则变动）
+│       │   ├── gameplay.ts        # 实时对局业务 Store（回合状态、词语选项、实时猜词流）
+│       │   ├── vocabulary.ts      # 词库选择与配置 Store
 │       │   ├── socket.ts          # Socket 单例 + 推送事件桥接（HMR dispose）
 │       │   └── request.ts         # 请求封装：timeout+ack+错误翻译+quiet 静默降级
 │       ├── composables/
 │       │   ├── useAudioFeedback.ts # Web Audio 合成提示音（自动播放入口解锁、音量实时读取）
 │       │   ├── useGameHud.ts      # 对局 HUD 计算（useTimestamp 驱动）：剩余时间/进度/猜词权限/阶段标签/排行
 │       │   ├── useShortcuts.ts    # 画板快捷键：自定义单键切换工具、撤销/重做组合键
-│       │   └── useToasts.ts       # 自建 Toast 状态层：队列/去重合并(key=type:text)/超时消失/弹跳事件（小条配色统一走 index.css 橙色）
+│       │   └── useToasts.ts       # 自建 Toast 状态层：队列/去重合并(key=type:text)/超时消失/弹跳事件（小条配色统一走橙色派生）
 │       ├── components/
 │       │   ├── AppButton.vue      # 统一动作按钮（primary/secondary/danger），内置类与外部类用 cn() 合并
-│       │   ├── BaseDialog.vue     # 通用弹窗外壳，焦点陷阱用 useFocusTrap（fallbackFocus 兜底）+ Esc 关闭 + 多弹窗顶层仲裁
-│       │   ├── ConfirmDialog.vue  # 通用确认弹窗（复用 BaseDialog，红色 danger 确认钮）
+│       │   ├── BaseDialog.vue     # 通用弹窗外壳，v-model:open 控制，焦点陷阱用 useFocusTrap + Esc 关闭 + 多弹窗顶层仲裁
+│       │   ├── ConfirmDialog.vue  # 通用确认弹窗（复用 BaseDialog，v-model:open 控制，红色 danger 确认钮）
 │       │   ├── AvatarImage.vue    # 内置 SVG 头像统一安全展示（只接收白名单编号）
-│       │   ├── AvatarPickerDialog.vue # 40 个 SVG 头像选择模态框
+│       │   ├── AvatarPickerDialog.vue # 40 个 SVG 头像选择模态框（v-model:open）
 │       │   ├── ActionPopover.vue  # 悬浮操作面板（聊天快捷互动用）
-│       │   ├── AppToaster.vue     # 自建 Toast 堆栈渲染：画框内右上角、白色长条+橙色小条+加粗文字、点击消失、淡入淡出、去重左弹跳（WAAPI）
-│       │   ├── GameCanvas.vue     # 高 DPI 实时画板：直线段描边增量绘制、橡皮擦/destination-out、洪泛填充、滚轮线宽
-│       │   ├── game/              # 对局组件：GameHud / ChatPanel / DrawingToolbar / PhaseOverlay / OverlayCard / ScoreStrip
-│       │   ├── room/              # 房间组件：SeatGrid / RuleSummary / RuleRow / RulesDialog / InviteDialog / VocabularyDialog
-│       │   ├── common/            # 通用原语组件：DataTable / DifficultyStars / MultiSelectPopover / IconButton / ToolButton / RoundIconButton / SettingSliderRow / SettingSwitchRow
-│       │   └── settings/          # 设置页组件：AudioTab / ShortcutsTab / AccessibilityTab / DiagnosticsTab
+│       │   ├── AppToaster.vue     # 自建 Toast 堆栈渲染：画框内右上角、白色长条+橙色小条+加粗文字、样式闭环在组件内、点击消失、淡入淡出、去重左弹跳（WAAPI）
+│       │   ├── GameCanvas.vue     # 高 DPI 实时画板：直线段描边增量绘制、橡皮擦/destination-out、洪泛填充、滚轮线宽（v-model:width）
+│       │   ├── game/              # 对局组件（提供 index.ts）：GameHud / ChatPanel / DrawingToolbar / PhaseOverlay / OverlayCard / ScoreStrip
+│       │   ├── room/              # 房间组件（提供 index.ts）：SeatGrid / RuleSummary / RuleRow / RulesDialog / InviteDialog / VocabularyDialog
+│       │   ├── lobby/             # 大厅组件（提供 index.ts）：CreateRoomDialog / JoinPrivateDialog
+│       │   ├── common/            # 通用原语组件（提供 index.ts）：AppInput / SearchInput / DataTable / DifficultyStars / MultiSelectPopover / IconButton / ToolButton / RoundIconButton / SectionHeader / SideNav / SettingSliderRow / SettingSwitchRow / RuleSliderField / RuleToggleField
+│       │   └── settings/          # 设置页组件（提供 index.ts）：AudioTab / ShortcutsTab / AccessibilityTab / DiagnosticsTab
 │       ├── views/
 │       │   ├── ProfileView.vue    # 资料确认页（随机昵称/内置 SVG 头像选择，无上传）
 │       │   ├── LobbyView.vue      # 在线大厅（公开列表/公私建房/私密短码加入/可发现玩家）
@@ -136,7 +151,7 @@ draw_and_guess/
 │           └── createUuid.ts      # 多环境 UUID：nanoid 十六进制 + RFC 4122 v4 位点（兼容服务端 z.string().uuid()）
 ```
 
-> **关于客户端样式**：`apps/client/src/style/` 仅剩 `index.css` 一个文件。它是 **Tailwind 全局配置**（`@theme` 语义色令牌 + `@layer base` 全局 reset、舞台上下文、交互动效、Vue 过渡钩子、关键帧、竖屏/减少动效 + `@layer components` 共享组件类 `.dialog-shell`/`.eyebrow`/`.round-icon-btn`/`.ui-feedback`/`.hover-tint` 等，用 `@apply` 收敛重复行内类）。**组件/页面自身视觉样式一律写成 Vue 模板内的行内 Tailwind 类**（依赖 `cqh/cqw` 容器单位 + 语义色 `bg-navy`/`text-muted`/`border-line` 等）。新增样式时不要新建 CSS 文件、不要写 `@layer components` 之外的原生 CSS 类选择器。
+> **关于客户端样式**：`apps/client/src/style/` 采用模块化分层管理，由 `index.css` 统一聚合导入各模块（`tokens.css` 设计令牌、`base.css` 全局 reset 与舞台上下文、`components.css` 共享组件类、`utilities.css` Tailwind 组合类、`animations.css` 交互动效与过渡钩子、`other.css` 设备方向规则）。Toast 专用样式收敛于 `AppToaster.vue` 内封闭维护。**组件/页面自身视觉样式一律写成 Vue 模板内的行内 Tailwind 类**（依赖 `cqh/cqw` 容器单位 + 语义色 `bg-navy`/`text-muted`/`border-line` 等）。不要写共享层之外的原生 CSS 类选择器。
 
 ---
 
@@ -210,9 +225,54 @@ pnpm format:check  # 仅检查格式
 - **错误处理**：服务端用 `GameError` + `errors.ts` 统一错误码与中文文案；客户端经 `request.ts` 统一超时 + ack + 错误翻译 + `quiet` 静默降级。
 - **日志**：由 `.env` 的 `LOG_ENABLED` 控制（默认 true）：关闭时完全不创建日志记录器、不写日志文件（零内存开销）；开启时服务端用 `pino`（默认结构化 JSON，无 ANSI 色码），**每次启动写一个新的日志文件**（`apps/server/log/app-YYYY-MM-DD-HH-mm-ss.log`，精确到秒），目录最多保留最近 `LOG_MAX_FILES` 条（默认 10，超出删除最老）；控制台只保留启动横幅，不输出业务日志；级别经 `LOG_LEVEL` 控制。
 - **UI 文案**：**严禁在组件/业务代码里硬编码展示字符**；一律从 `config/strings.ts` 的 `strings`（客户端）或 `serverStrings`（服务端）导入。
-- **样式**：组件/页面视觉一律用**行内 Tailwind 类**写在 Vue 模板；重复长串收敛到共享组件（`AppButton`/`BaseDialog`/`ConfirmDialog`/`IconButton`/`ToolButton`/`OverlayCard`/`RuleRow`/`RoundIconButton`）或 `style/index.css` 的 `@layer components` 共享类。不要新建 CSS 文件、不要写 `@layer components` 之外的原生 CSS 类选择器。语义色用 `@theme` 令牌；容器单位 `cqh/cqw` 用任意值（内部空格用 `_`，如 `shadow-[0_1.2cqh_5cqh_#0009]`）。
-- **配色（≤10 色）**：全应用自定义颜色**只取自 `index.css` `@theme` 里固定的 10 个语义变量**（`navy`/`muted`/`line`/`paper`/`blue`/`sky`/`yellow`/`green`/`red`/`purple`），`config/room.ts` 的 `seatColors` 取其中 6 个；`#fff`/`#000` 与透明度衍生（如 `bg-blue/10`）不计入调色板。**禁止**在组件/模板中硬编码任意 HEX（`bg-[#...]`/`text-[#...]`）或 Tailwind 默认色阶（`slate-*` 等）。`config/drawing.ts` 的 `colors` 是**画板工具色**（画家可选画笔色），属功能性工具配置，非 UI 主题色，不纳入 10 色限制。
+- **样式**：组件/页面视觉一律用**行内 Tailwind 类**写在 Vue 模板；重复长串收敛到共享组件（`AppButton`/`BaseDialog`/`ConfirmDialog`/`IconButton`/`ToolButton`/`OverlayCard`/`RuleRow`/`RoundIconButton`）或 `style/` 共享模块类。不要写共享层之外的原生 CSS 类选择器。语义色用 `@theme` 令牌；容器单位 `cqh/cqw` 用任意值（内部空格用 `_`，如 `shadow-[0_1.2cqh_5cqh_#0009]`）。
+- **配色（≤10 色）**：全应用自定义颜色**只取自 `style/tokens.css` `@theme` 里固定的 10 个语义变量**（`navy`/`muted`/`line`/`paper`/`blue`/`sky`/`yellow`/`green`/`red`/`purple`），`config/room.ts` 的 `seatColors` 取其中 6 个；`#fff`/`#000`（及黑色变量 `--color-black`）与透明度衍生（如 `bg-blue/10`）不计入调色板。**禁止**在组件/模板中硬编码任意 HEX（`bg-[#...]`/`text-[#...]`）或 Tailwind 默认色阶（`slate-*` 等）。`config/drawing.ts` 的 `colors` 是**画板工具色**（画家可选画笔色），属功能性工具配置，非 UI 主题色，不纳入 10 色限制。
 - **动画一致性**：按钮/卡片交互动效统一为 160ms（复用 `.ui-feedback` / `.hover-tint` 共享类，或依赖 `@layer base` 中 `.game-stage button` 的全局过渡）；同类控件应复用同一动画，避免各自定制造成手感不一。
+- **布局规范（外 Grid 骨架，内 Flex 排版）**：
+  - **Grid 宏观骨架与二维矩阵**：主页面二维行列骨架（`ProfileView`/`LobbyView`/`RoomView`/`GameView`/`SettingsView`）、二维固定席位/头像/卡片矩阵（`SeatGrid` 2×3、`AvatarPickerDialog` 8×5、`ShortcutsTab` 3 列、`RulesDialog` 3 列表单、`ChatPanel` 3 列表情）、三列对称顶栏（`StageHeader` `grid grid-cols-[1fr_auto_1fr]`）；
+  - **Flex 微观流式排版**：一维线性排列（水平按钮内容 `inline-flex items-center gap-[...]`、导航 Tab、工具栏工具条、输入框组合；垂直消息流 `flex flex-col`、规则行列表、Toast 堆叠）；
+  - **单元素绝对居中**：严格使用 `grid place-items-center`（如圆形头像底座 `AvatarImage`、独立图标按钮 `IconButton`/`RoundIconButton`、徽章 `HostCrownBadge`、模态遮罩居中），杜绝单元素使用 `flex items-center justify-center` 导致子项伸缩变形；
+  - **保留专用布局**：弹窗/画布状态遮罩（`BaseDialog`/`ConfirmDialog`/`OverlayCard`/`PhaseOverlay`）与 Toast 悬浮层（`AppToaster`）保留 `absolute`/`fixed` 定位；吸顶表头保留 `sticky`；数据表格（`DataTable.vue`）保留原生 `table`/`table-fixed`；
+  - **反模式禁令**：严禁单子项容器使用 `grid-cols-1` 伪网格；严禁单元素容器使用无意义的 `flex`；严禁一维简单按钮使用 Grid；严禁二维页面大框架采用多层嵌套 flex。
+- **字体与排印规范（统一字号标尺、二元字重、统一字体族）**：
+  - **字体家族统管**：字体族集中在 `apps/client/src/style/tokens.css` 的 `@theme` 中声明 `--font-sans`（默认无衬线系统字体）与 `--font-mono`（等宽数字/房间码/快捷键字体），全站经 Tailwind `font-sans` / `font-mono` 类统一调用，严禁在模板中临时编写私有 `font-[...]` 字体栈；
+  - **偶数字号标尺（`text-fs-*`）**：全站字号均为偶数，集中定义于 `tokens.css`（并在 `apps/client/src/utils/cn.ts` 注册 `CUSTOM_FONT_SIZES` 参与 TailwindMerge 冲突消解）。底层采用相对单位 `em` 随舞台等比缩放（基准 1em = 16px @ 1080p）：
+    - `text-fs-10` (0.625em)：徽章、辅助微标签、工具条小字、倒计时小角标；
+    - `text-fs-12` (0.75em)：表格单元格、辅助说明段、次要标签、表头眉题、状态胶囊；
+    - `text-fs-14` (0.875em)：弹窗正文、表单 label、次级操作按钮、Toast 提示内容；
+    - `text-fs-16` (1em)：标准正文基准、输入框文本、通用按钮文字；
+    - `text-fs-18` (1.125em)：卡片标题、弹窗关闭按钮、小标题、列表操作项；
+    - `text-fs-20` (1.25em)：三级标题（h3）、选词卡片大字、私密房间码输入框、设置页顶栏大字；
+    - `text-fs-24` (1.5em)：二级标题（h2）、顶栏回合与倒计时大数字、画家昵称高亮、题目答案展示；
+    - `text-fs-28` (1.75em)：一级主标题（h1）、主页面弹窗标题、资料卡问号大标；
+    - `text-fs-36` (2.25em)：品牌主展示区副标/展示标题；
+    - `text-fs-48` (3em)：首页品牌超大主标；
+    - `text-fs-96` (6em)：全屏开局倒计时特大数字；
+    - **禁止硬编码**：严禁在组件内书写 `text-[0.68em]`、`text-[1.85cqh]` 等任意数值的临时字号；
+  - **二元字重规范（非 normal 即 bold）**：全项目字重仅允许两种状态：常规（默认或 `font-normal`，400）与加粗（`font-bold`，700）。**严禁**使用 `font-semibold` (600)、`font-extrabold` (800)、`font-black` (900) 或 `font-[1000]`。所有历史极端字重均收敛为 `font-bold`，所有次要正文为常规字重，确保视觉层级分明、渲染抗锯齿细腻、不同操作系统字体表现一致。
+- **Vue 3.4+ `defineModel()` 统一双向绑定规范**：
+  - 表单组件值绑定（`AppInput` / `SearchInput` 的 `modelValue`、`RuleSliderField` / `SettingSliderRow` 的数字值、`RuleToggleField` / `SettingSwitchRow` 的布尔值）；
+  - 模态弹窗显隐控制统一命名为 `open`（`v-model:open="isOpen"`），所有弹窗组件（`BaseDialog` / `ConfirmDialog` / `AvatarPickerDialog` / `RulesDialog` / `VocabularyDialog` / `InviteDialog` / `CreateRoomDialog` / `JoinPrivateDialog`）均遵循该标准宏接口；
+  - 工具参数绑定（`DrawingToolbar` 与 `GameCanvas` 的 `v-model:width="strokeWidth"`）；
+  - **严禁**使用已淘汰的手写 `props: { modelValue }` + `emit('update:modelValue')` 样板代码。
+- **统一 Barrel 导出（`index.ts`）与模块化消费**：
+  - 各组件子目录（`components/common`、`components/lobby`、`components/room`、`components/game`、`components/settings`）均维护单一 `index.ts` 集中导出；
+  - 视图与组件引用时优先通过目录 Barrel 导入（如 `import { AppButton, AppInput } from '@/components/common'`），提高引用整洁度与重构灵活性；
+  - `stores/` 提供 `index.ts` 导出所有领域 store 及组合 facade。
+- **Pinia Store 领域解耦与 Facade 架构**：
+  - 状态按领域边界拆分为微 store：`useProfileStore`（资料/头像）、`useSettingsStore`（本地偏好）、`useSessionStore`（连接与会话鉴权）、`useLobbyStore`（大厅房间与玩家）、`useRoomStore`（房间生命周期与席位）、`useGameplayStore`（实时对局与消息）、`useVocabularyStore`（词库配置）；
+  - `stores/game.ts` 保留作为统一 Facade（`useGameStore()`），聚合所有子 store 的 state、getters 与 actions，提供向后兼容、无破坏性的单一入口，同时允许新代码按需细粒度注入微 store；
+  - 业务通信严格通过 store actions，禁止在组件中直接跨层调用底层 socket 发送未经校验的裸事件。
+- **Vue 模板原生 `:class` 对象规范**：
+  - Vue SFC 模板中条件样式严格使用 Vue 原生语法（例如 `:class="{ 'text-muted': isDisabled }"` 或数组形式）；
+  - **严禁**在模板表达式中直接调用 `clsx(...)` 或 `cn(...)`；
+  - `cn()`（`clsx + tailwind-merge`）仅允许在组件根节点与外部类名透传/覆盖合并时（如 `<div :class="cn('base-class', props.class)">`）在 `<script setup>` 或受限属性绑定中调用。
+- **表单输入原语规范（`AppInput` / `SearchInput`）**：
+  - 全站表单输入框、房间短码、玩家昵称、搜索框一律使用 `AppInput.vue` 或 `SearchInput.vue` 原语组件；
+  - 集中管理输入框边框色、圆角、背景色、焦点发光环（focus ring）、禁用态与字号；严禁在视图或业务弹窗中裸写 `<input>` 及私有边框/焦点类。
+- **无深浅色主题切换约束**：
+  - 本项目为固定纸墨手绘视觉风格（米白/纸张底色 + 深蓝/藏青字 + 粗线条边框），**不支持且未来绝不引入明暗/深浅色主题切换（No Dark Mode）**；
+  - 禁止引入 `dark:` 前缀类或相关检测代码；所有颜色严格走 `@theme` 10 个语义色。
 
 ---
 

@@ -45,12 +45,18 @@ export class SnapshotBuilder {
           totalRounds: game.totalRounds,
           drawerId: game.drawerId,
           phaseStartedAt: game.phaseStartedAt,
-          // 暂停阶段：phaseEndsAt 已被置 0（服务端停止计时），若原样下发客户端会算出 0 秒。
-          // 这里用冻结的剩余毫秒换算出一个静止的截止时间戳，客户端无需任何协议/DTO 变更
-          // 即可把倒计时冻结在暂停时刻的剩余时间（而非 0），恢复后仍由服务端重建真实截止时间。
-          // pausedRemainingMs 仅是公开倒计时的剩余时长，不属于秘密字段，可安全下发。
+          // 暂停阶段：下发冻结的剩余毫秒 pausedRemainingMs，并换算阶段总时长维持稳定的截止时间，
+          // 供客户端将倒计时与进度条准确冻结在暂停时刻的数值上（而非扣减至 0）。
           phaseEndsAt:
-            room.phase === 'paused' ? Date.now() + (game.pausedRemainingMs ?? 0) : game.phaseEndsAt,
+            room.phase === 'paused'
+              ? game.phaseStartedAt +
+                (game.phaseBeforePause === 'drawing'
+                  ? game.roundDurationMs
+                  : game.phaseBeforePause === 'choosing_word'
+                    ? room.settings.chooseSeconds * 1_000
+                    : (game.pausedRemainingMs ?? 0))
+              : game.phaseEndsAt,
+          ...(room.phase === 'paused' ? { pausedRemainingMs: game.pausedRemainingMs ?? 0 } : {}),
           // 答案展示规则：结算阶段公开全文；否则按设置显示遮罩或隐藏字数
           answerMask: game.answer
             ? room.phase === 'round_result' || room.phase === 'game_result'
@@ -59,10 +65,11 @@ export class SnapshotBuilder {
                 ? createAnswerMask(game.answer.text, game.revealedIndices)
                 : serverStrings.notices.answerHidden
             : '',
-          // 画家才可看到真实答案与候选词（候选词携带难度供选词星级展示）
+          // 画家才可看到真实答案与候选词（候选词携带难度供选词星级展示，以及换一组权限标识）
           ...(viewerIsDrawer && game.answer ? { answer: game.answer.text } : {}),
           ...(viewerIsDrawer && room.phase === 'choosing_word'
             ? {
+                canReroll: !game.rerollUsed && (room.settings.allowWordReroll ?? true),
                 wordOptions: game.candidates.map((word) => ({
                   id: word.id,
                   text: word.text,

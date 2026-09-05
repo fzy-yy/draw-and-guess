@@ -18,7 +18,7 @@ const model = defineModel<V>({ required: true })
 </script>
 
 <template>
-  <label class="min-w-0 flex flex-col gap-[0.5cqh] text-[0.76em] font-extrabold">
+  <label class="min-w-0 flex flex-col gap-[0.5cqh] text-fs-14 font-bold">
     {{ label }}
     <select
       v-model="model"

@@ -12,11 +12,7 @@ import { Gamepad2, LoaderCircle, LogOut, RotateCw, WifiOff } from 'lucide-vue-ne
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
 import { useAudioFeedback } from '@/composables/useAudioFeedback'
-import AvatarImage from '@/components/common/AvatarImage.vue'
-import BaseDialog from '@/components/common/BaseDialog.vue'
-import AppButton from '@/components/common/AppButton.vue'
-import StageBackdrop from '@/components/common/StageBackdrop.vue'
-import AppToaster from '@/components/common/AppToaster.vue'
+import { AppButton, AppToaster, AvatarImage, BaseDialog } from '@/components/common'
 // 五个视图组件：对局、房间等待、设置、大厅、资料确认
 import ProfileView from '@/views/ProfileView.vue'
 import LobbyView from '@/views/LobbyView.vue'
@@ -88,8 +84,8 @@ function declineCurrentInvite(): void {
 </script>
 
 <template>
-  <!-- 视口外壳（背景独立组件）：把舞台整体居中，后续背景特效统一在 StageBackdrop 内叠加 -->
-  <StageBackdrop>
+  <!-- 视口外壳：把舞台整体居中在视口中央，背景默认为黑色变量（bg-black / --color-black） -->
+  <div class="relative grid h-full w-full place-items-center overflow-hidden bg-black">
     <!-- 游戏舞台：16:9 容器，全部游戏内容都在此内部（投影用语义令牌 shadow-float） -->
     <section
       class="game-stage relative aspect-video h-[min(99vh,calc(99vw*9/16))] w-[min(99vw,calc(99vh*16/9))] overflow-hidden rounded-[clamp(6px,1cqh,14px)] border-[max(1px,0.28cqh)] border-navy bg-paper shadow-float"
@@ -118,14 +114,14 @@ function declineCurrentInvite(): void {
           <WifiOff v-if="store.sessionState === 'disconnected'" class="h-[5cqh] w-[5cqh]" />
           <LoaderCircle v-else class="h-[5cqh] w-[5cqh] animate-spin" />
         </div>
-        <h2 class="text-[1.45em] font-black text-navy">
+        <h2 class="text-fs-24 font-bold text-navy">
           {{
             store.sessionState === 'disconnected'
               ? strings.app.disconnectedTitle
               : strings.app.restoringTitle
           }}
         </h2>
-        <p class="max-w-[37cqw] text-[0.82em] font-bold leading-relaxed text-muted" role="status">
+        <p class="max-w-[37cqw] text-fs-14 font-bold leading-relaxed text-muted" role="status">
           {{
             store.sessionState === 'disconnected'
               ? strings.app.disconnectedBody
@@ -153,7 +149,7 @@ function declineCurrentInvite(): void {
             class="h-[6.5cqh] w-[6.5cqh]"
           />
           <div class="flex flex-col">
-            <span class="text-blue text-[0.65em]">{{ strings.app.inviteHeading }}</span
+            <span class="text-blue text-fs-12">{{ strings.app.inviteHeading }}</span
             ><b>{{
               strings.app.inviteReceived(
                 store.invites[0]?.from.nickname ?? '',
@@ -218,5 +214,5 @@ function declineCurrentInvite(): void {
         <p>{{ strings.app.portraitHint }}</p>
       </div>
     </section>
-  </StageBackdrop>
+  </div>
 </template>

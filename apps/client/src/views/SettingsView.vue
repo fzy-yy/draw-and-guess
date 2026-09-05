@@ -19,10 +19,8 @@ import {
   normalizedShortcut,
   type ShortcutSettingKey,
 } from '@/utils/keyboard'
-import AudioTab from '@/components/settings/AudioTab.vue'
-import AccessibilityTab from '@/components/settings/AccessibilityTab.vue'
-import ShortcutsTab from '@/components/settings/ShortcutsTab.vue'
-import DiagnosticsTab from '@/components/settings/DiagnosticsTab.vue'
+import { StageHeader, SideNav, type SideNavItem } from '@/components/common'
+import { AccessibilityTab, AudioTab, DiagnosticsTab, ShortcutsTab } from '@/components/settings'
 
 const store = useGameStore()
 const props = withDefaults(
@@ -40,10 +38,10 @@ const props = withDefaults(
 const emit = defineEmits<{
   back: []
 }>()
-// 当前激活的设置分类标签
+// 当前激活的设置分类
 const tab = ref<'audio' | 'accessibility' | 'shortcuts' | 'diagnostics'>('audio')
-// 分类标签数据驱动渲染：收敛四个重复的长类名按钮，图标/文案/键值集中一处维护
-const tabs: Array<{ key: typeof tab.value; label: string; icon: typeof Volume2 }> = [
+// 侧边导航条目数据驱动渲染：图标/文案/键值集中一处维护
+const navItems: SideNavItem<typeof tab.value>[] = [
   { key: 'audio', label: strings.settings.tabAudio, icon: Volume2 },
   { key: 'accessibility', label: strings.settings.tabAccessibility, icon: Eye },
   { key: 'shortcuts', label: strings.settings.tabShortcuts, icon: Keyboard },
@@ -131,13 +129,11 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
 </script>
 
 <template>
-  <!-- 设置子页骨架：顶栏 + 标签栏 + 正文四段（声音/显示/快捷键/资料诊断） -->
-  <main class="grid h-full grid-rows-[11%_9%_minmax(0,1fr)] bg-sky">
-    <!-- 顶栏：返回动作可配置，header-actions 插槽可按使用场景追加按钮。 -->
-    <header
-      class="grid grid-cols-[1fr_auto_1fr] items-center border-b-[0.45cqh] border-yellow bg-navy px-[2cqw] text-white"
-    >
-      <div class="justify-self-start flex items-center gap-[0.6em]">
+  <!-- 设置子页骨架：顶栏 + 下方左右两栏（左侧导航 / 右侧正文：声音/显示/快捷键/资料诊断） -->
+  <main class="grid h-full grid-rows-[11%_minmax(0,1fr)] bg-sky">
+    <!-- 顶栏：复用 StageHeader 统一步调骨架，返回动作可配置，header-actions 插槽可按使用场景追加按钮。 -->
+    <StageHeader>
+      <template #leading>
         <button
           type="button"
           class="flex items-center gap-[0.45em] rounded-[0.55em] bg-white/10 px-[0.8em] py-[0.8cqh] text-white"
@@ -146,55 +142,45 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
           <ArrowLeft /> {{ props.backLabel }}
         </button>
         <slot name="header-actions" />
-      </div>
-      <div class="text-center">
-        <p class="eyebrow-light">
-          {{ strings.settings.label }}
-        </p>
-        <h1 class="text-[1.25em]">{{ strings.settings.title }}</h1>
-      </div>
-      <div class="justify-self-end">
+      </template>
+      <template #center>
+        <div class="text-center">
+          <p class="eyebrow-light">
+            {{ strings.settings.label }}
+          </p>
+          <h1 class="text-fs-20">{{ strings.settings.title }}</h1>
+        </div>
+      </template>
+      <template #trailing>
         <!-- 右上角插槽：由使用场景自行决定内容（如对局内设置页放「退出游戏」按钮） -->
         <slot name="header-status" />
-      </div>
-    </header>
-    <!-- 分类标签：声音 / 显示与操作 / 快捷键 / 资料与诊断（数据驱动，统一样式） -->
-    <nav
-      class="flex justify-center gap-[0.5em] border-b-[0.18cqh] border-line bg-white p-[1cqh]"
-      :aria-label="strings.settings.categoryAria"
-    >
-      <button
-        v-for="item in tabs"
-        :key="item.key"
-        type="button"
-        class="bg-transparent flex min-w-[13cqw] items-center justify-center gap-[0.45em] border-b-[0.35cqh] border-transparent font-extrabold text-muted"
-        :class="{ 'border-b-blue! text-blue!': tab === item.key }"
-        @click="tab = item.key"
-      >
-        <component :is="item.icon" />{{ item.label }}
-      </button>
-    </nav>
+      </template>
+    </StageHeader>
 
-    <!-- 声音设置 -->
-    <AudioTab v-if="tab === 'audio'" />
-    <!-- 显示与操作设置 -->
-    <AccessibilityTab v-else-if="tab === 'accessibility'" />
-    <!-- 快捷键设置 -->
-    <ShortcutsTab
-      v-else-if="tab === 'shortcuts'"
-      :rows="shortcutRows"
-      :error="shortcutError"
-      @capture="captureShortcut"
-    />
-    <!-- 资料与诊断 -->
-    <DiagnosticsTab
-      v-else
-      :diagnostic="diagnostic"
-      :server-address="serverAddress"
-      :show-avatar-picker="showAvatarPicker"
-      :profile-editing-disabled="props.profileEditingDisabled"
-      @update:show-avatar-picker="showAvatarPicker = $event"
-      @copy="copyDiagnostics"
-    />
+    <!-- 下方两栏：左侧分类导航（声音 / 显示与操作 / 快捷键 / 资料与诊断），右侧对应正文 -->
+    <div class="grid min-h-0 grid-cols-[15%_minmax(0,1fr)]">
+      <SideNav v-model="tab" :items="navItems" :label="strings.settings.categoryAria" />
+      <div class="min-h-0 min-w-0">
+        <!-- 声音设置 -->
+        <AudioTab v-if="tab === 'audio'" />
+        <!-- 显示与操作设置 -->
+        <AccessibilityTab v-else-if="tab === 'accessibility'" />
+        <!-- 快捷键设置 -->
+        <ShortcutsTab
+          v-else-if="tab === 'shortcuts'"
+          :rows="shortcutRows"
+          :error="shortcutError"
+          @capture="captureShortcut"
+        />
+        <!-- 资料与诊断 -->
+        <DiagnosticsTab
+          v-else
+          v-model:show-avatar-picker="showAvatarPicker"
+          :diagnostic="diagnostic"
+          :profile-editing-disabled="props.profileEditingDisabled"
+          @copy="copyDiagnostics"
+        />
+      </div>
+    </div>
   </main>
 </template>

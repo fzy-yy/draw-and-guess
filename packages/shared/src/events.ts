@@ -31,6 +31,7 @@ export const EVENTS = {
   inviteRespond: 'invite:respond',
   gameStart: 'game:start',
   gameChooseWord: 'game:chooseWord',
+  gameRerollWords: 'game:rerollWords',
   gamePauseRequest: 'game:pauseRequest',
   gameResume: 'game:resume',
   gameEndEarly: 'game:endEarly',

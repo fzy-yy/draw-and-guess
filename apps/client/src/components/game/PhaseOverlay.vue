@@ -7,7 +7,7 @@
   注：外层的 display:contents 只是为了让多个定位遮罩不参与父级 grid 布局，同时保留 TS 窄化。
 -->
 <script setup lang="ts">
-import { Brush, CirclePause, CirclePlay, Trophy } from 'lucide-vue-next'
+import { Brush, CirclePause, CirclePlay, RefreshCw, Trophy } from 'lucide-vue-next'
 import type { GameView } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
@@ -29,6 +29,7 @@ defineProps<{
 }>()
 const emit = defineEmits<{
   'choose-word': [wordId: string]
+  'reroll-words': []
   resume: []
   'open-end-confirm': []
   'return-waiting': []
@@ -48,23 +49,36 @@ const store = useGameStore()
     >
       <span>{{ strings.game.countdownTitle }}</span
       ><b
-        class="grid place-items-center h-[20cqh] w-[20cqh] my-[2cqh] bg-yellow text-navy rounded-full text-[6em]"
+        class="grid place-items-center h-[20cqh] w-[20cqh] my-[2cqh] bg-yellow text-navy rounded-full text-fs-96"
         >{{ secondsLeft }}</b
       >
       <p>{{ strings.game.countdownHint }}</p>
     </div>
-    <!-- 阶段遮罩：画家选词（只有画家可见候选词按钮） -->
+    <!-- 阶段遮罩：画家选词（只有画家可见候选词按钮与换一组操作） -->
     <OverlayCard v-else-if="store.room.phase === 'choosing_word' && store.isDrawer">
       <!-- 图标与文字留足内边距，避免画笔笔触溢出圆形底座被裁剪 -->
       <Brush class="h-[7.5cqh] w-[7.5cqh] bg-blue p-[1.9cqh] text-white rounded-full" />
       <p>{{ strings.game.yourTurn }}</p>
-      <h2>{{ strings.game.chooseWordTitle }}</h2>
+      <div class="relative flex w-full items-center justify-center min-h-[4.5cqh]">
+        <h2>{{ strings.game.chooseWordTitle }}</h2>
+        <AppButton
+          v-if="store.room.settings.allowWordReroll"
+          variant="secondary"
+          class="absolute right-[1em] min-h-[4cqh] px-[0.9em] text-fs-14"
+          :disabled="!game.canReroll"
+          :title="game.canReroll ? strings.game.rerollWords : strings.game.rerollUsed"
+          @click="emit('reroll-words')"
+        >
+          <RefreshCw class="h-[2cqh] w-[2cqh]" />
+          {{ strings.game.rerollWords }}
+        </AppButton>
+      </div>
       <div class="flex gap-[1em] my-[2cqh]">
         <button
           v-for="option in game.wordOptions ?? []"
           :key="option.id"
           type="button"
-          class="flex min-h-[7cqh] min-w-[12cqw] flex-col items-center justify-center gap-[0.3cqh] rounded-[0.7em] bg-yellow border-b-[0.6cqh] border-yellow text-navy px-[1em] text-[1.25em] font-[1000]"
+          class="flex min-h-[7cqh] min-w-[12cqw] flex-col items-center justify-center gap-[0.3cqh] rounded-[0.7em] bg-yellow border-b-[0.6cqh] border-yellow text-navy px-[1em] text-fs-20 font-bold cursor-pointer transition-transform active:scale-95"
           @click="emit('choose-word', option.id)"
         >
           <span class="leading-[1.2]">{{ option.text }}</span>
@@ -74,7 +88,7 @@ const store = useGameStore()
             :value="option.difficulty"
             exact
             tone="navy"
-            class="text-[0.55em] w-full justify-center"
+            class="text-fs-10 w-full justify-center"
           />
         </button>
       </div>
@@ -102,15 +116,13 @@ const store = useGameStore()
         <article
           v-for="detail in game.roundResult.details"
           :key="detail.playerId"
-          class="grid grid-cols-[1.5fr_repeat(4,1fr)] items-center bg-line px-[0.8em] py-[0.8cqh] text-left text-[0.72em]"
+          class="grid grid-cols-[1.5fr_repeat(4,1fr)] items-center bg-line px-[0.8em] py-[0.8cqh] text-left text-fs-12"
         >
           <b>{{ store.room.members.find((member) => member.id === detail.playerId)?.nickname }}</b
           ><span>{{ strings.game.scoreBase(detail.base) }}</span
           ><span>{{ strings.game.scoreSpeed(detail.speed) }}</span
           ><span>{{ strings.game.scoreOrder(detail.order) }}</span
-          ><strong class="text-blue text-[1.2em]">{{
-            strings.game.scoreTotal(detail.total)
-          }}</strong>
+          ><strong class="text-blue text-fs-18">{{ strings.game.scoreTotal(detail.total) }}</strong>
         </article>
         <p v-if="!game.roundResult.details.length">{{ strings.game.noGuesses }}</p>
       </div>
@@ -134,15 +146,15 @@ const store = useGameStore()
           class="grid grid-cols-[3em_auto_1fr_auto] items-center gap-[0.8em] bg-line px-[1em] py-[0.6cqh] text-left"
           :class="{ 'text-yellow! bg-yellow/20!': member.rank === 1 }"
         >
-          <b>#{{ member.rank }}</b
+          <b>{{ strings.game.rankPrefix(member.rank) }}</b
           ><AvatarImage
             class="h-[4.5cqh] w-[4.5cqh]"
             :avatar-id="member.avatarId"
             :label="strings.common.playerAvatarAria(member.nickname)"
           />
-          <span class="flex flex-col font-extrabold"
+          <span class="flex flex-col font-bold"
             >{{ member.nickname
-            }}<small class="text-muted text-[0.62em] font-semibold">{{
+            }}<small class="text-muted text-fs-10 font-bold">{{
               strings.game.playerStats(
                 member.stats.correctCount,
                 member.stats.correctCount

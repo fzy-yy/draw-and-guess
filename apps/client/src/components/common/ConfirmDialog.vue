@@ -7,9 +7,10 @@ import { useId, type FunctionalComponent } from 'vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import AppButton from '@/components/common/AppButton.vue'
 
+const open = defineModel<boolean>('open', { default: false })
+
 withDefaults(
   defineProps<{
-    open: boolean
     title: string
     body: string
     confirmLabel: string
@@ -27,17 +28,27 @@ withDefaults(
 const emit = defineEmits<{ confirm: []; cancel: [] }>()
 // useId 保证同一页面存在多个确认弹窗（对局内清空/提前结束/退出）时标题 id 不冲突。
 const titleId = useId()
+
+function cancel(): void {
+  open.value = false
+  emit('cancel')
+}
+
+function confirm(): void {
+  open.value = false
+  emit('confirm')
+}
 </script>
 
 <template>
   <BaseDialog
-    :open="open"
+    v-model:open="open"
     width-class="w-[40cqw]"
     section-class="items-center gap-[1.4cqh] pt-[3cqh] text-center"
     footer-class="w-full mt-[1cqh]"
     :labelledby="titleId"
     :overlay-class="overlayClass"
-    @close="emit('cancel')"
+    @close="cancel"
   >
     <component
       :is="icon"
@@ -47,10 +58,10 @@ const titleId = useId()
     <h2 :id="titleId">{{ title }}</h2>
     <p class="max-w-[30em] leading-[1.6] text-muted">{{ body }}</p>
     <template #footer>
-      <AppButton variant="secondary" type="button" @click="emit('cancel')">
+      <AppButton variant="secondary" type="button" @click="cancel">
         {{ cancelLabel }}
       </AppButton>
-      <AppButton :variant="confirmVariant" type="button" @click="emit('confirm')">
+      <AppButton :variant="confirmVariant" type="button" @click="confirm">
         {{ confirmLabel }}
       </AppButton>
     </template>

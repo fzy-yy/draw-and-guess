@@ -15,9 +15,15 @@ import RuleSelectField from '@/components/common/RuleSelectField.vue'
 import RuleToggleField from '@/components/common/RuleToggleField.vue'
 import { useGameStore } from '@/stores/game'
 
-const props = defineProps<{ open: boolean; draft?: RoomSettings }>()
+const open = defineModel<boolean>('open', { default: false })
+const props = defineProps<{ draft?: RoomSettings }>()
 const emit = defineEmits<{ close: []; save: [draft: RoomSettings] }>()
 const store = useGameStore()
+
+function handleClose(): void {
+  open.value = false
+  emit('close')
+}
 
 /** 下拉选项：数值范围/枚举值一律来自公开配置与 strings，禁止另写一套。 */
 const maxPlayerOptions = computed(() =>
@@ -29,10 +35,6 @@ const maxPlayerOptions = computed(() =>
     },
   ),
 )
-const scoreModeOptions = [
-  { value: 'standard', label: strings.room.scoreModeStandard },
-  { value: 'flat', label: strings.room.scoreModeFlat },
-]
 const joinPolicyOptions = [
   { value: 'forbid', label: strings.room.joinPolicyForbid },
   { value: 'spectate', label: strings.room.joinPolicySpectate },
@@ -53,11 +55,11 @@ watch(
 <template>
   <!-- 规则编辑表单：数值字段用滑块，开关用复选框；中途加入策略为下拉框 -->
   <BaseDialog
-    :open="props.open"
-    width-class="w-[70cqw]"
+    v-model:open="open"
+    width-class="w-[56cqw]"
     labelledby="rules-title"
     :close-aria="strings.room.settingsCloseAria"
-    @close="emit('close')"
+    @close="handleClose"
   >
     <template #header>
       <SectionHeader
@@ -67,14 +69,15 @@ watch(
       ></SectionHeader>
     </template>
 
-    <div class="grid grid-cols-3 gap-[1.2cqh_1.3em] py-[2cqh] px-[1.8em]">
+    <div class="grid grid-cols-2 gap-[1.5cqh_1.8em] py-[2.2cqh] px-[2em]">
       <RuleSelectField
         v-model="localDraft.maxPlayers"
         :label="strings.room.maxPlayersField"
         :options="maxPlayerOptions"
       >
-        <small class="text-muted text-[0.8em]">{{ strings.room.maxPlayersNote }}</small>
+        <small class="text-muted text-fs-12">{{ strings.room.maxPlayersNote }}</small>
       </RuleSelectField>
+
       <RuleSliderField
         v-model="localDraft.roundsPerPlayer"
         :label="strings.common.roundsField"
@@ -83,14 +86,7 @@ watch(
         :step="store.config.game.roundsPerPlayer.step"
         :display="strings.common.roundsUnit(localDraft.roundsPerPlayer)"
       />
-      <RuleSliderField
-        v-model="localDraft.drawSeconds"
-        :label="strings.common.drawTimeField"
-        :min="store.config.game.drawSeconds.min"
-        :max="store.config.game.drawSeconds.max"
-        :step="store.config.game.drawSeconds.step"
-        :display="strings.common.secondsUnit(localDraft.drawSeconds)"
-      />
+
       <RuleSliderField
         v-model="localDraft.chooseSeconds"
         :label="strings.room.chooseTimeField"
@@ -99,6 +95,7 @@ watch(
         :step="store.config.game.chooseSeconds.step"
         :display="strings.common.secondsUnit(localDraft.chooseSeconds)"
       />
+
       <RuleSliderField
         v-model="localDraft.optionCount"
         :label="strings.room.optionCountField"
@@ -107,59 +104,29 @@ watch(
         :step="store.config.game.optionCount.step"
         :display="strings.room.optionCountUnit(localDraft.optionCount)"
       />
-      <RuleToggleField
-        v-model="localDraft.showWordLength"
-        :label="strings.room.toggleShowWordLength"
-      />
-      <RuleToggleField
-        v-model="localDraft.progressiveHints"
-        :label="strings.room.toggleProgressiveHints"
-      />
-      <RuleToggleField
-        v-model="localDraft.structuredHintsEnabled"
-        :label="strings.room.toggleStructuredHints"
-      />
-      <!-- 结构化提示开始时机：剩余时间比例（10%~90%，步进 5%） -->
-      <RuleSliderField
-        v-model="localDraft.hintStartRatio"
-        :label="strings.room.hintStartRatioField"
-        :min="store.config.game.hintStartRatioRange.min"
-        :max="store.config.game.hintStartRatioRange.max"
-        :step="store.config.game.hintStartRatioRange.step"
-        :display="strings.common.percentUnit(Math.round(localDraft.hintStartRatio * 100))"
-        :disabled="!localDraft.structuredHintsEnabled"
-      />
-      <!-- 统一猜词基础分：覆盖全局默认值（flat 模式下即为唯一得分） -->
-      <RuleSliderField
-        v-model="localDraft.guessBaseScore"
-        :label="strings.room.guessBaseScoreField"
-        :min="store.config.game.score.guessBaseRange.min"
-        :max="store.config.game.score.guessBaseRange.max"
-        :step="store.config.game.score.guessBaseRange.step"
-        :display="strings.room.guessBaseScoreUnit(localDraft.guessBaseScore)"
-      />
-      <!-- 计分方式：标准（基础+速度+顺序）/ 固定分（仅基础分） -->
-      <RuleSelectField
-        v-model="localDraft.scoreMode"
-        :label="strings.room.scoreModeField"
-        :options="scoreModeOptions"
-      />
-      <RuleToggleField
-        v-model="localDraft.allowPlayerInvite"
-        :label="strings.room.togglePlayerInvite"
-      />
-      <RuleToggleField v-model="localDraft.allowPause" :label="strings.room.togglePause" />
+
       <RuleSelectField
         v-model="localDraft.joinPolicy"
         :label="strings.room.joinPolicyField"
         :options="joinPolicyOptions"
       />
+
+      <div class="flex flex-col justify-center gap-[1.2cqh]">
+        <RuleToggleField
+          v-model="localDraft.allowPlayerInvite"
+          :label="strings.room.togglePlayerInvite"
+        />
+        <RuleToggleField
+          v-model="localDraft.allowWordReroll"
+          :label="strings.room.toggleAllowWordReroll"
+        />
+      </div>
     </div>
 
     <template #footer>
       <!-- 底部操作：取消或保存规则 -->
-      <p class="mr-auto text-muted text-[0.72em]">{{ strings.room.rulesChangeNote }}</p>
-      <AppButton variant="secondary" type="button" @click="emit('close')">
+      <p class="mr-auto text-muted text-fs-12">{{ strings.room.rulesChangeNote }}</p>
+      <AppButton variant="secondary" type="button" @click="handleClose">
         {{ strings.common.cancel }}
       </AppButton>
       <AppButton variant="primary" type="button" @click="emit('save', localDraft)">

@@ -1,15 +1,19 @@
 /**
  * 房间生命周期与成员管理事件处理器：创建/加入/离开、准备、规则、词库、房主管理、邀请。
  */
-import { z } from 'zod'
 import {
   CreateRoomSchema,
   EVENTS,
   JoinPrivateRoomSchema,
   JoinRoomSchema,
+  KickMemberSchema,
   RequestSchema,
-  RoomSettingsSchema,
-  WordIdSchema,
+  RespondInviteSchema,
+  SendInviteSchema,
+  SetReadySchema,
+  TransferHostSchema,
+  UpdateRoomSettingsSchema,
+  UpdateVocabularySchema,
 } from '@draw-guess/shared'
 import { bindRequest } from '../protocol/binder.ts'
 import type { GameService } from '../game-service.ts'
@@ -33,20 +37,11 @@ export function registerRoomHandlers(
     service.leaveRoom(playerId),
   )
   // 房间规则：准备、改规则、词库管理
-  bindRequest(
-    socket,
-    EVENTS.roomSetReady,
-    RequestSchema.extend({ ready: z.boolean() }),
-    (input, playerId) => service.setReady(playerId, input.ready),
+  bindRequest(socket, EVENTS.roomSetReady, SetReadySchema, (input, playerId) =>
+    service.setReady(playerId, input.ready),
   )
-  bindRequest(
-    socket,
-    EVENTS.roomUpdateSettings,
-    RequestSchema.extend({
-      patch: RoomSettingsSchema.partial(),
-      expectedVersion: z.number().int().nonnegative(),
-    }),
-    (input, playerId) => service.updateSettings(playerId, input.patch, input.expectedVersion),
+  bindRequest(socket, EVENTS.roomUpdateSettings, UpdateRoomSettingsSchema, (input, playerId) =>
+    service.updateSettings(playerId, input.patch, input.expectedVersion),
   )
   bindRequest(socket, EVENTS.roomGetVocabulary, RequestSchema, (_input, playerId) =>
     service.getVocabulary(playerId),
@@ -54,37 +49,23 @@ export function registerRoomHandlers(
   bindRequest(
     socket,
     EVENTS.roomUpdateVocabulary,
-    RequestSchema.extend({
-      // 词库词条 ID：格式与来源解耦（见 shared WordIdSchema），数量上限为权威词库规模
-      ids: z.array(WordIdSchema).max(service.vocabulary.items.length),
-      expectedVersion: z.number().int().nonnegative(),
+    UpdateVocabularySchema.refine((input) => input.ids.length <= service.vocabulary.items.length, {
+      message: 'vocabulary ids count exceeds maximum',
     }),
     (input, playerId) => service.updateVocabulary(playerId, input.ids, input.expectedVersion),
   )
   // 房主管理：踢人 / 移交房主
-  bindRequest(
-    socket,
-    EVENTS.roomKick,
-    RequestSchema.extend({ targetId: z.string().uuid() }),
-    (input, playerId) => service.kick(playerId, input.targetId),
+  bindRequest(socket, EVENTS.roomKick, KickMemberSchema, (input, playerId) =>
+    service.kick(playerId, input.targetId),
   )
-  bindRequest(
-    socket,
-    EVENTS.roomTransferHost,
-    RequestSchema.extend({ targetId: z.string().uuid() }),
-    (input, playerId) => service.transferHost(playerId, input.targetId),
+  bindRequest(socket, EVENTS.roomTransferHost, TransferHostSchema, (input, playerId) =>
+    service.transferHost(playerId, input.targetId),
   )
   // 定向邀请：发送 / 应答
-  bindRequest(
-    socket,
-    EVENTS.inviteSend,
-    RequestSchema.extend({ targetId: z.string().uuid() }),
-    (input, playerId) => service.sendInvite(playerId, input.targetId),
+  bindRequest(socket, EVENTS.inviteSend, SendInviteSchema, (input, playerId) =>
+    service.sendInvite(playerId, input.targetId),
   )
-  bindRequest(
-    socket,
-    EVENTS.inviteRespond,
-    RequestSchema.extend({ inviteId: z.string().uuid(), accept: z.boolean() }),
-    (input, playerId) => service.respondInvite(playerId, input.inviteId, input.accept),
+  bindRequest(socket, EVENTS.inviteRespond, RespondInviteSchema, (input, playerId) =>
+    service.respondInvite(playerId, input.inviteId, input.accept),
   )
 }

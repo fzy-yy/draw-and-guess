@@ -22,14 +22,22 @@ export function useGameHud(store: GameStore) {
   const game = computed(() => store.room?.game)
   // 校正后的本地时钟：叠加了与服务端的时钟偏移，避免设备时钟偏差导致倒计时不准
   const correctedNow = computed(() => now.value + store.clockOffset)
-  // 剩余秒数：按服务端权威截止时间向上取整
-  const secondsLeft = computed(() =>
-    game.value?.phaseEndsAt
+  // 剩余秒数：按服务端权威截止时间向上取整；暂停状态下固定使用服务端下发的冻结剩余时间，避免随本地时钟持续扣减到 0
+  const secondsLeft = computed(() => {
+    if (store.room?.phase === 'paused') {
+      return Math.max(0, Math.ceil((game.value?.pausedRemainingMs ?? 0) / 1_000))
+    }
+    return game.value?.phaseEndsAt
       ? Math.max(0, Math.ceil((game.value.phaseEndsAt - correctedNow.value) / 1_000))
-      : 0,
-  )
-  // 阶段进度：剩余毫秒 / 阶段总时长，用于进度条 scaleX
+      : 0
+  })
+  // 阶段进度：剩余毫秒 / 阶段总时长，用于进度条 scaleX；暂停状态下固定使用冻结的剩余进度
   const progress = computed(() => {
+    if (store.room?.phase === 'paused') {
+      const total = (game.value?.phaseEndsAt ?? 0) - (game.value?.phaseStartedAt ?? 0)
+      if (total <= 0) return 0
+      return Math.max(0, Math.min(1, (game.value?.pausedRemainingMs ?? 0) / total))
+    }
     if (!game.value?.phaseEndsAt || game.value.phaseEndsAt <= game.value.phaseStartedAt) return 0
     return Math.max(
       0,

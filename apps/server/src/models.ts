@@ -87,8 +87,9 @@ export interface GameSecret {
   drawerOrder: string[] // 画家轮换顺序（开局时洗牌）
   drawerId: string // 当前画家
   candidates: VocabularyWord[] // 当前回合候选词（富模型，仅画家可见）
+  rerollUsed?: boolean // 当前回合是否已使用“换一组”
   answer?: VocabularyWord // 当前回合答案（选定后置位；含别称/提示/词条级时限）
-  usedWordIds: Set<string> // 已用过的词条 ID（避免回合重复）
+  offeredWordIds: Set<string> // 本局已展示过的候选词 ID 集合（整局游戏中候选词绝不重复）
   /** 自由笔画与区域填充共用一条内存历史，支持统一撤销、重做与重连恢复。 */
   strokes: DrawingCommand[]
   undoneStrokeIds: string[] // 已撤销命令 ID 栈（先进后出）

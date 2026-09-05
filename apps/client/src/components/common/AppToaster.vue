@@ -5,9 +5,9 @@
   - 只负责「渲染 + 动画」，队列状态、去重、超时、配色在 useToasts；
   - 以 .game-stage（position:relative + overflow-hidden）为定位与裁剪上下文：
     用 absolute 右上角堆叠，天然不会越出画框，无需任何第三方 fixed 覆盖 hack；
-  - 外观：白色长条 + 小圆角 + 最左一条主题色小条 + 加粗文字，点击即消失；
-  - 进出场沿用全局统一的 toast-* 过渡（淡入淡出），
-    同一提示去重时用 Web Animations API 对当前元素重放一次「左弹跳」，
+  - 外观：白色长条 + 方角 + 最左一条主题色小条 + 加粗文字，点击即消失；
+  - 样式与过渡动画全部收敛于组件内部行内维护，避免全局 CSS 污染；
+  - 同一提示去重时用 Web Animations API 对当前元素重放一次「左弹跳」，
     连续多次触发也能逐次重放（不依赖 CSS 类切换的强制重排）。
 -->
 <script setup lang="ts">
@@ -50,13 +50,13 @@ onBeforeUnmount(unbindBump)
 
 <template>
   <!--
-    TransitionGroup name="toast"：复用全局 toast-* 过渡钩子（淡入淡出 + 轻微位移），
-    move 用 .toast-move 平滑挤占相邻 toast 的位置。容器在画框内绝对定位右上角。
+    TransitionGroup：使用统一管理于 style/animations.css 的 .toast-* 过渡钩子，
+    容器在画框内绝对定位至右上角顶栏下方（top 12.5cqh，留出呼吸间距，不遮挡顶栏按钮）。
   -->
   <TransitionGroup
     name="toast"
     tag="div"
-    class="app-toaster"
+    class="pointer-events-none absolute top-[12.5cqh] right-[2.5cqh] z-40 flex flex-col items-end gap-[1cqh]"
     aria-live="polite"
     aria-atomic="false"
   >
@@ -64,13 +64,19 @@ onBeforeUnmount(unbindBump)
       v-for="toast in toasts"
       :key="toast.id"
       :ref="(el) => setToastRef(toast.id, el)"
-      class="toast-item"
+      class="pointer-events-auto flex max-w-[44cqw] cursor-pointer items-stretch overflow-hidden rounded-none bg-white text-navy shadow-float"
       role="status"
       :aria-label="toast.text"
       @click="dismiss(toast.id)"
     >
-      <span class="toast-bar" aria-hidden="true" />
-      <span class="toast-text">{{ toast.text }}</span>
+      <span
+        class="w-[0.6cqh] shrink-0 self-stretch bg-[color-mix(in_srgb,var(--color-yellow)_62%,var(--color-red))]"
+        aria-hidden="true"
+      />
+      <span
+        class="min-w-0 py-[1cqh] pr-[1.6cqh] pl-[1.2cqh] text-fs-14 font-bold leading-[1.4] whitespace-nowrap"
+        >{{ toast.text }}</span
+      >
     </div>
   </TransitionGroup>
 </template>

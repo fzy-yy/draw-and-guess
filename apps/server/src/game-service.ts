@@ -10,6 +10,7 @@ import { APP_CONFIG } from '../../../config.ts'
 import { serverStrings } from '../../../config/strings.ts'
 import {
   EVENTS,
+  MIN_SELECTED_VOCABULARY_WORDS,
   canTransition,
   normalizeAnswer,
   normalizeHexColor,
@@ -27,6 +28,7 @@ import {
   type RoomSnapshot,
   type Stroke,
   type VocabularySnapshot,
+  type VocabularyWord,
 } from '@draw-guess/shared'
 import type { GameSecret, InviteSecret, MemberState, PlayerSecret, RoomSecret } from './models.ts'
 import { RoundMachine } from './round-machine.ts'
@@ -57,6 +59,7 @@ export function createDefaultRoomSettings(): RoomSettings {
     scoreMode: APP_CONFIG.game.scoreMode,
     allowPlayerInvite: APP_CONFIG.room.allowPlayerInvite,
     allowPause: APP_CONFIG.room.allowPause,
+    allowWordReroll: APP_CONFIG.game.allowWordReroll,
     joinPolicy: APP_CONFIG.room.joinPolicy,
   }
 }
@@ -700,11 +703,11 @@ export class GameService {
     if (room.stateVersion !== expectedVersion)
       throw new GameError('VERSION_CONFLICT', serverStrings.errors.VERSION_CONFLICT_VOCABULARY)
     const selected = new Set(ids)
-    // 词条数量不足时拒绝保存，保证开局选词阶段有足够候选
-    if (selected.size < APP_CONFIG.vocabulary.minWords) {
+    // 词条数量不足时拒绝保存，保证整局选词阶段（6人×2轮换词×5可选词=60条）有足够候选
+    if (selected.size < MIN_SELECTED_VOCABULARY_WORDS) {
       throw new GameError(
         'VOCABULARY_TOO_SMALL',
-        serverStrings.errors.VOCABULARY_TOO_SMALL(APP_CONFIG.vocabulary.minWords),
+        serverStrings.errors.VOCABULARY_TOO_SMALL(MIN_SELECTED_VOCABULARY_WORDS),
       )
     }
     // 每个 ID 都必须来自权威词库，防止伪造词条注入
@@ -737,13 +740,14 @@ export class GameService {
       .every((member) => member.ready)
     if (!allOnline || !guestsReady)
       throw new GameError('NOT_ALL_READY', serverStrings.errors.NOT_ALL_READY)
-    // 本局词条数必须不少于最小词数且覆盖选词候选数
-    const requiredWords = Math.max(APP_CONFIG.vocabulary.minWords, room.settings.optionCount)
-    if (room.selectedWordIds.size < requiredWords)
+    // 本局词条数必须不少于最小词数（60条）且覆盖选词候选数
+    const requiredWords = Math.max(MIN_SELECTED_VOCABULARY_WORDS, room.settings.optionCount)
+    if (room.selectedWordIds.size < requiredWords) {
       throw new GameError(
         'VOCABULARY_TOO_SMALL',
         serverStrings.errors.VOCABULARY_TOO_SMALL_GAME(requiredWords),
       )
+    }
 
     // 进入 3 秒开始倒计时阶段；倒计时结束而且阶段未变时正式开局
     this.transition(room, 'starting')
@@ -769,7 +773,7 @@ export class GameService {
       drawerOrder: this.shuffle(activeMembers.map((member) => member.playerId)),
       drawerId: '',
       candidates: [],
-      usedWordIds: new Set(),
+      offeredWordIds: new Set(),
       strokes: [],
       strokePointTotal: 0,
       undoneStrokeIds: [],
@@ -797,6 +801,26 @@ export class GameService {
     const answer = game.candidates.find((word) => word.id === wordId)
     if (!answer) throw new GameError('INVALID_WORD_ID', serverStrings.errors.INVALID_WORD_ID_CHOOSE)
     this.round.beginDrawing(room, answer)
+  }
+
+  /** 画家在选词阶段更换一组候选词（每回合最多允许一次） */
+  rerollWordOptions(playerId: string, roundId: string): void {
+    const { room } = this.requireMembership(playerId)
+    const game = this.requireGame(room)
+    if (room.phase !== 'choosing_word' || game.drawerId !== playerId || game.roundId !== roundId) {
+      throw new GameError('NOT_DRAWER', serverStrings.errors.NOT_DRAWER_CHOOSE)
+    }
+    if (!room.settings.allowWordReroll) {
+      throw new GameError('REROLL_DISABLED', serverStrings.errors.REROLL_DISABLED)
+    }
+    if (game.rerollUsed) {
+      throw new GameError('REROLL_ALREADY_USED', serverStrings.errors.REROLL_ALREADY_USED)
+    }
+
+    // 重新抽取候选词（pickCandidates 会从未展示词池抽取、按多样性分布并记录进 offeredWordIds）
+    game.candidates = this.pickCandidates(room, game)
+    game.rerollUsed = true
+    this.emitRoom(room.id)
   }
 
   submitGuess(playerId: string, roundId: string, rawText: string): { correct: boolean } {
@@ -1128,8 +1152,15 @@ export class GameService {
       throw new GameError('ROOM_NOT_JOINABLE', serverStrings.errors.ROOM_NOT_JOINABLE_INVITE)
     if (room.hostId !== playerId && !room.settings.allowPlayerInvite)
       throw new GameError('FORBIDDEN', serverStrings.errors.FORBIDDEN_INVITE)
-    // 目标必须在线、不在房间且愿意接收邀请
-    if (!target.connected || target.roomId || !target.preferences.acceptsInvites)
+    // 目标必须在线、不在房间且愿意接收邀请；若其是本房间的 leftGame 成员（稍早退出本局），
+    // 即使 player.roomId 已清空看起来「空闲」，accept 也必然被 GAME_ALREADY_LEFT 拒绝，
+    // 因此直接禁止邀请，避免发出一个注定失效的邀请（双方 UI 状态不一致）。
+    if (
+      !target.connected ||
+      target.roomId ||
+      !target.preferences.acceptsInvites ||
+      room.members.some((member) => member.playerId === targetId && member.leftGame)
+    )
       throw new GameError('TARGET_UNAVAILABLE', serverStrings.errors.TARGET_UNAVAILABLE)
     // 同一目标有冷却时间，防止反复骚扰
     const last = sender.lastInviteAt.get(targetId) ?? 0
@@ -1481,22 +1512,90 @@ export class GameService {
     game.hintTimers = []
   }
 
+  /**
+   * 候选词多样性抽样算法：
+   * 保证候选词集合在难度（1~5星阶梯）和类别（无重复分类）上均匀随机分布。
+   */
+  private sampleDiverseCandidates(pool: VocabularyWord[], count: number): VocabularyWord[] {
+    if (pool.length <= count) return this.shuffle([...pool])
+
+    const shuffled = this.shuffle([...pool])
+    const selected: VocabularyWord[] = []
+    const usedCategories = new Set<string>()
+    const usedIds = new Set<string>()
+
+    // 目标难度分布：尽量覆盖简单(1-2)、中等(3)、困难(4-5)
+    const targetDifficulties: number[] = []
+    if (count === 3) targetDifficulties.push(1, 3, 5)
+    else if (count === 4) targetDifficulties.push(1, 2, 4, 5)
+    else if (count === 5) targetDifficulties.push(1, 2, 3, 4, 5)
+    else {
+      for (let i = 0; i < count; i += 1) {
+        targetDifficulties.push(Math.round(1 + (i * 4) / (count - 1)))
+      }
+    }
+
+    for (const targetDiff of targetDifficulties) {
+      // 1. 优先：难度接近（差值 <= 1）且分类未重复
+      let candidate = shuffled.find(
+        (w) =>
+          !usedIds.has(w.id) &&
+          Math.abs(w.difficulty - targetDiff) <= 1 &&
+          !usedCategories.has(w.category),
+      )
+      // 2. 次选：任意难度但分类未重复
+      if (!candidate) {
+        candidate = shuffled.find((w) => !usedIds.has(w.id) && !usedCategories.has(w.category))
+      }
+      // 3. 兜底：难度最接近的未选词
+      if (!candidate) {
+        const remaining = shuffled.filter((w) => !usedIds.has(w.id))
+        remaining.sort(
+          (a, b) => Math.abs(a.difficulty - targetDiff) - Math.abs(b.difficulty - targetDiff),
+        )
+        candidate = remaining[0]
+      }
+      if (candidate) {
+        selected.push(candidate)
+        usedIds.add(candidate.id)
+        if (candidate.category) usedCategories.add(candidate.category)
+      }
+    }
+
+    // 若依然未填满 count，用剩余未选词补齐
+    if (selected.length < count) {
+      for (const w of shuffled) {
+        if (!usedIds.has(w.id)) {
+          selected.push(w)
+          usedIds.add(w.id)
+          if (selected.length >= count) break
+        }
+      }
+    }
+
+    return this.shuffle(selected)
+  }
+
   /** @internal 内部协作接口 */
-  public pickCandidates(room: RoomSecret, game: GameSecret) {
-    // 从本局已选词库中排除本局已用过的词条，构建候选池（元素为富模型 VocabularyWord）
+  public pickCandidates(room: RoomSecret, game: GameSecret): VocabularyWord[] {
+    // 从本局已选词库中排除本局已展示过的候选词条（整局绝不重复）
     let pool = [...room.selectedWordIds]
-      .filter((id) => !game.usedWordIds.has(id))
+      .filter((id) => !game.offeredWordIds.has(id))
       .map((id) => this.vocabulary.byId.get(id))
-      .filter((word) => word !== undefined)
-    // 词池不足且配置允许时重置已用记录，保证每回合候选充足
+      .filter((word): word is VocabularyWord => word !== undefined)
+
+    // 词池不足且配置允许时重置已展示记录，保证每回合候选充足
     if (pool.length < room.settings.optionCount && APP_CONFIG.vocabulary.resetWhenExhausted) {
-      game.usedWordIds.clear()
+      game.offeredWordIds.clear()
       pool = [...room.selectedWordIds]
         .map((id) => this.vocabulary.byId.get(id))
-        .filter((word) => word !== undefined)
+        .filter((word): word is VocabularyWord => word !== undefined)
     }
-    // 洗牌后截取前 optionCount 个作为本轮候选项
-    return this.shuffle(pool).slice(0, room.settings.optionCount)
+
+    const picked = this.sampleDiverseCandidates(pool, room.settings.optionCount)
+    // 立即将展示给玩家的候选词记录进 offeredWordIds，整局绝不重复出现
+    picked.forEach((word) => game.offeredWordIds.add(word.id))
+    return picked
   }
 
   /** @internal 内部协作接口 */
@@ -1528,7 +1627,7 @@ export class GameService {
       if (!this.roomsByPrivateCode.has(code)) return code
     }
     // 极端碰撞时明确失败，不降级到 Math.random 或重复房间码。
-    throw new GameError('PRIVATE_CODE_EXHAUSTED', serverStrings.errors.UNKNOWN_FAILURE)
+    throw new GameError('PRIVATE_CODE_EXHAUSTED', serverStrings.errors.PRIVATE_CODE_EXHAUSTED)
   }
 
   /** 房主迁移后轮换私密码，防止旧房主继续分享旧访问凭据。 */
@@ -1613,6 +1712,7 @@ export class GameService {
       Number.isInteger(settings.guessBaseScore) &&
       settings.guessBaseScore >= score.guessBaseRange.min &&
       settings.guessBaseScore <= score.guessBaseRange.max &&
+      typeof settings.allowWordReroll === 'boolean' &&
       (settings.scoreMode === 'standard' || settings.scoreMode === 'flat')
     if (!valid) throw new GameError('INVALID_SETTINGS', serverStrings.errors.INVALID_SETTINGS)
   }

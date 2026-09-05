@@ -31,7 +31,7 @@ const store = useGameStore()
 </script>
 
 <template>
-  <section class="min-h-0 px-[9cqw] py-[3cqh]">
+  <section class="min-h-0 px-[5cqw] py-[3cqh]">
     <SettingsSectionHeader
       :icon="Keyboard"
       :title="strings.settings.shortcutsTitle"
@@ -46,21 +46,21 @@ const store = useGameStore()
         <component :is="row.icon" class="w-[3.6cqh] text-blue" />
         <span class="flex flex-col gap-[0.25em]"
           ><b>{{ row.name }}</b
-          ><small class="text-muted text-[0.68em]">{{ row.detail }}</small></span
+          ><small class="text-muted text-fs-12">{{ row.detail }}</small></span
         >
         <input
           :value="store.settings[row.setting]"
           type="text"
           readonly
-          class="h-[3.2em] w-[3.2em] rounded-[0.55em] bg-blue text-center text-white uppercase font-mono font-black leading-none cursor-pointer focus:outline-[0.3cqh] focus:outline-yellow focus:outline-offset-[0.2cqh]"
+          class="h-[3.2em] w-[3.2em] rounded-[0.55em] bg-blue text-center text-white uppercase font-mono font-bold leading-none cursor-pointer focus:outline-[0.3cqh] focus:outline-yellow focus:outline-offset-[0.2cqh]"
           :aria-label="strings.settings.setShortcutAria(row.name)"
           @keydown.prevent="emit('capture', row.setting, $event)"
         />
       </label>
     </div>
-    <p v-if="error" class="mt-[1.2cqh] text-red font-extrabold" role="alert">
+    <p v-if="error" class="mt-[1.2cqh] text-red font-bold" role="alert">
       {{ error }}
     </p>
-    <p class="mt-[1.2cqh] text-muted text-[0.68em]">{{ strings.settings.shortcutNote }}</p>
+    <p class="mt-[1.2cqh] text-muted text-fs-12">{{ strings.settings.shortcutNote }}</p>
   </section>
 </template>

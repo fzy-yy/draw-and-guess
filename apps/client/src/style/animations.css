@@ -1,0 +1,127 @@
+/*
+ * 动画效果组合类（animations.css）：交互动效、Vue 运行时过渡钩子、关键帧与系统/全局减弱动画。
+ */
+
+/* ===== 全局交互反馈：跨组件统一变色手感（仅用通用元素选择器） =====
+   约定：全站悬浮/按下只改变颜色（亮度/背景/边框/文字），不位移、不缩放、不加阴影，保证手感一致。 */
+@layer base {
+  .game-stage button,
+  .game-stage input,
+  .game-stage select {
+    transition:
+      filter 160ms ease,
+      border-color 160ms ease,
+      background-color 160ms ease,
+      color 160ms ease,
+      opacity 160ms ease;
+  }
+
+  /* 所有可用按钮悬浮时统一变暗：白色 → 稍深，蓝色/红色等 → 对应更深的同色。 */
+  .game-stage button:not(:disabled):hover {
+    filter: brightness(0.95);
+  }
+
+  /* 按下时再加深一点，作为按压反馈（同样只变色，无位移/缩放）。 */
+  .game-stage button:not(:disabled):active {
+    filter: brightness(0.9);
+  }
+}
+
+/* ===== Vue 运行时过渡钩子：Vue 动态切换类名，无法行内化 ===== */
+@layer base {
+  /* 遮罩淡入淡出，对话框同步执行缩放。动效时长与全局 160ms 反馈统一。 */
+  .modal-enter-active,
+  .modal-leave-active {
+    transition: opacity 160ms ease;
+  }
+
+  .modal-enter-active .game-dialog,
+  .modal-leave-active .game-dialog {
+    transition:
+      transform 160ms ease,
+      opacity 160ms ease;
+  }
+
+  .modal-enter-from,
+  .modal-leave-to {
+    opacity: 0;
+  }
+
+  .modal-enter-from .game-dialog,
+  .modal-leave-to .game-dialog {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+
+  /* 邀请横幅的进入/离开动画。 */
+  .banner-enter-active,
+  .banner-leave-active {
+    transition:
+      opacity 160ms ease,
+      transform 160ms ease;
+  }
+
+  .banner-enter-from,
+  .banner-leave-to {
+    opacity: 0;
+    transform: translate(-50%, 2cqh) scale(0.96);
+  }
+
+  /* Toast 提示堆栈过渡动画（Vue TransitionGroup）
+     离开时使用 absolute 脱离文档流，配合 FLIP 算法（.toast-move）实现无顿挫平滑向上位移 */
+  .toast-enter-active,
+  .toast-leave-active {
+    transition:
+      transform 160ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 160ms ease;
+  }
+
+  .toast-enter-from,
+  .toast-leave-to {
+    opacity: 0;
+    transform: translateX(2cqw) scale(0.96);
+  }
+
+  .toast-leave-active {
+    position: absolute;
+    right: 0;
+  }
+
+  .toast-move {
+    transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+/* ===== 关键帧：当前画家角色文字沿固定席位色流动 ===== */
+/* 关闭动画设置时会被全局 motion-disabled 规则停用。 */
+@keyframes drawer-role-flow {
+  from {
+    background-position: 200% 50%;
+  }
+  to {
+    background-position: 0% 50%;
+  }
+}
+
+/* ===== 减少动态效果：把非必要过渡压缩为瞬时 ===== */
+@layer base {
+  .motion-disabled .game-stage *,
+  .motion-disabled .game-stage *::before,
+  .motion-disabled .game-stage *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .game-stage *,
+    .game-stage *::before,
+    .game-stage *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}

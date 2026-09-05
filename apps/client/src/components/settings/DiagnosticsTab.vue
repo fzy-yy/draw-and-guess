@@ -4,51 +4,46 @@
   复制动作上抛给父层（copy 事件），保持权限与提示逻辑集中在父层。
 -->
 <script setup lang="ts">
+import { ref } from 'vue'
 import { Clipboard, RotateCcw, Trash2 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import AvatarImage from '@/components/common/AvatarImage.vue'
 import AvatarPickerDialog from '@/components/common/AvatarPickerDialog.vue'
 import AppButton from '@/components/common/AppButton.vue'
+import AppInput from '@/components/common/AppInput.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useGameStore } from '@/stores/game'
 
-// 诊断文本、服务地址与头像弹窗开关均由父层下发；本组件上报复制与弹窗开关变更事件。
+const showAvatarPicker = defineModel<boolean>('showAvatarPicker', { default: false })
+
 defineProps<{
   diagnostic: string
-  serverAddress: string
-  showAvatarPicker: boolean
   profileEditingDisabled?: boolean
 }>()
 const emit = defineEmits<{
   copy: []
-  'update:showAvatarPicker': [value: boolean]
 }>()
 
 const store = useGameStore()
-
-/** 打开/关闭内置头像选择弹窗，通过事件回写父层的 showAvatarPicker。 */
-function onAvatarPickerOpenChange(open: boolean): void {
-  emit('update:showAvatarPicker', open)
-}
+const showResetConfirm = ref(false)
+const showClearProfileConfirm = ref(false)
 </script>
 
 <template>
   <section
-    class="min-h-0 px-[9cqw] py-[3cqh] grid grid-cols-[1fr_1.3fr] grid-rows-[1fr_auto] gap-[2cqh_2cqw]"
+    class="min-h-0 px-[5cqw] py-[3cqh] grid grid-cols-[1fr_1.3fr] grid-rows-[1fr_auto] gap-[2cqh_2cqw]"
   >
-    <!--
-      资料卡片：纵向居中排版（头像 → 昵称 → 保存按钮），与资料确认页保持一致的表单动线。
-      所有元素同宽居中，避免左右分栏导致视觉重心偏移。
-    -->
+    <!-- 资料卡片 -->
     <div
       class="flex flex-col items-center justify-center gap-[1.2cqh] border-t-[0.4cqh] border-blue bg-white p-[2cqh_1.5em]"
       :class="{ 'opacity-50': profileEditingDisabled }"
     >
       <button
         type="button"
-        class="flex flex-col items-center gap-[0.7cqh] text-blue bg-transparent text-[0.72em] font-black"
+        class="flex flex-col items-center gap-[0.7cqh] text-blue bg-transparent text-fs-12 font-bold"
         :disabled="profileEditingDisabled"
         :aria-label="strings.profile.changeAvatarAria"
-        @click="onAvatarPickerOpenChange(true)"
+        @click="showAvatarPicker = true"
       >
         <AvatarImage
           :avatar-id="store.profile.avatarId"
@@ -57,14 +52,21 @@ function onAvatarPickerOpenChange(open: boolean): void {
         />
         <span>{{ strings.settings.avatarField }}</span>
       </button>
-      <label class="flex w-full flex-col items-center gap-[0.6cqh] font-extrabold"
-        >{{ strings.settings.nicknameField
-        }}<input
-          v-model="store.profile.nickname"
-          :maxlength="store.config.player.nicknameMaxLength"
-          class="h-[5.2cqh] w-full rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] text-center font-bold text-navy disabled:cursor-not-allowed disabled:bg-line disabled:text-muted"
-          :disabled="profileEditingDisabled"
-      /></label>
+
+      <label class="flex w-full flex-col items-center gap-[0.6cqh] font-bold text-fs-14">
+        {{ strings.settings.nicknameField }}
+        <div class="w-full">
+          <AppInput
+            v-model="store.profile.nickname"
+            :maxlength="store.config.player.nicknameMaxLength"
+            align="center"
+            input-class="font-bold text-navy"
+            :disabled="profileEditingDisabled"
+            @enter="store.updateProfile"
+          />
+        </div>
+      </label>
+
       <AppButton
         variant="primary"
         type="button"
@@ -75,39 +77,66 @@ function onAvatarPickerOpenChange(open: boolean): void {
         {{ strings.settings.saveProfile }}
       </AppButton>
     </div>
+
+    <!-- 诊断区 -->
     <div class="border-t-[0.4cqh] border-blue bg-white p-[2cqh_1.5em]">
       <h2>{{ strings.settings.diagnosticsTitle }}</h2>
       <pre
-        class="my-[1.4cqh] rounded-[0.6em] bg-navy p-[1.2cqh_1em] text-sky font-mono text-[0.7em] leading-normal whitespace-pre-wrap"
+        class="my-[1.4cqh] rounded-[0.6em] bg-navy p-[1.2cqh_1em] text-sky font-mono text-fs-12 leading-normal whitespace-pre-wrap"
         >{{ diagnostic }}</pre>
       <AppButton variant="secondary" type="button" @click="emit('copy')">
         <Clipboard />{{ strings.settings.copyDiagnostics }}
       </AppButton>
     </div>
+
+    <!-- 底部操作按钮 -->
     <div class="col-span-full flex justify-end gap-[0.8em]">
       <AppButton
         variant="secondary"
         type="button"
         class="min-h-[5cqh]! px-[1em]! rounded-[0.6em]! gap-[0.5em]!"
-        @click="store.resetSettings"
+        @click="showResetConfirm = true"
       >
-        <RotateCcw />{{ strings.settings.resetSettings }}</AppButton
-      ><AppButton
+        <RotateCcw />{{ strings.settings.resetSettings }}
+      </AppButton>
+      <AppButton
         variant="danger"
         type="button"
         class="min-h-[5cqh]! px-[1em]! rounded-[0.6em]! gap-[0.5em]!"
         :disabled="profileEditingDisabled"
-        @click="store.clearProfile"
+        @click="showClearProfileConfirm = true"
       >
         <Trash2 />{{ strings.settings.clearProfile }}
       </AppButton>
     </div>
   </section>
 
+  <!-- 确认弹窗：恢复默认设置 -->
+  <ConfirmDialog
+    v-model:open="showResetConfirm"
+    :title="strings.settings.resetSettingsTitle"
+    :body="strings.settings.resetSettingsBody"
+    :confirm-label="strings.settings.confirmResetSettings"
+    :cancel-label="strings.common.cancel"
+    confirm-variant="primary"
+    :icon="RotateCcw"
+    @confirm="store.resetSettings"
+  />
+
+  <!-- 确认弹窗：清除本地资料 -->
+  <ConfirmDialog
+    v-model:open="showClearProfileConfirm"
+    :title="strings.settings.clearProfileTitle"
+    :body="strings.settings.clearProfileBody"
+    :confirm-label="strings.settings.confirmClearProfile"
+    :cancel-label="strings.common.cancel"
+    :icon="Trash2"
+    @confirm="store.clearProfile"
+  />
+
   <AvatarPickerDialog
     v-if="!profileEditingDisabled"
     v-model="store.profile.avatarId"
-    :open="showAvatarPicker"
-    @close="onAvatarPickerOpenChange(false)"
+    v-model:open="showAvatarPicker"
   />
 </template>

@@ -3,9 +3,7 @@
 import { computed, ref } from 'vue'
 import { ArrowRight, CheckCircle2, RefreshCw, Wifi, WifiOff } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
-import AppButton from '@/components/common/AppButton.vue'
-import AvatarImage from '@/components/common/AvatarImage.vue'
-import AvatarPickerDialog from '@/components/common/AvatarPickerDialog.vue'
+import { AppButton, AppInput, AvatarImage, AvatarPickerDialog } from '@/components/common'
 import { useGameStore } from '@/stores/game'
 
 const store = useGameStore()
@@ -34,26 +32,26 @@ function randomize(): void {
       :aria-label="strings.profile.brandAria"
     >
       <div
-        class="relative h-[13cqh] w-[13cqh] rounded-[2.4cqh] border-[0.55cqh] border-white bg-yellow shadow-[0.8cqh_0.8cqh_0] shadow-navy/40 -rotate-3"
+        class="relative h-[13cqh] w-[13cqh] rounded-[2.4cqh] border-[0.55cqh] border-white bg-yellow shadow-block -rotate-3"
         aria-hidden="true"
       >
         <span
           class="absolute left-[3.1cqh] top-[1.6cqh] h-[9cqh] w-[2.3cqh] rounded-full border-[0.35cqh] border-navy bg-yellow rotate-38"
         ></span
         ><span
-          class="absolute right-[1.2cqh] top-[1.2cqh] grid h-[4.5cqh] w-[4.5cqh] place-items-center rounded-full bg-blue text-white text-[1.7em] font-[1000]"
+          class="absolute right-[1.2cqh] top-[1.2cqh] grid h-[4.5cqh] w-[4.5cqh] place-items-center rounded-full bg-blue text-white text-fs-28 font-bold"
           >?</span
         >
       </div>
       <p class="mt-[3cqh] eyebrow-light">
         {{ strings.profile.brandEyebrow }}
       </p>
-      <h1 class="mt-[0.8cqh] text-[3.5em]">{{ store.config.app.name }}</h1>
+      <h1 class="mt-[0.8cqh] text-fs-48">{{ store.config.app.name }}</h1>
       <p class="mx-0 mb-[3.2cqh] mt-[1.8cqh] max-w-[25em] leading-[1.8] text-sky">
         {{ strings.profile.brandCopy }}
       </p>
       <div
-        class="inline-flex items-center gap-[0.55em] rounded-full px-[1.05em] py-[0.65cqh] text-[0.8em] font-extrabold"
+        class="inline-flex items-center gap-[0.55em] rounded-full px-[1.05em] py-[0.65cqh] text-fs-14 font-bold"
         :class="store.connected ? 'text-green bg-green/10' : 'text-red bg-red/10'"
       >
         <Wifi v-if="store.connected" /><WifiOff v-else />
@@ -70,7 +68,7 @@ function randomize(): void {
           <p class="eyebrow">
             {{ strings.profile.sectionLabel }}
           </p>
-          <h2 id="profile-title" class="mt-[0.5cqh] text-[1.8em]">
+          <h2 id="profile-title" class="mt-[0.5cqh] text-fs-28">
             {{ strings.profile.sectionTitle }}
           </h2>
         </div>
@@ -87,11 +85,11 @@ function randomize(): void {
 
       <!-- 大头像位于资料区顶部；整个圆形按钮均可打开头像选择弹窗。 -->
       <div class="flex flex-col items-center mb-[2.2cqh]">
-        <span class="mb-[0.65cqh] block text-navy font-extrabold">{{
+        <span class="mb-[0.65cqh] block text-navy font-bold">{{
           strings.profile.avatarLabel
         }}</span>
         <button
-          class="flex flex-col items-center gap-[0.8cqh] bg-transparent text-blue text-[0.76em] font-black"
+          class="flex flex-col items-center gap-[0.8cqh] bg-transparent text-blue text-fs-12 font-bold"
           type="button"
           :aria-label="strings.profile.changeAvatarAria"
           @click="showAvatarPicker = true"
@@ -106,25 +104,29 @@ function randomize(): void {
       </div>
 
       <!-- 昵称位于头像下方，保留自定义输入和 Enter 提交。 -->
-      <label class="mb-[0.65cqh] block text-navy font-extrabold" for="nickname">{{
+      <label class="mb-[0.65cqh] block text-navy font-bold" for="nickname">{{
         strings.profile.nicknameLabel
       }}</label>
-      <div class="relative flex">
-        <input
+      <div>
+        <AppInput
           id="nickname"
           v-model="store.profile.nickname"
-          class="w-full min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] text-center font-bold text-navy pr-[3em] pl-[3em] text-[1.05em]"
+          align="center"
+          input-class="font-bold text-fs-18 text-navy"
           :maxlength="store.config.player.nicknameMaxLength"
           autocomplete="nickname"
-          @keydown.enter="nicknameValid && store.connected && store.register()"
-        />
-        <CheckCircle2
-          v-if="nicknameValid"
-          class="absolute right-[1em] top-1/2 -translate-y-1/2 text-green"
-          :aria-label="strings.profile.nicknameValidAria"
-        />
+          @enter="nicknameValid && store.connected && store.register()"
+        >
+          <template #suffix>
+            <CheckCircle2
+              v-if="nicknameValid"
+              class="text-green"
+              :aria-label="strings.profile.nicknameValidAria"
+            />
+          </template>
+        </AppInput>
       </div>
-      <p class="mt-[0.6cqh] text-muted text-[0.74em]">
+      <p class="mt-[0.6cqh] text-muted text-fs-12">
         {{
           strings.profile.nicknameHelp(
             store.config.player.nicknameMinLength,
@@ -142,15 +144,11 @@ function randomize(): void {
       >
         {{ store.busy ? strings.profile.busy : strings.profile.enterLobby }}<ArrowRight />
       </AppButton>
-      <p v-if="!store.connected" class="mt-[0.75cqh] text-red text-[0.72em] font-bold">
+      <p v-if="!store.connected" class="mt-[0.75cqh] text-red text-fs-12 font-bold">
         {{ strings.profile.offlineWarning }}
       </p>
     </section>
 
-    <AvatarPickerDialog
-      v-model="store.profile.avatarId"
-      :open="showAvatarPicker"
-      @close="showAvatarPicker = false"
-    />
+    <AvatarPickerDialog v-model="store.profile.avatarId" v-model:open="showAvatarPicker" />
   </main>
 </template>

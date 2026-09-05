@@ -62,6 +62,7 @@ export class RoundMachine {
     game.drawerId = drawer // 指定当前画家（在切阶段后立即赋值）
     game.roundId = randomUUID()
     game.candidates = this.service.pickCandidates(room, game)
+    game.rerollUsed = false
     game.answer = undefined
     game.strokes = []
     game.strokePointTotal = 0 // 新回合重置画布点数预算
@@ -109,7 +110,7 @@ export class RoundMachine {
       difficulty: 0,
     }
     game.answer = richAnswer
-    game.usedWordIds.add(answer.id) // 记录已用词条，避免后续回合重复
+    game.offeredWordIds.add(answer.id) // 记录已展示词条，避免整局后续回合重复
     // 回合实际时长：词条级 time_limit 覆盖房间统一作画秒数（可在配置关闭；钳制到合法区间）
     const configuredSeconds =
       APP_CONFIG.vocabulary.useWordTimeLimit && richAnswer.timeLimit
@@ -319,42 +320,81 @@ export class RoundMachine {
     this.service.emitRoom(room.id)
   }
   /**
-   * 按剩余时间阈值安排逐步提示。
-   * 剩余比例降到某个阈值以下时揭示一个非标点字符（如 [0.35, 0.2] 表示两次揭示），
-   * 且每次揭示后仍保留至少一个字符未知，因此提示只缩小范围而不会直接泄露答案。
+   * 优化后的猜词提示调度算法：
+   * ① 逐步提示（Progressive Hints）：
+   *    - 在作画时间后半程（由 progressiveHintRatio 配置，如 0.5 即后 50%）逐步给出；
+   *    - 提示字符总数向下取整为字数的一半：Math.floor(wordLength / 2)；
+   *    - 间隔时间为：(总时长 * progressiveHintRatio) / 提示总数；
+   *    - 在对应剩余时间触发，每次随机公布答案中一个未揭示的非标点字符。
+   * ② 结构化提示（Category Hint）：
+   *    - 在倒计时快结束时（剩余 categoryHintRemainingSeconds 秒，如 15 秒）给出词语类别提示。
    */
   public scheduleHints(room: RoomSecret): void {
     const game = this.service.requireGame(room)
     this.service.clearHintTimers(game)
     if (!game.answer || room.phase !== 'drawing') return
+
     const totalMs = game.roundDurationMs
-    const remainingRatio = Math.max(0, Math.min(1, (game.phaseEndsAt - Date.now()) / totalMs))
+    const currentRemainingMs = Math.max(0, game.phaseEndsAt - Date.now())
     const timers: NodeJS.Timeout[] = []
-    // ① 逐字揭示遮罩：沿用全局阈值 finalHintThresholds（受 progressiveHints 门控）
+
+    // ① 逐步提示：在后半程按字符数逐步揭示
     if (room.settings.progressiveHints) {
-      for (const threshold of APP_CONFIG.game.finalHintThresholds) {
-        if (threshold >= remainingRatio) continue
-        timers.push(
-          setTimeout(
-            () => this.service.safeRun('revealHint', () => this.revealHint(room)),
-            Math.max(0, (remainingRatio - threshold) * totalMs),
-          ),
-        )
+      const wordChars = Array.from(game.answer.text)
+      const hintCount = Math.floor(wordChars.length / 2)
+      if (hintCount > 0) {
+        const totalSec = Math.floor(totalMs / 1_000)
+        const windowSec = Math.floor(totalSec * APP_CONFIG.game.progressiveHintRatio)
+        const intervalSec = Math.floor(windowSec / hintCount)
+        const intervalMs = intervalSec * 1_000
+        const hintsAlreadyRevealed = game.revealedIndices.size
+
+        for (let k = 1; k <= hintCount; k += 1) {
+          // 若该轮次提示之前已触发过（如暂停前已揭示），跳过避免重复触发
+          if (k <= hintsAlreadyRevealed) continue
+
+          const targetRemainingMs = intervalMs * (hintCount - k + 1)
+          if (currentRemainingMs >= targetRemainingMs) {
+            const delay = currentRemainingMs - targetRemainingMs
+            timers.push(
+              setTimeout(
+                () => this.service.safeRun('revealHint', () => this.revealHint(room)),
+                delay,
+              ),
+            )
+          }
+        }
       }
     }
-    // ② 结构化提示：开始时机为房间规则可设的剩余比例；词库单分类即提示，只揭示一次（hintOrder 恒 1 槽）
-    if (room.settings.structuredHintsEnabled && game.hintOrder.length > 0) {
-      const start = room.settings.hintStartRatio
-      if (start > 0 && start < remainingRatio) {
+
+    // ② 结构化提示：时间快结束时（默认剩余 15 秒）揭示分类
+    if (
+      room.settings.structuredHintsEnabled &&
+      game.hintOrder.length > 0 &&
+      game.revealedHintCount < game.hintOrder.length
+    ) {
+      const targetRemainingMs = APP_CONFIG.game.categoryHintRemainingSeconds * 1_000
+      if (currentRemainingMs >= targetRemainingMs) {
+        const delay = currentRemainingMs - targetRemainingMs
         timers.push(
           setTimeout(
             () =>
               this.service.safeRun('revealStructuredHint', () => this.revealStructuredHint(room)),
-            Math.max(0, (remainingRatio - start) * totalMs),
+            delay,
+          ),
+        )
+      } else {
+        // 当前剩余时间已经不足指定秒数，立即揭示
+        timers.push(
+          setTimeout(
+            () =>
+              this.service.safeRun('revealStructuredHint', () => this.revealStructuredHint(room)),
+            0,
           ),
         )
       }
     }
+
     game.hintTimers = timers
   }
 

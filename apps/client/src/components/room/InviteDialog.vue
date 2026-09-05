@@ -15,9 +15,14 @@ import SectionHeader from '@/components/common/SectionHeader.vue'
 import RoundIconButton from '@/components/common/RoundIconButton.vue'
 import { useGameStore } from '@/stores/game'
 
-const props = defineProps<{ open: boolean }>()
+const open = defineModel<boolean>('open', { default: false })
 const emit = defineEmits<{ close: [] }>()
 const store = useGameStore()
+
+function handleClose(): void {
+  open.value = false
+  emit('close')
+}
 
 // 可邀请玩家：当前空闲的在线玩家（排除自己）。
 // 「是否允许接收邀请」不在公开资料中下发，由服务端 sendInvite 侧校验并拒绝。
@@ -58,9 +63,9 @@ async function sendInvite(playerId: string): Promise<void> {
 // 弹窗打开期间每 250ms 刷新一次剩余秒数；关闭时清理定时器并清空冷却状态。
 // immediate：组件在 open=true 时才挂载，必须在初始化时也启动定时器，否则倒计时永远停在初始值。
 watch(
-  () => props.open,
-  (open) => {
-    if (open) {
+  open,
+  (isOpen) => {
+    if (isOpen) {
       cooldownEndsAt.value = new Map()
       window.clearInterval(tickTimer)
       tickTimer = window.setInterval(() => (nowTick.value = Date.now()), 250)
@@ -76,11 +81,11 @@ onBeforeUnmount(() => window.clearInterval(tickTimer))
 
 <template>
   <BaseDialog
-    :open="props.open"
+    v-model:open="open"
     width-class="w-[52cqw]"
     labelledby="invite-title"
     :close-aria="strings.room.inviteCloseAria"
-    @close="emit('close')"
+    @close="handleClose"
   >
     <template #header>
       <SectionHeader
@@ -111,7 +116,7 @@ onBeforeUnmount(() => window.clearInterval(tickTimer))
             @click="sendInvite(player.id)"
           >
             <!-- 冷却期展示剩余秒数，冷却结束恢复发送图标 -->
-            <b v-if="cooldownSeconds(player.id) > 0" class="text-[0.8em] tabular-nums">{{
+            <b v-if="cooldownSeconds(player.id) > 0" class="text-fs-12 tabular-nums">{{
               cooldownSeconds(player.id)
             }}</b>
             <Send v-else />

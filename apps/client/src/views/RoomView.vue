@@ -2,20 +2,23 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Check, ClipboardCopy, KeyRound, LogOut, Play, ShieldCheck } from 'lucide-vue-next'
-import { clsx } from 'clsx'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
 import { useCopyWithFeedback } from '@/composables/useCopyWithFeedback'
-import SeatGrid from '@/components/room/SeatGrid.vue'
-import RuleSummary from '@/components/room/RuleSummary.vue'
-import IconButton from '@/components/common/IconButton.vue'
-import NetworkStatusButton from '@/components/common/NetworkStatusButton.vue'
-import StageHeader from '@/components/common/StageHeader.vue'
-import VocabularyDialog from '@/components/room/VocabularyDialog.vue'
-import RulesDialog from '@/components/room/RulesDialog.vue'
-import InviteDialog from '@/components/room/InviteDialog.vue'
-import AppButton from '@/components/common/AppButton.vue'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import {
+  AppButton,
+  ConfirmDialog,
+  IconButton,
+  NetworkStatusButton,
+  StageHeader,
+} from '@/components/common'
+import {
+  InviteDialog,
+  RuleSummary,
+  RulesDialog,
+  SeatGrid,
+  VocabularyDialog,
+} from '@/components/room'
 import type { RoomSettings } from '@draw-guess/shared'
 
 const store = useGameStore()
@@ -83,18 +86,16 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
     <StageHeader>
       <template #leading>
         <div class="flex items-baseline gap-[0.8em] min-w-0">
-          <span class="text-sky text-[0.65em] tracking-[0.15em]">{{
-            strings.room.roomEyebrow
-          }}</span>
-          <h1 class="overflow-hidden text-ellipsis whitespace-nowrap text-[1.35em]">
+          <span class="text-sky text-fs-12 tracking-[0.15em]">{{ strings.room.roomEyebrow }}</span>
+          <h1 class="overflow-hidden text-ellipsis whitespace-nowrap text-fs-20">
             {{ store.room.name }}
           </h1>
         </div>
       </template>
       <template #center>
         <div
-          class="flex items-center justify-self-center gap-[0.6em] text-yellow text-[0.72em] font-black"
-          :class="clsx(store.room.visibility === 'private' && 'text-red!')"
+          class="flex items-center justify-self-center gap-[0.6em] text-yellow text-fs-12 font-bold"
+          :class="{ 'text-red!': store.room.visibility === 'private' }"
         >
           <KeyRound v-if="store.room.visibility === 'private'" />
           <ShieldCheck v-else />
@@ -110,8 +111,8 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
             :aria-label="strings.room.copyPrivateCodeAria"
             @click="handleCopyPrivateCode"
           >
-            <b>{{ store.room.privateJoinCode }}</b
-            ><ClipboardCopy />
+            <b>{{ store.room.privateJoinCode }}</b>
+            <ClipboardCopy />
           </button>
         </div>
       </template>
@@ -143,10 +144,10 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
 
       <!-- 房主只显示开始按钮；其他玩家保留准备按钮，观战者不能参与准备。 -->
       <div class="mt-auto pt-[1.3cqh] border-t-[0.2cqh] border-t-line text-center">
-        <p v-if="store.me?.spectating" class="min-h-[2.4cqh] text-muted text-[0.69em]">
+        <p v-if="store.me?.spectating" class="min-h-[2.4cqh] text-muted text-fs-12">
           {{ strings.room.spectatorReadyHint }}
         </p>
-        <p v-else-if="!allSet" class="min-h-[2.4cqh] text-muted text-[0.69em]">
+        <p v-else-if="!allSet" class="min-h-[2.4cqh] text-muted text-fs-12">
           {{
             (store.room.members || []).filter((member) => !member.spectating).length <
             store.config.player.minPlayers
@@ -158,7 +159,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
         </p>
         <p
           v-else
-          class="min-h-[2.4cqh] flex items-center justify-center gap-[0.3em] text-green text-[0.69em]"
+          class="min-h-[2.4cqh] flex items-center justify-center gap-[0.3em] text-green text-fs-12"
         >
           <Check /> {{ strings.room.allReady }}
         </p>
@@ -168,7 +169,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           variant="secondary"
           type="button"
           class="w-full my-[0.8cqh]"
-          :class="clsx(store.me?.ready && 'text-green! bg-green/10! border-green!')"
+          :class="{ 'text-green! bg-green/10! border-green!': store.me?.ready }"
           @click="store.setReady(!store.me?.ready)"
         >
           {{ store.me?.ready ? strings.room.cancelReady : strings.room.readyGo }}
@@ -198,36 +199,24 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
 
     <!--
       弹窗一：本局词库管理（房主）——搜索、批量选择、确认保存。
-      只由 :open 控制显隐（不要在外层再包 <Transition> 或 v-if：BaseDialog 内部已自带 modal 过渡，
-      双层包裹会让关闭流程卡死、弹窗变成僵尸 DOM——表现为弹窗内所有按钮“点击没反应”，100% 复现；
-      父级 v-if 还会切断 leave 动画，导致三个弹窗退出时无过渡而 ConfirmDialog 有过渡，手感不一致）。
+      只由 v-model:open 控制显隐。
     -->
-    <VocabularyDialog
-      v-model:loading="vocabularyLoading"
-      :open="showVocabulary"
-      @close="showVocabulary = false"
-    />
+    <VocabularyDialog v-model:open="showVocabulary" v-model:loading="vocabularyLoading" />
 
     <!-- 弹窗二：房间规则编辑（房主）——滑块与开关修改规则（动画由 BaseDialog 内部负责） -->
-    <RulesDialog
-      :open="showSettings"
-      :draft="settingsDraft"
-      @close="showSettings = false"
-      @save="saveSettings"
-    />
+    <RulesDialog v-model:open="showSettings" :draft="settingsDraft" @save="saveSettings" />
 
     <!-- 弹窗三：邀请在线玩家（房主或允许邀请的成员） -->
-    <InviteDialog :open="showInvite" @close="showInvite = false" />
+    <InviteDialog v-model:open="showInvite" />
 
     <!-- 弹窗四：退出房间确认（复用通用 ConfirmDialog：图标 + 标题 + 正文 + 取消/确认） -->
     <ConfirmDialog
-      :open="showLeaveConfirm"
+      v-model:open="showLeaveConfirm"
       :title="strings.room.leaveTitle"
       :body="strings.room.leaveBody"
       :confirm-label="strings.room.confirmLeave"
       :cancel-label="strings.room.stayInRoom"
       :icon="LogOut"
-      @cancel="showLeaveConfirm = false"
       @confirm="store.leaveRoom"
     />
   </main>

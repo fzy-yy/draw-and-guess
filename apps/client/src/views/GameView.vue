@@ -4,26 +4,40 @@
   这里仅保留画布区、弹窗编排与浏览器级状态（全屏/弹窗开关/颜色线宽工具）。
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useFullscreen } from '@vueuse/core'
 import { Brush, LogOut, Trash2, X } from 'lucide-vue-next'
 import { APP_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import { EVENTS, type FillCommand, type Stroke } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
-import GameCanvas from '@/components/game/GameCanvas.vue'
+import { AppButton, ConfirmDialog } from '@/components/common'
+import {
+  ChatPanel,
+  DrawingToolbar,
+  GameCanvas,
+  GameHud,
+  PhaseOverlay,
+  ScoreStrip,
+} from '@/components/game'
 import SettingsView from '@/views/SettingsView.vue'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import AppButton from '@/components/common/AppButton.vue'
-import GameHud from '@/components/game/GameHud.vue'
-import ScoreStrip from '@/components/game/ScoreStrip.vue'
-import ChatPanel from '@/components/game/ChatPanel.vue'
-import DrawingToolbar from '@/components/game/DrawingToolbar.vue'
-import PhaseOverlay from '@/components/game/PhaseOverlay.vue'
 import { useGameHud } from '@/composables/useGameHud'
 import { useShortcuts } from '@/composables/useShortcuts'
+import { fireGuessCorrectConfetti } from '@/utils/confetti'
 
 const store = useGameStore()
+
+// 当自己猜中且处于作画阶段时，触发全屏礼花庆祝特效
+watch(
+  () => store.me?.guessed,
+  (guessed, prev) => {
+    if (guessed && !prev && store.room?.phase === 'drawing') {
+      if (store.settings.animationsEnabled) {
+        fireGuessCorrectConfetti()
+      }
+    }
+  },
+)
 // ---- 对局 HUD（计时/进度/权限/排行等，含 ticker 生命周期，见 composables/useGameHud.ts）----
 // 整局只在此处调用一次 useGameHud，把派生值（剩余秒数/进度/画家/排位）作为 props 下发给
 // GameHud/PhaseOverlay 等子组件，避免各组件各自开启 ticker 造成重复刷新。
@@ -108,6 +122,7 @@ function handleFullscreenToggle(): void {
       class="relative min-w-0 min-h-0 m-[1.5cqh_1cqw] overflow-hidden border-[0.3cqh] border-navy bg-white shadow-block"
     >
       <GameCanvas
+        v-model:width="width"
         :round-id="game.roundId"
         :strokes="game.strokes"
         :undone-stroke-ids="game.undoneStrokeIds"
@@ -115,23 +130,19 @@ function handleFullscreenToggle(): void {
         :can-draw="store.isDrawer && store.room.phase === 'drawing'"
         :tool="tool"
         :color="color"
-        :width="width"
         :revision="store.drawRevision"
         @stroke="submitStroke"
         @fill="submitFill"
-        @width-change="width = $event"
       />
       <!-- 画布状态遮罩：选词/结算/暂停等非作画阶段覆盖在画布上 -->
       <div
         v-if="store.room.phase !== 'drawing'"
         class="absolute inset-0 flex flex-col items-center justify-center gap-[0.6cqh] bg-paper text-muted pointer-events-none"
       >
-        <Brush class="h-[7cqh] w-[7cqh] text-blue" /><b class="text-[1.35em]">{{ phaseLabel }}</b
-        ><span
-          v-if="store.room.phase === 'choosing_word' && !store.isDrawer"
-          class="text-[0.75em]"
-          >{{ strings.game.choosingHint }}</span
-        >
+        <Brush class="h-[7cqh] w-[7cqh] text-blue" /><b class="text-fs-20">{{ phaseLabel }}</b>
+        <span v-if="store.room.phase === 'choosing_word' && !store.isDrawer" class="text-fs-12">{{
+          strings.game.choosingHint
+        }}</span>
       </div>
     </section>
 
@@ -142,8 +153,7 @@ function handleFullscreenToggle(): void {
     <DrawingToolbar
       v-model:tool="tool"
       v-model:color="color"
-      :width="width"
-      @width-change="width = $event"
+      v-model:width="width"
       @clear="showClearConfirm = true"
     />
 
@@ -153,6 +163,7 @@ function handleFullscreenToggle(): void {
       :game="game"
       :rankings="rankings"
       @choose-word="store.chooseWord"
+      @reroll-words="store.rerollWords"
       @resume="store.resume"
       @open-end-confirm="showEndConfirm = true"
       @return-waiting="store.returnWaiting"
@@ -171,7 +182,7 @@ function handleFullscreenToggle(): void {
           <AppButton
             variant="danger"
             type="button"
-            class="min-h-[4.4cqh] rounded-[0.55em] px-[0.8em] py-[0.8cqh] text-[0.85em]"
+            class="min-h-[4.4cqh] rounded-[0.55em] px-[0.8em] py-[0.8cqh] text-fs-14"
             @click="showLeaveGameConfirm = true"
           >
             <LogOut />{{ strings.game.leaveGame }}
@@ -182,37 +193,34 @@ function handleFullscreenToggle(): void {
 
     <!-- 确认弹窗：从对局设置页退出本局，层级高于设置页。 -->
     <ConfirmDialog
-      :open="showLeaveGameConfirm"
+      v-model:open="showLeaveGameConfirm"
       :title="strings.game.leaveGameTitle"
       :body="strings.game.leaveGameBody"
       :confirm-label="strings.game.confirmLeaveGame"
       :cancel-label="strings.common.cancel"
       :icon="LogOut"
       overlay-class="z-50"
-      @cancel="showLeaveGameConfirm = false"
       @confirm="leaveGame"
     />
 
     <!-- 确认弹窗：清空画板 -->
     <ConfirmDialog
-      :open="showClearConfirm"
+      v-model:open="showClearConfirm"
       :title="strings.game.clearCanvasTitle"
       :body="strings.game.clearCanvasBody"
       :confirm-label="strings.game.confirmClear"
       :cancel-label="strings.common.cancel"
       :icon="Trash2"
-      @cancel="showClearConfirm = false"
       @confirm="clearDrawing"
     />
     <!-- 确认弹窗：提前结束本局 -->
     <ConfirmDialog
-      :open="showEndConfirm"
+      v-model:open="showEndConfirm"
       :title="strings.game.endGameTitle"
       :body="strings.game.endGameBody"
       :confirm-label="strings.game.confirmEnd"
       :cancel-label="strings.common.cancel"
       :icon="X"
-      @cancel="showEndConfirm = false"
       @confirm="endGameEarly"
     />
   </main>

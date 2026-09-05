@@ -30,15 +30,32 @@ const CUSTOM_COLORS = [
   'purple',
 ] as const
 
+/** 项目自定义语义偶数字号标尺（与 style/tokens.css 的 @theme 保持一致）。 */
+const CUSTOM_FONT_SIZES = [
+  'fs-10',
+  'fs-12',
+  'fs-14',
+  'fs-16',
+  'fs-18',
+  'fs-20',
+  'fs-24',
+  'fs-28',
+  'fs-36',
+  'fs-48',
+  'fs-96',
+] as const
+
 /**
- * 扩展后的 twMerge：把自定义语义色并入 color 冲突组。
- * 这样 bg-navy 与 bg-blue、text-muted 与 text-navy、border-line 与 border-blue
- * 等同类（背景/文字/边框颜色）才能正确参与“保留靠后者”的冲突消解。
+ * 扩展后的 twMerge：把自定义语义色与偶数字号标尺并入冲突组。
+ * 保证 bg-*、text-*（颜色）与 text-fs-*（字号）能正确参与“保留靠后者”的冲突消解。
  */
 const twMerge = extendTailwindMerge({
   extend: {
     theme: {
       color: CUSTOM_COLORS,
+    },
+    classGroups: {
+      'font-size': [{ text: CUSTOM_FONT_SIZES }],
     },
   },
 })

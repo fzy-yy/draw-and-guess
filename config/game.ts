@@ -11,7 +11,11 @@ export const game = {
   roundResultSeconds: 6, // 回合结算展示时长
   /** 作画阶段剩余秒数低于该值时进入“紧急”视觉/音效提示（GameHud 与 useAudioFeedback 共用，避免重复硬编码）。 */
   warningSeconds: 10,
-  finalHintThresholds: [0.35, 0.2], // 逐字揭示遮罩的剩余时间比例阈值（独立于结构化提示）
+  /** 逐步提示时间窗口比例：在作画时间的后半程开始逐步揭示字符（0.5 = 后 50% 时间开始） */
+  progressiveHintRatio: 0.5,
+  /** 结构化分类提示触发时机：倒计时剩余多少秒时给出词语类别（默认 15 秒） */
+  categoryHintRemainingSeconds: 15,
+  finalHintThresholds: [0.35, 0.2], // 兼容历史配置阈值
   // —— 房间规则可设置项的默认值（RulesDialog/LobbyView 初始值均从这取，禁止另写一套）——
   structuredHintsEnabled: true, // 默认开启结构化提示（词条分类按阈值揭示一次）
   hintStartRatio: 0.35, // 结构化提示开始时机：剩余比例降到该值时揭示分类
@@ -20,6 +24,7 @@ export const game = {
   scoreMode: 'standard' as const, // 猜词分数计算方式默认值（standard=基础+速度+顺序）
   showWordLength: true, // 默认显示答案字数
   progressiveHints: true, // 默认开启逐步提示
+  allowWordReroll: true, // 默认开启选词换一组
   // 猜词比较固定为：NFKC 规范化 → 去首尾空白 → 折叠连续空白 → 忽略拉丁大小写（由 shared normalizeAnswer 内置）
   score: {
     guessBase: 300, // 猜中基础分（全局默认值；房间规则可用 guessBaseScore 覆盖）

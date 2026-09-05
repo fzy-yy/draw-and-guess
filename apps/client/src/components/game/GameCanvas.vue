@@ -17,6 +17,8 @@ import { APP_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import { createUuid } from '@/utils/createUuid'
 
+const width = defineModel<number>('width', { required: true })
+
 const props = defineProps<{
   /** 当前回合 ID；变化时必须清空像素缓冲，不能只按命令数量判断。 */
   roundId: string
@@ -27,14 +29,12 @@ const props = defineProps<{
   canDraw: boolean
   tool: ToolKind
   color: string
-  width: number
   /** 画布渲染代次：同 ID 笔画追加点不会改变命令数组长度，由该代次触发增量绘制。 */
   revision?: number
 }>()
 const emit = defineEmits<{
   stroke: [stroke: Stroke]
   fill: [fill: FillCommand]
-  widthChange: [width: number]
 }>()
 
 const canvas = ref<HTMLCanvasElement>() // 画布 DOM 引用
@@ -54,12 +54,12 @@ const cursorPos = ref({ x: 0, y: 0 }) // 指针在画板内的 CSS 像素坐标�
 const cursorDiameter = computed(() => {
   void resizeTick.value // 依赖尺寸代次：窗口缩放后强制重算
   const element = canvas.value
-  if (!element) return props.width
+  if (!element) return width.value
   const rect = element.getBoundingClientRect()
   const cssMin = Math.min(rect.width, rect.height)
   const dpr = window.devicePixelRatio || 1
   const scale = (cssMin * dpr) / APP_CONFIG.drawing.referenceResolution
-  return (props.width * Math.max(APP_CONFIG.drawing.minLineScale, scale)) / dpr
+  return (width.value * Math.max(APP_CONFIG.drawing.minLineScale, scale)) / dpr
 })
 /** 圆点颜色：画笔跟随当前选色；橡皮擦用主题 line 令牌（淡灰），避免硬编码。 */
 const cursorColor = computed(() => (props.tool === 'eraser' ? 'var(--color-line)' : props.color))
@@ -94,7 +94,7 @@ function currentStrokeStyle(): { tool: 'pen' | 'eraser'; color: string; width: n
     activeStyle ?? {
       tool: props.tool === 'eraser' ? 'eraser' : 'pen',
       color: props.color,
-      width: props.width,
+      width: width.value,
     }
   )
 }
@@ -407,7 +407,7 @@ function pointerDown(event: PointerEvent): void {
   activeStyle = {
     tool: props.tool === 'eraser' ? 'eraser' : 'pen',
     color: props.color,
-    width: props.width,
+    width: width.value,
   }
   sentPointCount = 0
   activePoints.value = [point]
@@ -504,10 +504,10 @@ function wheelWidth(event: WheelEvent): void {
     APP_CONFIG.drawing.width.min,
     Math.min(
       APP_CONFIG.drawing.width.max,
-      props.width + direction * APP_CONFIG.drawing.width.wheelStep,
+      width.value + direction * APP_CONFIG.drawing.width.wheelStep,
     ),
   )
-  emit('widthChange', next)
+  width.value = next
 }
 
 /**

@@ -50,7 +50,7 @@ const hintsSummary = computed(() => {
         <button
           v-if="store.isHost"
           type="button"
-          class="col-start-2 row-[1/3] flex items-center gap-[0.4em] text-blue bg-transparent font-extrabold"
+          class="col-start-2 row-[1/3] flex items-center gap-[0.4em] text-blue bg-transparent font-bold"
           @click="emit('edit-rules')"
         >
           <Settings2 /> {{ strings.room.rulesEdit }}
@@ -61,10 +61,17 @@ const hintsSummary = computed(() => {
           {{ strings.room.ruleRoundsDd(store.room?.settings.roundsPerPlayer ?? 0) }}
         </RuleRow>
         <RuleRow :label="strings.room.ruleDrawDt">
-          {{ strings.room.ruleDrawDd(store.room?.settings.drawSeconds ?? 0) }}
+          {{ strings.room.ruleDrawByVocab }}
         </RuleRow>
         <RuleRow :label="strings.room.ruleOptionsDt">
           {{ strings.room.ruleOptionsDd(store.room?.settings.optionCount ?? 0) }}
+        </RuleRow>
+        <RuleRow :label="strings.room.ruleRerollDt">
+          {{
+            store.room?.settings.allowWordReroll
+              ? strings.room.ruleRerollOn
+              : strings.room.ruleRerollOff
+          }}
         </RuleRow>
         <RuleRow :label="strings.room.ruleHintsDt">
           {{ hintsSummary }}
@@ -87,16 +94,16 @@ const hintsSummary = computed(() => {
             store.room?.totalWordCount ?? 0,
           )
         }}</small></span
-      ><span class="text-[0.68em] font-extrabold">{{
+      ><span class="text-fs-12 font-bold">{{
         store.isHost ? strings.room.vocabularyManage : strings.room.vocabularyReadOnly
       }}</span>
     </button>
 
     <!-- 邀请在线玩家：满员或无权限时禁用 -->
-    <div class="grid grid-cols-1 gap-[0.6em] my-[1.3cqh]">
+    <div class="my-[1.3cqh]">
       <AppButton
         variant="secondary"
-        class="min-h-[4.6cqh] px-[0.5em] text-[0.72em]"
+        class="w-full min-h-[4.6cqh] px-[0.5em] text-fs-12"
         :disabled="
           (store.room?.members.length ?? 0) >= (store.room?.settings.maxPlayers ?? 0) ||
           (!store.isHost && !(store.room?.settings.allowPlayerInvite ?? false))

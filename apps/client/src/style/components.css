@@ -1,0 +1,24 @@
+/*
+ * 共享组件类（components.css）：用 @apply 收敛重复的行内 Tailwind 长串，供各视图引用。
+ */
+@layer components {
+  /* 弹窗卡片骨架：与 BaseDialog 组件使用的 .game-dialog dialog-shell 一致。 */
+  .dialog-shell {
+    @apply flex max-h-[86cqh] flex-col overflow-hidden rounded-[1.2em] border-[0.35cqh] border-white bg-paper text-navy shadow-float;
+  }
+
+  /* 眉题：分区小标题（如词库弹窗标题上方的标签）。 */
+  .eyebrow {
+    @apply text-blue font-bold tracking-[0.16em] text-fs-12;
+  }
+
+  /* 浅色眉题：用于深色（navy）背景下的分区小标题，避免对比度不足。 */
+  .eyebrow-light {
+    @apply text-sky font-bold tracking-[0.16em] text-fs-12;
+  }
+
+  /* 圆形图标按钮底座：ActionPopover 触发钮等统一圆形图标（与 RoundIconButton 组件等价）。 */
+  .round-icon-btn {
+    @apply grid h-[4.2cqh] w-[4.2cqh] shrink-0 place-items-center rounded-full border-[0.18cqh] border-line bg-white text-blue disabled:cursor-not-allowed disabled:opacity-40;
+  }
+}

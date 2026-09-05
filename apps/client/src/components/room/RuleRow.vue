@@ -7,8 +7,8 @@ const props = defineProps<{ label: string }>()
 </script>
 
 <template>
-  <div class="flex justify-between py-[0.85cqh] border-b-[0.14cqh] border-b-line text-[0.75em]">
+  <div class="flex justify-between py-[0.85cqh] border-b-[0.14cqh] border-b-line text-fs-12">
     <dt class="text-muted">{{ props.label }}</dt>
-    <dd class="m-0 font-black"><slot /></dd>
+    <dd class="m-0 font-bold"><slot /></dd>
   </div>
 </template>

@@ -14,7 +14,6 @@ import type { VocabularyMeta, VocabularyProvider } from './contract.ts'
 import { SqliteProvider } from './sqlite.provider.ts'
 
 export type { LoadedVocabulary, VocabularyMeta, VocabularyProvider } from './contract.ts'
-export { canonicalWordId, hashWords } from './normalize.ts'
 
 /** 词库装载结果：词条列表 + 按 ID 索引 + 内容哈希版本 + 元信息。 */
 export interface VocabularyStore {

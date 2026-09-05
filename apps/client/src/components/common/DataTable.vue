@@ -11,7 +11,7 @@
   典型用法见 components/room/VocabTableView.vue（词库管理表格视图）。
 -->
 <script setup lang="ts" generic="T extends object">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { useVirtualRows } from '@/composables/useVirtualRows'
@@ -87,14 +87,39 @@ function displayValue(row: T, column: DataTableColumn<T>): string {
   return String(value)
 }
 
-// —— 表体虚拟滚动：行高先按 38px 估算，再由 measureElement 实测校准 ——
+// —— 表体虚拟滚动：锁定实测统一行高，避免滑动过程中因动态再测量导致 totalSize 缩放跳动 ——
+const measuredRowHeight = ref(28)
 const scrollContainer = ref<HTMLElement>()
-const { virtualizer: rowVirtualizer, measureElementRef } = useVirtualRows({
+const { virtualizer: rowVirtualizer } = useVirtualRows({
   scrollElement: scrollContainer,
   count: computed(() => props.rows.length),
-  estimateSize: 38,
+  estimateSize: measuredRowHeight,
 })
-/** 取虚拟行索引对应的原始行数据（itemsPerVirtual=1，切片即单行）。 */
+
+/** 在挂载与容器尺寸变化时实测一次真实行高并广播，保证所有单行均一且拖拽滚动条平滑 */
+function updateRowHeight(): void {
+  const container = scrollContainer.value
+  if (!container) return
+  const firstRow = container.querySelector('tbody tr:not([aria-hidden])') as HTMLElement | null
+  if (firstRow) {
+    const h = firstRow.getBoundingClientRect().height
+    if (h > 0 && Math.abs(h - measuredRowHeight.value) > 0.5) {
+      measuredRowHeight.value = h
+      rowVirtualizer.value.measure()
+    }
+  }
+}
+
+onMounted(() => {
+  nextTick(updateRowHeight)
+  if (typeof ResizeObserver !== 'undefined' && scrollContainer.value) {
+    const observer = new ResizeObserver(() => updateRowHeight())
+    observer.observe(scrollContainer.value)
+    onBeforeUnmount(() => observer.disconnect())
+  }
+})
+
+/** 取虚拟行索引对应的原始行数据（每个虚拟项即单行）。 */
 function rowAt(index: number): T | undefined {
   return props.rows[index]
 }
@@ -111,7 +136,7 @@ const columnWidths = computed(() => {
   }
   return map
 })
-/** 取顶部/底部虚拟占位高度（把可视行推到滚动条对应偏移；占位行放在 table 外，见模板）。 */
+/** 取顶部/底部虚拟占位高度（置于 tbody 内部占位行，不再影响 table 外部结构）。 */
 const topSpacerHeight = computed(() =>
   rowVirtualizer.value.getVirtualItems().length
     ? rowVirtualizer.value.getVirtualItems()[0]!.start
@@ -127,7 +152,7 @@ const bottomSpacerHeight = computed(() => {
 
 <template>
   <div
-    class="flex min-h-0 flex-col overflow-hidden rounded-[0.7em] border-[0.16cqh] border-line bg-white"
+    class="flex min-h-0 flex-col overflow-hidden rounded-none border-[0.16cqh] border-line bg-white"
   >
     <!-- 表格区：表头吸顶，表体滚动（容器高度由调用方控制）；内部只挂载可视行。
          顶部/底部虚拟占位用 table 外的 div 承载：table-fixed 的列宽由「表格第一行」决定，
@@ -136,15 +161,22 @@ const bottomSpacerHeight = computed(() => {
       ref="scrollContainer"
       class="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-gutter-stable"
     >
-      <div aria-hidden="true" :style="{ height: `${topSpacerHeight}px` }"></div>
-      <table class="w-full table-fixed border-collapse text-left text-[0.72em] text-navy">
-        <thead class="sticky top-0 z-10 bg-line shadow-[0_0.2cqh_0_var(--color-line)]">
+      <table class="w-full table-fixed border-collapse text-left text-fs-12 text-navy">
+        <colgroup>
+          <col v-if="props.selectedIds" class="w-[3.2em]" />
+          <col
+            v-for="column in props.columns"
+            :key="column.key"
+            :style="{ width: columnWidths.get(column.key) }"
+          />
+        </colgroup>
+        <thead class="sticky top-0 z-10 border-b-[0.2cqh] border-line bg-line">
           <tr>
             <!-- 可选行首复选列表头：三态统一复选框（全选当前结果 / 取消全选），范围由父组件裁决 -->
             <th v-if="props.selectedIds" class="w-[3.2em] px-[0.5em] py-[0.55cqh]">
               <input
                 type="checkbox"
-                class="h-[1.6cqh] w-[1.6cqh] accent-blue"
+                class="h-[1.6cqh] w-[1.6cqh] rounded-none accent-blue"
                 :checked="props.selectAllState === 'all'"
                 :indeterminate="props.selectAllState === 'some'"
                 :aria-label="selectAllAria"
@@ -154,7 +186,7 @@ const bottomSpacerHeight = computed(() => {
             <th
               v-for="column in props.columns"
               :key="column.key"
-              class="whitespace-nowrap px-[0.6em] py-[0.55cqh] font-black text-muted"
+              class="whitespace-nowrap px-[0.6em] py-[0.55cqh] font-bold text-muted"
               :style="{ width: columnWidths.get(column.key) }"
               :class="[
                 column.align === 'center'
@@ -175,7 +207,7 @@ const bottomSpacerHeight = computed(() => {
               <button
                 v-if="column.sortable !== false"
                 type="button"
-                class="inline-flex items-center gap-[0.25em] rounded-[0.3em] px-[0.25em] py-[0.1cqh] hover:bg-line"
+                class="inline-flex items-center gap-[0.25em] rounded-none px-[0.25em] py-[0.1cqh] hover:bg-line"
                 :aria-label="strings.common.sortByAria(column.label)"
                 @click="emit('sort', column.key)"
               >
@@ -197,11 +229,20 @@ const bottomSpacerHeight = computed(() => {
           </tr>
         </thead>
         <tbody>
-          <!-- 顶部占位行已移至 table 外（见滚动容器注释），此处只保留可视行 -->
+          <!-- 顶部占位行：置于 tbody 内配合 colgroup，不推挤 thead，根除滚动跳动 -->
+          <tr
+            v-if="topSpacerHeight > 0"
+            aria-hidden="true"
+            :style="{ height: `${topSpacerHeight}px` }"
+          >
+            <td
+              :colspan="props.columns.length + (props.selectedIds ? 1 : 0)"
+              class="p-0 border-0 pointer-events-none"
+            ></td>
+          </tr>
           <tr
             v-for="virtualRow in rowVirtualizer.getVirtualItems()"
             :key="String(virtualRow.key)"
-            :ref="measureElementRef"
             :data-index="virtualRow.index"
             class="border-t-[0.12cqh] border-t-line ui-feedback hover:bg-sky"
             :class="
@@ -212,7 +253,7 @@ const bottomSpacerHeight = computed(() => {
             <td v-if="props.selectedIds" class="px-[0.5em] py-[0.4cqh]">
               <input
                 type="checkbox"
-                class="h-[1.6cqh] w-[1.6cqh] accent-blue"
+                class="h-[1.6cqh] w-[1.6cqh] rounded-none accent-blue"
                 :checked="rowAt(virtualRow.index) ? isSelected(rowAt(virtualRow.index)!) : false"
                 :aria-label="
                   rowAt(virtualRow.index)
@@ -254,13 +295,23 @@ const bottomSpacerHeight = computed(() => {
               </slot>
             </td>
           </tr>
+          <!-- 底部占位行 -->
+          <tr
+            v-if="bottomSpacerHeight > 0"
+            aria-hidden="true"
+            :style="{ height: `${bottomSpacerHeight}px` }"
+          >
+            <td
+              :colspan="props.columns.length + (props.selectedIds ? 1 : 0)"
+              class="p-0 border-0 pointer-events-none"
+            ></td>
+          </tr>
         </tbody>
       </table>
-      <div aria-hidden="true" :style="{ height: `${bottomSpacerHeight}px` }"></div>
       <!-- 空态：无数据或筛选无结果 -->
       <div
         v-if="!props.rows.length"
-        class="flex flex-col items-center gap-[0.4cqh] px-[1em] py-[3cqh] text-center text-[0.72em] text-muted"
+        class="flex flex-col items-center gap-[0.4cqh] px-[1em] py-[3cqh] text-center text-fs-12 text-muted"
       >
         <b>{{ emptyText }}</b>
         <span v-if="props.emptyHint">{{ props.emptyHint }}</span>

@@ -1,0 +1,14 @@
+/*
+ * Tailwind 组合类（utilities.css）：通用交互反馈与修饰工具类。
+ */
+@layer utilities {
+  /* 统一变色过渡：卡片/列表项 hover 的颜色过渡（160ms）；配合 .hover-tint 使用。 */
+  .ui-feedback {
+    @apply transition-[background-color,border-color,color,opacity] duration-160;
+  }
+
+  /* 统一变色悬浮：白色/浅色表面 hover 时稍变深（只变色，不加阴影、不位移）。 */
+  .hover-tint {
+    @apply hover:bg-line;
+  }
+}

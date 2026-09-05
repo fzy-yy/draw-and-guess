@@ -16,8 +16,8 @@ export const WordIdSchema = z
   .min(1)
   .max(64)
   .regex(/^[A-Za-z0-9:_-]+$/u, { message: 'invalid word id' })
-/** 内置 SVG 头像编号白名单；拒绝任意 URL、文件路径和 SVG 正文。 */
-export const AvatarIdSchema = z.enum(APP_CONFIG.player.avatarIds)
+/** 内置 SVG 头像编号白名单；拒绝任意 URL、文件路径和 SVG 正文（仅供 ProfileSchema 内部复用）。 */
+const AvatarIdSchema = z.enum(APP_CONFIG.player.avatarIds)
 /** 玩家资料 schema：昵称由服务层按 Unicode 码点复核，头像必须来自内置白名单。 */
 export const ProfileSchema = z
   .object({
@@ -84,11 +84,12 @@ export const RoomSettingsSchema = z
     scoreMode: z.enum(['standard', 'flat']),
     allowPlayerInvite: z.boolean(),
     allowPause: z.boolean(),
+    allowWordReroll: z.boolean(),
     joinPolicy: z.enum(['forbid', 'spectate', 'next_game']),
   })
   .strict()
 /** 房间可见性与私密房间码 schema 均由共享协议统一定义。 */
-export const RoomVisibilitySchema = z.enum(['public', 'private'])
+const RoomVisibilitySchema = z.enum(['public', 'private'])
 export const PrivateRoomCodeSchema = z
   .string()
   .trim()
@@ -138,3 +139,62 @@ export const FillCommandSchema = z.object({
 })
 
 // 注：HEX 颜色的规范化实现位于 `pure.ts` 的 `normalizeHexColor`，此处只保留结构校验。
+
+/** 准备状态切换 schema */
+export const SetReadySchema = RequestSchema.extend({
+  ready: z.boolean(),
+})
+
+/** 修改房间规则 schema */
+export const UpdateRoomSettingsSchema = RequestSchema.extend({
+  patch: RoomSettingsSchema.partial(),
+  expectedVersion: z.number().int().nonnegative(),
+})
+
+/** 修改词库配置 schema */
+export const UpdateVocabularySchema = RequestSchema.extend({
+  ids: z.array(WordIdSchema),
+  expectedVersion: z.number().int().nonnegative(),
+})
+
+/** 房主踢人与移交房主 schema */
+export const KickMemberSchema = RequestSchema.extend({
+  targetId: z.string().uuid(),
+})
+export const TransferHostSchema = RequestSchema.extend({
+  targetId: z.string().uuid(),
+})
+
+/** 定向邀请发送与应答 schema */
+export const SendInviteSchema = RequestSchema.extend({
+  targetId: z.string().uuid(),
+})
+export const RespondInviteSchema = RequestSchema.extend({
+  inviteId: z.string().uuid(),
+  accept: z.boolean(),
+})
+
+/** 猜词与预设短语 schema */
+export const GuessWordSchema = RequestSchema.extend({
+  roundId: z.string().uuid(),
+  text: z.string().min(1).max(APP_CONFIG.player.chatMaxLength),
+})
+export const SendPresetSchema = RequestSchema.extend({
+  roundId: z.string().uuid(),
+  preset: z.string(),
+})
+
+/** 对局控制相关 schema */
+export const StartGameSchema = RequestSchema.extend({
+  expectedVersion: z.number().int().nonnegative(),
+})
+export const ChooseWordSchema = RequestSchema.extend({
+  roundId: z.string().uuid(),
+  wordId: WordIdSchema,
+})
+export const RerollWordsSchema = RequestSchema.extend({
+  roundId: z.string().uuid(),
+})
+export const PauseGameSchema = RequestSchema.extend({
+  reason: z.string().max(40),
+})

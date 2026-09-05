@@ -93,6 +93,7 @@ export interface RoomSettings {
   scoreMode: 'standard' | 'flat'
   allowPlayerInvite: boolean // 普通玩家是否可邀请
   allowPause: boolean // 是否允许暂停
+  allowWordReroll: boolean // 是否允许选词换一组
   joinPolicy: 'forbid' | 'spectate' | 'next_game' // 对局中加入策略（首版固定为下一局）
 }
 
@@ -110,10 +111,10 @@ export interface PublicRoom {
   joinPolicy: RoomSettings['joinPolicy'] // 中途加入策略（大厅据此决定是否可发起观战加入）
 }
 
-/** 聊天消息：猜词、系统、猜中、预设短语与「很接近」提示共用此结构。 */
+/** 聊天消息：猜词、系统、猜中与预设短语共用此结构。 */
 export interface ChatMessage {
   id: string
-  type: 'guess' | 'system' | 'correct' | 'preset' | 'close'
+  type: 'guess' | 'system' | 'correct' | 'preset'
   text: string
   playerId?: string // 仅玩家消息有来源
   createdAt: number
@@ -174,9 +175,11 @@ export interface GameView {
   drawerId: string // 当前画家
   phaseStartedAt: number
   phaseEndsAt: number // 服务端权威的截止时间戳（毫秒）
+  pausedRemainingMs?: number // 暂停时的剩余毫秒数，供客户端冻结倒计时与进度条
   answerMask: string // 猜词者可见的答案遮罩（画家可见真实答案）
   answer?: string // 仅当前画家可见
   wordOptions?: Array<{ id: string; text: string; difficulty: number }> // 仅画家选词阶段可见（含难度星级）
+  canReroll?: boolean // 仅画家选词阶段可见：是否允许换一组（已用或房间未开启时为 false）
   /** 已揭示的结构化提示（词库改为单分类即提示，按阈值揭示词条分类；列表至多一条） */
   revealedHints?: string[]
   strokes: DrawingCommand[] // 全部画布命令历史
@@ -246,6 +249,9 @@ export interface VocabularyWord {
   /** 词条级计分权重；计分语义确认前仅透传预留，不参与计分 */
   scoreWeight?: number
 }
+
+/** 房间词库必须选择的最低词条数（6位玩家 × 2组换词 × 5可选词 = 最少 60 词）。不可在 config 自定义。 */
+export const MIN_SELECTED_VOCABULARY_WORDS = 60
 
 /**
  * 词库快照：仅房主可见全部词条与当前选择。

@@ -5,8 +5,10 @@
   - 橙色（yellow 语义令牌）：已连接但延迟高于阈值（网络较慢）；
   - 红色：断线（Socket 未连接）；
   - 中性色：已连接但延迟尚未测得（进入页面后的首个探测周期内）。
-  颜色只取 index.css @theme 的语义令牌（green/yellow/red/sky），悬浮/无障碍文案
-  统一来自 strings.common.networkStatusAria / connectionDetail，禁止硬编码色值与文案。
+  延迟一旦测得就一直展示到下一次探测（失败时沿用旧值，store 侧保证测得值 ≥1ms），
+  切换页面不丢失；颜色只取 index.css @theme 的语义令牌（green/yellow/red/sky），
+  悬浮/无障碍文案统一来自 strings.common.networkStatusAria / connectionDetail，
+  禁止硬编码色值与文案。
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
@@ -60,7 +62,7 @@ const detail = () => strings.common.connectionDetail(store.connectionLabel, stor
       class="shrink-0"
     />
     <!-- 延迟数值：tabular-nums 防止位数变化抖动；未测得时显示占位符「—」 -->
-    <span class="min-w-[3ch] text-center text-[0.72em] font-extrabold leading-none tabular-nums">{{
+    <span class="min-w-[3ch] text-center text-fs-12 font-bold leading-none tabular-nums">{{
       store.latency ? strings.common.latencyShort(store.latency) : strings.common.emptyDash
     }}</span>
   </button>

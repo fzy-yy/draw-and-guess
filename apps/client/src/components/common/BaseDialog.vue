@@ -10,9 +10,10 @@ import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useFocusTrap } from '@vueuse/integrations/useFocusTrap'
 import { X } from 'lucide-vue-next'
 
+const open = defineModel<boolean>('open', { default: false })
+
 const props = withDefaults(
   defineProps<{
-    open: boolean
     /** 卡片宽度类（Tailwind），如 w-[58cqw]；不传则无默认宽度 */
     widthClass?: string
     /** 追加到卡片 section 的类（用于确认弹窗的居中/间距布局） */
@@ -41,6 +42,12 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{ close: [] }>()
+
+function closeDialog(): void {
+  if (!props.dismissible) return
+  open.value = false
+  emit('close')
+}
 
 /**
  * 可访问性：Esc 关闭 + 初始聚焦 + Tab 焦点陷阱 + 关闭后焦点还原。
@@ -88,7 +95,7 @@ function handleKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Escape' || !isTopmostDialog()) return
   event.stopImmediatePropagation()
   event.preventDefault()
-  if (props.dismissible) emit('close')
+  if (props.dismissible) closeDialog()
 }
 
 /** 打开/关闭弹窗时同步激活/失活焦点陷阱，并在失活时归还焦点。 */
@@ -98,7 +105,7 @@ function releaseFocus(): void {
 }
 
 watch(
-  () => props.open,
+  open,
   async (isOpen) => {
     if (isOpen) {
       document.addEventListener('keydown', handleKeydown)
@@ -142,9 +149,9 @@ onBeforeUnmount(releaseFocus)
           <button
             v-if="closeAria && dismissible"
             type="button"
-            class="grid h-[4cqh] w-[4cqh] place-items-center rounded-full bg-white/10 text-white text-[1.2em]"
+            class="grid h-[4cqh] w-[4cqh] place-items-center rounded-full bg-white/10 text-white text-fs-18"
             :aria-label="closeAria"
-            @click="emit('close')"
+            @click="closeDialog"
           >
             <X />
           </button>

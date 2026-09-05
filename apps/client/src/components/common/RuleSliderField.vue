@@ -5,11 +5,12 @@
   可选 disabled：禁用时整行半透明并阻止交互（如结构化提示关闭后的时机字段）。
 -->
 <script setup lang="ts">
+const model = defineModel<number>({ required: true })
+
 withDefaults(
   defineProps<{
     /** 字段标签文案（来自 strings） */
     label: string
-    modelValue: number
     min: number
     max: number
     step: number
@@ -21,35 +22,32 @@ withDefaults(
   }>(),
   { disabled: false, hint: undefined },
 )
-const emit = defineEmits<{
-  'update:modelValue': [value: number]
-}>()
 
-/** range 输入值始终是字符串，转为数值再上抛，保持 v-model.number 语义。 */
+/** range 输入值始终是字符串，转为数值再更新，保持数值语义。 */
 function onInput(event: Event): void {
-  emit('update:modelValue', Number((event.target as HTMLInputElement).value))
+  model.value = Number((event.target as HTMLInputElement).value)
 }
 </script>
 
 <template>
   <label
-    class="min-w-0 flex flex-col gap-[0.4cqh] text-[0.76em] font-extrabold"
+    class="min-w-0 flex flex-col gap-[0.4cqh] text-fs-14 font-bold"
     :class="{ 'opacity-45 pointer-events-none': disabled }"
   >
     <span class="flex items-baseline justify-between gap-[0.5em]">
       {{ label }}
-      <b class="text-blue text-[0.95em]">{{ display }}</b>
+      <b class="text-blue text-fs-16">{{ display }}</b>
     </span>
     <input
       type="range"
       :min="min"
       :max="max"
       :step="step"
-      :value="modelValue"
+      :value="model"
       :disabled="disabled"
       class="accent-blue"
       @input="onInput"
     />
-    <small v-if="hint" class="text-muted text-[0.8em]">{{ hint }}</small>
+    <small v-if="hint" class="text-muted text-fs-12">{{ hint }}</small>
   </label>
 </template>

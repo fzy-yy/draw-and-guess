@@ -11,6 +11,7 @@
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
 import { ChevronDown, Filter } from 'lucide-vue-next'
+import { strings } from '@draw-guess/strings'
 import ActionPopover from '@/components/common/ActionPopover.vue'
 
 /** 单个可选项：value 为业务值（受控集合内唯一），label 为展示文案 */
@@ -33,8 +34,8 @@ const props = withDefaults(
     selectAllLabel: string
     /** 弹层「全不选」按钮文案（已全选时点击切换为全不选） */
     deselectAllLabel: string
-    /** 弹层关闭按钮文案 */
-    doneLabel: string
+    /** 弹层关闭按钮文案（已废弃：勾选即时生效，无需确认按钮） */
+    doneLabel?: string
     disabled?: boolean
     /** 纯图标触发模式：只显示图标，语义由悬浮 title 与 aria 标签表达 */
     iconOnly?: boolean
@@ -45,7 +46,14 @@ const props = withDefaults(
     /** 弹出方向：缺省向上；位于对话框/页面顶部时传 'bottom' 避免被裁剪（见 ActionPopover） */
     placement?: 'top' | 'bottom'
   }>(),
-  { disabled: false, iconOnly: false, icon: undefined, highlight: false, placement: 'top' },
+  {
+    doneLabel: '',
+    disabled: false,
+    iconOnly: false,
+    icon: undefined,
+    highlight: false,
+    placement: 'top',
+  },
 )
 
 const emit = defineEmits<{
@@ -63,7 +71,7 @@ const allSelected = computed(
 
 // 悬浮提示文案：iconOnly 模式下承载完整语义（如「分类 · 2」），有文字时仅作补充说明。
 const triggerTitle = computed(() =>
-  selectedCount.value ? `${props.label} · ${selectedCount.value}` : props.label,
+  selectedCount.value ? strings.common.countBadge(props.label, selectedCount.value) : props.label,
 )
 
 /** 切换单个选项：保持父组件集合语义不变，仅增删一项。 */
@@ -105,18 +113,18 @@ function toggleSelectAll(): void {
         <Filter class="h-[1.35cqh] w-[1.35cqh]" aria-hidden="true" />
         <!-- 未选中时展示默认文案（如「全部分类」），选中后展示「分类 · 2」强调生效中 -->
         <span class="max-w-[9cqw] truncate">{{
-          selectedCount ? `${label} · ${selectedCount}` : label
+          selectedCount ? strings.common.countBadge(label, selectedCount) : label
         }}</span>
         <ChevronDown class="h-[1.2cqh] w-[1.2cqh]" aria-hidden="true" />
       </span>
     </template>
-    <template #default="{ close }">
+    <template #default>
       <div class="flex flex-col gap-[0.5cqh]" role="group" :aria-label="label">
         <!-- 快捷操作：全选/全不选切换（已全选时点击即全不选，反之亦然） -->
         <div class="flex items-center border-b-[0.14cqh] border-b-line pb-[0.5cqh]">
           <button
             type="button"
-            class="rounded-[0.4em] bg-line px-[0.55em] py-[0.25cqh] text-[0.62em] font-extrabold text-blue hover:bg-sky"
+            class="rounded-[0.4em] bg-line px-[0.55em] py-[0.25cqh] text-fs-10 font-bold text-blue hover:bg-sky"
             @click="toggleSelectAll"
           >
             {{ allSelected ? props.deselectAllLabel : props.selectAllLabel }}
@@ -129,7 +137,7 @@ function toggleSelectAll(): void {
           <label
             v-for="option in options"
             :key="option.value"
-            class="flex min-h-[2.6cqh] cursor-pointer items-center gap-[0.45em] rounded-[0.4em] px-[0.45em] py-[0.2cqh] text-[0.66em] font-bold text-navy hover:bg-sky"
+            class="flex min-h-[2.6cqh] cursor-pointer items-center gap-[0.45em] rounded-[0.4em] px-[0.45em] py-[0.2cqh] text-fs-12 font-bold text-navy hover:bg-sky"
           >
             <input
               type="checkbox"
@@ -140,14 +148,6 @@ function toggleSelectAll(): void {
             <span class="min-w-0 flex-1 truncate">{{ option.label }}</span>
           </label>
         </div>
-        <!-- 关闭弹层（不改变已选内容；点选即时生效，无需确认按钮） -->
-        <button
-          type="button"
-          class="min-h-[3cqh] rounded-[0.5em] bg-blue px-[0.8em] text-[0.66em] font-black text-white"
-          @click="close()"
-        >
-          {{ props.doneLabel }}
-        </button>
       </div>
     </template>
   </ActionPopover>

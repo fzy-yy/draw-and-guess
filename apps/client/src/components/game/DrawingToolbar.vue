@@ -11,36 +11,29 @@ import { EVENTS, type ToolKind } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
 import ToolButton from '@/components/common/ToolButton.vue'
 
-// 当前工具/颜色/线宽由父组件管理，这里只读值、再把变更事件抛回去（受控组件）。
-defineProps<{
-  tool: ToolKind
-  color: string
-  width: number
-}>()
-const emit = defineEmits<{
-  'update:tool': [tool: ToolKind]
-  'update:color': [color: string]
-  'width-change': [width: number]
-  clear: []
-}>()
+// 当前工具/颜色/线宽由 defineModel 双向绑定
+const tool = defineModel<ToolKind>('tool', { required: true })
+const color = defineModel<string>('color', { required: true })
+const width = defineModel<number>('width', { required: true })
+const emit = defineEmits<{ clear: [] }>()
 
 const store = useGameStore()
 
 /** 切换工具（画笔/橡皮擦/填充）。 */
-function setTool(tool: ToolKind): void {
-  emit('update:tool', tool)
+function setTool(nextTool: ToolKind): void {
+  tool.value = nextTool
 }
 /** 选择预设色块。 */
-function setColor(color: string): void {
-  emit('update:color', color)
+function setColor(nextColor: string): void {
+  color.value = nextColor
 }
 /** 任意颜色取色器输入（原生 input[type=color] 事件）。 */
 function onColorInput(event: Event): void {
-  emit('update:color', (event.target as HTMLInputElement).value)
+  color.value = (event.target as HTMLInputElement).value
 }
 /** 线宽滑块拖拽（原生 range 事件，转回数字）。 */
 function onWidthInput(event: Event): void {
-  emit('width-change', Number((event.target as HTMLInputElement).value))
+  width.value = Number((event.target as HTMLInputElement).value)
 }
 /** 清空画板：只抛事件，确认与执行由父组件负责。 */
 function clearCanvas(): void {
@@ -57,9 +50,7 @@ function clearCanvas(): void {
   >
     <!-- 工具组：画笔 / 橡皮擦 / 填充，可自定义快捷键 -->
     <div class="flex items-center gap-[0.45em]">
-      <span class="mr-[0.3em] text-muted text-[0.62em] font-extrabold">{{
-        strings.game.toolGroup
-      }}</span>
+      <span class="mr-[0.3em] text-muted text-fs-10 font-bold">{{ strings.game.toolGroup }}</span>
       <ToolButton
         :active="tool === 'pen'"
         :disabled="!store.isDrawer"
@@ -90,9 +81,7 @@ function clearCanvas(): void {
     </div>
     <!-- 颜色组：预设色块 + 任意颜色选择器 -->
     <div class="flex items-center justify-center gap-[0.45em]">
-      <span class="mr-[0.3em] text-muted text-[0.62em] font-extrabold">{{
-        strings.game.colorGroup
-      }}</span>
+      <span class="mr-[0.3em] text-muted text-fs-10 font-bold">{{ strings.game.colorGroup }}</span>
       <button
         v-for="paint in store.config.drawing.colors"
         :key="paint"
@@ -123,8 +112,7 @@ function clearCanvas(): void {
     </div>
     <!-- 线宽滑块：画笔与橡皮擦共用；填充工具下禁用；数值固定两位宽度避免 9→10 抙动 -->
     <label class="flex items-center gap-[0.45em]">
-      <span
-        class="mr-[0.3em] flex items-center text-muted text-[0.62em] font-extrabold tabular-nums"
+      <span class="mr-[0.3em] flex items-center text-muted text-fs-10 font-bold tabular-nums"
         >{{ strings.game.widthName
         }}<span class="inline-block min-w-[2ch] text-center">{{ width }}</span></span
       >

@@ -24,7 +24,7 @@ defineProps<{
     />
     <div>
       <h2>{{ title }}</h2>
-      <p class="mt-[0.5cqh] text-muted text-[0.72em]">{{ intro }}</p>
+      <p class="mt-[0.5cqh] text-muted text-fs-12">{{ intro }}</p>
     </div>
   </div>
 </template>
