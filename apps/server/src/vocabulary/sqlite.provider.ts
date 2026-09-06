@@ -94,16 +94,21 @@ export class SqliteProvider implements VocabularyProvider {
       }
       if (APP_CONFIG.vocabulary.deduplicate) assertNoDuplicateText(parsedWords)
 
+      const baseId = path.basename(this.dbPath, '.db')
       return {
         words: parsedWords,
         version: hashWords(parsedWords),
         meta: {
           sourceId: this.sourceId,
+          id: baseId,
+          name: meta.name || baseId,
+          description: meta.description || '',
           fileVersion: meta.version,
           updatedAt: meta.updatedAt,
           categoryEnum: meta.categoryEnum,
           defaultTimeLimit: meta.defaultTimeLimit,
           defaultScoreWeight: meta.defaultScoreWeight,
+          wordCount: parsedWords.length,
         },
       }
     } finally {
@@ -113,6 +118,8 @@ export class SqliteProvider implements VocabularyProvider {
 
   /** 读取元数据表：枚举集合解析为字符串数组，缺省值解析为整数；缺失值以缺省串联处理。 */
   private readMeta(database: Database.Database): {
+    name?: string
+    description?: string
     version?: string
     updatedAt?: string
     categoryEnum: string[]
@@ -134,6 +141,8 @@ export class SqliteProvider implements VocabularyProvider {
       }
     }
     return {
+      name: map.get('name')?.trim(),
+      description: map.get('description')?.trim(),
       version: map.get('version'),
       updatedAt: map.get('updated_at'),
       categoryEnum: parseList('category_enum'),

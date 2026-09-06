@@ -12,23 +12,27 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch, type Component } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
-import { Star, Tags } from 'lucide-vue-next'
+import { Library, ListFilter, Star, Tags } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import {
   MIN_SELECTED_VOCABULARY_WORDS,
   normalizeAnswer,
+  type VocabularyPackageInfo,
   type VocabularyWord,
 } from '@draw-guess/shared'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import SectionHeader from '@/components/common/SectionHeader.vue'
 import SearchInput from '@/components/common/SearchInput.vue'
+import RoundIconButton from '@/components/common/RoundIconButton.vue'
 import MultiSelectPopover, {
   type MultiSelectOption,
 } from '@/components/common/MultiSelectPopover.vue'
 import type { DataTableColumn } from '@/components/common/DataTable.vue'
 import VocabTableView from '@/components/room/VocabTableView.vue'
+import VocabPackageTableView from '@/components/room/VocabPackageTableView.vue'
 import { useGameStore } from '@/stores/game'
+import { useTableSort } from '@/composables/useTableSort'
 
 const open = defineModel<boolean>('open', { default: false })
 const loading = defineModel<boolean>('loading', { default: false })
@@ -36,20 +40,32 @@ const emit = defineEmits<{ close: [] }>()
 const store = useGameStore()
 
 // ---- 词库弹窗内部状态 ----
+const viewMode = ref<'words' | 'packages'>('words')
 const search = ref('') // 搜索框即时输入
 const searchKeyword = ref('') // 防抖后的实际筛选关键词
 const selectedIds = ref(new Set<string>()) // 使用响应式 Set，5000+ 词条下单选仍为 O(1)
 const vocabularyLoading = ref(false) // 拉取中标记（防重复打开）
+let loadGeneration = 0
+type ScrollableTable = { scrollToTop(): void; scrollToIndex(index: number): void }
+const wordTable = ref<ScrollableTable>()
+const packageTable = ref<ScrollableTable>()
 /** 只读标志：非房主可打开查看，但不可选择词条（无复选框/无保存）。 */
 const isReadOnly = computed(() => !store.isHost)
 
-// ---- 表格状态（受控状态，子组件只渲染不持有） ----
-const sortKey = ref<string | null>(null) // 当前排序字段（null = 数据原序）
-const sortDir = ref<'asc' | 'desc'>('asc')
+// ---- 词条表格状态（受控状态，子组件只渲染不持有） ----
+const { sortKey, sortDir, handleSort } = useTableSort()
 const filterSelections = ref<Record<string, string[]>>({
   category: [],
   difficulty: [],
 }) // 字段多选筛选（空数组 = 不筛选）
+
+// ---- 词库包选择状态 ----
+const packageSort = useTableSort()
+const packageSortKey = packageSort.sortKey
+const packageSortDir = packageSort.sortDir
+const activePackageId = computed(() => store.vocabulary?.packageId ?? '')
+const pendingPackageId = ref<string>()
+const displayedPackageId = computed(() => pendingPackageId.value ?? activePackageId.value)
 
 /**
  * 全部词条 ID。统一走可选链而非 `store.vocabulary!` 非空断言：
@@ -115,15 +131,6 @@ const tableRows = computed<VocabularyWord[]>(() => {
 })
 
 /** 表头点击：同列翻转方向，异列默认升序。 */
-function handleSort(key: string): void {
-  if (sortKey.value === key) {
-    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
-  } else {
-    sortKey.value = key
-    sortDir.value = 'asc'
-  }
-}
-
 /** 勾选/取消单个词条：选择集合由父组件持有。 */
 function toggleWord(id: string): void {
   if (isReadOnly.value) return
@@ -215,6 +222,7 @@ const filterDefs = computed<
 /** 更新某个筛选字段的选中集合（MultiSelectPopover 受控回写）。 */
 function updateFilter(key: string, values: string[]): void {
   filterSelections.value = { ...filterSelections.value, [key]: values }
+  void nextTick(() => wordTable.value?.scrollToTop())
 }
 
 // 搜索防抖：用 @vueuse/core 的 useDebounceFn 替代手写 setTimeout + onBeforeUnmount 清理。
@@ -223,8 +231,73 @@ const debouncedSearch = useDebounceFn((value: string) => {
   searchKeyword.value = value
 }, store.config.ui.searchDebounceMs)
 watch(search, (value) => debouncedSearch(value))
+watch(searchKeyword, () => {
+  void nextTick(() =>
+    viewMode.value === 'words' ? wordTable.value?.scrollToTop() : packageTable.value?.scrollToTop(),
+  )
+})
+
+/** 词库包搜索过滤：匹配名称或描述 */
+const filteredPackages = computed<VocabularyPackageInfo[]>(() => {
+  const packages = store.vocabulary?.packages ?? []
+  const keyword = normalizeAnswer(searchKeyword.value)
+  if (!keyword) return packages
+  return packages.filter((pkg) => {
+    const text = normalizeAnswer(`${pkg.name} ${pkg.description}`)
+    return text.includes(keyword)
+  })
+})
+
+/** 词库包排序 */
+const tablePackageRows = computed<VocabularyPackageInfo[]>(() => {
+  if (!packageSortKey.value) return filteredPackages.value
+  const key = packageSortKey.value as keyof VocabularyPackageInfo
+  const sorted = [...filteredPackages.value].sort((left, right) => {
+    const leftVal = left[key]
+    const rightVal = right[key]
+    if (typeof leftVal === 'number' && typeof rightVal === 'number') {
+      return leftVal - rightVal
+    }
+    return String(leftVal ?? '').localeCompare(String(rightVal ?? ''), 'zh-Hans-CN')
+  })
+  return packageSortDir.value === 'desc' ? sorted.reverse() : sorted
+})
+
+const handlePackageSort = packageSort.handleSort
+
+/** 切换词库包 */
+async function handleSelectPackage(packageId: string): Promise<void> {
+  if (isReadOnly.value || pendingPackageId.value || packageId === activePackageId.value) return
+  pendingPackageId.value = packageId
+  try {
+    const ok = await store.selectVocabularyPackage(packageId)
+    if (ok && store.vocabulary) {
+      selectedIds.value = new Set(store.vocabulary.selectedIds)
+      await nextTick()
+      packageTable.value?.scrollToTop()
+    }
+  } finally {
+    pendingPackageId.value = undefined
+  }
+}
+
+/** 切换视图模式：词条列表 <-> 词库包选择 */
+function toggleViewMode(): void {
+  viewMode.value = viewMode.value === 'words' ? 'packages' : 'words'
+  search.value = ''
+  searchKeyword.value = ''
+  void nextTick(() =>
+    viewMode.value === 'words' ? wordTable.value?.scrollToTop() : packageTable.value?.scrollToTop(),
+  )
+}
 
 function handleClose(): void {
+  loadGeneration += 1
+  debouncedSearch.cancel()
+  store.cancelVocabularyRequests()
+  pendingPackageId.value = undefined
+  vocabularyLoading.value = false
+  loading.value = false
   open.value = false
   emit('close')
 }
@@ -233,7 +306,16 @@ function handleClose(): void {
 watch(
   open,
   async (isOpen) => {
-    if (!isOpen || vocabularyLoading.value) return
+    const generation = ++loadGeneration
+    if (!isOpen) {
+      debouncedSearch.cancel()
+      store.cancelVocabularyRequests()
+      pendingPackageId.value = undefined
+      vocabularyLoading.value = false
+      loading.value = false
+      return
+    }
+    if (vocabularyLoading.value) return
     vocabularyLoading.value = true
     loading.value = true
     try {
@@ -243,6 +325,7 @@ watch(
       loading.value = false
     }
     // 首次拉取失败时 store.vocabulary 为空：不显示弹窗，由父组件收下 close 供重试。
+    if (generation !== loadGeneration || !open.value) return
     const vocab = store.vocabulary
     if (!vocab) {
       handleClose()
@@ -251,6 +334,7 @@ watch(
     selectedIds.value = new Set(vocab.selectedIds)
     search.value = ''
     searchKeyword.value = ''
+    viewMode.value = 'words'
     await nextTick()
   },
   { immediate: true },
@@ -271,25 +355,58 @@ watch(
       <SectionHeader
         id="vocab-title"
         :eyebrow="strings.room.vocabLabel"
-        :title="isReadOnly ? strings.room.vocabTitleReadonly : strings.room.vocabTitle"
+        :title="
+          viewMode === 'packages'
+            ? strings.room.vocabSwitchToPackages
+            : isReadOnly
+              ? strings.room.vocabTitleReadonly
+              : strings.room.vocabTitle
+        "
       ></SectionHeader>
     </template>
 
     <template v-if="store.vocabulary">
       <div class="flex min-h-0 flex-1 flex-col">
-        <!-- 工具栏：搜索框占左半行，右半行为功能按钮区（分类/难度筛选，纯图标，悬浮说明语义） -->
+        <!-- 工具栏：搜索框占左半行（含切换词库选择的圆形小按钮），右半行为功能区 -->
         <div
           class="flex items-center gap-[0.6em] py-[1.1cqh] px-[1.7em] border-b-[0.18cqh] border-b-line"
         >
-          <div class="w-1/2 min-w-0">
-            <SearchInput
-              v-model="search"
-              :placeholder="strings.room.vocabSearchPlaceholder"
-              :aria-label="strings.room.vocabSearchAria"
-            />
+          <div class="flex w-1/2 min-w-0 items-center gap-[0.6em]">
+            <div class="min-w-0 flex-1">
+              <SearchInput
+                v-model="search"
+                :placeholder="
+                  viewMode === 'words'
+                    ? strings.room.vocabSearchPlaceholder
+                    : strings.room.vocabPackageSearchPlaceholder
+                "
+                :aria-label="
+                  viewMode === 'words'
+                    ? strings.room.vocabSearchAria
+                    : strings.room.vocabPackageSearchAria
+                "
+              />
+            </div>
+            <!-- 圆形切换小按钮：在词条管理与词库包选择之间切换 -->
+            <RoundIconButton
+              :label="
+                viewMode === 'words'
+                  ? strings.room.vocabSwitchToPackages
+                  : strings.room.vocabSwitchToWords
+              "
+              :title="
+                viewMode === 'words'
+                  ? strings.room.vocabSwitchToPackages
+                  : strings.room.vocabSwitchToWords
+              "
+              @click="toggleViewMode"
+            >
+              <Library v-if="viewMode === 'words'" class="h-[2.2cqh] w-[2.2cqh]" />
+              <ListFilter v-else class="h-[2.2cqh] w-[2.2cqh]" />
+            </RoundIconButton>
           </div>
-          <!-- 字段筛选：分类 / 难度（多选，可叠加搜索）；纯图标 + 悬浮说明 -->
-          <div class="flex w-1/2 min-w-0 items-center gap-[0.45em]">
+          <!-- 字段筛选：分类 / 难度（多选，仅词条模式可用）；纯图标 + 悬浮说明 -->
+          <div v-if="viewMode === 'words'" class="flex w-1/2 min-w-0 items-center gap-[0.45em]">
             <MultiSelectPopover
               v-for="filter in filterDefs"
               :key="filter.key"
@@ -306,10 +423,18 @@ watch(
               @update:selected="updateFilter(filter.key, $event)"
             />
           </div>
+          <!-- 词库包模式右侧信息：显示可用词库数 -->
+          <div v-else class="flex w-1/2 min-w-0 items-center justify-end">
+            <span class="text-muted text-fs-12">
+              {{ strings.room.vocabPackageTotal(store.vocabulary.packages.length) }}
+            </span>
+          </div>
         </div>
 
-        <!-- 内容区：统一列表（表格）视图，经 DataTable 虚拟滚动承载大词库。 -->
+        <!-- 内容区：根据 viewMode 切换词条表格与词库包选择表格 -->
         <VocabTableView
+          v-if="viewMode === 'words'"
+          ref="wordTable"
           :rows="tableRows"
           :columns="allColumns"
           :selected-ids="isReadOnly ? undefined : selectedIds"
@@ -319,12 +444,33 @@ watch(
           @toggle="toggleWord"
           @toggle-all="toggleSelectAll"
         />
+        <VocabPackageTableView
+          v-else
+          ref="packageTable"
+          :rows="tablePackageRows"
+          :selected-package-id="displayedPackageId"
+          :sort-key="packageSortKey"
+          :sort-dir="packageSortDir"
+          :is-read-only="isReadOnly"
+          :selection-pending="!!pendingPackageId"
+          @sort="handlePackageSort"
+          @select="handleSelectPackage"
+        />
       </div>
     </template>
 
     <template #footer>
-      <!-- 底部操作：左侧词库统计（全部/搜索结果/已选），右侧保存/恢复默认；只读玩家仅提示不可编辑 -->
-      <template v-if="isReadOnly">
+      <!-- 词库包模式底部操作 -->
+      <template v-if="viewMode === 'packages'">
+        <p class="mr-auto min-w-0 text-muted text-fs-12" role="status">
+          {{ strings.room.vocabPackageTotal(store.vocabulary?.packages.length ?? 0) }}
+        </p>
+        <AppButton variant="secondary" type="button" @click="viewMode = 'words'">
+          {{ strings.room.vocabSwitchToWords }}
+        </AppButton>
+      </template>
+      <!-- 词条管理模式：只读玩家仅提示不可编辑 -->
+      <template v-else-if="isReadOnly">
         <p class="mr-auto text-muted text-fs-12" role="status">
           {{ strings.room.vocabReadonlyHint }}
         </p>

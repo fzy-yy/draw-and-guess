@@ -6,7 +6,7 @@
 import { defineStore, storeToRefs } from 'pinia'
 import { APP_CONFIG, PUBLIC_CONFIG } from '@draw-guess/config'
 import { strings, serverStrings } from '@draw-guess/strings'
-import { EVENTS, type MemberConnectionChange, type RoomSnapshot } from '@draw-guess/shared'
+import { EVENTS, RoomSnapshotSchema, type MemberConnectionChange } from '@draw-guess/shared'
 import { notify as pushToast } from '@/composables/useToasts'
 import { attachSocketListeners, socket } from './socket.ts'
 import { createRequester } from './request.ts'
@@ -22,6 +22,7 @@ import { useLobbyStore } from './lobby.ts'
 import { useRoomStore } from './room.ts'
 import { useGameplayStore } from './gameplay.ts'
 import { useVocabularyStore } from './vocabulary.ts'
+import { acceptDrawingIncrement, acceptRoomSnapshot } from './snapshot-gate.ts'
 
 export type { ConnectionLabel, SessionState, ShellPage, StoredProfile, LocalSettings }
 
@@ -108,6 +109,51 @@ export const useGameStore = defineStore('game', () => {
 
   // Socket 事件集中网关
   let resyncInFlight = false
+  let lastResyncAt = 0
+
+  /**
+   * 全量快照修复通道：同一时刻仅允许一个请求，并用冷却窗口阻止恶意坏推送形成请求风暴。
+   * 响应仍经过完整 RoomSnapshot schema 和身份/版本门禁，旧请求不能覆盖新房间。
+   */
+  async function requestFullSnapshot(): Promise<void> {
+    const current = roomStore.room
+    if (!current || resyncInFlight) return
+    const now = Date.now()
+    if (now - lastResyncAt < APP_CONFIG.network.stateResyncCooldownMs) return
+    resyncInFlight = true
+    lastResyncAt = now
+    const requestContext = {
+      generation: sessionStore.generation,
+      roomId: current.id,
+      gameId: current.game?.gameId,
+      roundId: current.game?.roundId,
+    }
+    try {
+      const result = await request<unknown>(
+        EVENTS.stateResync,
+        {
+          roomId: requestContext.roomId,
+          ...(requestContext.gameId ? { gameId: requestContext.gameId } : {}),
+          ...(requestContext.roundId ? { roundId: requestContext.roundId } : {}),
+        },
+        { quiet: true, retry: true },
+      )
+      if (!result.ok || result.data === undefined) return
+      const parsed = RoomSnapshotSchema.safeParse(result.data)
+      if (!parsed.success) return
+      if (
+        sessionStore.generation !== requestContext.generation ||
+        roomStore.room?.id !== requestContext.roomId ||
+        parsed.data.id !== requestContext.roomId
+      )
+        return
+      if (acceptRoomSnapshot(roomStore.room, parsed.data) !== 'accept') return
+      roomStore.room = parsed.data
+    } finally {
+      resyncInFlight = false
+    }
+  }
+
   const detachSocketListeners = attachSocketListeners({
     onConnect: () => {
       sessionStore.connected = true
@@ -159,43 +205,31 @@ export const useGameStore = defineStore('game', () => {
       lobbyStore.presence.rooms = rooms
     },
     onRoomSnapshot: (snapshot) => {
+      const currentSnapshot = roomStore.room
+      const decision = acceptRoomSnapshot(currentSnapshot, snapshot)
+      if (decision === 'ignore') return
+      if (decision === 'resync') {
+        void requestFullSnapshot()
+        return
+      }
       if (snapshot.game?.strokesOmitted) {
-        const localStrokes = roomStore.room?.game?.strokes ?? []
+        const localGame = currentSnapshot?.game
+        if (
+          !localGame ||
+          localGame.gameId !== snapshot.game.gameId ||
+          localGame.roundId !== snapshot.game.roundId ||
+          localGame.drawingRevision > snapshot.game.drawingRevision
+        ) {
+          void requestFullSnapshot()
+          return
+        }
+        const localStrokes = localGame.strokes
         const localMaxSequence = localStrokes.reduce(
           (max, command) => Math.max(max, command.sequence),
           -1,
         )
         if (localMaxSequence < snapshot.game.lastSequence) {
-          if (!resyncInFlight) {
-            resyncInFlight = true
-            const requestContext = {
-              generation: sessionStore.generation,
-              roomId: snapshot.id,
-              gameId: snapshot.game.gameId,
-              roundId: snapshot.game.roundId,
-              drawingRevision: snapshot.game.drawingRevision,
-            }
-            void request<RoomSnapshot | undefined>(EVENTS.stateResync, {}).then((full) => {
-              resyncInFlight = false
-              const fullSnapshot = full.ok ? full.data : undefined
-              if (!fullSnapshot?.game) return
-              // 验证请求上下文：防止异步重同步返回时房间/对局/回合已变更，或旧请求覆盖新状态
-              if (
-                sessionStore.generation !== requestContext.generation ||
-                roomStore.room?.id !== requestContext.roomId ||
-                roomStore.room?.game?.gameId !== requestContext.gameId ||
-                roomStore.room?.game?.roundId !== requestContext.roundId ||
-                fullSnapshot.id !== requestContext.roomId ||
-                fullSnapshot.game.gameId !== requestContext.gameId ||
-                fullSnapshot.game.roundId !== requestContext.roundId
-              ) {
-                return
-              }
-              const current = roomStore.room?.game
-              if (current && current.drawingRevision > fullSnapshot.game.drawingRevision) return
-              roomStore.room = fullSnapshot
-            })
-          }
+          void requestFullSnapshot()
           return
         }
         snapshot = {
@@ -236,11 +270,22 @@ export const useGameStore = defineStore('game', () => {
     },
     onSystemNotice: (text) => notify(text, 'warning'),
     onSystemError: (message) => notify(message, 'error'),
-    onDrawStrokeBatch: (roundId, stroke) => {
-      gameplayStore.handleStrokeBatch(roundId, stroke)
+    onInvalidPush: () => {
+      void requestFullSnapshot()
     },
-    onDrawFillCommit: (roundId, fill) => {
-      gameplayStore.handleFillCommit(roundId, fill)
+    onDrawStrokeBatch: (meta, stroke) => {
+      const decision = acceptDrawingIncrement(roomStore.room, meta)
+      if (decision === 'resync') void requestFullSnapshot()
+      if (decision !== 'accept') return
+      gameplayStore.handleStrokeBatch(meta.roundId, stroke)
+      if (roomStore.room?.game) roomStore.room.game.drawingRevision = meta.drawingRevision
+    },
+    onDrawFillCommit: (meta, fill) => {
+      const decision = acceptDrawingIncrement(roomStore.room, meta)
+      if (decision === 'resync') void requestFullSnapshot()
+      if (decision !== 'accept') return
+      gameplayStore.handleFillCommit(meta.roundId, fill)
+      if (roomStore.room?.game) roomStore.room.game.drawingRevision = meta.drawingRevision
     },
   })
 
@@ -301,6 +346,8 @@ export const useGameStore = defineStore('game', () => {
     updateRoomSettings: roomStore.updateRoomSettings,
     loadVocabulary: vocabularyStore.loadVocabulary,
     saveVocabulary: vocabularyStore.saveVocabulary,
+    selectVocabularyPackage: vocabularyStore.selectVocabularyPackage,
+    cancelVocabularyRequests: vocabularyStore.cancelPending,
     startGame: gameplayStore.startGame,
     chooseWord: gameplayStore.chooseWord,
     rerollWords: gameplayStore.rerollWords,
@@ -315,6 +362,7 @@ export const useGameStore = defineStore('game', () => {
     leaveGame: gameplayStore.leaveGame,
     returnWaiting: gameplayStore.returnWaiting,
     kick: roomStore.kick,
+    transferHost: roomStore.transferHost,
     invite: lobbyStore.invite,
     respondInvite,
     dismissKickedNotice: sessionStore.dismissKickedNotice,

@@ -50,25 +50,6 @@ export function bindRequest<T extends { requestId: string }, R>(
     const respond = typeof callback === 'function' ? callback : () => undefined
 
     // 每连接一秒滑动窗口限频；绘图和网络探测已有独立策略，可由调用方关闭。
-    if (options.rateLimit !== false) {
-      const now = Date.now()
-      const history = ((socket.data.eventTimes as number[] | undefined) ?? []).filter(
-        (time) => now - time < APP_CONFIG.network.requestRateWindowMs,
-      )
-      if (history.length >= APP_CONFIG.network.requestEventsPerSecond) {
-        socket.data.eventTimes = history
-        respond(
-          failure(
-            new GameError('RATE_LIMITED', serverStrings.errors.RATE_LIMITED),
-            provisionalId,
-          ) as Ack<R>,
-        )
-        return
-      }
-      history.push(now)
-      socket.data.eventTimes = history
-    }
-
     let input: T
     try {
       input = schema.parse(raw)
@@ -90,6 +71,27 @@ export function bindRequest<T extends { requestId: string }, R>(
       if (existing) {
         respond((await existing) as Ack<R>)
         return
+      }
+
+      if (options.rateLimit !== false) {
+        const clock = (socket.data.service as { clock?: { now: () => number } } | undefined)?.clock
+        if (!clock) throw new Error('binder runtime clock is not initialized')
+        const now = clock.now()
+        const history = ((socket.data.eventTimes as number[] | undefined) ?? []).filter(
+          (time) => now - time < APP_CONFIG.network.requestRateWindowMs,
+        )
+        if (history.length >= APP_CONFIG.network.requestEventsPerSecond) {
+          socket.data.eventTimes = history
+          respond(
+            failure(
+              new GameError('RATE_LIMITED', serverStrings.errors.RATE_LIMITED),
+              input.requestId,
+            ) as Ack<R>,
+          )
+          return
+        }
+        history.push(now)
+        socket.data.eventTimes = history
       }
 
       // Promise 在调用 handler 前先写入表，确保同一时刻的重复副作用只执行一次。

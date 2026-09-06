@@ -87,13 +87,17 @@ const hintsSummary = computed(() => {
       @click="emit('open-vocabulary')"
     >
       <BookOpenCheck class="h-[3.4cqh] w-[3.4cqh]" /><span class="flex-1 flex flex-col"
-        ><b>{{ strings.room.vocabularyTitle }}</b
-        ><small class="text-muted">{{
-          strings.room.vocabularyCount(
-            store.room?.selectedWordCount ?? 0,
-            store.room?.totalWordCount ?? 0,
-          )
-        }}</small></span
+        ><b>{{ strings.room.vocabularyTitle }}</b>
+        <small class="text-muted truncate">
+          <span v-if="store.room?.vocabularyPackageName" class="font-bold text-navy mr-[0.3em]"
+            >[{{ store.room.vocabularyPackageName }}]</span
+          >{{
+            strings.room.vocabularyCount(
+              store.room?.selectedWordCount ?? 0,
+              store.room?.totalWordCount ?? 0,
+            )
+          }}</small
+        ></span
       ><span class="text-fs-12 font-bold">{{
         store.isHost ? strings.room.vocabularyManage : strings.room.vocabularyReadOnly
       }}</span>

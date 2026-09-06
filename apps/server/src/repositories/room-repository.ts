@@ -48,6 +48,8 @@ export interface RoomRepository {
   removeRoom(id: string): void
   /** 替换某房间的成员集合（入房/离房/清空时调用）。 */
   replaceMembers(roomId: string, members: RoomMemberRecord[]): void
+  /** 房间聚合根与成员快照必须在同一事务中提交，避免半写入状态。 */
+  saveAggregate(record: RoomRecord, members: RoomMemberRecord[]): void
 }
 
 /** 房间表行（蛇形，对应 SELECT * 返回的列名）。 */
@@ -124,6 +126,19 @@ export class SqliteRoomRepository implements RoomRepository {
       for (const member of members) insert.run(this.toMemberRow(member))
     })
     replace()
+  }
+
+  saveAggregate(record: RoomRecord, members: RoomMemberRecord[]): void {
+    const save = this.db.transaction(() => {
+      this.upsertRoom(record)
+      this.db.prepare('DELETE FROM room_members WHERE room_id = ?').run(record.id)
+      const insert = this.db.prepare(
+        `INSERT INTO room_members(room_id, player_id, seat_index, spectating, left_game, ready, score, joined_at, stats)
+         VALUES (@room_id, @player_id, @seat_index, @spectating, @left_game, @ready, @score, @joined_at, @stats)`,
+      )
+      for (const member of members) insert.run(this.toMemberRow(member))
+    })
+    save()
   }
 
   /** 领域对象（驼峰）→ 表行（蛇形），供 SQL 命名参数使用。 */

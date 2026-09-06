@@ -129,6 +129,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  stopRejectCountdown()
+})
+
+onUnmounted(() => {
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
 })
 

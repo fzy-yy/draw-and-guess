@@ -3,13 +3,14 @@
  * 与 GameService 组合使用（注入 service 引用调用其房间/成员助手），
  * 便于把“回合规则”与“会话/成员/传输”职责分离、独立单测。
  */
-import { randomUUID } from 'node:crypto'
 import { APP_CONFIG } from '../../../config/index.ts'
+import { createHintSchedule } from './hint-scheduler.ts'
 import { serverStrings } from '../../../string/index.ts'
 import { canTransition, type FinalRankingEntry, type RoundResult } from '@draw-guess/shared'
 import type { MemberState, RoomSecret } from './models.ts'
 import type { GameService } from './game-service.ts'
 import { buildDrawerScore, buildGuessDetail } from './scoring.ts'
+import type { TimerHandle } from './runtime.ts'
 
 /** 回合流转状态机；只操作房间的 game 与阶段，不直接接触 socket。 */
 export class RoundMachine {
@@ -23,7 +24,7 @@ export class RoundMachine {
    */
   public abandonChoosing(room: RoomSecret, notice: string): void {
     const game = this.service.requireGame(room)
-    if (game.timer) clearTimeout(game.timer)
+    this.service.scheduler.clear(game.timer)
     // 清掉暂停残留字段（若之前在暂停态），保证后续状态干净
     delete game.phaseBeforePause
     delete game.pausedRemainingMs
@@ -32,7 +33,7 @@ export class RoundMachine {
     this.beginChoosing(room)
   }
   public beginGame(room: RoomSecret): void {
-    if (room.game?.timer) clearTimeout(room.game.timer)
+    this.service.scheduler.clear(room.game?.timer)
     // 重置全员准备位、得分、猜中时间与统计，进入第一回合选词
     room.members.forEach((member) => {
       member.ready = false
@@ -60,7 +61,7 @@ export class RoundMachine {
     // 初始化本轮：随机候选词、空画布、空消息、重置猜中位
     this.service.transition(room, 'choosing_word')
     game.drawerId = drawer // 指定当前画家（在切阶段后立即赋值）
-    game.roundId = randomUUID()
+    game.roundId = this.service.random.uuid()
     game.candidates = this.service.pickCandidates(room, game)
     game.rerollUsed = false
     game.answer = undefined
@@ -86,21 +87,21 @@ export class RoundMachine {
     // 候选池按规则在开局前已校验充足（resetWhenExhausted 保障轮转），正常不会为空；
     // 此处仍作防御：极端情况下（词库被掏空）走弃权流程作废本回合，避免房间滞留 choosing_word。
     // abandonChoosing 会递归 beginChoosing 并推进回合序号，最终回合耗尽即进入最终结算，递归有界。
-    game.timer = setTimeout(
-      () =>
-        this.service.safeRun('choosingTimeout', () => {
-          if (room.phase !== 'choosing_word') return
-          const candidate = game.candidates[Math.floor(Math.random() * game.candidates.length)]
-          if (candidate) this.beginDrawing(room, candidate)
-          else this.abandonChoosing(room, serverStrings.notices.candidatesExhausted)
-        }),
-      room.settings.chooseSeconds * 1_000,
+    game.timer = this.service.scheduler.set(room.settings.chooseSeconds * 1_000, () =>
+      this.service.safeRun('choosingTimeout', () => {
+        if (room.phase !== 'choosing_word') return
+        const candidate = game.candidates.length
+          ? game.candidates[this.service.random.integer(game.candidates.length)]
+          : undefined
+        if (candidate) this.beginDrawing(room, candidate)
+        else this.abandonChoosing(room, serverStrings.notices.candidatesExhausted)
+      }),
     )
     this.service.emitRoom(room.id)
   }
   public beginDrawing(room: RoomSecret, answer: { id: string; text: string }): void {
     const game = this.service.requireGame(room)
-    if (game.timer) clearTimeout(game.timer)
+    this.service.scheduler.clear(game.timer)
     this.service.transition(room, 'drawing')
     // 记录富答案：candidates 中的词条即含别称/分类/词条级时限，直接取用；
     // 兜底数据在极端情况下（候选被外部改动）保证不引用 undefined。
@@ -130,9 +131,8 @@ export class RoundMachine {
     // 首条即唯一一条，且对全体猜词者一致（随快照下发）；分类为空时不开启提示。
     game.hintOrder = richAnswer.category ? [0] : []
     // 作画倒计时结束进入回合结算
-    game.timer = setTimeout(
-      () => this.service.safeRun('drawingTimeout', () => this.finishRound(room, false)),
-      game.roundDurationMs,
+    game.timer = this.service.scheduler.set(game.roundDurationMs, () =>
+      this.service.safeRun('drawingTimeout', () => this.finishRound(room, false)),
     )
     this.scheduleHints(room) // 若开启逐步/结构化提示则安排揭示计时器
     this.service.addSystemNotice(room, serverStrings.notices.drawingStarted)
@@ -141,7 +141,7 @@ export class RoundMachine {
   public markCorrect(room: RoomSecret, member: MemberState): void {
     const game = this.service.requireGame(room)
     if (member.guessedAt) return // 防重复计分
-    member.guessedAt = Date.now()
+    member.guessedAt = this.service.clock.now()
     game.correctOrder.push(member.playerId)
     // 按可玩成员数（排除观战）计算速度奖励和顺序奖励，累加到成员总分（scoring 模块统一口径）
     const detail = buildGuessDetail({
@@ -187,7 +187,7 @@ export class RoundMachine {
 
     game.roundSettled = true
     this.service.clearHintTimers(game)
-    if (game.timer) clearTimeout(game.timer)
+    this.service.scheduler.clear(game.timer)
     // 若从暂停态结算，先复位到 drawing 以走合法转换，并清理暂停残留字段
     if (room.phase === 'paused') {
       room.phase = 'drawing'
@@ -212,16 +212,15 @@ export class RoundMachine {
     game.roundResult = result
     game.phaseStartedAt = this.service.clock.now()
     game.phaseEndsAt = this.service.clock.now() + APP_CONFIG.game.roundResultSeconds * 1_000
-    game.timer = setTimeout(
-      () => this.service.safeRun('roundResultTimeout', () => this.beginChoosing(room)),
-      APP_CONFIG.game.roundResultSeconds * 1_000,
+    game.timer = this.service.scheduler.set(APP_CONFIG.game.roundResultSeconds * 1_000, () =>
+      this.service.safeRun('roundResultTimeout', () => this.beginChoosing(room)),
     )
     this.service.emitRoom(room.id)
   }
   public finishGame(room: RoomSecret, reason: string): void {
     const game = this.service.requireGame(room)
     this.service.clearHintTimers(game)
-    if (game.timer) clearTimeout(game.timer)
+    this.service.scheduler.clear(game.timer)
     // 排行必须在首次进入最终结算时一次性冻结。之后 leaveRoom 会从 room.members 移除成员，
     // 但已公布的成绩属于本局历史，不能跟随当前房间席位继续变化。
     if (!game.finalRanking) {
@@ -258,7 +257,7 @@ export class RoundMachine {
       if (!canTransition(room.phase, 'game_result')) room.phase = 'drawing'
       this.service.transition(room, 'game_result')
     }
-    game.phaseStartedAt = Date.now()
+    game.phaseStartedAt = this.service.clock.now()
     game.phaseEndsAt = 0
     // 收敛回合显示：beginChoosing 先自增 currentRound 再判断是否超限，进入最终结算时
     // 回退到总回合数，避免结算界面 HUD 短暂显示「5 / 4」这类越界数字。
@@ -281,10 +280,10 @@ export class RoundMachine {
     // 先确认状态机允许，再动现场：否则清除倒计时后转换失败，会留下无计时器的僵死阶段
     if (!canTransition(room.phase, 'paused')) return
     this.service.clearHintTimers(game)
-    if (game.timer) clearTimeout(game.timer)
+    this.service.scheduler.clear(game.timer)
     // 冻结当前阶段与剩余毫秒，暂停期间所有计时停止
     game.phaseBeforePause = room.phase
-    game.pausedRemainingMs = Math.max(0, game.phaseEndsAt - Date.now())
+    game.pausedRemainingMs = Math.max(0, game.phaseEndsAt - this.service.clock.now())
     this.service.transition(room, 'paused')
     game.phaseEndsAt = 0
     this.service.addSystemNotice(room, reason)
@@ -292,35 +291,31 @@ export class RoundMachine {
   public scheduleCurrentPhase(room: RoomSecret): void {
     const game = this.service.requireGame(room)
     // 暂停恢复后按冻结的剩余毫秒重新调度当前阶段计时器
-    const delay = Math.max(0, game.phaseEndsAt - Date.now())
-    if (game.timer) clearTimeout(game.timer)
+    const delay = Math.max(0, game.phaseEndsAt - this.service.clock.now())
+    this.service.scheduler.clear(game.timer)
     if (room.phase === 'choosing_word') {
       // 恢复选词阶段：超时后取第一个候选词自动开画；候选池为空时与超时路径同构作废本回合
-      game.timer = setTimeout(
-        () =>
-          this.service.safeRun('resumeChoosing', () => {
-            const candidate = game.candidates[0]
-            if (candidate) this.beginDrawing(room, candidate)
-            else this.abandonChoosing(room, serverStrings.notices.candidatesExhausted)
-          }),
-        delay,
+      game.timer = this.service.scheduler.set(delay, () =>
+        this.service.safeRun('resumeChoosing', () => {
+          const candidate = game.candidates[0]
+          if (candidate) this.beginDrawing(room, candidate)
+          else this.abandonChoosing(room, serverStrings.notices.candidatesExhausted)
+        }),
       )
     } else if (room.phase === 'drawing') {
-      game.timer = setTimeout(
-        () => this.service.safeRun('resumeDrawing', () => this.finishRound(room, false)),
-        delay,
+      game.timer = this.service.scheduler.set(delay, () =>
+        this.service.safeRun('resumeDrawing', () => this.finishRound(room, false)),
       )
       this.scheduleHints(room) // 同时重建逐步提示计时器
     } else if (room.phase === 'round_result')
-      game.timer = setTimeout(
-        () => this.service.safeRun('resumeRoundResult', () => this.beginChoosing(room)),
-        delay,
+      game.timer = this.service.scheduler.set(delay, () =>
+        this.service.safeRun('resumeRoundResult', () => this.beginChoosing(room)),
       )
   }
   public setWaiting(room: RoomSecret, notice: string, resetReady = true): void {
     // 把房间状态重置回等待：清理对局秘密、提示计时器与全员准备
     if (room.game) this.service.clearHintTimers(room.game)
-    if (room.game?.timer) clearTimeout(room.game.timer)
+    this.service.scheduler.clear(room.game?.timer)
     delete room.game
     room.phase = 'waiting'
     if (resetReady) this.service.invalidateReady(room, notice)
@@ -338,7 +333,7 @@ export class RoundMachine {
    *    - 间隔时间为：(总时长 * progressiveHintRatio) / 提示总数；
    *    - 在对应剩余时间触发，每次随机公布答案中一个未揭示的非标点字符。
    * ② 结构化提示（Category Hint）：
-   *    - 在倒计时快结束时（剩余 categoryHintRemainingSeconds 秒，如 15 秒）给出词语类别提示。
+   *    - 在倒计时剩余比例降到房间 hintStartRatio 时给出词语类别提示。
    */
   public scheduleHints(room: RoomSecret): void {
     const game = this.service.requireGame(room)
@@ -346,8 +341,8 @@ export class RoundMachine {
     if (!game.answer || room.phase !== 'drawing') return
 
     const totalMs = game.roundDurationMs
-    const currentRemainingMs = Math.max(0, game.phaseEndsAt - Date.now())
-    const timers: NodeJS.Timeout[] = []
+    const currentRemainingMs = Math.max(0, game.phaseEndsAt - this.service.clock.now())
+    const timers: TimerHandle[] = []
 
     // ① 逐步提示：在后半程按字符数逐步揭示
     if (room.settings.progressiveHints) {
@@ -368,9 +363,8 @@ export class RoundMachine {
           if (currentRemainingMs >= targetRemainingMs) {
             const delay = currentRemainingMs - targetRemainingMs
             timers.push(
-              setTimeout(
-                () => this.service.safeRun('revealHint', () => this.revealHint(room)),
-                delay,
+              this.service.scheduler.set(delay, () =>
+                this.service.safeRun('revealHint', () => this.revealHint(room)),
               ),
             )
           }
@@ -384,23 +378,31 @@ export class RoundMachine {
       game.hintOrder.length > 0 &&
       game.revealedHintCount < game.hintOrder.length
     ) {
-      const targetRemainingMs = APP_CONFIG.game.categoryHintRemainingSeconds * 1_000
+      const targetRemainingMs =
+        currentRemainingMs -
+        (createHintSchedule({
+          totalMs,
+          currentRemainingMs,
+          progressiveHints: false,
+          wordText: game.answer.text,
+          revealedCount: game.revealedIndices.size,
+          structuredHintsEnabled: true,
+          hasStructuredHint: true,
+          revealedHintCount: game.revealedHintCount,
+          hintStartRatio: room.settings.hintStartRatio,
+        }).structuredDelay ?? 0)
       if (currentRemainingMs >= targetRemainingMs) {
         const delay = currentRemainingMs - targetRemainingMs
         timers.push(
-          setTimeout(
-            () =>
-              this.service.safeRun('revealStructuredHint', () => this.revealStructuredHint(room)),
-            delay,
+          this.service.scheduler.set(delay, () =>
+            this.service.safeRun('revealStructuredHint', () => this.revealStructuredHint(room)),
           ),
         )
       } else {
         // 当前剩余时间已经不足指定秒数，立即揭示
         timers.push(
-          setTimeout(
-            () =>
-              this.service.safeRun('revealStructuredHint', () => this.revealStructuredHint(room)),
-            0,
+          this.service.scheduler.set(0, () =>
+            this.service.safeRun('revealStructuredHint', () => this.revealStructuredHint(room)),
           ),
         )
       }
@@ -431,7 +433,7 @@ export class RoundMachine {
     // 只剩一个字符时不再揭示，避免答案被完全泄露
     if (candidates.length <= 1) return
     // 随机揭示其中一个字符下标
-    const target = candidates[Math.floor(Math.random() * candidates.length)]
+    const target = candidates[this.service.random.integer(candidates.length)]
     if (target) game.revealedIndices.add(target.index)
     this.service.emitRoom(room.id)
   }

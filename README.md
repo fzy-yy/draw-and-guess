@@ -40,15 +40,15 @@ pnpm format        # 写入 Prettier 格式
 pnpm format:check  # 检查格式
 ```
 
-> 当前没有自动化测试脚本；提交前最低验证为 `pnpm format && pnpm lint && pnpm typecheck && pnpm build`。
+> 项目已提供 Vitest 单元测试与 Playwright E2E 测试；提交前最低验证为 `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit && pnpm test:e2e`。
 
 ## 配置与词库
 
-- **唯一业务配置**：根级 [`config.ts`](config.ts)，按网络、玩家、房间、游戏、画板、音频、词库和 UI 分类。新增可调参数应先加入这里。
+- **唯一业务配置**：[`config/index.ts`](config/index.ts) 聚合 `config/` 下按领域拆分的配置，按网络、玩家、房间、游戏、画板、音频、词库和 UI 分类。新增可调参数应先加入对应领域文件。
 - **部署覆盖**：复制 [`.env.example`](.env.example) 为根目录 `.env`，可配置 `HOST`、`PORT`、`LOG_LEVEL`、`LOG_ENABLED`、`LOG_MAX_FILES`；服务启动时会自动加载 `.env`（进程已有环境变量优先级更高）。环境变量不会覆盖游戏规则。
   - `LOG_ENABLED=false` 时完全不创建日志记录器、不写日志文件（零内存开销）；
   - `LOG_MAX_FILES` 控制日志文件保留条数（默认 10，每次启动新建一个 `apps/server/log/app-<秒级时间戳>.log`，超出删除最老）。
-- **唯一词库**：[`vocabulary/`](vocabulary/) 目录下的 SQLite 数据库文件 `draw_guess_words.db`（metadata/words 表）。词条为富字段（词面/别称/唯一分类/难度/词条级时限与权重等），**词条分类同时作为作画阶段的猜词提示**；分类必须落在 `metadata.category_enum` 白名单内，`enabled=false` 的词条不参与抽选。修改后重启服务生效，异常数据会以中文错误阻止启动。
+- **词库来源**：[`vocabulary/`](vocabulary/) 目录下可包含多个 SQLite 词库包（metadata/words 表），由 Provider 注册并在房间内选择。词条为富字段（词面/别称/唯一分类/难度/词条级时限与权重等），**词条分类同时作为作画阶段的猜词提示**；分类必须落在 `metadata.category_enum` 白名单内，`enabled=false` 的词条不参与抽选。修改后重启服务生效，异常数据会以中文错误阻止启动。
 - 服务启动时会按规范化词面去重并生成稳定 ID（`sqlite:主键`）；词条过少或过长会阻止启动并显示中文错误。
 
 ## 工程结构
@@ -60,7 +60,7 @@ apps/client/       Vue 3 游戏舞台、内置 SVG 头像、Pinia 状态与 Canv
 apps/server/       Express、Socket.IO、权威领域状态与 SQLite 本地持久化
   └─ src/db/ 与 src/repositories/   # 数据库连接/迁移与仓储（player/room/archive）
 packages/shared/   DTO、Zod schema、事件名和领域纯函数
-config.ts          唯一业务配置中心（按领域聚合 config/ 目录）
+config/            按领域拆分的业务配置（由 config/index.ts 聚合）
 vocabulary/        唯一权威词库目录（SQLite 数据库，Provider 加载）
 ```
 

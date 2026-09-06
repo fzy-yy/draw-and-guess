@@ -14,6 +14,44 @@ export function normalizeAnswer(value: string): string {
   return value.normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase()
 }
 
+/** 按用户可见字符（Unicode grapheme cluster）计数，避免 emoji/组合音标被拆成多个字符。 */
+export function countGraphemes(value: string): number {
+  const Segmenter = (
+    Intl as typeof Intl & {
+      Segmenter?: new (
+        locales?: string | string[],
+        options?: { granularity?: string },
+      ) => {
+        segment(input: string): Iterable<unknown>
+      }
+    }
+  ).Segmenter
+  if (Segmenter)
+    return Array.from(new Segmenter(undefined, { granularity: 'grapheme' }).segment(value)).length
+  return Array.from(value).length
+}
+
+/** 按用户可见字符截断，服务端与客户端的昵称规范化使用同一规则。 */
+export function truncateGraphemes(value: string, maxLength: number): string {
+  const Segmenter = (
+    Intl as typeof Intl & {
+      Segmenter?: new (
+        locales?: string | string[],
+        options?: { granularity?: string },
+      ) => {
+        segment(input: string): Iterable<{ segment: string }>
+      }
+    }
+  ).Segmenter
+  if (Segmenter) {
+    return Array.from(new Segmenter(undefined, { granularity: 'grapheme' }).segment(value))
+      .slice(0, maxLength)
+      .map((part) => part.segment)
+      .join('')
+  }
+  return Array.from(value).slice(0, maxLength).join('')
+}
+
 /** 按 Unicode 码点生成遮罩，标点和空白保留，避免中文代理对被拆开。 */
 export function createAnswerMask(
   answer: string,

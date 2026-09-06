@@ -5,10 +5,11 @@ import { APP_CONFIG } from '../../../config/index.ts'
 import { serverStrings } from '../../../string/index.ts'
 import { GameError } from './errors.ts'
 import type { PlayerSecret } from './models.ts'
+import type { Clock } from './runtime.ts'
 
 /** 对猜词/绘图事件执行秒级滑动窗口限频，超限抛 RATE_LIMITED。 */
-export function enforceEventRate(player: PlayerSecret, kind: 'guess' | 'draw'): void {
-  const now = Date.now()
+export function enforceEventRate(player: PlayerSecret, kind: 'guess' | 'draw', clock: Clock): void {
+  const now = clock.now()
   const history = (kind === 'guess' ? player.guessEventTimes : player.drawEventTimes).filter(
     (time) => now - time < 1_000,
   )

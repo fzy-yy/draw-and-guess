@@ -62,8 +62,7 @@ async function sendGuess(): Promise<void> {
 
 /** 发送服务端白名单内的互动内容，并在送达后收起其悬浮面板。 */
 async function sendPresetAndClose(preset: string, close: () => void): Promise<void> {
-  await store.sendPreset(preset)
-  close()
+  if (await store.sendPreset(preset)) close()
 }
 
 /** 用户接近列表底部时跟随新消息；主动上滚后保留阅读位置。 */

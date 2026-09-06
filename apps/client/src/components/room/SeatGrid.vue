@@ -5,7 +5,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { UserPlus, Users, X } from 'lucide-vue-next'
+import { Crown, UserPlus, Users, X } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import AvatarImage from '@/components/common/AvatarImage.vue'
 import SectionHeader from '@/components/common/SectionHeader.vue'
@@ -32,6 +32,10 @@ const kickTarget = computed(() =>
   store.room?.members.find((member) => member.id === pendingKickId.value),
 )
 const pendingKickId = ref<string>()
+const pendingHostId = ref<string>()
+const hostTarget = computed(() =>
+  store.room?.members.find((member) => member.id === pendingHostId.value),
+)
 </script>
 
 <template>
@@ -115,6 +119,15 @@ const pendingKickId = ref<string>()
           >
             <X />
           </button>
+          <button
+            v-if="store.isHost && member.id !== store.playerId"
+            class="absolute left-[0.6cqh] top-[0.6cqh] grid place-items-center h-[3cqh] w-[3cqh] text-yellow bg-yellow/10 rounded-full"
+            type="button"
+            :aria-label="strings.room.transferHostAria"
+            @click="pendingHostId = member.id"
+          >
+            <Crown />
+          </button>
         </template>
         <!-- 空席位占位提示 -->
         <template v-else
@@ -137,6 +150,21 @@ const pendingKickId = ref<string>()
         () => {
           if (pendingKickId) void store.kick(pendingKickId)
           pendingKickId = undefined
+        }
+      "
+    />
+    <ConfirmDialog
+      :open="Boolean(hostTarget)"
+      :title="strings.room.transferHostTitle"
+      :body="strings.room.transferHostBody(hostTarget?.nickname ?? '')"
+      :confirm-label="strings.room.transferHostConfirm"
+      :cancel-label="strings.common.cancel"
+      :icon="Crown"
+      @cancel="pendingHostId = undefined"
+      @confirm="
+        async () => {
+          if (pendingHostId) await store.transferHost(pendingHostId)
+          pendingHostId = undefined
         }
       "
     />

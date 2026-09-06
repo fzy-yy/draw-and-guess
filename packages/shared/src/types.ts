@@ -156,6 +156,17 @@ export interface FillCommand {
   sequence: number
 }
 
+/** 绘图增量推送携带完整房间/对局/回合/修订上下文，供客户端统一门禁。 */
+export interface DrawingPushContext {
+  roomId: string
+  gameId: string
+  roundId: string
+  drawingRevision: number
+}
+
+export type StrokePush = DrawingPushContext & { stroke: Stroke }
+export type FillPush = DrawingPushContext & { fill: FillCommand }
+
 /** 画布历史使用可判别联合，服务端可对笔画与填充命令执行严格校验。 */
 export type DrawingCommand = Stroke | FillCommand
 
@@ -218,6 +229,8 @@ export interface RoomSnapshot {
   members: RoomMember[]
   selectedWordCount: number // 本局已选词条数
   totalWordCount: number // 词库总词条数
+  vocabularyPackageId?: string // 当前使用的词库包 ID
+  vocabularyPackageName?: string // 当前使用的词库包名称
   game?: GameView // 对局中才有
 }
 
@@ -265,11 +278,23 @@ export interface VocabularyWord {
 /** 房间词库必须选择的最低词条数（6位玩家 × 2组换词 × 5可选词 = 最少 60 词）。不可在 config 自定义。 */
 export const MIN_SELECTED_VOCABULARY_WORDS = 60
 
+/** 词库包概要信息：供房间词库选择列表展示。 */
+export interface VocabularyPackageInfo {
+  id: string // 词库唯一 ID（如 draw_guess_words）
+  name: string // 词库名称（metadata 的 name，缺省为文件名）
+  wordCount: number // 词数（words 表有效词数，服务端预先统计）
+  description: string // 词库描述（metadata 的 description）
+  version: string // 版本号（metadata 的 version）
+  updatedAt: string // 更新日期（metadata 的 updated_at）
+}
+
 /**
  * 词库快照：仅房主可见全部词条与当前选择。
  * categories 为词库文件的分类白名单（category_enum），供管理 UI 做筛选下拉。
  */
 export interface VocabularySnapshot {
+  packageId: string // 当前房间选中的词库包 ID
+  packages: VocabularyPackageInfo[] // 全部可用词库包元数据列表
   items: VocabularyWord[]
   selectedIds: string[]
   version: string // 词库内容哈希版本
@@ -289,6 +314,12 @@ export interface Invite {
 export interface PresenceSnapshot {
   players: PublicPlayer[]
   rooms: PublicRoom[]
+}
+
+/** 所有服务端主动推送统一使用带协议版本的信封，客户端先解码再交给状态层。 */
+export interface ServerPushEnvelope<T> {
+  protocolVersion: string
+  data: T
 }
 
 /**

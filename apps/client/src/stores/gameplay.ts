@@ -7,6 +7,7 @@ import { defineStore } from 'pinia'
 import { APP_CONFIG } from '@draw-guess/config'
 import {
   EVENTS,
+  type EventName,
   type FillCommand,
   type RoomSnapshot,
   type Stroke,
@@ -57,9 +58,13 @@ export const useGameplayStore = defineStore('gameplay', () => {
     return result.ok
   }
 
-  async function sendPreset(preset: string): Promise<void> {
-    if (!roomStore.room?.game) return
-    await request(EVENTS.chatPreset, { roundId: roomStore.room.game.roundId, preset })
+  async function sendPreset(preset: string): Promise<boolean> {
+    if (!roomStore.room?.game) return false
+    const result = await request(EVENTS.chatPreset, {
+      roundId: roomStore.room.game.roundId,
+      preset,
+    })
+    return result.ok
   }
 
   async function sendStroke(stroke: Stroke): Promise<StrokeAck | undefined> {
@@ -87,7 +92,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
     )
   }
 
-  async function drawAction(event: string): Promise<void> {
+  async function drawAction(event: EventName): Promise<void> {
     if (!roomStore.room?.game) return
     await request(event, { roundId: roomStore.room.game.roundId }, { quiet: true })
   }

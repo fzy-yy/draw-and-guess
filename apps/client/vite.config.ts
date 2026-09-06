@@ -38,6 +38,12 @@ function publicConfigPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [publicConfigPlugin(), vue(), tailwindcss()],
+  build: {
+    // 测试隔离：E2E 把前端构建到临时目录再让测试服务托管，避免依赖恰好存在的 dist。
+    // 默认 'dist'（相对 client 包根）；通过 CLIENT_OUT_DIR 覆盖为绝对临时路径。
+    outDir: process.env.CLIENT_OUT_DIR ?? 'dist',
+    emptyOutDir: true,
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

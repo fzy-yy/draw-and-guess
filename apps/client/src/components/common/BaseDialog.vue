@@ -9,6 +9,7 @@
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useFocusTrap } from '@vueuse/integrations/useFocusTrap'
 import { X } from 'lucide-vue-next'
+import { selectTopmostDialog } from './dialog-stack'
 
 const open = defineModel<boolean>('open', { default: false })
 
@@ -83,12 +84,11 @@ function isTopmostDialog(): boolean {
   const dialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]')).filter(
     (element) => element.offsetParent !== null,
   )
-  const topmost = dialogs.reduce<HTMLElement | undefined>((current, element) => {
-    if (!current) return element
-    const currentZ = Number.parseInt(window.getComputedStyle(current).zIndex, 10) || 0
-    const elementZ = Number.parseInt(window.getComputedStyle(element).zIndex, 10) || 0
-    return elementZ >= currentZ ? element : current
-  }, undefined)
+  const topmost = selectTopmostDialog(
+    dialogs,
+    (element) => element.offsetParent !== null,
+    (element) => Number.parseInt(window.getComputedStyle(element).zIndex, 10) || 0,
+  )
   return topmost === overlayRef.value
 }
 

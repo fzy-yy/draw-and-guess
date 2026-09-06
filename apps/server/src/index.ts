@@ -11,7 +11,7 @@ import pino from 'pino'
 import { z } from 'zod'
 import { APP_CONFIG, getDeploymentConfig, type DeploymentConfig } from '../../../config/index.ts'
 import { serverStrings } from '../../../string/index.ts'
-import { EVENTS } from '@draw-guess/shared'
+import { EVENTS, createServerPush } from '@draw-guess/shared'
 import { createApplication } from './app.ts'
 import { closeDb } from './db/index.ts'
 import { SILENT_LOGGER, type RuntimeLogger } from './errors.ts'
@@ -210,7 +210,7 @@ async function main(): Promise<void> {
       console.error(`端口 ${deployment.port} 已被占用。请通过 PORT 环境变量更换端口。`)
       logger.error(
         { port: deployment.port },
-        `端口 ${deployment.port} 已被占用。请通过 PORT 环境变量或根级 config.ts 更换端口。`,
+        `端口 ${deployment.port} 已被占用。请通过 PORT 环境变量或 config/app.ts 更换端口。`,
       )
     } else {
       console.error('服务器启动失败:', error)
@@ -246,10 +246,10 @@ async function main(): Promise<void> {
   // 优雅关闭：先通知所有客户端，再关闭 Socket.IO 与 HTTP 服务器
   const shutdown = (signal: string) => {
     logger.info({ signal }, '正在优雅关闭服务')
-    application.io.emit(EVENTS.systemError, {
-      code: 'SERVER_SHUTDOWN',
-      message: serverStrings.notices.serverShutdown,
-    })
+    application.io.emit(
+      EVENTS.systemError,
+      createServerPush({ text: serverStrings.notices.serverShutdown }),
+    )
     application.io.close(() => {
       // 关闭时先落库数据（WAL checkpoint 由 SQLite 自动处理），再关 HTTP 并退出。
       closeDb()

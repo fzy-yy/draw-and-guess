@@ -143,7 +143,12 @@ export class SnapshotBuilder {
         }
       }),
       selectedWordCount: room.selectedWordIds.size,
-      totalWordCount: this.service.vocabulary.items.length,
+      totalWordCount: this.service.getRoomVocabularyStore(room).items.length,
+      vocabularyPackageId:
+        room.vocabularyPackageId || this.service.getRoomVocabularyStore(room).meta.id,
+      vocabularyPackageName:
+        this.service.getRoomVocabularyStore(room).meta.name ||
+        this.service.getRoomVocabularyStore(room).meta.id,
       ...(gameView ? { game: gameView } : {}),
     }
   }

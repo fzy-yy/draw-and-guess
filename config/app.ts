@@ -1,11 +1,11 @@
 /**
  * 领域配置：应用标识、网络与连接参数。
- * 归入根级 config/ 目录后由 config.ts 聚合，保持“唯一业务配置中心”不变。
+ * 归入根级 config/ 目录后由 config/index.ts 聚合，保持“唯一业务配置中心”不变。
  */
 export const app = {
   name: '你画我猜',
   version: '2.3.0',
-  protocolVersion: '7', // 词库改为 SQLite 并改用单分类作为猜词提示（VocabularyWord 字段变更），不匹配时拒绝注册
+  protocolVersion: '8', // 服务端主动推送改为版本化信封并增加完整运行时解码，不匹配时拒绝注册
   storageKey: 'draw-and-guess-profile-v1', // localStorage 资料键
   settingsStorageKey: 'draw-and-guess-settings-v1', // localStorage 设置键
   fullscreenPromptSessionKey: 'draw-and-guess-fullscreen-prompt-v1', // sessionStorage 全屏提示记录键
@@ -15,6 +15,9 @@ export const network = {
   host: '0.0.0.0', // 监听所有网卡，供局域网访问
   port: 5174,
   requestTimeoutMs: 8_000, // 客户端请求超时
+  requestRetryAttempts: 1, // 普通幂等请求发生传输故障时自动重试次数（复用同一 requestId）
+  requestRetryDelayMs: 250, // 自动重试前短暂等待，让 Socket.IO 有机会完成快速重连
+  stateResyncCooldownMs: 1_000, // 非法/缺口推送触发全量重同步的最小间隔
   reconnectGraceMs: 120_000, // 从实际断线时刻起计算的身份/作画席位恢复宽限期
   sessionRestoreRetryMs: 2_000, // 传输已恢复但会话注册 ack 失败时的静默重试间隔
   drawerReconnectGraceMs: 20_000, // 作画阶段画家/房主的额外处置宽限期

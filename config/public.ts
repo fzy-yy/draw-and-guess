@@ -14,6 +14,9 @@ export const PUBLIC_CONFIG = {
   app,
   network: {
     requestTimeoutMs: network.requestTimeoutMs,
+    requestRetryAttempts: network.requestRetryAttempts,
+    requestRetryDelayMs: network.requestRetryDelayMs,
+    stateResyncCooldownMs: network.stateResyncCooldownMs,
     pingIntervalMs: network.pingIntervalMs,
     sessionRestoreRetryMs: network.sessionRestoreRetryMs,
     latencyGoodMs: network.latencyGoodMs,

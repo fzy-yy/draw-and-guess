@@ -17,6 +17,7 @@ import type {
   ScoreDetail,
   VocabularyWord,
 } from '@draw-guess/shared'
+import type { TimerHandle } from './runtime.ts'
 
 /**
  * 玩家在服务端内存中的秘密状态。
@@ -37,7 +38,7 @@ export interface PlayerSecret {
   drawingDisconnectRoomId?: string
   /** 每次有效断线递增；画家/房主短宽限回调只处理创建它的断线代次。 */
   disconnectGeneration: number
-  disconnectTimer?: NodeJS.Timeout // 断线清理定时器
+  disconnectTimer?: TimerHandle // 断线清理定时器
   requestCache: Map<string, Ack<unknown>> // event + requestId → 完整 ack 的幂等缓存
   lastInviteAt: Map<string, number> // 目标玩家 ID → 最近邀请时间（限频）
   /** 一秒滑动窗口内的猜词与绘图事件时间，用于局域网刷包保护。 */
@@ -115,9 +116,9 @@ export interface GameSecret {
   roundResult?: RoundResult // 回合结算数据
   /** 进入最终结算时冻结；成员随后离房不会改变已公布的排名与统计。 */
   finalRanking?: FinalRankingEntry[]
-  timer?: NodeJS.Timeout // 主阶段计时器
+  timer?: TimerHandle // 主阶段计时器
   /** 绘图阶段的逐步提示计时器，与主阶段计时器一起在暂停/切换时清理。 */
-  hintTimers?: NodeJS.Timeout[]
+  hintTimers?: TimerHandle[]
 }
 
 /** 房间秘密状态：成员席位、规则、词库选择与对局引用。 */
@@ -132,6 +133,7 @@ export interface RoomSecret {
   stateVersion: number // 状态版本号（乐观并发控制）
   settings: RoomSettings
   members: MemberState[] // 成员席位（顺序即加入顺序）
+  vocabularyPackageId?: string // 本局绑定的词库包 ID（缺省为词数最多者）
   selectedWordIds: Set<string> // 本局启用的词条 ID 集合
   game?: GameSecret // 对局进行中才有
   createdAt: number
@@ -144,5 +146,5 @@ export interface InviteSecret {
   toPlayerId: string // 被邀请者
   roomId: string
   expiresAt: number // 过期时间戳
-  timer: NodeJS.Timeout // 过期清理定时器
+  timer: TimerHandle // 过期清理定时器
 }

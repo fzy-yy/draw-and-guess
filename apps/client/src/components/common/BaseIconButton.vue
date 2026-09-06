@@ -4,7 +4,7 @@
   文字或更复杂内容请使用 AppButton。
 -->
 <script setup lang="ts">
-import { computed, useAttrs } from 'vue'
+import { computed, ref, useAttrs } from 'vue'
 import { cn } from '@/utils/cn'
 
 const props = withDefaults(
@@ -23,14 +23,23 @@ const emit = defineEmits<{ click: [] }>()
 
 // 在 setup 顶层取响应式 attrs，供下方 computed 读取外部透传的 class（调用处可用 class 追加布局类）。
 const attrs = useAttrs()
+const button = ref<HTMLElement>()
 
 // 底座 + 调用处透传的外部 class：只取 attrs.class，避免把 style/onClick 等键名当类名；
 // 其余 attrs（style、事件、无障碍属性等）由 Vue 单根组件的隐式透传落到 <button> 上。
 const buttonClass = computed(() => cn(props.baseClass, attrs.class))
+
+/** 供带弹层的上层图标按钮在 Esc 关闭后恢复键盘焦点。 */
+function focus(): void {
+  button.value?.focus()
+}
+
+defineExpose({ focus })
 </script>
 
 <template>
   <button
+    ref="button"
     type="button"
     :aria-label="label"
     :disabled="disabled"

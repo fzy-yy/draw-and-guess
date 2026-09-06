@@ -7,6 +7,7 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core'
+import RoundIconButton from '@/components/common/RoundIconButton.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -36,7 +37,7 @@ const props = withDefaults(
 )
 
 const root = ref<HTMLElement>()
-const trigger = ref<HTMLElement>()
+const trigger = ref<InstanceType<typeof RoundIconButton>>()
 const open = ref(false)
 
 function close(restoreFocus = false): void {
@@ -62,19 +63,17 @@ defineExpose({ close })
 
 <template>
   <div ref="root" class="relative inline-flex" @keydown.esc.stop="close(true)">
-    <button
+    <RoundIconButton
       ref="trigger"
-      type="button"
-      class="round-icon-btn"
+      :label="triggerLabel"
       :disabled="disabled"
       :title="triggerTitle"
-      :aria-label="triggerLabel"
       :aria-expanded="open"
       aria-haspopup="dialog"
       @click="toggle"
     >
       <slot name="trigger" />
-    </button>
+    </RoundIconButton>
     <div
       v-if="open"
       role="dialog"
@@ -82,7 +81,7 @@ defineExpose({ close })
       :class="[
         // 弹出方向：top 从按钮上方弹出，bottom 从按钮下方弹出（见 placement 说明）
         placement === 'top' ? 'bottom-[calc(100%+0.8cqh)]' : 'top-[calc(100%+0.8cqh)]',
-        'absolute z-50 max-h-[42cqh] w-max max-w-[18cqw] overflow-y-auto overscroll-contain rounded-[0.7em] border-[0.18cqh] border-line bg-white p-[0.65em] shadow-float scrollbar-gutter-stable',
+        'absolute z-50 max-h-[42cqh] w-max max-w-[18cqw] overflow-y-auto overscroll-contain rounded-[0.7em] border-[0.18cqh] border-line bg-white p-[0.65em] shadow-float',
         align === 'end' ? 'right-0' : 'left-0',
         panelClass,
       ]"

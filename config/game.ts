@@ -1,6 +1,6 @@
 /**
  * 领域配置：对局规则与计分。
- * 归入根级 config/ 目录后由 config.ts 聚合，保持“唯一业务配置中心”不变。
+ * 归入根级 config/ 目录后由 config/index.ts 聚合，保持“唯一业务配置中心”不变。
  */
 export const game = {
   roundsPerPlayer: { min: 1, max: 5, default: 2, step: 1 }, // 每人作画轮数
@@ -13,9 +13,6 @@ export const game = {
   warningSeconds: 10,
   /** 逐步提示时间窗口比例：在作画时间的后半程开始逐步揭示字符（0.5 = 后 50% 时间开始） */
   progressiveHintRatio: 0.5,
-  /** 结构化分类提示触发时机：倒计时剩余多少秒时给出词语类别（默认 15 秒） */
-  categoryHintRemainingSeconds: 15,
-  finalHintThresholds: [0.35, 0.2], // 兼容历史配置阈值
   // —— 房间规则可设置项的默认值（RulesDialog/LobbyView 初始值均从这取，禁止另写一套）——
   structuredHintsEnabled: true, // 默认开启结构化提示（词条分类按阈值揭示一次）
   hintStartRatio: 0.35, // 结构化提示开始时机：剩余比例降到该值时揭示分类
@@ -28,6 +25,7 @@ export const game = {
   // 猜词比较固定为：NFKC 规范化 → 去首尾空白 → 折叠连续空白 → 忽略拉丁大小写（由 shared normalizeAnswer 内置）
   score: {
     guessBase: 300, // 猜中基础分（全局默认值；房间规则可用 guessBaseScore 覆盖）
+    defaultWordWeight: 5, // 词条 score_weight 缺省时的计分基准
     /** 房间规则“统一猜词基础分”滑块合法区间（步进 50，覆盖全局默认值）。 */
     guessBaseRange: { min: 50, max: 2_000, step: 50 },
     maxSpeedBonus: 700, // 速度奖励上限

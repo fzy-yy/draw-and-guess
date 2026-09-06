@@ -5,6 +5,7 @@
   与 ActionPopover 的触发按钮保持同一来源，避免两处样式漂移。
 -->
 <script setup lang="ts">
+import { ref } from 'vue'
 import BaseIconButton from '@/components/common/BaseIconButton.vue'
 
 withDefaults(
@@ -17,10 +18,19 @@ withDefaults(
   { disabled: false },
 )
 const emit = defineEmits<{ click: [] }>()
+const button = ref<InstanceType<typeof BaseIconButton>>()
+
+/** ActionPopover 等组合组件通过此方法恢复触发按钮焦点。 */
+function focus(): void {
+  button.value?.focus()
+}
+
+defineExpose({ focus })
 </script>
 
 <template>
   <BaseIconButton
+    ref="button"
     :label="label"
     :disabled="disabled"
     base-class="round-icon-btn"

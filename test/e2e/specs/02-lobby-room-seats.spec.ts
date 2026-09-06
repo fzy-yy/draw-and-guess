@@ -97,4 +97,92 @@ test.describe('02 - 大厅房间与席位网格 (Lobby, Room & Seats)', () => {
       await p3.close()
     }
   })
+
+  test('词库管理与多词库包视图切换', async ({ browser }) => {
+    const host = await createPlayer(browser, '词库房主')
+
+    try {
+      const roomName = `词库测试-${Date.now()}`
+      await host.lobby.createRoom({ name: roomName, visibility: 'public' })
+
+      // 1. 打开词库弹窗
+      await host.page.getByRole('button', { name: /词库/ }).click()
+      const dialog = host.page.getByRole('dialog')
+      await expect(dialog).toBeVisible({ timeout: 10_000 })
+
+      // 验证默认处于词条管理列表（包含词面列）
+      await expect(dialog.getByText('词面')).toBeVisible()
+
+      // 5,000 行虚拟表格：滚到末尾后筛选必须回到顶部；连续两个相同结果数的搜索也必须刷新。
+      await expect(dialog.getByText(/全部\s*5000/)).toBeVisible()
+      const wordScroller = dialog.locator('table').first().locator('..')
+      await wordScroller.evaluate((element) => {
+        element.scrollTop = element.scrollHeight
+      })
+      await expect(dialog.getByText('测试词5000', { exact: true })).toBeVisible()
+      const search = dialog.getByRole('textbox', { name: /搜索词条/ })
+      await search.fill('测试词4999')
+      await expect(dialog.getByText('测试词4999', { exact: true })).toBeVisible()
+      await search.fill('测试词5000')
+      await expect(dialog.getByText('测试词5000', { exact: true })).toBeVisible()
+      await expect
+        .poll(() => wordScroller.evaluate((element) => element.scrollTop))
+        .toBeLessThan(100)
+      await search.clear()
+
+      // 三个工具入口保持统一的圆形图标按钮交互；分类弹层不应再为外层滚动槽预留空白条
+      const categoryFilter = dialog.getByRole('button', { name: '按分类筛选' })
+      await categoryFilter.click()
+      const categoryPopover = dialog.getByRole('dialog', { name: '分类' })
+      await expect(categoryPopover).toBeVisible()
+      await expect(categoryPopover).toHaveCSS('scrollbar-gutter', 'auto')
+      await host.page.keyboard.press('Escape')
+      await expect(categoryPopover).toBeHidden()
+      await expect(categoryFilter).toBeFocused()
+
+      // 2. 点击搜索框旁边的圆形切换按钮，切换至词库包选择视图
+      const toggleBtn = dialog.getByRole('button', { name: '切换词库选择' })
+      await toggleBtn.click()
+
+      // 3. 验证表格 5 列顺序与字段：词库名称、词数、词库描述、版本号、更新日期
+      await expect(dialog.getByText('词库名称')).toBeVisible()
+      await expect(dialog.getByText('词数')).toBeVisible()
+      await expect(dialog.getByText('词库描述')).toBeVisible()
+      await expect(dialog.getByText('版本号')).toBeVisible()
+      await expect(dialog.getByText('更新日期')).toBeVisible()
+
+      // 行首单选按钮同时负责选择与当前状态提示，不再显示额外状态徽标或操作按钮
+      await expect(dialog.getByText('draw_guess_words')).toBeVisible()
+      const defaultPackageRadio = dialog.getByRole('radio', {
+        name: '选择词库 draw_guess_words',
+      })
+      await expect(defaultPackageRadio).toBeChecked()
+      await expect(dialog.getByText('当前使用中')).toHaveCount(0)
+      await expect(dialog.getByRole('button', { name: '使用此词库' })).toHaveCount(0)
+
+      // 4. 使用第二行单选按钮切换词库，选中状态应成为唯一的当前状态提示
+      const testWordsRow = dialog.locator('tr:has-text("test_words")')
+      await expect(testWordsRow).toBeVisible()
+      const testWordsRadio = testWordsRow.getByRole('radio', { name: '选择词库 test_words' })
+      await testWordsRadio.check()
+      await expect(testWordsRadio).toBeChecked()
+      await expect(defaultPackageRadio).not.toBeChecked()
+
+      // 5. 点击返回词条列表
+      await dialog.getByRole('button', { name: '返回词条列表' }).first().click()
+      await expect(dialog.getByText('词面')).toBeVisible()
+
+      // 6. 点击确认选择，验证弹窗自动关闭
+      await dialog.getByRole('button', { name: /确认选择/ }).click()
+      await expect(dialog).toBeHidden({ timeout: 10_000 })
+
+      // 关闭后重开不会接受上一轮 debounce/pending UI 写回。
+      await host.page.getByRole('button', { name: /词库/ }).click()
+      await expect(dialog).toBeVisible()
+      await expect(dialog.getByRole('textbox', { name: /搜索词条/ })).toHaveValue('')
+      await dialog.getByRole('button', { name: /关闭词库/ }).click()
+    } finally {
+      await host.close()
+    }
+  })
 })

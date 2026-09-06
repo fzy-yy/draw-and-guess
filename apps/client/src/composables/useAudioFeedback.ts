@@ -13,12 +13,51 @@ type CueName = keyof typeof APP_CONFIG.audio.cues
 export function useAudioFeedback(): void {
   const store = useGameStore()
   let context: AudioContext | undefined
+  let musicOscillator: OscillatorNode | undefined
+  let musicGain: GainNode | undefined
   let lastWarningSecond = -1
+
+  function stopMusic(): void {
+    musicOscillator?.stop()
+    musicOscillator?.disconnect()
+    musicGain?.disconnect()
+    musicOscillator = undefined
+    musicGain = undefined
+  }
+
+  function syncMusic(): void {
+    const phase = store.room?.phase
+    const enabled =
+      !!context &&
+      (phase === 'waiting' || phase === 'game_result') &&
+      !store.settings.muted &&
+      store.settings.masterVolume > 0 &&
+      store.settings.musicVolume > 0
+    if (!enabled || !context) {
+      stopMusic()
+      return
+    }
+    if (!musicOscillator || !musicGain) {
+      musicOscillator = context.createOscillator()
+      musicGain = context.createGain()
+      musicOscillator.type = 'sine'
+      musicOscillator.frequency.value = phase === 'game_result' ? 196 : 146.83
+      musicGain.gain.value = 0.0001
+      musicOscillator.connect(musicGain).connect(context.destination)
+      musicOscillator.start()
+    }
+    musicGain.gain.setTargetAtTime(
+      store.settings.masterVolume * store.settings.musicVolume * 0.025,
+      context.currentTime,
+      0.08,
+    )
+  }
 
   /** 首次用户交互时解锁音频上下文（遵守浏览器自动播放限制）。 */
   const unlock = (): void => {
     context ??= new AudioContext()
     if (context.state === 'suspended') void context.resume()
+    syncMusic()
   }
   // 只用首次指针/键盘交互触发一次解锁
   window.addEventListener('pointerdown', unlock, { once: true })
@@ -76,7 +115,12 @@ export function useAudioFeedback(): void {
       else if (phase === 'drawing') play('drawing')
       else if (phase === 'round_result') play('result')
       else if (phase === 'game_result') play('final')
+      syncMusic()
     },
+  )
+  watch(
+    () => [store.settings.muted, store.settings.masterVolume, store.settings.musicVolume],
+    () => syncMusic(),
   )
   // 自己准备/猜中/收到邀请时播放对应音效
   watch(
@@ -111,5 +155,6 @@ export function useAudioFeedback(): void {
     window.removeEventListener('pointerdown', unlock)
     window.removeEventListener('keydown', unlock)
     if (context) void context.close()
+    stopMusic()
   })
 }

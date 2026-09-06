@@ -8,7 +8,7 @@
   - 各富内容列（分类徽章/难度星级/别称灰字等）通过 DataTable 的具名插槽渲染。
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { strings } from '@draw-guess/strings'
 import type { VocabularyWord } from '@draw-guess/shared'
 import type { DataTableColumn } from '@/components/common/DataTable.vue'
@@ -45,11 +45,18 @@ const selectAllState = useSelectAllState(
   computed(() => props.rows),
   selectedSet,
 )
+const table = ref<{ scrollToTop(): void; scrollToIndex(index: number): void }>()
+
+defineExpose({
+  scrollToTop: () => table.value?.scrollToTop(),
+  scrollToIndex: (index: number) => table.value?.scrollToIndex(index),
+})
 </script>
 
 <template>
   <!-- 表格容器：占满剩余高度，滚动与虚拟化由 DataTable 内部处理 -->
   <DataTable
+    ref="table"
     class="min-h-0 flex-1"
     :columns="props.columns"
     :rows="props.rows"

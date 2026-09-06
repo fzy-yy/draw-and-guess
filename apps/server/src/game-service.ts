@@ -4,7 +4,6 @@
  * 本类独占所有可改变比赛结果的状态：身份、成员资格、准备、阶段、答案、计时、绘图与分数。
  * Socket 处理器只负责校验载荷并调用这些方法，客户端永远不能上传裁决结果。
  */
-import { randomBytes, randomInt, randomUUID } from 'node:crypto'
 import type { Server, Socket } from 'socket.io'
 import { APP_CONFIG } from '../../../config/index.ts'
 import { serverStrings } from '../../../string/index.ts'
@@ -12,8 +11,11 @@ import {
   EVENTS,
   MIN_SELECTED_VOCABULARY_WORDS,
   canTransition,
+  countGraphemes,
+  createServerPush,
   normalizeAnswer,
   normalizeHexColor,
+  truncateGraphemes,
   type ChatMessage,
   type FillCommand,
   type Invite,
@@ -33,8 +35,9 @@ import {
 } from '@draw-guess/shared'
 import type { GameSecret, InviteSecret, MemberState, PlayerSecret, RoomSecret } from './models.ts'
 import { RoundMachine } from './round-machine.ts'
+import { validateRoomSettings } from './room-settings.ts'
 import { SnapshotBuilder } from './snapshot.ts'
-import type { VocabularyStore } from './vocabulary/index.ts'
+import type { VocabularyRegistry, VocabularyStore } from './vocabulary/index.ts'
 import { enforceEventRate } from './rate-limit.ts'
 import { GameError, SILENT_LOGGER, type RuntimeLogger } from './errors.ts'
 import type {
@@ -43,6 +46,7 @@ import type {
   RoomRepository,
   ArchiveRepository,
 } from './repositories/index.ts'
+import { SYSTEM_RUNTIME, type RuntimeDependencies } from './runtime.ts'
 
 /** 默认房间规则只从根级配置生成，避免处理器中出现另一套默认值。 */
 export function createDefaultRoomSettings(): RoomSettings {
@@ -77,13 +81,13 @@ export class GameService {
   readonly invites = new Map<string, InviteSecret>()
 
   /** 回合流转状态机：开局/选词/作画/结算/暂停等阶段推进逻辑。 */
-  readonly round = new RoundMachine(this)
+  readonly round: RoundMachine
   /** 视图裁剪（快照组装）构建器。 */
-  readonly snapshotter = new SnapshotBuilder(this)
+  readonly snapshotter: SnapshotBuilder
 
   constructor(
     readonly io: Server,
-    readonly vocabulary: VocabularyStore,
+    readonly vocabulary: VocabularyRegistry,
     /** 持久化仓储（身份/房间/战报），由启动器注入 SQLite 实现，测试可注入内存实现。 */
     readonly repositories: {
       players: PlayerRepository
@@ -91,8 +95,33 @@ export class GameService {
       archive: ArchiveRepository
     },
     readonly logger: RuntimeLogger = SILENT_LOGGER,
-    readonly clock: { now: () => number } = { now: () => Date.now() },
-  ) {}
+    readonly runtime: RuntimeDependencies = SYSTEM_RUNTIME,
+  ) {
+    this.round = new RoundMachine(this)
+    this.snapshotter = new SnapshotBuilder(this)
+  }
+
+  /** 兼容领域协作者的简洁访问，同时确保全部时间来自统一运行时。 */
+  get clock(): RuntimeDependencies['clock'] {
+    return this.runtime.clock
+  }
+
+  get scheduler(): RuntimeDependencies['scheduler'] {
+    return this.runtime.scheduler
+  }
+
+  get random(): RuntimeDependencies['random'] {
+    return this.runtime.random
+  }
+
+  /** 获取房间当前绑定的词库 Store（若未绑定或未找到则回退默认词库）。 */
+  getRoomVocabularyStore(room?: RoomSecret): VocabularyStore {
+    if (room?.vocabularyPackageId && 'get' in this.vocabulary) {
+      const store = this.vocabulary.get(room.vocabularyPackageId)
+      if (store) return store
+    }
+    return 'getDefault' in this.vocabulary ? this.vocabulary.getDefault() : this.vocabulary
+  }
 
   /** 记录未预期的服务器内部错误（脱敏到错误名），供排查 bindRequest 兜底返回的 INTERNAL_ERROR。 */
   logUnexpectedError(error: unknown, context: Record<string, unknown> = {}): void {
@@ -131,7 +160,7 @@ export class GameService {
     if (
       recovering &&
       (!recovering.disconnectedAt ||
-        Date.now() - recovering.disconnectedAt <= APP_CONFIG.network.reconnectGraceMs)
+        this.clock.now() - recovering.disconnectedAt <= APP_CONFIG.network.reconnectGraceMs)
     ) {
       return this.reclaimPlayer(socket, recovering)
     }
@@ -143,7 +172,7 @@ export class GameService {
       const record = this.repositories.players.findByToken(input.recoveryToken)
       const withinGrace =
         record?.disconnectedAt !== undefined &&
-        Date.now() - record.disconnectedAt <= APP_CONFIG.network.reconnectGraceMs
+        this.clock.now() - record.disconnectedAt <= APP_CONFIG.network.reconnectGraceMs
       if (record && withinGrace) {
         const restored = this.restorePlayerFromRecord(record)
         if (restored) return this.reclaimPlayer(socket, restored)
@@ -168,14 +197,14 @@ export class GameService {
     // 全新注册：生成随机昵称去重、UUID 身份、随机恢复令牌
     const nickname = this.makeUniqueNickname(this.cleanNickname(input.profile.nickname))
     const player: PlayerSecret = {
-      id: randomUUID(),
-      token: randomBytes(32).toString('base64url'),
+      id: this.random.uuid(),
+      token: this.random.token(32),
       profile: { nickname, avatarId: input.profile.avatarId },
       preferences: input.preferences,
       socket,
       socketId: socket.id,
       connected: true,
-      joinedAt: Date.now(),
+      joinedAt: this.clock.now(),
       disconnectGeneration: 0,
       requestCache: new Map(),
       lastInviteAt: new Map(),
@@ -253,7 +282,7 @@ export class GameService {
 
   /** 把房间及其成员席位同步到 SQLite（settings/selectedWords 以 JSON 存储）。 */
   private persistRoom(room: RoomSecret): void {
-    this.repositories.rooms.upsertRoom({
+    const record = {
       id: room.id,
       name: room.name,
       hostId: room.hostId,
@@ -264,10 +293,10 @@ export class GameService {
       settings: JSON.stringify(room.settings),
       selectedWords: JSON.stringify([...room.selectedWordIds]),
       createdAt: room.createdAt,
-      updatedAt: Date.now(),
-    })
-    this.repositories.rooms.replaceMembers(
-      room.id,
+      updatedAt: this.clock.now(),
+    }
+    this.repositories.rooms.saveAggregate(
+      record,
       room.members.map((member) => ({
         roomId: room.id,
         playerId: member.playerId,
@@ -291,7 +320,7 @@ export class GameService {
   public persistGameResult(room: RoomSecret, reason: string): void {
     const game = room.game
     if (!game || !game.finalRanking) return
-    const finishedAt = Date.now()
+    const finishedAt = this.clock.now()
     // game_results：逐玩家最终结果（从冻结的 finalRanking 拆出）。
     const results = game.finalRanking.map((entry) => ({
       gameId: game.id,
@@ -334,10 +363,10 @@ export class GameService {
     // 先清理「上一次运行前就已超过恢复宽限期」的过期身份行，防止 players 表随重启无限增长；
     // 再把剩余行（含崩溃时 connected=1 的行）全部标记为断线，给它们一个全新的恢复宽限窗口。
     this.repositories.players.deleteStaleDisconnected(
-      Date.now() - APP_CONFIG.network.reconnectGraceMs,
+      this.clock.now() - APP_CONFIG.network.reconnectGraceMs,
     )
     // 全部玩家视为断线，开始身份宽限计时（宽限期由 APP_CONFIG.network.reconnectGraceMs 定义）。
-    this.repositories.players.markAllDisconnected(Date.now())
+    this.repositories.players.markAllDisconnected(this.clock.now())
   }
 
   /**
@@ -345,7 +374,7 @@ export class GameService {
    * 取消原清理定时器、断开旧连接、重新加入 Socket 房间并推送恢复快照。
    */
   private reclaimPlayer(socket: Socket, player: PlayerSecret): Omit<SessionRegistration, 'room'> {
-    if (player.disconnectTimer) clearTimeout(player.disconnectTimer)
+    this.scheduler.clear(player.disconnectTimer)
     const previousSocket = player.socket
     // 必须先把身份指向新 socket，再断开旧连接；否则旧 socket 的 disconnect 若同步/抢先触发，
     // 会被误认为当前连接断线并执行离房，造成恢复成功后仍偶发回大厅或登录页。
@@ -376,7 +405,7 @@ export class GameService {
         nickname: player.profile.nickname,
         connection: 'online',
       }
-      socket.to(room.id).emit(EVENTS.roomMemberConnectionChanged, payload)
+      socket.to(room.id).emit(EVENTS.roomMemberConnectionChanged, createServerPush(payload))
     }
     delete player.drawingDisconnectRoomId
     // 重新上线：持久化连接状态与房间归属，保证跨重启宽限判断正确。
@@ -398,7 +427,7 @@ export class GameService {
     if (playerId) {
       const player = this.players.get(playerId)
       if (player) {
-        if (player.disconnectTimer) clearTimeout(player.disconnectTimer)
+        this.scheduler.clear(player.disconnectTimer)
         if (player.roomId) {
           try {
             this.leaveRoom(playerId)
@@ -457,9 +486,12 @@ export class GameService {
     this.validateSettings(input.settings)
     const privateJoinCode =
       input.visibility === 'private' ? this.generatePrivateJoinCode() : undefined
-    // 新房间默认全选词库，成员只有房主一人，状态版本从 1 开始。
+    // 新房间默认选择词数最多的词库并全选其词条，成员只有房主一人，状态版本从 1 开始。
+    const defaultPackageId =
+      'defaultPackageId' in this.vocabulary ? this.vocabulary.defaultPackageId : undefined
+    const defaultStore = this.getRoomVocabularyStore()
     const room: RoomSecret = {
-      id: randomUUID(),
+      id: this.random.uuid(),
       name: input.name.trim(),
       hostId: player.id,
       visibility: input.visibility,
@@ -468,8 +500,9 @@ export class GameService {
       stateVersion: 1,
       settings: input.settings,
       members: [],
-      selectedWordIds: new Set(this.vocabulary.items.map((word) => word.id)),
-      createdAt: Date.now(),
+      vocabularyPackageId: defaultPackageId,
+      selectedWordIds: new Set(defaultStore.items.map((word) => word.id)),
+      createdAt: this.clock.now(),
     }
     room.members.push(this.createMember(player, room))
     // 持久化优先：先写数据库，成功后再提交到内存 Map 与加入 Socket 房间
@@ -502,7 +535,7 @@ export class GameService {
   /** 通过短码加入私密房；独立限频防止在局域网内高频枚举房间码。 */
   joinPrivateRoom(playerId: string, code: string): RoomSnapshot {
     const player = this.requireAvailablePlayer(playerId)
-    const now = Date.now()
+    const now = this.clock.now()
     player.privateJoinAttemptTimes = player.privateJoinAttemptTimes.filter(
       (timestamp) => now - timestamp < APP_CONFIG.room.privateJoinWindowMs,
     )
@@ -537,26 +570,62 @@ export class GameService {
         throw new GameError('GAME_IN_PROGRESS', serverStrings.errors.GAME_IN_PROGRESS_FORBID)
       if (room.settings.joinPolicy === 'next_game')
         throw new GameError('GAME_IN_PROGRESS', serverStrings.errors.GAME_IN_PROGRESS_NEXT)
-      room.members.push(this.createMember(player, room, true))
+      const member = this.createMember(player, room, true)
+      const previousVersion = room.stateVersion
+      room.members.push(member)
       room.stateVersion += 1
       this.logger.info({ roomId: room.id, playerId: player.id, source }, '玩家以观战身份加入房间')
       player.roomId = room.id
       player.socket?.join(room.id)
       // 持久化：成员席位与玩家房间归属。
-      this.persistPlayer(player)
-      this.persistRoom(room)
+      try {
+        this.persistPlayer(player)
+        this.persistRoom(room)
+      } catch (error) {
+        room.members = room.members.filter((item) => item !== member)
+        room.stateVersion = previousVersion
+        delete player.roomId
+        player.socket?.leave(room.id)
+        try {
+          this.persistPlayer(player)
+        } catch (rollbackError) {
+          this.logger.error(
+            { rollbackError, playerId: player.id, roomId: room.id },
+            '房间加入失败后的玩家归属回滚失败',
+          )
+        }
+        throw error
+      }
       this.emitRoom(room.id)
       this.broadcastPresence()
       return this.snapshotter.snapshot(room, player.id)
     }
-    room.members.push(this.createMember(player, room))
+    const member = this.createMember(player, room)
+    const previousVersion = room.stateVersion
+    room.members.push(member)
     room.stateVersion += 1
     this.logger.info({ roomId: room.id, playerId: player.id, source }, '玩家已加入房间')
     player.roomId = room.id
     player.socket?.join(room.id)
     // 持久化：成员席位与玩家房间归属。
-    this.persistPlayer(player)
-    this.persistRoom(room)
+    try {
+      this.persistPlayer(player)
+      this.persistRoom(room)
+    } catch (error) {
+      room.members = room.members.filter((item) => item !== member)
+      room.stateVersion = previousVersion
+      delete player.roomId
+      player.socket?.leave(room.id)
+      try {
+        this.persistPlayer(player)
+      } catch (rollbackError) {
+        this.logger.error(
+          { rollbackError, playerId: player.id, roomId: room.id },
+          '房间加入失败后的玩家归属回滚失败',
+        )
+      }
+      throw error
+    }
     // 成员加入只改变席位和状态版本，不取消其他玩家已经完成的准备。
     this.addSystemNotice(room, serverStrings.notices.playerJoined(player.profile.nickname))
     this.emitRoom(room.id)
@@ -658,7 +727,7 @@ export class GameService {
       nickname: player.profile.nickname,
       connection: 'left',
     }
-    this.io.to(room.id).emit(EVENTS.roomMemberConnectionChanged, payload)
+    this.io.to(room.id).emit(EVENTS.roomMemberConnectionChanged, createServerPush(payload))
 
     if (room.hostId === playerId && !this.transferHostInternal(room)) {
       this.closeRoom(room, serverStrings.notices.closeRoomNoPlayableHost)
@@ -743,17 +812,61 @@ export class GameService {
   }
 
   /**
-   * 读取本局词库快照（全部词条、当前选择、词库版本与分类白名单）。
-   * 房主与普通成员都可读（普通成员只能查看，不能修改；修改仍走 updateVocabulary 仅房主）。
+   * 读取本局词库快照（当前包 ID、全部可用词库包、词条列表、当前选择、词库版本与分类白名单）。
+   * 房主与普通成员都可读（普通成员只能查看，不能修改；修改与切换仅房主）。
    */
   getVocabulary(playerId: string): VocabularySnapshot {
     const { room } = this.requireMembership(playerId)
+    const store = this.getRoomVocabularyStore(room)
+    const packages = 'packages' in this.vocabulary ? this.vocabulary.packages : []
+    const packageId =
+      room.vocabularyPackageId ||
+      ('defaultPackageId' in this.vocabulary
+        ? this.vocabulary.defaultPackageId
+        : store.meta.id || '')
     return {
-      items: this.vocabulary.items,
+      packageId,
+      packages,
+      items: store.items,
       selectedIds: [...room.selectedWordIds],
-      version: this.vocabulary.version,
-      categories: this.vocabulary.meta.categoryEnum,
+      version: store.version,
+      categories: store.meta.categoryEnum,
     }
+  }
+
+  /**
+   * 房主切换房间词库包（默认选择词数最多的词库；亦可在词库管理中自由切换）。
+   * 切换后重置为新词库全部词条，自增房间状态版本并推送快照与系统通知。
+   */
+  selectVocabularyPackage(
+    playerId: string,
+    packageId: string,
+    expectedVersion?: number,
+  ): VocabularySnapshot {
+    const room = this.requireHostRoom(playerId)
+    if (room.phase !== 'waiting')
+      throw new GameError('SETTINGS_LOCKED', serverStrings.errors.SETTINGS_LOCKED_VOCABULARY)
+    if (expectedVersion !== undefined && room.stateVersion !== expectedVersion)
+      throw new GameError('VERSION_CONFLICT', serverStrings.errors.VERSION_CONFLICT_VOCABULARY)
+
+    let targetStore: VocabularyStore | undefined
+    if ('get' in this.vocabulary) {
+      targetStore = this.vocabulary.get(packageId)
+    }
+    if (!targetStore) {
+      throw new GameError('NOT_FOUND', serverStrings.errors.VOCABULARY_PACKAGE_NOT_FOUND)
+    }
+
+    room.vocabularyPackageId = packageId
+    // 切换词库后默认全选新词库的所有词条
+    room.selectedWordIds = new Set(targetStore.items.map((word) => word.id))
+    room.stateVersion += 1
+
+    const pkgName = targetStore.meta.name || packageId
+    this.addSystemNotice(room, serverStrings.notices.vocabularyPackageSwitched(pkgName))
+    this.persistRoom(room)
+    this.emitRoom(room.id)
+    return this.getVocabulary(playerId)
   }
 
   updateVocabulary(playerId: string, ids: string[], expectedVersion: number): VocabularySnapshot {
@@ -762,6 +875,7 @@ export class GameService {
       throw new GameError('SETTINGS_LOCKED', serverStrings.errors.SETTINGS_LOCKED_VOCABULARY)
     if (room.stateVersion !== expectedVersion)
       throw new GameError('VERSION_CONFLICT', serverStrings.errors.VERSION_CONFLICT_VOCABULARY)
+    const store = this.getRoomVocabularyStore(room)
     const selected = new Set(ids)
     // 词条数量不足时拒绝保存，保证整局选词阶段（6人×2轮换词×5可选词=60条）有足够候选
     if (selected.size < MIN_SELECTED_VOCABULARY_WORDS) {
@@ -772,7 +886,7 @@ export class GameService {
     }
     // 每个 ID 都必须来自权威词库，防止伪造词条注入
     for (const id of selected) {
-      if (!this.vocabulary.byId.has(id))
+      if (!store.byId.has(id))
         throw new GameError('INVALID_WORD_ID', serverStrings.errors.INVALID_WORD_ID)
     }
     room.selectedWordIds = selected
@@ -811,14 +925,12 @@ export class GameService {
 
     // 进入 3 秒开始倒计时阶段；倒计时结束而且阶段未变时正式开局
     this.transition(room, 'starting')
-    const gameId = randomUUID()
-    const timer = setTimeout(
-      () =>
-        this.safeRun('startingCountdown', () => {
-          if (room.phase !== 'starting' || room.game?.id !== gameId) return
-          this.round.beginGame(room)
-        }),
-      APP_CONFIG.game.startingCountdownSeconds * 1_000,
+    const gameId = this.random.uuid()
+    const timer = this.scheduler.set(APP_CONFIG.game.startingCountdownSeconds * 1_000, () =>
+      this.safeRun('startingCountdown', () => {
+        if (room.phase !== 'starting' || room.game?.id !== gameId) return
+        this.round.beginGame(room)
+      }),
     )
     // 预建本局秘密状态：洗牌确定画家顺序（只含可玩成员），清空所有历史与计时
     room.game = {
@@ -905,7 +1017,7 @@ export class GameService {
     if (member.guessedAt)
       throw new GameError('ALREADY_GUESSED', serverStrings.errors.ALREADY_GUESSED)
     const text = rawText.trim()
-    enforceEventRate(this.requirePlayer(playerId), 'guess') // 猜词限频
+    enforceEventRate(this.requirePlayer(playerId), 'guess', this.clock) // 猜词限频
     if (!text || Array.from(text).length > APP_CONFIG.player.chatMaxLength)
       throw new GameError('INVALID_MESSAGE', serverStrings.errors.INVALID_MESSAGE_EMPTY)
     const normalized = normalizeAnswer(text)
@@ -944,7 +1056,7 @@ export class GameService {
   addStroke(playerId: string, roundId: string, stroke: Stroke): StrokeAck {
     const { room } = this.requireMembership(playerId)
     const game = this.requireDrawerGame(room, playerId, roundId)
-    enforceEventRate(this.requirePlayer(playerId), 'draw')
+    enforceEventRate(this.requirePlayer(playerId), 'draw', this.clock)
     // 序号必须严格递增，服务端拒绝迟到的旧包（网络乱序/重复发包）
     if (stroke.sequence <= game.lastSequence)
       throw new GameError('STALE_DRAW_EVENT', serverStrings.errors.STALE_DRAW_EVENT_STROKE)
@@ -972,12 +1084,20 @@ export class GameService {
       (candidate): candidate is Stroke => candidate.kind === 'stroke' && candidate.id === stroke.id,
     )
     // 依据 startPointIndex 计算实际新增点，杜绝重复连接点混入权威点数
-    const newPoints =
-      existing &&
-      stroke.startPointIndex !== undefined &&
-      stroke.startPointIndex < existing.points.length
-        ? stroke.points.slice(existing.points.length - stroke.startPointIndex)
-        : stroke.points
+    if (existing) {
+      const expectedStart = existing.points.length
+      if (
+        existing.tool !== stroke.tool ||
+        existing.width !== stroke.width ||
+        existing.color !== color ||
+        stroke.startPointIndex !== expectedStart
+      ) {
+        throw new GameError('INVALID_DRAW_STYLE', serverStrings.errors.INVALID_DRAW_STYLE)
+      }
+    } else if (stroke.startPointIndex !== undefined && stroke.startPointIndex !== 0) {
+      throw new GameError('INVALID_DRAW_STYLE', serverStrings.errors.INVALID_DRAW_STYLE)
+    }
+    const newPoints = stroke.points
 
     const nextPointTotal = game.strokePointTotal + newPoints.length
     if (
@@ -1004,11 +1124,16 @@ export class GameService {
     // 增量广播前标记房间全部成员已同步到该序号：下一次快照可省略画布历史（差分下发，见 snapshot.ts）
     room.members.forEach((member) => (member.lastSyncedSeq = game.lastSequence))
     // 标准化颜色后广播给房间所有成员（画家自身也会收到并用于纠正本地预览）
-    this.io.to(room.id).emit(EVENTS.drawStrokeBatch, {
-      roundId,
-      stroke: { ...stroke, color, points: newPoints },
-      drawingRevision: game.drawingRevision,
-    })
+    this.io.to(room.id).emit(
+      EVENTS.drawStrokeBatch,
+      createServerPush({
+        roomId: room.id,
+        gameId: game.id,
+        roundId,
+        stroke: { ...stroke, color, points: newPoints },
+        drawingRevision: game.drawingRevision,
+      }),
+    )
     return {
       strokeId: stroke.id,
       pointCount: existing ? existing.points.length : newPoints.length,
@@ -1021,7 +1146,7 @@ export class GameService {
   addFill(playerId: string, roundId: string, fill: FillCommand): void {
     const { room } = this.requireMembership(playerId)
     const game = this.requireDrawerGame(room, playerId, roundId)
-    enforceEventRate(this.requirePlayer(playerId), 'draw')
+    enforceEventRate(this.requirePlayer(playerId), 'draw', this.clock)
     // 序号必须严格递增，拒绝旧包
     if (fill.sequence <= game.lastSequence)
       throw new GameError('STALE_DRAW_EVENT', serverStrings.errors.STALE_DRAW_EVENT_FILL)
@@ -1051,18 +1176,23 @@ export class GameService {
     game.drawingRevision += 1
     // 标记房间全部成员同步到该序号（与笔画增量同一套差分机制）
     room.members.forEach((member) => (member.lastSyncedSeq = game.lastSequence))
-    this.io.to(room.id).emit(EVENTS.drawFillCommit, {
-      roundId,
-      fill: { ...fill, color },
-      drawingRevision: game.drawingRevision,
-    })
+    this.io.to(room.id).emit(
+      EVENTS.drawFillCommit,
+      createServerPush({
+        roomId: room.id,
+        gameId: game.id,
+        roundId,
+        fill: { ...fill, color },
+        drawingRevision: game.drawingRevision,
+      }),
+    )
   }
 
   undo(playerId: string, roundId: string): void {
     const { room } = this.requireMembership(playerId)
     const game = this.requireDrawerGame(room, playerId, roundId)
     // 与笔画/填充同样受绘图限频保护：否则单请求可无限触发全员快照广播
-    enforceEventRate(this.requirePlayer(playerId), 'draw')
+    enforceEventRate(this.requirePlayer(playerId), 'draw', this.clock)
     const undoneSet = new Set(game.undoneStrokeIds)
     let target: (typeof game.strokes)[number] | undefined
     for (let index = game.strokes.length - 1; index >= 0; index -= 1) {
@@ -1081,7 +1211,7 @@ export class GameService {
   redo(playerId: string, roundId: string): void {
     const { room } = this.requireMembership(playerId)
     const game = this.requireDrawerGame(room, playerId, roundId)
-    enforceEventRate(this.requirePlayer(playerId), 'draw')
+    enforceEventRate(this.requirePlayer(playerId), 'draw', this.clock)
     if (!game.undoneStrokeIds.length) return // 撤销栈为空时不广播
     game.undoneStrokeIds.pop() // 撤销栈是先进后出，重做即弹出最后一条
     game.drawingRevision += 1
@@ -1091,7 +1221,7 @@ export class GameService {
   clearDrawing(playerId: string, roundId: string): void {
     const { room } = this.requireMembership(playerId)
     const game = this.requireDrawerGame(room, playerId, roundId)
-    enforceEventRate(this.requirePlayer(playerId), 'draw')
+    enforceEventRate(this.requirePlayer(playerId), 'draw', this.clock)
     if (!game.strokes.length && !game.undoneStrokeIds.length) return // 已是空画布时不广播
     game.strokes = []
     game.strokePointTotal = 0 // 清空画布同步释放点数预算
@@ -1167,7 +1297,7 @@ export class GameService {
     const { room } = this.requireMembership(playerId)
     if (room.phase !== 'game_result')
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_RETURN_WAITING)
-    if (room.game?.timer) clearTimeout(room.game.timer)
+    this.scheduler.clear(room.game?.timer)
     delete room.game
     room.members = room.members.filter((member) => !member.leftGame)
     room.phase = 'waiting'
@@ -1187,7 +1317,11 @@ export class GameService {
     if (!room.members.some((member) => member.playerId === targetId))
       throw new GameError('NOT_IN_ROOM', serverStrings.errors.NOT_IN_ROOM_KICK)
     // 先通知被踢玩家房间关闭，再走标准离开流程释放座位
-    this.emitToPlayer(targetId, EVENTS.roomClosed, { reason: serverStrings.notices.kickedReason })
+    this.emitToPlayer(
+      targetId,
+      EVENTS.roomClosed,
+      createServerPush({ reason: serverStrings.notices.kickedReason }),
+    )
     this.leaveRoom(targetId, serverStrings.notices.kickedLog)
   }
 
@@ -1237,33 +1371,32 @@ export class GameService {
       throw new GameError('TARGET_UNAVAILABLE', serverStrings.errors.TARGET_UNAVAILABLE)
     // 同一目标有冷却时间，防止反复骚扰
     const last = sender.lastInviteAt.get(targetId) ?? 0
-    if (Date.now() - last < APP_CONFIG.network.inviteCooldownMs)
+    if (this.clock.now() - last < APP_CONFIG.network.inviteCooldownMs)
       throw new GameError('RATE_LIMITED', serverStrings.errors.RATE_LIMITED_INVITE)
-    sender.lastInviteAt.set(targetId, Date.now())
+    sender.lastInviteAt.set(targetId, this.clock.now())
     // 创建 30 秒有效的邀请，超时自动回收
-    const id = randomUUID()
-    const expiresAt = Date.now() + APP_CONFIG.network.inviteExpiryMs
+    const id = this.random.uuid()
+    const expiresAt = this.clock.now() + APP_CONFIG.network.inviteExpiryMs
     const invite: InviteSecret = {
       id,
       fromPlayerId: playerId,
       toPlayerId: targetId,
       roomId: room.id,
       expiresAt,
-      timer: setTimeout(
-        () => this.safeRun('inviteExpiry', () => this.resolveInvite(id, 'expired')),
-        APP_CONFIG.network.inviteExpiryMs,
+      timer: this.scheduler.set(APP_CONFIG.network.inviteExpiryMs, () =>
+        this.safeRun('inviteExpiry', () => this.resolveInvite(id, 'expired')),
       ),
     }
     this.invites.set(id, invite)
     const publicInvite = this.snapshotter.toPublicInvite(invite)
-    target.socket?.emit(EVENTS.inviteReceived, publicInvite)
+    target.socket?.emit(EVENTS.inviteReceived, createServerPush(publicInvite))
     return publicInvite
   }
 
   respondInvite(playerId: string, inviteId: string, accept: boolean): RoomSnapshot | undefined {
     const invite = this.invites.get(inviteId)
     // 只允许被邀请者本人应答，且邀请未过期
-    if (!invite || invite.toPlayerId !== playerId || invite.expiresAt < Date.now())
+    if (!invite || invite.toPlayerId !== playerId || invite.expiresAt < this.clock.now())
       throw new GameError('INVITE_EXPIRED', serverStrings.errors.INVITE_EXPIRED)
     const room = this.rooms.get(invite.roomId)
     if (!accept) {
@@ -1301,7 +1434,7 @@ export class GameService {
     player.connected = false
     player.socket = undefined
     player.socketId = undefined
-    player.disconnectedAt = Date.now()
+    player.disconnectedAt = this.clock.now()
     // 持久化连接状态与断线时间：跨重启宽限判断依赖它（宽限内可凭令牌恢复）。
     try {
       this.repositories.players.setConnection(player.id, false, player.disconnectedAt)
@@ -1323,66 +1456,62 @@ export class GameService {
         nickname: player.profile.nickname,
         connection: 'reconnecting',
       }
-      this.io.to(room.id).emit(EVENTS.roomMemberConnectionChanged, payload)
+      this.io.to(room.id).emit(EVENTS.roomMemberConnectionChanged, createServerPush(payload))
 
       // 当前画家断线：保留短宽限；超时仍未恢复则由权威状态机废弃本回合。
       // 宽限期间房间可能被暂停（保留席位语义仍指向作画），因此暂停中同样认定「本回合未完成」：
       // 否则超时回调因阶段不是 drawing 而静默跳过，恢复后回合将无人作画直至自然超时。
       if (room.game?.drawerId === playerId) {
-        setTimeout(
-          () =>
-            this.safeRun('drawerReconnectTimeout', () => {
-              const phaseIsRoundDrawing =
-                room.phase === 'drawing' ||
-                (room.phase === 'paused' && room.game?.phaseBeforePause === 'drawing')
-              if (
-                !player.connected &&
-                player.disconnectGeneration === disconnectGeneration &&
-                player.roomId === room.id &&
-                room.game?.drawerId === playerId &&
-                phaseIsRoundDrawing
-              )
-                this.round.finishRound(room, true)
-            }),
-          APP_CONFIG.network.drawerReconnectGraceMs,
+        this.scheduler.set(APP_CONFIG.network.drawerReconnectGraceMs, () =>
+          this.safeRun('drawerReconnectTimeout', () => {
+            const phaseIsRoundDrawing =
+              room.phase === 'drawing' ||
+              (room.phase === 'paused' && room.game?.phaseBeforePause === 'drawing')
+            if (
+              !player.connected &&
+              player.disconnectGeneration === disconnectGeneration &&
+              player.roomId === room.id &&
+              room.game?.drawerId === playerId &&
+              phaseIsRoundDrawing
+            )
+              this.round.finishRound(room, true)
+          }),
         )
       }
       // 作画期房主掉线时暂留控制权；短宽限后仍未恢复才迁移给在线可玩成员。
       if (room.hostId === playerId) {
-        setTimeout(
-          () =>
-            this.safeRun('hostReconnectTimeout', () => {
-              if (
-                player.connected ||
-                player.disconnectGeneration !== disconnectGeneration ||
-                player.roomId !== room.id ||
-                room.hostId !== playerId ||
-                room.members.length <= 1
-              )
-                return
-              const candidate = room.members.find(
-                (member) =>
-                  member.playerId !== playerId &&
-                  !member.spectating &&
-                  !member.leftGame &&
-                  this.players.get(member.playerId)?.connected,
-              )
-              if (!candidate) return
-              room.hostId = candidate.playerId
-              this.rotatePrivateJoinCode(room)
-              room.stateVersion += 1
-              this.addSystemNotice(
-                room,
-                serverStrings.notices.hostMigratedTimeout(
-                  this.players.get(candidate.playerId)?.profile.nickname ??
-                    serverStrings.notices.hostFallback,
-                ),
-              )
-              // 持久化：断线超时迁移房主与主动移交同一套落库口径。
-              this.persistRoom(room)
-              this.emitRoom(room.id)
-            }),
-          APP_CONFIG.network.drawerReconnectGraceMs,
+        this.scheduler.set(APP_CONFIG.network.drawerReconnectGraceMs, () =>
+          this.safeRun('hostReconnectTimeout', () => {
+            if (
+              player.connected ||
+              player.disconnectGeneration !== disconnectGeneration ||
+              player.roomId !== room.id ||
+              room.hostId !== playerId ||
+              room.members.length <= 1
+            )
+              return
+            const candidate = room.members.find(
+              (member) =>
+                member.playerId !== playerId &&
+                !member.spectating &&
+                !member.leftGame &&
+                this.players.get(member.playerId)?.connected,
+            )
+            if (!candidate) return
+            room.hostId = candidate.playerId
+            this.rotatePrivateJoinCode(room)
+            room.stateVersion += 1
+            this.addSystemNotice(
+              room,
+              serverStrings.notices.hostMigratedTimeout(
+                this.players.get(candidate.playerId)?.profile.nickname ??
+                  serverStrings.notices.hostFallback,
+              ),
+            )
+            // 持久化：断线超时迁移房主与主动移交同一套落库口径。
+            this.persistRoom(room)
+            this.emitRoom(room.id)
+          }),
         )
       }
       this.emitRoom(room.id)
@@ -1398,9 +1527,8 @@ export class GameService {
     }
 
     // 身份级宽限与房间席位分离：非作画阶段虽已离房，仍可凭令牌恢复同一 UUID 后进入大厅。
-    player.disconnectTimer = setTimeout(
-      () => this.safeRun('expireDisconnectedPlayer', () => this.expireDisconnectedPlayer(playerId)),
-      APP_CONFIG.network.reconnectGraceMs,
+    player.disconnectTimer = this.scheduler.set(APP_CONFIG.network.reconnectGraceMs, () =>
+      this.safeRun('expireDisconnectedPlayer', () => this.expireDisconnectedPlayer(playerId)),
     )
     this.broadcastPresence()
   }
@@ -1420,7 +1548,10 @@ export class GameService {
       // 会中断全员广播，并把异常向上抛进计时器回调而终结进程（内存态全部丢失）。
       try {
         const player = this.players.get(member.playerId)
-        player?.socket?.emit(EVENTS.roomSnapshot, this.snapshotter.snapshot(room, member.playerId))
+        player?.socket?.emit(
+          EVENTS.roomSnapshot,
+          createServerPush(this.snapshotter.snapshot(room, member.playerId)),
+        )
       } catch (error) {
         this.logUnexpectedError(error, { roomId, memberId: member.playerId, scope: 'emitRoom' })
       }
@@ -1447,8 +1578,8 @@ export class GameService {
   /** @internal 内部协作接口（RoundMachine / 模块间调用） */
   public broadcastPresence(): void {
     const snapshot = this.presenceSnapshot()
-    this.io.emit(EVENTS.presenceSnapshot, snapshot)
-    this.io.emit(EVENTS.roomListChanged, snapshot.rooms)
+    this.io.emit(EVENTS.presenceSnapshot, createServerPush(snapshot))
+    this.io.emit(EVENTS.roomListChanged, createServerPush(snapshot.rooms))
   }
 
   /** 大厅在线状态快照：只包含可发现玩家与全部未关闭房间。 */
@@ -1494,11 +1625,11 @@ export class GameService {
     // 无论接受/拒绝/过期，都清除定时器并通知邀请双方
     const invite = this.invites.get(id)
     if (!invite) return
-    clearTimeout(invite.timer)
+    this.scheduler.clear(invite.timer)
     this.invites.delete(id)
     const payload = { id, status }
-    this.emitToPlayer(invite.fromPlayerId, EVENTS.inviteResolved, payload)
-    this.emitToPlayer(invite.toPlayerId, EVENTS.inviteResolved, payload)
+    this.emitToPlayer(invite.fromPlayerId, EVENTS.inviteResolved, createServerPush(payload))
+    this.emitToPlayer(invite.toPlayerId, EVENTS.inviteResolved, createServerPush(payload))
   }
 
   private expireDisconnectedPlayer(playerId: string): void {
@@ -1516,9 +1647,9 @@ export class GameService {
   private closeRoom(room: RoomSecret, reason: string): void {
     // 清理全部计时器，广播关闭原因后从内存移除房间
     if (room.game) this.clearHintTimers(room.game)
-    if (room.game?.timer) clearTimeout(room.game.timer)
+    this.scheduler.clear(room.game?.timer)
     room.phase = 'closed'
-    this.io.to(room.id).emit(EVENTS.roomClosed, { reason })
+    this.io.to(room.id).emit(EVENTS.roomClosed, createServerPush({ reason }))
     // 房间即将从内存删除：必须同时解绑幸存成员（含观战者）的 roomId 与 Socket 房间，
     // 否则 requireAvailablePlayer 会永久抛 ALREADY_IN_ROOM，玩家无法再建房/加入/被邀请。
     for (const member of room.members) {
@@ -1570,7 +1701,7 @@ export class GameService {
   /** @internal 内部协作接口（RoundMachine / 模块间调用） */
   public addMessage(room: RoomSecret, input: Omit<ChatMessage, 'id' | 'createdAt'>): void {
     const game = this.requireGame(room)
-    game.messages.push({ ...input, id: randomUUID(), createdAt: Date.now() })
+    game.messages.push({ ...input, id: this.random.uuid(), createdAt: this.clock.now() })
     // 消息只保留最近两倍展示数量，防止内存无限增长
     game.messages = game.messages.slice(-APP_CONFIG.ui.recentMessageCount * 2)
   }
@@ -1579,13 +1710,13 @@ export class GameService {
   public addSystemNotice(room: RoomSecret, text: string): void {
     // 系统通知同时进入消息历史和作为独立事件推送（即使尚无对局也能收到）
     if (room.game) this.addMessage(room, { type: 'system', text })
-    this.io.to(room.id).emit(EVENTS.systemNotice, { text })
+    this.io.to(room.id).emit(EVENTS.systemNotice, createServerPush({ text }))
   }
 
   /** @internal 内部协作接口（RoundMachine / 模块间调用） */
   public clearHintTimers(game: GameSecret): void {
     // 清理全部逐步提示计时器，防止暂停/切换阶段后旧回调误触发
-    for (const timer of game.hintTimers ?? []) clearTimeout(timer)
+    for (const timer of game.hintTimers ?? []) this.scheduler.clear(timer)
     game.hintTimers = []
   }
 
@@ -1655,17 +1786,18 @@ export class GameService {
 
   /** @internal 内部协作接口 */
   public pickCandidates(room: RoomSecret, game: GameSecret): VocabularyWord[] {
+    const store = this.getRoomVocabularyStore(room)
     // 从本局已选词库中排除本局已展示过的候选词条（整局绝不重复）
     let pool = [...room.selectedWordIds]
       .filter((id) => !game.offeredWordIds.has(id))
-      .map((id) => this.vocabulary.byId.get(id))
+      .map((id) => store.byId.get(id))
       .filter((word): word is VocabularyWord => word !== undefined)
 
     // 词池不足且配置允许时重置已展示记录，保证每回合候选充足
     if (pool.length < room.settings.optionCount && APP_CONFIG.vocabulary.resetWhenExhausted) {
       game.offeredWordIds.clear()
       pool = [...room.selectedWordIds]
-        .map((id) => this.vocabulary.byId.get(id))
+        .map((id) => store.byId.get(id))
         .filter((word): word is VocabularyWord => word !== undefined)
     }
 
@@ -1699,7 +1831,7 @@ export class GameService {
     const alphabet = APP_CONFIG.room.privateCodeAlphabet
     for (let attempt = 0; attempt < 64; attempt += 1) {
       const code = Array.from({ length: APP_CONFIG.room.privateCodeLength }, () =>
-        alphabet.charAt(randomInt(alphabet.length)),
+        alphabet.charAt(this.random.integer(alphabet.length)),
       ).join('')
       if (!this.roomsByPrivateCode.has(code)) return code
     }
@@ -1728,7 +1860,7 @@ export class GameService {
       spectating,
       ready: false,
       score: 0,
-      joinedAt: Date.now(),
+      joinedAt: this.clock.now(),
       stats: { correctCount: 0, totalGuessMs: 0, drawingCorrectCount: 0 },
     }
   }
@@ -1736,10 +1868,11 @@ export class GameService {
   private cleanNickname(value: string): string {
     // 剔除控制字符（换行、零宽字符等），防止昵称破坏聊天排版
     const clean = value.replace(/[\p{Cc}\p{Cf}]/gu, '').trim()
-    // 按可见字符（Unicode 码点）计数校验长度
+    // 按用户可见字符（Unicode grapheme cluster）计数校验长度
+    const length = countGraphemes(clean)
     if (
-      Array.from(clean).length < APP_CONFIG.player.nicknameMinLength ||
-      Array.from(clean).length > APP_CONFIG.player.nicknameMaxLength
+      length < APP_CONFIG.player.nicknameMinLength ||
+      length > APP_CONFIG.player.nicknameMaxLength
     ) {
       throw new GameError(
         'INVALID_NICKNAME',
@@ -1749,7 +1882,7 @@ export class GameService {
         ),
       )
     }
-    return clean
+    return truncateGraphemes(clean, APP_CONFIG.player.nicknameMaxLength)
   }
 
   private makeUniqueNickname(value: string, exceptId?: string): string {
@@ -1762,9 +1895,10 @@ export class GameService {
     if (!occupied.has(normalizeAnswer(value))) return value
     // 重名时追加数字后缀（2～99），且保证裁剪后不超出昵称长度上限
     for (let suffix = 2; suffix <= 99; suffix += 1) {
-      const base = Array.from(value)
-        .slice(0, APP_CONFIG.player.nicknameMaxLength - String(suffix).length)
-        .join('')
+      const base = truncateGraphemes(
+        value,
+        APP_CONFIG.player.nicknameMaxLength - String(suffix).length,
+      )
       const candidate = `${base}${suffix}`
       if (!occupied.has(normalizeAnswer(candidate))) return candidate
     }
@@ -1772,28 +1906,7 @@ export class GameService {
   }
 
   private validateSettings(settings: RoomSettings): void {
-    // 数值区间与协议层一样读配置单一来源（config/game.ts），不要在服务层写第二套硬编码边界。
-    const { hintStartRatioRange, score } = APP_CONFIG.game
-    const valid =
-      Number.isInteger(settings.maxPlayers) &&
-      settings.maxPlayers >= APP_CONFIG.player.minPlayers &&
-      settings.maxPlayers <= APP_CONFIG.player.maxPlayers &&
-      settings.roundsPerPlayer >= APP_CONFIG.game.roundsPerPlayer.min &&
-      settings.roundsPerPlayer <= APP_CONFIG.game.roundsPerPlayer.max &&
-      settings.drawSeconds >= APP_CONFIG.game.drawSeconds.min &&
-      settings.drawSeconds <= APP_CONFIG.game.drawSeconds.max &&
-      settings.chooseSeconds >= APP_CONFIG.game.chooseSeconds.min &&
-      settings.chooseSeconds <= APP_CONFIG.game.chooseSeconds.max &&
-      settings.optionCount >= APP_CONFIG.game.optionCount.min &&
-      settings.optionCount <= APP_CONFIG.game.optionCount.max &&
-      settings.hintStartRatio >= hintStartRatioRange.min &&
-      settings.hintStartRatio <= hintStartRatioRange.max &&
-      Number.isInteger(settings.guessBaseScore) &&
-      settings.guessBaseScore >= score.guessBaseRange.min &&
-      settings.guessBaseScore <= score.guessBaseRange.max &&
-      typeof settings.allowWordReroll === 'boolean' &&
-      (settings.scoreMode === 'standard' || settings.scoreMode === 'flat')
-    if (!valid) throw new GameError('INVALID_SETTINGS', serverStrings.errors.INVALID_SETTINGS)
+    validateRoomSettings(settings)
   }
 
   /** @internal 内部协作接口（RoundMachine / 模块间调用） */
@@ -1885,7 +1998,7 @@ export class GameService {
   public shuffle<T>(values: T[]): T[] {
     const result = [...values]
     for (let index = result.length - 1; index > 0; index -= 1) {
-      const target = Math.floor(Math.random() * (index + 1))
+      const target = this.random.integer(index + 1)
       ;[result[index], result[target]] = [result[target] as T, result[index] as T]
     }
     return result

@@ -80,6 +80,11 @@ export const useRoomStore = defineStore('room', () => {
     await request(EVENTS.roomKick, { targetId })
   }
 
+  async function transferHost(targetId: string): Promise<boolean> {
+    const result = await request(EVENTS.roomTransferHost, { targetId })
+    return result.ok
+  }
+
   return {
     room,
     me,
@@ -93,5 +98,6 @@ export const useRoomStore = defineStore('room', () => {
     setReady,
     updateRoomSettings,
     kick,
+    transferHost,
   }
 })

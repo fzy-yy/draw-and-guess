@@ -1,7 +1,7 @@
 # AGENTS.md
 
 > 本文件是所有后续开发（人工或 AI）的**第一入口**。下列内容以**当前代码为准**；原始需求文档已删除，若与本文件或代码冲突，一律以代码与本文件为准。
-> 仓库内其它根级文档：`README.md`（项目总览/十分钟启动）、`vocabulary/`（SQLite 词库目录）。`开发建议.md`、`样式重构与代码审查报告.md`、根级 `docs/` 目录均已删除，不再维护；历史要点已并入本文件/README。**注意：`README.md` 部分章节（依赖清单、持久化/日志说明、已被删除的文档引用）已过时，与代码不一致时以本文件与代码为准。**
+> 仓库内其它根级文档：`README.md`（项目总览/十分钟启动）、`vocabulary/`（SQLite 词库目录）。**注意：`README.md` 部分章节（依赖清单、持久化/日志说明、已被删除的文档引用）已过时，与代码不一致时以本文件与代码为准。**
 
 ---
 
@@ -15,7 +15,7 @@
 - **日志文件化**：服务端日志**不输出到控制台**（规避 Windows 控制台 GBK 解码 UTF-8 中文乱码），默认写入 `apps/server/log/app-<秒级时间戳>.log`（每次启动新建一个、最多保留 `LOG_MAX_FILES` 条）；可通过 `.env` 的 `LOG_ENABLED` 完全关闭（零内存开销）。
 - **画板**：高 DPI 实时画布，支持自由画笔、橡皮擦（`destination-out`）与封闭区域洪泛填充；画笔/橡皮擦共用连续粗细，可滚轮调整；支持预设或任意 HEX 颜色，工具可自定义单键切换。**渲染模型为「归一化点列 + 直线段描边」增量同步**（不引入轮廓填充型平滑库，曾因此导致白边/闪烁/空心缺陷）。
 - **头像**：仅允许从 40 个内置 SVG 白名单编号中选择，协议只传编号；禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像。
-- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '7'`（见 `config/app.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。
+- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '8'`（见 `config/app.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。
 
 ### 技术栈与运行环境
 
@@ -32,7 +32,7 @@
 
 ```text
 draw_and_guess/
-├── package.json                  # 根工程 scripts（dev/build/start/typecheck/lint/format）；无 test 脚本
+├── package.json                  # 根工程 scripts（dev/build/start/typecheck/lint/format + test:e2e/test:unit）
 ├── pnpm-workspace.yaml           # pnpm workspace：apps/* 与 packages/*（勿手改）
 ├── pnpm-lock.yaml                # 依赖锁文件（勿手改）
 ├── tsconfig.json                 # 根 TS 严格配置 + 路径别名（@draw-guess/shared / @draw-guess/config / @draw-guess/strings / @/）
@@ -42,8 +42,7 @@ draw_and_guess/
 ├── .env.example                  # 部署环境变量示例：HOST/PORT/LOG_LEVEL/LOG_ENABLED/LOG_MAX_FILES（复制为 .env 使用）
 ├── .env                          # 本地部署覆盖（已被 .gitignore 忽略，不入库）
 ├── .gitignore                    # 忽略 node_modules/dist/日志/数据库/.env/.pi/.playwright-mcp 等
-├── config.ts                     # ★唯一业务配置中心（聚合 export）：APP_CONFIG / PUBLIC_CONFIG / DeploymentConfig / getDeploymentConfig
-├── config/                       # 按领域拆分的配置（由 config.ts 聚合；strings.ts 除外）
+├── config/                       # 按领域拆分的配置（由 config/index.ts 聚合）
 │   ├── app.ts                    # 应用标识/名称版本/协议版本/storageKey/网络与连接参数（限频、宽限、端口、恢复令牌窗口）
 │   ├── player.ts                 # 玩家资料：昵称长度、默认昵称、40 个内置 SVG 头像 ID 白名单
 │   ├── room.ts                   # 房间默认名、公开性、私密短码长度、允许邀请/暂停、加入策略 joinPolicy
@@ -52,8 +51,19 @@ draw_and_guess/
 │   ├── vocabulary.ts             # 词库来源/路径/校验预算/去重/Provider 标识（扩展点）
 │   ├── audio.ts                  # 音效合成 cue（频率序列与时长）与增益
 │   ├── settings.ts               # 本地设置（音量/动画/快捷键/发现偏好/自动聚焦）、UI 参数、预设安全短语
-│   └── strings.ts                # ★唯一 UI 文案表：客户端 strings / 服务端 serverStrings；含模板函数，不纳入 PUBLIC_CONFIG
+├── string/                       # ★唯一 UI 文案表：客户端 strings / 服务端 serverStrings
 ├── vocabulary/                   # ★唯一权威词库目录：SQLite 数据库（metadata/words 表）
+├── vitest.config.ts               # 单测配置：test/unit/**/*.spec.ts、node 环境、复刻 @draw-guess/* 别名
+├── test/                          # 自动化测试目录（隔离环境）
+│   ├── unit/                      # Vitest 单元/规则测试（test:unit）
+│   │   ├── game.deadline.spec.ts  # 假时钟下 submitGuess 截止校验示例
+│   │   └── helpers/               # fake-clock.ts / in-memory-repositories.ts / mini-vocabulary.ts
+│   └── e2e/                       # Playwright 端到端（test:e2e）
+│       ├── playwright.config.ts   # 独立端口(5199)、reuseExistingServer=false、指向 launcher
+│       ├── launcher.mts           # 隔离 webServer：临时目录 + fixture 词库 + 前端构建 + 清理/清扫
+│       ├── pages/                 # 页面封装（profile/lobby/room/game）
+│       ├── fixtures/test-base.ts  # 测试基类（建玩家/连接）
+│       └── specs/                 # 01-profile-session / 02-lobby-room-seats / 03-game-drawing / 04-game-guessing / 05-game-lifecycle
 │   └── draw_guess_words.db
 ├── README.md                     # 项目总览、十分钟启动（注意：部分章节已过时，见顶部声明）
 ├── AGENTS.md                     # 本文件：导读、硬性限制、启动方法、编码/测试/提交流程
@@ -63,7 +73,7 @@ draw_and_guess/
 │       ├── index.ts               # 聚合出口：re-export 下列四模块（引用路径保持 @draw-guess/shared）
 │       ├── events.ts              # 全部 Socket.IO 事件名常量 EVENTS（前后端唯一事件名来源）
 │       ├── types.ts               # 领域类型：房间阶段/成员/规则/快照/绘图命令/邀请等 DTO（含 spectating）
-│       ├── schemas.ts             # Zod 运行时校验：注册/资料/建房/规则/绘图等请求载荷
+│       ├── schemas.ts             # Zod 运行时校验：请求载荷 + 全部版本化服务端推送信封
 │       └── pure.ts                # 纯函数：答案规范化、遮罩生成、计分、状态机转换表
 │
 ├── apps/server/                   # 服务端（Express 5 + Socket.IO + Zod + SQLite，权威领域）
@@ -73,7 +83,7 @@ draw_and_guess/
 │   ├── log/                       # 运行期生成：日志文件（app-<秒级时间戳>.log，已忽略入库，仅保留 .gitkeep）
 │   └── src/
 │       ├── index.ts               # 生产入口：加载 .env（loadEnvFile）、配置校验、日志初始化（LOG_ENABLED/LOG_MAX_FILES）、局域网 IPv4 探测、监听、优雅关闭
-│       ├── app.ts                 # HTTP/Socket.IO 装配：端口、compression 静态托管 dist、SPA 回退、连接入口（含建库迁移）
+│       ├── app.ts                 # HTTP/Socket.IO 装配：端口、compression 静态托管 dist、SPA 回退、连接入口（含建库迁移）；createApplication 可注入 dbFile/clientDist/vocabulary/logger
 │       ├── game-service.ts        # 领域服务编排：会话/成员/房间/邀请/猜词/绘图/快照入口（权威裁决）+ 持久化接入
 │       ├── round-machine.ts       # 回合流转状态机：开局/选词/作画/结算/暂停/弃权/逐步提示/战报落盘
 │       ├── scoring.ts             # 计分纯函数：猜中明细、画家得分（可独立单测）
@@ -81,8 +91,9 @@ draw_and_guess/
 │       ├── rate-limit.ts          # 猜词/绘图滑动窗口限频
 │       ├── errors.ts              # GameError / success / failure / RuntimeLogger / SILENT_LOGGER（避免循环依赖）
 │       ├── models.ts              # 服务端内存秘密模型（PlayerSecret/RoomSecret/GameSecret/InviteSecret…）
-│       ├── vocabulary/            # 词库 Provider 架构：contract（接口）/normalize（共享纯函数）/sqlite.provider（SQLite 实现）/index（分发入口）；新增其它来源只需实现 VocabularyProvider 并在 config 切换
-│       ├── db/                    # SQLite 持久化：连接（WAL + 事务辅助）/ 版本化迁移（db/index.ts、db/migrate.ts）
+│       ├── runtime.ts             # 统一 Clock/Scheduler/RandomSource（生产实现与测试注入边界）
+│       ├── vocabulary/            # 词库 Provider 架构：contract（接口）/normalize（共享纯函数）/sqlite.provider（SQLite 实现）/index（分发入口，loadVocabulary 可传目录）；test-fixture.ts 生成隔离测试词库
+│       ├── db/                    # SQLite 持久化：连接（WAL + 事务辅助，setDbFile 供测试注入临时库）/ 版本化迁移（db/index.ts、db/migrate.ts）
 │       ├── repositories/          # 仓储接口 + SQLite 实现（player/room/archive，领域层只依赖接口）
 │       ├── protocol/binder.ts     # 统一请求绑定：schema 校验、会话限频、幂等缓存、统一 ack
 │       └── handlers/              # 按领域分组的事件注册（全部走 binder）
@@ -95,11 +106,15 @@ draw_and_guess/
 ├── apps/client/                   # 客户端（Vue 3 + Pinia + Vite + Tailwind4 + Socket.IO）
 │   ├── package.json               # 依赖见「技术栈与运行环境」
 │   ├── tsconfig.json              # 继承根配置 + DOM/vite 类型
-│   ├── vite.config.ts             # Vite 配置：@draw-guess/config 虚拟公开模块裁剪、/@、@draw-guess/strings 别名、开发代理（/api 与 /socket.io → 5174）
+│   ├── vite.config.ts             # Vite 配置：@draw-guess/config 虚拟公开模块裁剪、/@、@draw-guess/strings 别名、开发代理（/api 与 /socket.io → 5174）；build.outDir 可经 CLIENT_OUT_DIR 覆盖（测试用）
 │   ├── index.html                 # 入口 HTML（#app 挂载点，标题/描述由 vite.config 从 strings.ts 注入）
 │   └── src/
 │       ├── main.ts                # 客户端入口：创建 App 并挂载 #app；仅引入 ./style/index.css（Toast 为自建，无需第三方样式）
 │       ├── App.vue                # 根舞台：页面互斥渲染（对局>房间>设置>大厅>资料）、自建 `<AppToaster/>`、邀请横幅、竖屏提示、断线恢复阻断框
+│       ├── canvas/                # 画布纯逻辑：直线段渲染、固定 backing size、DPR 无关洪泛填充
+│       │   ├── rendering.ts
+│       │   ├── viewport.ts
+│       │   └── flood-fill.ts
 │       ├── style/                 # 全局样式模块目录（由 index.css 聚合导出）
 │       │   ├── index.css          # ★主入口：依次导入 tailwindcss 与各分模块样式
 │       │   ├── tokens.css         # 设计令牌：@theme（字体、10 语义色、黑色变量、阴影令牌）
@@ -119,7 +134,10 @@ draw_and_guess/
 │       │   ├── gameplay.ts        # 实时对局业务 Store（回合状态、词语选项、实时猜词流）
 │       │   ├── vocabulary.ts      # 词库选择与配置 Store
 │       │   ├── socket.ts          # Socket 单例 + 推送事件桥接（HMR dispose）
-│       │   └── request.ts         # 请求封装：timeout+ack+错误翻译+quiet 静默降级
+│       │   ├── request.ts         # 请求封装：timeout+同 requestId 自动重试+ack+错误翻译
+│       │   ├── push-protocol.ts   # 主动推送 Zod 解码与脱敏诊断记录
+│       │   ├── snapshot-gate.ts   # 房间/对局/回合/版本/画布修订统一门禁
+│       │   └── vocabulary-request-context.ts # 词库异步请求上下文与失效控制
 │       ├── composables/
 │       │   ├── useAudioFeedback.ts # Web Audio 合成提示音（自动播放入口解锁、音量实时读取）
 │       │   ├── useGameHud.ts      # 对局 HUD 计算（useTimestamp 驱动）：剩余时间/进度/猜词权限/阶段标签/排行
@@ -198,7 +216,7 @@ pnpm format        # Prettier 写入
 pnpm format:check  # 仅检查格式
 ```
 
-> 各子包也带独立脚本：`apps/client` 含 `dev/build/typecheck`；`apps/server` 含 `dev/start/typecheck`；`packages/shared` 含 `typecheck`。当前**没有** `test` 脚本（见「测试规范」）。
+> 各子包也带独立脚本：`apps/client` 含 `dev/build/typecheck`；`apps/server` 含 `dev/start/typecheck`；`packages/shared` 含 `typecheck`。根工程提供 `test:unit` 与 `test:e2e`。
 
 ---
 
@@ -208,11 +226,14 @@ pnpm format:check  # 仅检查格式
 - **服务端权威裁决**：答案、计分、阶段、计时、绘画资格只能由服务端判定；客户端永远不能上传「裁决结果」。客户端只发带 `requestId` 的幂等请求经统一 `ack` 返回。
 - **角色裁剪快照**（`snapshot.ts`）：所有公开数据结构按观看者角色生成；服务端秘密字段（答案、恢复令牌、候选词、内部计时器、请求缓存）绝不进快照/事件。私密房短码仅裁剪给当前房主；大厅玩家资料不回显私密房 UUID。
 - **统一请求绑定**（`protocol/binder.ts`）：schema 校验、会话限频、幂等缓存、统一 `ack`。非法阶段/角色/序号/频率由 `binder.ts` 与领域服务拒绝。
+- **幂等传输重试**：普通客户端请求发生超时/断线等传输故障时，以同一 `requestId` 自动重试；服务端只缓存成功 ack，并让并发重复请求共享同一个执行 Promise。高频 `quiet` 绘图请求默认不重试。
+- **版本化主动推送**：服务端主动事件一律使用 `createServerPush()` 包装；客户端先经 `SERVER_PUSH_SCHEMAS` 完整 Zod 解码，再通过 `snapshot-gate.ts` 校验房间、对局、回合、`stateVersion` 与 `drawingRevision`。非法推送只记录脱敏诊断，并以冷却窗口触发一次全量重同步。
+- **统一运行时依赖**：`GameService`、`RoundMachine`、`rate-limit.ts`、`protocol/binder.ts` 的领域时间、定时器与随机数统一来自 `runtime.ts` 的 `Clock` / `Scheduler` / `RandomSource`；这些领域文件禁止直接调用系统时间、随机数或定时器，ESLint 会阻止回退。
 - **回合状态机**：`round-machine.ts` + `packages/shared/src/pure.ts` 的 `LEGAL_PHASES` 白名单；非法转换由服务端拒绝（`INVALID_TRANSITION`）。
 - **计分统一口径**：`scoring.ts` 与 `pure.ts` 的 `calculateGuessScore` 使用同一规则（基础 + 速度 + 顺序；两人局禁用顺序奖）。
 - **画布增量绘制**（`GameCanvas.vue`）：坐标一律**归一化 0～1**；绘图序号单调递增，服务端拒绝旧包；橡皮擦/填充只传「点击位置 + 颜色」，不传像素，客户端按同一历史重放；`lastSequence` 用于重连续接。**渲染为直线段描边（`stroke()` + `round` 线帽），增量只补画新增段（fromIndex）**。
 - **持久化分层**：`db/` 管连接与迁移（`runMigrations` 幂等）；`repositories/` 提供 `PlayerRepository`/`RoomRepository`/`ArchiveRepository` 接口 + SQLite 实现，领域层（`game-service.ts`）只依赖接口。游戏结束时经 `finishGame → persistGameResult` 落盘战报；重启时 `recoverOnStartup` 标记玩家断线（身份可宽限恢复）并作废进行中房间。
-- **配置单一来源**：业务规则只写在 `config/` + `config.ts` 聚合；UI 文案只写在 `config/strings.ts`；词库只写在 `vocabulary/`（SQLite，经 Provider 加载）；部署覆盖只写在 `.env`（HOST/PORT/LOG_LEVEL/LOG_ENABLED/LOG_MAX_FILES）。
+- **配置单一来源**：业务规则只写在 `config/` + `config/index.ts` 聚合；UI 文案只写在 `string/`；词库只写在 `vocabulary/`（SQLite，经 Provider 加载）；部署覆盖只写在 `.env`（HOST/PORT/LOG_LEVEL/LOG_ENABLED/LOG_MAX_FILES）。
 
 ---
 
@@ -224,7 +245,7 @@ pnpm format:check  # 仅检查格式
 - **注释**：中文注释，解释「为什么」而非复述代码；关键算法 / 边界处理要求注释（参考 `GameCanvas.vue`、`pure.ts`、`snapshot.ts`、`game-service.ts` 的注释质量）。
 - **错误处理**：服务端用 `GameError` + `errors.ts` 统一错误码与中文文案；客户端经 `request.ts` 统一超时 + ack + 错误翻译 + `quiet` 静默降级。
 - **日志**：由 `.env` 的 `LOG_ENABLED` 控制（默认 true）：关闭时完全不创建日志记录器、不写日志文件（零内存开销）；开启时服务端用 `pino`（默认结构化 JSON，无 ANSI 色码），**每次启动写一个新的日志文件**（`apps/server/log/app-YYYY-MM-DD-HH-mm-ss.log`，精确到秒），目录最多保留最近 `LOG_MAX_FILES` 条（默认 10，超出删除最老）；控制台只保留启动横幅，不输出业务日志；级别经 `LOG_LEVEL` 控制。
-- **UI 文案**：**严禁在组件/业务代码里硬编码展示字符**；一律从 `config/strings.ts` 的 `strings`（客户端）或 `serverStrings`（服务端）导入。
+- **UI 文案**：**严禁在组件/业务代码里硬编码展示字符**；一律从 `string/` 的 `strings`（客户端）或 `serverStrings`（服务端）导入。
 - **样式**：组件/页面视觉一律用**行内 Tailwind 类**写在 Vue 模板；重复长串收敛到共享组件（`AppButton`/`BaseDialog`/`ConfirmDialog`/`IconButton`/`ToolButton`/`OverlayCard`/`RuleRow`/`RoundIconButton`）或 `style/` 共享模块类。不要写共享层之外的原生 CSS 类选择器。语义色用 `@theme` 令牌；容器单位 `cqh/cqw` 用任意值（内部空格用 `_`，如 `shadow-[0_1.2cqh_5cqh_#0009]`）。
 - **配色（≤10 色）**：全应用自定义颜色**只取自 `style/tokens.css` `@theme` 里固定的 10 个语义变量**（`navy`/`muted`/`line`/`paper`/`blue`/`sky`/`yellow`/`green`/`red`/`purple`），`config/room.ts` 的 `seatColors` 取其中 6 个；`#fff`/`#000`（及黑色变量 `--color-black`）与透明度衍生（如 `bg-blue/10`）不计入调色板。**禁止**在组件/模板中硬编码任意 HEX（`bg-[#...]`/`text-[#...]`）或 Tailwind 默认色阶（`slate-*` 等）。`config/drawing.ts` 的 `colors` 是**画板工具色**（画家可选画笔色），属功能性工具配置，非 UI 主题色，不纳入 10 色限制。
 - **动画一致性**：按钮/卡片交互动效统一为 160ms（复用 `.ui-feedback` / `.hover-tint` 共享类，或依赖 `@layer base` 中 `.game-stage button` 的全局过渡）；同类控件应复用同一动画，避免各自定制造成手感不一。
@@ -278,18 +299,21 @@ pnpm format:check  # 仅检查格式
 
 ## 测试规范
 
-> **不写任何测试文件**：经检索，仓库内**没有** `vitest`/`jest` 配置、没有 `*.test.ts`/`*.spec.ts` 文件，`package.json` 及子包也**没有** `test` 脚本。因此**当前不存在可运行的自动化测试**。
+> **测试框架已登记**：分两层——① 单元/规则测试用 **Vitest（v5，根 devDependency）**，入口 `test/unit/**/*.spec.ts`，运行 `pnpm test:unit`；② 端到端用 **@playwright/test（已锁定）**，入口 `test/e2e/`，运行 `pnpm test:e2e`。二者均为**隔离环境**：单测默认使用内存仓储 + 假运行时；SQLite 用例只写系统临时目录；E2E 每次生成唯一临时目录（临时 game.db + 词库 fixture + 前端构建产物），以独立端口监听，`reuseExistingServer=false`，**不连接/不停真实 5174 服务、不改真实数据库与词库**。
 
+- **单元测试（`pnpm test:unit`，Vitest）**：`vitest.config.ts` 通过 `resolve.alias` 复刻 `@draw-guess/*` 与 `@/` 路径。内存仓储与完整假运行时见 `test/unit/helpers/`；`fake-clock.ts` 同时控制 Clock/Scheduler/RandomSource，可同步推进完整对局。`persistence.spec.ts` 使用系统临时 SQLite 并在每例后关闭、删除；`documentation.consistency.spec.ts` 校验 AGENTS 关键路径与根质量命令存在性。单元测试已纳入 `pnpm typecheck`。
+- **端到端测试（`pnpm test:e2e`，Playwright）**：launcher 承担 webServer（构建前端 → 生成 fixture → 建库 → 监听）。默认词库 fixture 含 5,000 词，用于虚拟表格压力验收；兼容性项目覆盖 Chromium DPR 1/1.5/2、Firefox DPR 2、触屏输入和后台标签页恢复。页面封装在 `test/e2e/pages/`，fixtures 在 `test/e2e/fixtures/test-base.ts`，spec 在 `test/e2e/specs/`。
 - 可作为将来单测目标的纯函数（注释已注明「可独立单测」）：`packages/shared/src/pure.ts`、`apps/server/src/scoring.ts`、`apps/server/src/snapshot.ts`；仓储接口（`repositories/`）可注入内存实现测试。
-- **修改代码后的最低验证要求**（目前唯一的「测试」手段）：依次运行
+- **修改代码后的最低验证要求**：依次运行
   ```bash
   pnpm format
   pnpm lint         # --max-warnings=0，无任何警告
   pnpm typecheck
   pnpm build
   ```
-- 涉及关键逻辑（状态机、计分、快照裁剪、画布同步、限频、私有房间访问控制、持久化落盘）时，建议额外做人工/浏览器端到端验证（可用 Playwright MCP 等驱动真实浏览器，但当前仓库未锁定其依赖，属 `待确认`）。
-- **若未来引入测试框架**：请在本文件登记测试框架、测试文件位置与运行命令，并保持纯函数模块的可测试性。
+  涉及规则/状态机/绘图/持久化等关键逻辑时，额外运行 `pnpm test:unit` 与 `pnpm test:e2e`（隔离环境，不污染真实数据）。
+- 涉及关键逻辑（状态机、计分、快照裁剪、画布同步、限频、私有房间访问控制、持久化落盘）时，建议额外做人工/浏览器端到端验证（可用 Playwright MCP 等驱动真实浏览器）。
+- **Windows 注意**：Playwright 结束 webServer 时用 `taskkill /T /F` 强杀进程树，launcher 收不到 SIGTERM，因此「先前运行」的临时目录由**下一次运行启动时的清扫**回收（`launcher.mts` 会清除超过 5 分钟的旧 `draw-guess-e2e-*` 目录）。
 
 ---
 
@@ -306,8 +330,8 @@ pnpm format:check  # 仅检查格式
 
 - **新增功能**：
   1. 新增请求事件：`packages/shared/src/events.ts`（事件名）→ `schemas.ts`（校验）→ `game-service.ts` 或对应 handler → `handlers/*.ts` 注册 → `stores/game.ts` 客户端方法。
-  2. 业务规则参数先加入 `config/` 对应文件 + `config.ts` 聚合。
-  3. UI 文案加入 `config/strings.ts`。
+  2. 业务规则参数先加入 `config/` 对应文件，由 `config/index.ts` 聚合。
+  3. UI 文案加入 `string/`。
   4. 完成后跑「最低验证命令」。
 - **修复缺陷**：先复现、明确根因（多在状态机 / 快照裁剪 / 同步兜底 / 画布渲染），改最小范围，再验证相关模块与相邻功能。
 - **调整接口 / DTO**：同步 `packages/shared` 的 `types.ts` + `schemas.ts`，并检查 `snapshot.ts` 是否需按新字段裁剪；协议版本不兼容时 `protocolVersion +1`。
@@ -342,8 +366,8 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
    - **猜词提示使用词条分类**：结构化提示揭示的是 `category` 字段（单条），而非旧版 `hint` 列表；词库已不再包含 `type/hint/tags/lang` 字段。
    - 猜词判定固定用 `normalizeAnswer`（NFKC + 去空白 + 折叠空白 + 忽略拉丁大小写），不要在别处另写一套比较。
 4. **配置治理**
-   - 业务规则**只允许**写在 `config/` 目录 + `config.ts` 聚合；环境变量仅覆盖 `HOST / PORT / LOG_LEVEL / LOG_ENABLED / LOG_MAX_FILES`，禁止环境变量覆盖游戏规则。
-   - UI 文案**只允许**写在 `config/strings.ts`，组件与业务代码严禁硬编码展示字符。
+   - 业务规则**只允许**写在 `config/` 目录 + `config/index.ts` 聚合；环境变量仅覆盖 `HOST / PORT / LOG_LEVEL / LOG_ENABLED / LOG_MAX_FILES`，禁止环境变量覆盖游戏规则。
+   - UI 文案**只允许**写在 `string/`，组件与业务代码严禁硬编码展示字符。
    - 不要把配置明文写死进业务代码（应用名、版本、协议版本等集中在 `config/app.ts`）。
 5. **联机与部署**
    - 服务监听默认 `0.0.0.0`；前端构建产物托管与 Socket.IO 必须在**同一 Node 服务**（端口分离仅限开发代理）。
@@ -364,7 +388,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 
 ## 配置、安全与敏感信息
 
-- **环境变量**：仅 `.env.example` 中的 `HOST / PORT / LOG_LEVEL / LOG_ENABLED / LOG_MAX_FILES` 可覆盖部署参数；游戏规则一律改 `config.ts`。`.env` 已被 `.gitignore` 忽略，不入库。
+- **环境变量**：仅 `.env.example` 中的 `HOST / PORT / LOG_LEVEL / LOG_ENABLED / LOG_MAX_FILES` 可覆盖部署参数；游戏规则一律改 `config/`。`.env` 已被 `.gitignore` 忽略，不入库。
 - **密钥 / 凭据**：仓库中**不包含**任何真实密钥、Token、密码或个人信息。临时身份恢复令牌由服务端内存生成、仅当前进程有效、只存于内存与客户端 `localStorage`（同时有选择地落盘到 `players.token` 以支持跨重启宽限恢复；均非公开快照字段）。
 - **本地存储**：浏览器仅保存昵称、内置头像编号、本地设置与短期恢复令牌（见 `config/app.ts` 的 `storageKey`/`settingsStorageKey`）。
 - **敏感信息纪律**：禁止将真实密钥、Token、密码、私有地址或任何个人信息写入仓库、提交日志或本文件。`.gitignore` 已忽略 `.env`、`*.local`、日志与数据库文件。
@@ -377,34 +401,8 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 - **提交信息**（从 `git log` 可确认的既有规范）：采用 Conventional Commits 格式：
   `type(scope)：subject`，其中 `type` 为 `feat/fix/docs/style/refactor/perf/test/build/ci/chore/revert` 之一，`scope` 为影响模块（可选），`subject` 用**中文**、且不超过 50 字、不以句号结尾。需要补充说明时加空行写 `body` 说明动机与上下文。
   示例（取自近期提交）：`fix(画布)：回退 perfect-freehand 轮廓渲染，彻底修复白边/闪烁/空心`、`feat(server)：日志开关与保留条数改为 .env 配置并使其真正生效`、`feat(server)：引入 SQLite 持久化并重构持久化层`。
-- **分支**：当前默认分支为 `main`（`git branch --show-current` = `main`）。仓库中**未发现** PR / Code Review / 分支命名 / CI/CD 规范（未找到 `.github/`、`.gitlab-ci.yml`、`.circleci/` 等配置），**此部分待确认**。
+- **分支与 CI**：实际工作分支以 `git branch --show-current` 为准，不在文档中写死当前分支。`.github/workflows/quality.yml` 在 push/PR 上执行格式、Lint、类型、单测、构建及 Chromium/Firefox E2E。
 - **协作约定**：遵守「修改完成后必须执行」的命令，保持一次提交聚焦一个改动点，涉及协议/接口变更时同步前后端。
-
----
-
-## 最近改动
-
-> 本节仅基于**可验证信息**：`git log`（已提交历史）与 `git status`/`git diff`（工作区变更），来源见各条目标注。
-
-### 已提交历史（近期，`git log --oneline`，时间倒序）
-
-- `65a2826` feat(server)：日志开关与保留条数改为 .env 配置并使其真正生效（`LOG_ENABLED`/`LOG_MAX_FILES`；启动时 `loadEnvFile` 加载根目录 `.env`）。
-- `45b08f4` feat(server)：日志改为本地文件落盘并移除 pino-pretty（每次启动新建 `log/app-<秒级时间戳>.log`，最多保留 10 个，删除最老）。
-- `976e08b` fix(画布)：回退 perfect-freehand 轮廓渲染，彻底修复白边/闪烁/空心（恢复直线段描边增量渲染并移除该依赖）。
-- `2752c73` docs(agents)：更新持久化引入后的架构约束与依赖清单。
-- `55cfbf1` chore(server)：移除未使用的 clock.ts 时钟注入模块。
-- `7e438b8` fix(客户端)：修复 focus-trap 在无可聚焦节点弹窗中的报错（`BaseDialog` 配置 `fallbackFocus`）。
-- `d6d6fe1` feat(server)：引入 SQLite 持久化并重构持久化层（`db/` + `repositories/`，身份/房间/战报落盘，`recoverOnStartup`）。
-- `f9f3634` feat(客户端与服务端)：引入并替换第三方依赖（`perfect-freehand`/`tailwind-merge`/`vue-sonner`/`@vueuse/integrations`/`focus-trap`/`better-sqlite3`/`compression`；`@vueuse` 替换手写计时/防抖/全屏；日志 `pino-pretty`）。
-- `5d062c3` fix：修复部分 bug。
-
-> 本次较近的连续改动可归纳为四个主题：① 依赖引入与手写逻辑替换；② SQLite 本地持久化与持久化层重构；③ 日志改文件落盘并支持 `.env` 开关/条数配置；④ 画布渲染回退直线段描边并移除 perfect-freehand。
-
-### 工作区未提交变更（来源：`git status`）
-
-当前工作区**干净**（无未提交变更）；运行期生成的 `apps/server/data/game.db` 与 `apps/server/log/*.log` 已被 `.gitignore` 忽略，不参与提交。
-
----
 
 ## AI 代理操作指南
 
@@ -419,7 +417,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 
 | 想改什么                       | 去哪个文件                                                                                                                               |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| 应用名/版本/端口/协议/限频参数 | `config/app.ts`（经 `config.ts` 聚合）                                                                                                   |
+| 应用名/版本/端口/协议/限频参数 | `config/app.ts`（经 `config/index.ts` 聚合）                                                                                             |
 | 对局轮数/时间/分数/提示        | `config/game.ts`                                                                                                                         |
 | 画板颜色/粗细/批次/历史上限    | `config/drawing.ts`                                                                                                                      |
 | 词库内容                       | `vocabulary/draw_guess_words.db`（SQLite；改后重启服务）                                                                                 |
@@ -430,7 +428,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 | 快照裁剪/隐私边界              | `apps/server/src/snapshot.ts`                                                                                                            |
 | SQLite 建表/迁移               | `apps/server/src/db/migrate.ts`（新变更追加新迁移）                                                                                      |
 | 持久化仓储（玩家/房间/战报）   | `apps/server/src/repositories/`                                                                                                          |
-| 日志开关/保留条数              | `.env`（`LOG_ENABLED`/`LOG_MAX_FILES`）→ `config.ts` `getDeploymentConfig` → `apps/server/src/index.ts`                                  |
+| 日志开关/保留条数              | `.env`（`LOG_ENABLED`/`LOG_MAX_FILES`）→ `config/index.ts` `getDeploymentConfig` → `apps/server/src/index.ts`                            |
 | 画布渲染/增量绘制              | `apps/client/src/components/GameCanvas.vue`（直线段描边，勿引入轮廓填充平滑库）                                                          |
 | 全局样式 / Tailwind 令牌       | `apps/client/src/style/index.css`                                                                                                        |
 | 类名合并 cn()                  | `apps/client/src/utils/cn.ts`                                                                                                            |

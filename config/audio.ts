@@ -1,6 +1,6 @@
 /**
  * 领域配置：音效合成。
- * 归入根级 config/ 目录后由 config.ts 聚合，保持“唯一业务配置中心”不变。
+ * 归入根级 config/ 目录后由 config/index.ts 聚合，保持“唯一业务配置中心”不变。
  */
 export const audio = {
   cues: {

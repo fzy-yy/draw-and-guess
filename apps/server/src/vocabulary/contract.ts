@@ -19,6 +19,12 @@ import type { VocabularyWord } from '@draw-guess/shared'
 export interface VocabularyMeta {
   /** 来源实现标识（与 VocabularyProvider.sourceId 一致） */
   sourceId: string
+  /** 词库唯一标识 ID（如 draw_guess_words） */
+  id?: string
+  /** 词库名称（metadata 的 name 行；无则缺省为文件名） */
+  name?: string
+  /** 词库描述（metadata 的 description 行） */
+  description?: string
   /** 词库数据自身的版本号（SQLite metadata 的 version 行；无则缺省） */
   fileVersion?: string
   /** 词库最后更新日期（SQLite metadata 的 updated_at 行；无则缺省） */
@@ -29,6 +35,8 @@ export interface VocabularyMeta {
   defaultTimeLimit?: number
   /** 词条未提供 score_weight 时的缺省计分权重 */
   defaultScoreWeight?: number
+  /** 词库词数（words 表有效词数，服务端预先检查并保存） */
+  wordCount?: number
 }
 
 /** Provider 加载结果：已是校验后、过滤后、可直接进入内存领域层的最终形态。 */

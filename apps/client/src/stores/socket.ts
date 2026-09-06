@@ -13,6 +13,8 @@ import {
   type RoomSnapshot,
   type Stroke,
 } from '@draw-guess/shared'
+import { decodeServerPush } from './push-protocol.ts'
+import type { DrawingIncrementMeta } from './snapshot-gate.ts'
 
 /** 服务端推送事件到 store 的回调集合。 */
 export interface SocketHandlers {
@@ -29,8 +31,22 @@ export interface SocketHandlers {
   onRoomClosed(reason: string): void
   onSystemNotice(text: string): void
   onSystemError(message: string): void
-  onDrawStrokeBatch(roundId: string, stroke: Stroke): void
-  onDrawFillCommit(roundId: string, fill: FillCommand): void
+  onInvalidPush(event: string): void
+  onDrawStrokeBatch(meta: DrawingIncrementMeta, stroke: Stroke): void
+  onDrawFillCommit(meta: DrawingIncrementMeta, fill: FillCommand): void
+}
+
+function decoded<T>(
+  event: Parameters<typeof decodeServerPush>[0],
+  raw: unknown,
+  handlers: SocketHandlers,
+): T | undefined {
+  const result = decodeServerPush(event, raw)
+  if (!result.ok) {
+    handlers.onInvalidPush(event)
+    return undefined
+  }
+  return result.data as T
 }
 
 /** Socket 实例放在模块级，避免 Pinia devtools 序列化传输对象和监听器。 */
@@ -54,25 +70,62 @@ export function attachSocketListeners(handlers: SocketHandlers): () => void {
   socket.on('disconnect', (reason) => handlers.onDisconnect(reason))
   socket.io.on('reconnect_attempt', () => handlers.onReconnectAttempt())
   socket.io.on('error', () => handlers.onIoError())
-  socket.on(EVENTS.presenceSnapshot, (snapshot: PresenceSnapshot) => handlers.onPresence(snapshot))
-  socket.on(EVENTS.roomListChanged, (rooms: PublicRoom[]) => handlers.onRooms(rooms))
-  socket.on(EVENTS.roomSnapshot, (snapshot: RoomSnapshot) => handlers.onRoomSnapshot(snapshot))
-  socket.on(EVENTS.roomMemberConnectionChanged, (change: MemberConnectionChange) =>
-    handlers.onMemberConnectionChanged(change),
-  )
-  socket.on(EVENTS.inviteReceived, (invite: Invite) => handlers.onInviteReceived(invite))
-  socket.on(EVENTS.inviteResolved, ({ id }: { id: string }) => handlers.onInviteResolved(id))
-  socket.on(EVENTS.roomClosed, ({ reason }: { reason: string }) => handlers.onRoomClosed(reason))
-  socket.on(EVENTS.systemNotice, ({ text }: { text: string }) => handlers.onSystemNotice(text))
-  socket.on(EVENTS.systemError, ({ message }: { message: string }) =>
-    handlers.onSystemError(message),
-  )
-  socket.on(EVENTS.drawStrokeBatch, ({ roundId, stroke }: { roundId: string; stroke: Stroke }) =>
-    handlers.onDrawStrokeBatch(roundId, stroke),
-  )
-  socket.on(EVENTS.drawFillCommit, ({ roundId, fill }: { roundId: string; fill: FillCommand }) =>
-    handlers.onDrawFillCommit(roundId, fill),
-  )
+  socket.on(EVENTS.presenceSnapshot, (raw: unknown) => {
+    const snapshot = decoded<PresenceSnapshot>(EVENTS.presenceSnapshot, raw, handlers)
+    if (snapshot) handlers.onPresence(snapshot)
+  })
+  socket.on(EVENTS.roomListChanged, (raw: unknown) => {
+    const rooms = decoded<PublicRoom[]>(EVENTS.roomListChanged, raw, handlers)
+    if (rooms) handlers.onRooms(rooms)
+  })
+  socket.on(EVENTS.roomSnapshot, (raw: unknown) => {
+    const snapshot = decoded<RoomSnapshot>(EVENTS.roomSnapshot, raw, handlers)
+    if (snapshot) handlers.onRoomSnapshot(snapshot)
+  })
+  socket.on(EVENTS.roomMemberConnectionChanged, (raw: unknown) => {
+    const change = decoded<MemberConnectionChange>(
+      EVENTS.roomMemberConnectionChanged,
+      raw,
+      handlers,
+    )
+    if (change) handlers.onMemberConnectionChanged(change)
+  })
+  socket.on(EVENTS.inviteReceived, (raw: unknown) => {
+    const invite = decoded<Invite>(EVENTS.inviteReceived, raw, handlers)
+    if (invite) handlers.onInviteReceived(invite)
+  })
+  socket.on(EVENTS.inviteResolved, (raw: unknown) => {
+    const payload = decoded<{ id: string }>(EVENTS.inviteResolved, raw, handlers)
+    if (payload) handlers.onInviteResolved(payload.id)
+  })
+  socket.on(EVENTS.roomClosed, (raw: unknown) => {
+    const payload = decoded<{ reason: string }>(EVENTS.roomClosed, raw, handlers)
+    if (payload) handlers.onRoomClosed(payload.reason)
+  })
+  socket.on(EVENTS.systemNotice, (raw: unknown) => {
+    const payload = decoded<{ text: string }>(EVENTS.systemNotice, raw, handlers)
+    if (payload) handlers.onSystemNotice(payload.text)
+  })
+  socket.on(EVENTS.systemError, (raw: unknown) => {
+    const payload = decoded<{ text: string }>(EVENTS.systemError, raw, handlers)
+    if (payload) handlers.onSystemError(payload.text)
+  })
+  socket.on(EVENTS.drawStrokeBatch, (raw: unknown) => {
+    const payload = decoded<DrawingIncrementMeta & { stroke: Stroke }>(
+      EVENTS.drawStrokeBatch,
+      raw,
+      handlers,
+    )
+    if (payload) handlers.onDrawStrokeBatch(payload, payload.stroke)
+  })
+  socket.on(EVENTS.drawFillCommit, (raw: unknown) => {
+    const payload = decoded<DrawingIncrementMeta & { fill: FillCommand }>(
+      EVENTS.drawFillCommit,
+      raw,
+      handlers,
+    )
+    if (payload) handlers.onDrawFillCommit(payload, payload.fill)
+  })
 
   /**
    * 返回解绑函数：开发态 HMR 或 store 销毁时调用，避免同一事件被重复注册

@@ -21,10 +21,26 @@ const DEFAULT_DB_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '
 /** 惰性单例连接：只在首次 getDb() 时打开，避免模块加载即建库/占连接。 */
 let db: Database.Database | undefined
 
+/**
+ * 数据库文件路径覆盖：默认指向 apps/server/data/game.db。
+ * 测试/嵌入场景可在首次 getDb() 前用 setDbFile 指向临时目录，避免触碰真实数据。
+ * 该覆盖仅作用于「连接字符串」，不改变任何业务规则（业务规则仍只读 config/）。
+ */
+let dbFileOverride: string | undefined
+
+/**
+ * 设置（或切换）数据库文件路径，用于为测试服务提供隔离的数据文件。
+ * 会先关闭当前连接（如有），随后 getDb() 以新路径打开；只在首次打开前设置最安全。
+ */
+export function setDbFile(filePath: string): void {
+  closeDb()
+  dbFileOverride = filePath
+}
+
 /** 获取（必要时创建）SQLite 连接。开启 WAL 与外键约束。 */
 export function getDb(): Database.Database {
   if (db) return db
-  const database = new Database(path.join(DEFAULT_DB_DIR, 'game.db'))
+  const database = new Database(dbFileOverride ?? path.join(DEFAULT_DB_DIR, 'game.db'))
   // WAL：读写互不阻塞；busy_timeout 避免并发写时立即抛错。
   database.pragma('journal_mode = WAL')
   database.pragma('busy_timeout = 5000')

@@ -9,6 +9,7 @@ import {
   KickMemberSchema,
   RequestSchema,
   RespondInviteSchema,
+  SelectVocabularyPackageSchema,
   SendInviteSchema,
   SetReadySchema,
   TransferHostSchema,
@@ -49,10 +50,17 @@ export function registerRoomHandlers(
   bindRequest(
     socket,
     EVENTS.roomUpdateVocabulary,
-    UpdateVocabularySchema.refine((input) => input.ids.length <= service.vocabulary.items.length, {
+    UpdateVocabularySchema.refine((input) => input.ids.length <= 10_000, {
       message: 'vocabulary ids count exceeds maximum',
     }),
     (input, playerId) => service.updateVocabulary(playerId, input.ids, input.expectedVersion),
+  )
+  bindRequest(
+    socket,
+    EVENTS.roomSelectVocabularyPackage,
+    SelectVocabularyPackageSchema,
+    (input, playerId) =>
+      service.selectVocabularyPackage(playerId, input.packageId, input.expectedVersion),
   )
   // 房主管理：踢人 / 移交房主
   bindRequest(socket, EVENTS.roomKick, KickMemberSchema, (input, playerId) =>

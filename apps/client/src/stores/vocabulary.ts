@@ -10,37 +10,74 @@ import { notify } from '@/composables/useToasts'
 import { socket } from './socket.ts'
 import { createRequester } from './request.ts'
 import { useRoomStore } from './room.ts'
+import { useSessionStore } from './session.ts'
+import { VocabularyRequestGuard } from './vocabulary-request-context.ts'
 
 export const useVocabularyStore = defineStore('vocabulary', () => {
   const roomStore = useRoomStore()
+  const sessionStore = useSessionStore()
   const vocabulary = ref<VocabularySnapshot>()
   const request = createRequester({ socket, notify })
+  const requestGuard = new VocabularyRequestGuard()
+
+  function state() {
+    return { sessionGeneration: sessionStore.generation, roomId: roomStore.room?.id }
+  }
 
   function clear(): void {
+    requestGuard.invalidate()
     vocabulary.value = undefined
   }
 
+  /** 弹窗关闭时废弃尚未返回的 UI 操作；服务端幂等请求可继续完成但不能写回旧界面。 */
+  function cancelPending(): void {
+    requestGuard.invalidate()
+  }
+
   async function loadVocabulary(): Promise<void> {
+    const context = requestGuard.begin(state(), roomStore.room?.vocabularyPackageId)
+    if (!context) return
     const snapshot = await request<VocabularySnapshot>(EVENTS.roomGetVocabulary)
-    if (snapshot.ok) vocabulary.value = snapshot.data
+    if (snapshot.ok && requestGuard.accepts(context, state(), snapshot.data.packageId))
+      vocabulary.value = snapshot.data
   }
 
   async function saveVocabulary(ids: string[]): Promise<boolean> {
     if (!roomStore.room) return false
+    const context = requestGuard.begin(state(), roomStore.room.vocabularyPackageId)
+    if (!context) return false
     const snapshot = await request<VocabularySnapshot>(EVENTS.roomUpdateVocabulary, {
       ids,
       expectedVersion: roomStore.room.stateVersion,
     })
-    if (!snapshot.ok) return false
+    if (!snapshot.ok || !requestGuard.accepts(context, state(), snapshot.data.packageId))
+      return false
     vocabulary.value = snapshot.data
     notify(strings.store.vocabularyUpdated)
+    return true
+  }
+
+  async function selectVocabularyPackage(packageId: string): Promise<boolean> {
+    if (!roomStore.room) return false
+    const context = requestGuard.begin(state(), packageId)
+    if (!context) return false
+    const snapshot = await request<VocabularySnapshot>(EVENTS.roomSelectVocabularyPackage, {
+      packageId,
+      expectedVersion: roomStore.room.stateVersion,
+    })
+    if (!snapshot.ok || !requestGuard.accepts(context, state(), snapshot.data.packageId))
+      return false
+    vocabulary.value = snapshot.data
+    notify(strings.room.vocabPackageSwitched)
     return true
   }
 
   return {
     vocabulary,
     clear,
+    cancelPending,
     loadVocabulary,
     saveVocabulary,
+    selectVocabularyPackage,
   }
 })

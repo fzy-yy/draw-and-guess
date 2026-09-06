@@ -14,7 +14,7 @@ import { Server } from 'socket.io'
 import { APP_CONFIG, PUBLIC_CONFIG } from '../../../config/index.ts'
 import { GameService } from './game-service.ts'
 import type { RuntimeLogger } from './errors.ts'
-import { loadVocabulary, type VocabularyStore } from './vocabulary/index.ts'
+import { loadVocabulary, type VocabularyRegistry } from './vocabulary/index.ts'
 import { registerSessionHandlers } from './handlers/session.ts'
 import { registerRoomHandlers } from './handlers/room.ts'
 import { registerGameHandlers } from './handlers/game.ts'
@@ -24,6 +24,26 @@ import { SqlitePlayerRepository } from './repositories/player-repository.ts'
 import { SqliteRoomRepository } from './repositories/room-repository.ts'
 import { SqliteArchiveRepository } from './repositories/archive-repository.ts'
 import { runMigrations } from './db/migrate.ts'
+import { setDbFile } from './db/index.ts'
+
+function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) return true
+  try {
+    const url = new URL(origin)
+    if (!['http:', 'https:'].includes(url.protocol)) return false
+    // 开发代理与局域网部署都需要跨端口访问，但只允许本地/私网浏览器来源。
+    return (
+      url.hostname === 'localhost' ||
+      url.hostname === '127.0.0.1' ||
+      url.hostname === '::1' ||
+      /^10\./u.test(url.hostname) ||
+      /^192\.168\./u.test(url.hostname) ||
+      /^172\.(1[6-9]|2\d|3[01])\./u.test(url.hostname)
+    )
+  } catch {
+    return false
+  }
+}
 
 export interface RunningApplication {
   httpServer: HttpServer
@@ -44,16 +64,28 @@ function registerSocketHandlers(socket: import('socket.io').Socket, service: Gam
   registerDrawHandlers(socket, service)
 }
 
-/** 创建完整应用，并允许启动入口按部署环境注入公开地址和日志器。 */
+/**
+ * 创建完整应用，并允许启动入口按部署环境注入公开地址、日志器、数据库路径与前端产物目录。
+ *
+ * 注入项均为「基础设施」参数：dbFile / clientDist 仅供测试或嵌入场景指向隔离目录，
+ * 生产路径保持默认（apps/server/data/game.db 与 ../client/dist）；本文件不承载任何业务规则，
+ * 业务规则仍只读取 config/（经此处按 ROLE 裁剪的快照与计分逻辑不变）。
+ */
 export async function createApplication(
   options: {
-    vocabulary?: VocabularyStore
+    vocabulary?: VocabularyRegistry
     publicBaseUrl?: () => string
     logger?: RuntimeLogger
+    /** 测试隔离用：把 SQLite 数据文件指向临时目录，避免污染真实 game.db。 */
+    dbFile?: string
+    /** 测试隔离用：托管前端构建产物的目录，避免依赖恰好存在的 dist。 */
+    clientDist?: string
   } = {},
 ): Promise<RunningApplication> {
   const vocabulary = options.vocabulary ?? (await loadVocabulary())
   // 建库并执行迁移（幂等）：首次启动建全部表，升级时应用新增迁移。
+  // 测试可先通过 dbFile 让连接指向临时目录；默认仍落在 apps/server/data/game.db。
+  if (options.dbFile) setDbFile(options.dbFile)
   runMigrations()
   const app = express()
   const httpServer = createHttpServer(app)
@@ -61,7 +93,10 @@ export async function createApplication(
   // 不启用 connectionStateRecovery：它会在应用层注册校验前恢复旧 socket.rooms 并重放消息，
   // 导致已经被领域层移出房间的身份仍短暂收到旧房间数据，形成跨房间状态与隐私风险。
   const io = new Server(httpServer, {
-    cors: { origin: true, credentials: false },
+    cors: {
+      origin: (origin, callback) => callback(null, isAllowedOrigin(origin)),
+      credentials: false,
+    },
     maxHttpBufferSize: 128 * 1024,
     pingInterval: APP_CONFIG.network.pingIntervalMs,
   })
@@ -76,8 +111,8 @@ export async function createApplication(
 
   // 安全头与请求解析；CSP 由客户端自行管理，跨域资源策略关闭以便局域网访问
   app.disable('x-powered-by')
-  app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }))
-  app.use(cors())
+  app.use(helmet({ crossOriginResourcePolicy: false }))
+  app.use(cors({ origin: (origin, callback) => callback(null, isAllowedOrigin(origin)) }))
   app.use(express.json({ limit: '32kb' }))
   // 静态资源 gzip 压缩：JS/CSS/SVG 经 compression 减小传输体积，对局域网也有明显收益。
   // 放在静态托管前，仅对可压缩内容（text/javascript/css/svg 等）生效。
@@ -96,8 +131,9 @@ export async function createApplication(
   app.get('/api/info', (_request, response) =>
     response.json({ config: PUBLIC_CONFIG, serverTime: Date.now(), serverUrl: baseUrl() }),
   )
-  // 静态托管前端构建产物（生产模式由 pnpm start 拉起同一进程）
-  const clientDist = path.resolve(process.cwd(), '../client/dist')
+  // 静态托管前端构建产物（生产模式由 pnpm start 拉起同一进程）。
+  // 测试可注入 clientDist 指向本次构建到临时目录的产物；默认托管 ../client/dist。
+  const clientDist = options.clientDist ?? path.resolve(process.cwd(), '../client/dist')
   app.use(express.static(clientDist))
   // SPA 回退：非 API 非 Socket.IO 的路径统一返回 index.html
   app.get(/^(?!\/api|\/socket\.io).*/, (_request, response) =>

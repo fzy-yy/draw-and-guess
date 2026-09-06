@@ -2,6 +2,16 @@
  * 前后端共享协议、运行时校验与无环境依赖领域纯函数。
  * 此模块只描述可公开的数据结构，绝不声明服务端秘密答案容器或密码字段。
  */
+import type {
+  FillPush,
+  Invite,
+  MemberConnectionChange,
+  PresenceSnapshot,
+  PublicRoom,
+  RoomSnapshot,
+  ServerPushEnvelope,
+  StrokePush,
+} from './types.ts'
 
 /**
  * 全部 Socket.IO 事件名常量表。
@@ -25,6 +35,7 @@ export const EVENTS = {
   roomUpdateSettings: 'room:updateSettings',
   roomGetVocabulary: 'room:getVocabulary',
   roomUpdateVocabulary: 'room:updateVocabulary',
+  roomSelectVocabularyPackage: 'room:selectVocabularyPackage',
   roomSetReady: 'room:setReady',
   roomKick: 'room:kick',
   roomTransferHost: 'room:transferHost',
@@ -58,3 +69,23 @@ export const EVENTS = {
   systemNotice: 'system:notice',
   systemError: 'system:error',
 } as const
+
+/** 协议事件名联合类型，禁止业务层绕过 EVENTS 手写任意字符串。 */
+export type EventName = (typeof EVENTS)[keyof typeof EVENTS]
+
+/** Socket.IO 服务端主动推送类型图；每项都强制使用版本化信封。 */
+export interface ServerToClientEvents {
+  [EVENTS.presenceSnapshot]: (payload: ServerPushEnvelope<PresenceSnapshot>) => void
+  [EVENTS.roomListChanged]: (payload: ServerPushEnvelope<PublicRoom[]>) => void
+  [EVENTS.inviteReceived]: (payload: ServerPushEnvelope<Invite>) => void
+  [EVENTS.inviteResolved]: (payload: ServerPushEnvelope<{ id: string; status: string }>) => void
+  [EVENTS.roomSnapshot]: (payload: ServerPushEnvelope<RoomSnapshot>) => void
+  [EVENTS.roomMemberConnectionChanged]: (
+    payload: ServerPushEnvelope<MemberConnectionChange>,
+  ) => void
+  [EVENTS.roomClosed]: (payload: ServerPushEnvelope<{ reason: string }>) => void
+  [EVENTS.systemNotice]: (payload: ServerPushEnvelope<{ text: string }>) => void
+  [EVENTS.systemError]: (payload: ServerPushEnvelope<{ text: string }>) => void
+  [EVENTS.drawStrokeBatch]: (payload: ServerPushEnvelope<StrokePush>) => void
+  [EVENTS.drawFillCommit]: (payload: ServerPushEnvelope<FillPush>) => void
+}

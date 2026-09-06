@@ -1,0 +1,143 @@
+import { APP_CONFIG } from '../../../config/index.ts'
+import type { RoomSettings } from '@draw-guess/shared'
+import { GameService, createDefaultRoomSettings } from '../../../apps/server/src/game-service.ts'
+import { SILENT_LOGGER } from '../../../apps/server/src/errors.ts'
+import type { RuntimeDependencies } from '../../../apps/server/src/runtime.ts'
+import { createMemoryRepositories } from './in-memory-repositories.ts'
+import { createMemoryVocabularyRegistry } from './mini-vocabulary.ts'
+import { createFakeRuntime, type FakeRuntime } from './fake-clock.ts'
+
+type ServiceIo = ConstructorParameters<typeof GameService>[0]
+type RegisterSocket = Parameters<GameService['register']>[0]
+
+export interface RecordedEvent {
+  target: string
+  event: string
+  payload: unknown
+}
+
+export interface TestSocket {
+  id: string
+  data: Record<string, unknown>
+  rooms: Set<string>
+  events: RecordedEvent[]
+  disconnected: boolean
+  emit(event: string, payload: unknown): void
+  join(roomId: string): void
+  leave(roomId: string): void
+  disconnect(force?: boolean): void
+  to(roomId: string): { emit(event: string, payload: unknown): void }
+}
+
+export interface GameHarness {
+  service: GameService
+  runtime: FakeRuntime
+  repositories: ReturnType<typeof createMemoryRepositories>
+  ioEvents: RecordedEvent[]
+  createSocket(id: string): TestSocket
+  register(
+    nickname: string,
+    socketId?: string,
+    recoveryToken?: string,
+  ): {
+    playerId: string
+    recoveryToken: string
+    socket: TestSocket
+  }
+}
+
+export function createGameHarness(
+  options: {
+    runtime?: FakeRuntime
+    repositories?: ReturnType<typeof createMemoryRepositories>
+  } = {},
+): GameHarness {
+  const runtime = options.runtime ?? createFakeRuntime()
+  const repositories = options.repositories ?? createMemoryRepositories()
+  const ioEvents: RecordedEvent[] = []
+  const io = {
+    to: (target: string) => ({
+      emit: (event: string, payload: unknown) => ioEvents.push({ target, event, payload }),
+    }),
+    in: (target: string) => ({
+      emit: (event: string, payload: unknown) => ioEvents.push({ target, event, payload }),
+    }),
+    emit: (event: string, payload: unknown) => ioEvents.push({ target: '*', event, payload }),
+  } as unknown as ServiceIo
+  const service = new GameService(
+    io,
+    createMemoryVocabularyRegistry(),
+    repositories,
+    SILENT_LOGGER,
+    runtime as RuntimeDependencies,
+  )
+
+  function createSocket(id: string): TestSocket {
+    const events: RecordedEvent[] = []
+    const socket: TestSocket = {
+      id,
+      data: {},
+      rooms: new Set([id]),
+      events,
+      disconnected: false,
+      emit: (event, payload) => events.push({ target: id, event, payload }),
+      join: (roomId) => void socket.rooms.add(roomId),
+      leave: (roomId) => void socket.rooms.delete(roomId),
+      disconnect: () => {
+        socket.disconnected = true
+      },
+      to: (target) => ({
+        emit: (event, payload) => ioEvents.push({ target, event, payload }),
+      }),
+    }
+    return socket
+  }
+
+  let socketSequence = 0
+  return {
+    service,
+    runtime,
+    repositories,
+    ioEvents,
+    createSocket,
+    register: (nickname, socketId, recoveryToken) => {
+      socketSequence += 1
+      const socket = createSocket(socketId ?? `socket-${socketSequence}`)
+      const registration = service.register(socket as unknown as RegisterSocket, {
+        protocolVersion: APP_CONFIG.app.protocolVersion,
+        profile: { nickname, avatarId: '01' },
+        preferences: { discoverable: true, acceptsInvites: true },
+        ...(recoveryToken ? { recoveryToken } : {}),
+      })
+      return {
+        playerId: registration.player.id,
+        recoveryToken: registration.recoveryToken,
+        socket,
+      }
+    },
+  }
+}
+
+export function testRoomSettings(patch: Partial<RoomSettings> = {}): RoomSettings {
+  return { ...createDefaultRoomSettings(), roundsPerPlayer: 1, ...patch }
+}
+
+export function startTwoPlayerGame(
+  harness: GameHarness,
+  settings: RoomSettings = testRoomSettings(),
+) {
+  const host = harness.register('房主')
+  const guest = harness.register('客人')
+  const room = harness.service.createRoom(host.playerId, {
+    name: '测试房间',
+    visibility: 'public',
+    settings,
+  })
+  harness.service.joinRoom(guest.playerId, room.id)
+  const ready = harness.service.setReady(guest.playerId, true)
+  harness.service.startGame(host.playerId, ready.stateVersion)
+  harness.runtime.advance(APP_CONFIG.game.startingCountdownSeconds * 1_000)
+  const secret = harness.service.rooms.get(room.id)
+  if (!secret?.game) throw new Error('对局未启动')
+  return { host, guest, room: secret, game: secret.game }
+}

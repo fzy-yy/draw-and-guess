@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // 单元测试引用了 apps/server 的权威领域类型（GameService 等），
+    // 这些文件里用到 node: 内置模块与 better-sqlite3，需显式纳入 Node 类型。
+    "types": ["node"]
+    // test/ 目录在 pnpm 严格 node_modules 下无法从根部解析 apps/server 的依赖，
+    // 因此不直接 import socket.io/better-sqlite3（见各测试文件注释），
+    // 这里也无需额外 paths；@draw-guess/* 已由根 tsconfig 提供。
+  },
+  "include": ["test/unit/**/*.ts", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist", "apps", "packages"]
+}

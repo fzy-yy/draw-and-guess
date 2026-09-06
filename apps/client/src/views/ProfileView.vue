@@ -3,6 +3,7 @@
 import { computed, ref } from 'vue'
 import { ArrowRight, CheckCircle2, RefreshCw, Wifi, WifiOff } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
+import { countGraphemes } from '@draw-guess/shared'
 import { AppButton, AppInput, AvatarImage, AvatarPickerDialog } from '@/components/common'
 import { useGameStore } from '@/stores/game'
 
@@ -11,7 +12,7 @@ const showAvatarPicker = ref(false)
 
 /** 昵称按 Unicode 码点计数，避免中文或组合字符被 UTF-16 长度误判。 */
 const nicknameValid = computed(() => {
-  const length = Array.from(store.profile.nickname.trim()).length
+  const length = countGraphemes(store.profile.nickname.trim())
   return (
     length >= store.config.player.nicknameMinLength &&
     length <= store.config.player.nicknameMaxLength

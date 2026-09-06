@@ -4,17 +4,18 @@
   - 列由调用方以 columns 定义（key/label/排序取值/对齐/宽度），并预先完成「列显隐」过滤；
   - 表头点击上抛 sort 事件（升/降序切换由父组件维护 sortKey/sortDir 后回传）；
   - 单元格支持两种渲染方式：具名插槽 `cell-<key>`（自定义富内容）或缺省的文本渲染；
-  - 可选行首复选列：传入 selectedIds 后显示；表头复选框为三态统一全选
-    （全选/部分选中/未选），点击上抛 toggle-all 事件，由父组件裁决批量选择范围；
+  - 可选行首选择列：传入 selectedIds 后显示；multiple 模式使用三态复选框，single 模式使用单选按钮；
+    选择状态始终由父组件持有，点击上抛 toggle/toggle-all 事件，由父组件裁决；
   - 表体经 useVirtualRows 虚拟滚动：数千行词条只挂载可视行，避免一次性渲染卡顿；
   - 空态文案、行悬停高亮、斑马纹等视觉细节内置，与游戏舞台主题协调。
   典型用法见 components/room/VocabTableView.vue（词库管理表格视图）。
 -->
 <script setup lang="ts" generic="T extends object">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { useVirtualRows } from '@/composables/useVirtualRows'
+import { getColumnWidths } from './data-table-layout'
 
 /** 列定义：key 限定为行对象的字段名；排序取值可用 sortValue 自定义（如数组 join、缺省回退） */
 export interface DataTableColumn<T> {
@@ -47,6 +48,10 @@ const props = defineProps<{
   sortDir?: 'asc' | 'desc'
   /** 可选：行首复选列的选中集合；不传则不渲染复选列 */
   selectedIds?: Set<string>
+  /** 行首选择控件类型；缺省为支持批量选择的复选框。 */
+  selectionMode?: 'multiple' | 'single'
+  /** 禁用全部行首选择控件；用于只读场景仍展示当前选择。 */
+  selectionDisabled?: boolean
   /** 表头统一复选框的三态：'all' 全选 / 'some' 部分选中（半选样式）/ 'none' 未选 */
   selectAllState?: 'all' | 'some' | 'none'
   /** 表头统一复选框的无障碍标签（语义由调用方注入，组件不感知业务命名空间） */
@@ -63,6 +68,9 @@ const props = defineProps<{
 // 缺省值改在模板/计算中用 ?? 兜底。
 const activeSortKey = computed(() => props.sortKey ?? null)
 const activeSortDir = computed(() => props.sortDir ?? 'asc')
+const activeSelectionMode = computed(() => props.selectionMode ?? 'multiple')
+/** 同一 DataTable 的单选按钮共享原生 name，获得正确的键盘单选组行为；不同表格间保持隔离。 */
+const selectionGroupName = `data-table-selection-${useId()}`
 
 const emit = defineEmits<{
   /** 点击表头：上抛列 key，升/降序切换逻辑由父组件裁决 */
@@ -96,6 +104,37 @@ const { virtualizer: rowVirtualizer } = useVirtualRows({
   estimateSize: measuredRowHeight,
 })
 
+/** 显式滚动 API：调用方在搜索、筛选或切换数据源后可稳定重置虚拟窗口。 */
+function scrollToIndex(index: number): void {
+  const safeIndex = Math.max(0, Math.min(index, Math.max(0, props.rows.length - 1)))
+  const virtualizer = rowVirtualizer.value as unknown as {
+    scrollToIndex(index: number, options?: { align: 'start' | 'center' | 'end' | 'auto' }): void
+    scrollToOffset?: (offset: number) => void
+  }
+  if (safeIndex === 0) {
+    // scrollToIndex 可能在下一帧依据旧测量值恢复偏移；先走虚拟器 API，再强制校准 DOM，
+    // 并在微任务中再校准一次，确保“相同结果数”的搜索也不会停留在列表底部。
+    virtualizer.scrollToOffset?.(0)
+    virtualizer.scrollToIndex(0, { align: 'start' })
+    if (scrollContainer.value) scrollContainer.value.scrollTop = 0
+    Promise.resolve().then(() => {
+      if (scrollContainer.value) scrollContainer.value.scrollTop = 0
+    })
+    setTimeout(() => {
+      virtualizer.scrollToOffset?.(0)
+      if (scrollContainer.value) scrollContainer.value.scrollTop = 0
+    }, 0)
+    return
+  }
+  virtualizer.scrollToIndex(safeIndex, { align: 'start' })
+}
+
+function scrollToTop(): void {
+  scrollToIndex(0)
+}
+
+defineExpose({ scrollToIndex, scrollToTop })
+
 /** 在挂载与容器尺寸变化时实测一次真实行高并广播，保证所有单行均一且拖拽滚动条平滑 */
 function updateRowHeight(): void {
   const container = scrollContainer.value
@@ -119,6 +158,15 @@ onMounted(() => {
   }
 })
 
+// 搜索/筛选结果切换后回到列表顶部，避免虚拟列表保留旧滚动偏移而显示空白。
+watch(
+  () => props.rows,
+  async () => {
+    await nextTick()
+    scrollToTop()
+  },
+)
+
 /** 取虚拟行索引对应的原始行数据（每个虚拟项即单行）。 */
 function rowAt(index: number): T | undefined {
   return props.rows[index]
@@ -129,12 +177,7 @@ function rowAt(index: number): T | undefined {
  * 配合 table-fixed 保证列宽稳定且始终从左到右铺满整表。
  */
 const columnWidths = computed(() => {
-  const total = props.columns.reduce((sum, column) => sum + (column.weight ?? 1), 0)
-  const map = new Map<string, string>()
-  for (const column of props.columns) {
-    map.set(column.key, `${(((column.weight ?? 1) / total) * 100).toFixed(3)}%`)
-  }
-  return map
+  return getColumnWidths(props.columns, Boolean(props.selectedIds))
 })
 /** 取顶部/底部虚拟占位高度（置于 tbody 内部占位行，不再影响 table 外部结构）。 */
 const topSpacerHeight = computed(() =>
@@ -172,16 +215,19 @@ const bottomSpacerHeight = computed(() => {
         </colgroup>
         <thead class="sticky top-0 z-10 border-b-[0.2cqh] border-line bg-line">
           <tr>
-            <!-- 可选行首复选列表头：三态统一复选框（全选当前结果 / 取消全选），范围由父组件裁决 -->
+            <!-- 行首选择列表头：多选显示三态复选框；单选仅保留同宽列与无障碍列名。 -->
             <th v-if="props.selectedIds" class="w-[3.2em] px-[0.5em] py-[0.55cqh]">
               <input
+                v-if="activeSelectionMode === 'multiple'"
                 type="checkbox"
                 class="h-[1.6cqh] w-[1.6cqh] rounded-none accent-blue"
+                :disabled="props.selectionDisabled"
                 :checked="props.selectAllState === 'all'"
                 :indeterminate="props.selectAllState === 'some'"
                 :aria-label="selectAllAria"
                 @change="emit('toggle-all')"
               />
+              <span v-else class="sr-only">{{ selectAllAria }}</span>
             </th>
             <th
               v-for="column in props.columns"
@@ -251,11 +297,14 @@ const bottomSpacerHeight = computed(() => {
                 : 'bg-white'
             "
           >
-            <!-- 行首复选列：词库选择与表格浏览共存，勾选即写入父组件的已选集合 -->
+            <!-- 行首选择列：多选用于词条批量管理，单选用于互斥的词库包选择。 -->
             <td v-if="props.selectedIds" class="px-[0.5em] py-[0.4cqh]">
               <input
-                type="checkbox"
-                class="h-[1.6cqh] w-[1.6cqh] rounded-none accent-blue"
+                :type="activeSelectionMode === 'single' ? 'radio' : 'checkbox'"
+                :name="activeSelectionMode === 'single' ? selectionGroupName : undefined"
+                class="h-[1.6cqh] w-[1.6cqh] accent-blue disabled:cursor-not-allowed disabled:opacity-60"
+                :class="{ 'rounded-none': activeSelectionMode === 'multiple' }"
+                :disabled="props.selectionDisabled"
                 :checked="rowAt(virtualRow.index) ? isSelected(rowAt(virtualRow.index)!) : false"
                 :aria-label="
                   rowAt(virtualRow.index)

@@ -8,6 +8,8 @@ import {
   ProfileSchema,
   RegisterSchema,
   RequestSchema,
+  StateResyncSchema,
+  createServerPush,
   type SessionRegistration,
 } from '@draw-guess/shared'
 import { bindRequest } from '../protocol/binder.ts'
@@ -30,8 +32,8 @@ export function registerSessionHandlers(
       // 避免页面刷新后的空本地历史收到 strokesOmitted 快照而显示空画布。
       const room = service.snapshotForPlayer(identity.player.id, true) ?? null
       const result: SessionRegistration = { ...identity, room }
-      socket.emit(EVENTS.presenceSnapshot, service.presenceSnapshot())
-      if (room) socket.emit(EVENTS.roomSnapshot, room)
+      socket.emit(EVENTS.presenceSnapshot, createServerPush(service.presenceSnapshot()))
+      if (room) socket.emit(EVENTS.roomSnapshot, createServerPush(room))
       return result
     },
     { registration: true },
@@ -68,7 +70,7 @@ export function registerSessionHandlers(
   )
   // 状态重同步：断线恢复/大厅刷新时拉取权威房间快照（可能为 undefined，表示不在房间）
   // forceFull=true：仅作为客户端“本地落后于权威 lastSequence”时的自检修复通道，拉取完整画布历史
-  bindRequest(socket, EVENTS.stateResync, RequestSchema, (_input, playerId) =>
+  bindRequest(socket, EVENTS.stateResync, StateResyncSchema, (_input, playerId) =>
     service.snapshotForPlayer(playerId, true),
   )
   // 网络检测：往返延迟估算（低频，无需限频）
@@ -76,7 +78,7 @@ export function registerSessionHandlers(
     socket,
     EVENTS.networkPing,
     RequestSchema.extend({ clientTime: z.number() }),
-    (input) => ({ clientTime: input.clientTime, serverTime: Date.now() }),
+    (input) => ({ clientTime: input.clientTime, serverTime: service.clock.now() }),
     { rateLimit: false },
   )
 

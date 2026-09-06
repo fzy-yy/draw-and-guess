@@ -1,6 +1,6 @@
 /**
  * 领域配置：画板与填充。
- * 归入根级 config/ 目录后由 config.ts 聚合，保持“唯一业务配置中心”不变。
+ * 归入根级 config/ 目录后由 config/index.ts 聚合，保持“唯一业务配置中心”不变。
  */
 export const drawing = {
   colors: ['#1F2937', '#EF4444', '#F97316', '#EAB308', '#22C55E', '#3B82F6', '#8B5CF6', '#FFFFFF'],

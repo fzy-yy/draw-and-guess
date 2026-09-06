@@ -17,6 +17,9 @@ import {
 import { APP_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import { createUuid } from '@/utils/createUuid'
+import { getCanvasBackingSize } from '@/canvas/viewport'
+import { applyFloodFill, colorToRgba } from '@/canvas/flood-fill'
+import { renderStroke } from '@/canvas/rendering'
 
 const width = defineModel<number>('width', { required: true })
 
@@ -58,9 +61,8 @@ const cursorDiameter = computed(() => {
   if (!element) return width.value
   const rect = element.getBoundingClientRect()
   const cssMin = Math.min(rect.width, rect.height)
-  const dpr = window.devicePixelRatio || 1
-  const scale = (cssMin * dpr) / APP_CONFIG.drawing.referenceResolution
-  return (width.value * Math.max(APP_CONFIG.drawing.minLineScale, scale)) / dpr
+  const scale = cssMin / APP_CONFIG.drawing.referenceResolution
+  return width.value * Math.max(APP_CONFIG.drawing.minLineScale, scale)
 })
 /** 圆点颜色：画笔跟随当前选色；橡皮擦用主题 line 令牌（淡灰），避免硬编码。 */
 const cursorColor = computed(() => (props.tool === 'eraser' ? 'var(--color-line)' : props.color))
@@ -118,9 +120,10 @@ function resizeCanvas(): void {
   const element = canvas.value
   if (!element) return
   const rect = element.getBoundingClientRect()
-  const ratio = Math.min(window.devicePixelRatio || 1, APP_CONFIG.drawing.devicePixelRatioCap)
-  element.width = Math.max(1, Math.round(rect.width * ratio))
-  element.height = Math.max(1, Math.round(rect.height * ratio))
+  // 采用固定短边逻辑分辨率，避免 DPR/浏览器缩放差异改变洪泛填充的像素拓扑。
+  const size = getCanvasBackingSize(rect.width, rect.height, APP_CONFIG.drawing.referenceResolution)
+  element.width = size.width
+  element.height = size.height
   resizeTick.value += 1
   redraw()
 }
@@ -129,7 +132,7 @@ function resizeCanvas(): void {
  * 绘制自由笔画；橡皮擦使用 destination-out 做透明擦除，并与画笔共用 width。
  * fromIndex 表示从第几个采样点开始绘制（用于增量绘制局部笔画，0 = 从头画））。
  */
-function drawStroke(context: CanvasRenderingContext2D, stroke: Stroke, fromIndex = 0): void {
+function drawPreviewStroke(context: CanvasRenderingContext2D, stroke: Stroke, fromIndex = 0): void {
   if (!stroke.points.length) return
   const canvasWidth = context.canvas.width
   const canvasHeight = context.canvas.height
@@ -165,46 +168,9 @@ function drawStroke(context: CanvasRenderingContext2D, stroke: Stroke, fromIndex
   context.restore()
 }
 
-/** 把配置允许的六位 HEX 颜色转换为 Canvas ImageData 使用的 RGBA。 */
-function colorToRgba(color: string): readonly [number, number, number, number] {
-  return [
-    Number.parseInt(color.slice(1, 3), 16),
-    Number.parseInt(color.slice(3, 5), 16),
-    Number.parseInt(color.slice(5, 7), 16),
-    255,
-  ]
-}
-
-/** 判断像素是否仍属于起始区域；容差只与最初目标色比较，避免逐级跨过抗锯齿边界。 */
-function pixelMatches(
-  data: Uint8ClampedArray,
-  offset: number,
-  target: readonly [number, number, number, number],
-): boolean {
-  const tolerance = APP_CONFIG.drawing.fillTolerance
-  return (
-    Math.abs((data[offset] ?? 0) - target[0]) <= tolerance &&
-    Math.abs((data[offset + 1] ?? 0) - target[1]) <= tolerance &&
-    Math.abs((data[offset + 2] ?? 0) - target[2]) <= tolerance &&
-    Math.abs((data[offset + 3] ?? 0) - target[3]) <= tolerance
-  )
-}
-
-/** 将一个像素写为不透明目标色；写入本身也作为 visited 标记，避免额外内存。 */
-function setPixel(
-  data: Uint8ClampedArray,
-  offset: number,
-  replacement: readonly [number, number, number, number],
-): void {
-  data[offset] = replacement[0]
-  data[offset + 1] = replacement[1]
-  data[offset + 2] = replacement[2]
-  data[offset + 3] = replacement[3]
-}
-
 /**
  * 使用四方向洪泛算法填充与点击像素连通的区域。
- * 队列使用定长 Int32Array，避免大画布上 JavaScript 对象队列产生大量临时内存。
+ * 算法位于 canvas/flood-fill.ts，固定逻辑缓冲让结果不受 CSS 尺寸和 DPR 影响。
  */
 function drawFill(context: CanvasRenderingContext2D, command: FillCommand): void {
   const width = context.canvas.width
@@ -213,84 +179,15 @@ function drawFill(context: CanvasRenderingContext2D, command: FillCommand): void
   const startX = Math.max(0, Math.min(width - 1, Math.round(command.point.x * (width - 1))))
   const startY = Math.max(0, Math.min(height - 1, Math.round(command.point.y * (height - 1))))
   const image = context.getImageData(0, 0, width, height)
-  const data = image.data
-  const startIndex = startY * width + startX
-  const startOffset = startIndex * 4
-  const target = [
-    data[startOffset] ?? 0,
-    data[startOffset + 1] ?? 0,
-    data[startOffset + 2] ?? 0,
-    data[startOffset + 3] ?? 0,
-  ] as const
-  const replacement = colorToRgba(command.color)
-  if (
-    target.every(
-      (channel, index) =>
-        Math.abs(channel - (replacement[index] ?? channel)) <= APP_CONFIG.drawing.fillTolerance,
-    )
+  const filled = applyFloodFill(
+    image.data,
+    width,
+    height,
+    startX,
+    startY,
+    colorToRgba(command.color),
   )
-    return
-
-  const queue = new Int32Array(width * height)
-  let head = 0
-  let tail = 0
-  queue[tail] = startIndex
-  tail += 1
-  setPixel(data, startOffset, replacement)
-
-  /** 匹配成功的相邻像素在入队前立即着色，因此每个像素最多入队一次。 */
-  const enqueueIfTarget = (pixelIndex: number): void => {
-    const offset = pixelIndex * 4
-    if (!pixelMatches(data, offset, target)) return
-    setPixel(data, offset, replacement)
-    queue[tail] = pixelIndex
-    tail += 1
-  }
-
-  while (head < tail) {
-    const pixelIndex = queue[head] ?? 0
-    head += 1
-    const x = pixelIndex % width
-    const y = Math.floor(pixelIndex / width)
-    if (x > 0) enqueueIfTarget(pixelIndex - 1)
-    if (x + 1 < width) enqueueIfTarget(pixelIndex + 1)
-    if (y > 0) enqueueIfTarget(pixelIndex - width)
-    if (y + 1 < height) enqueueIfTarget(pixelIndex + width)
-  }
-  // —— 封边处理：消除填充区与描边线之间的半透明缝隙 ——
-  // 仅针对抗锯齿半透明混合像素（0 < alpha < 255）做底层混合，将填充色垫在半透明线条下方；
-  // 绝不覆盖 alpha === 255 的完整不透明墨线/色块，防止吃线。
-  for (let cursor = 0; cursor < tail; cursor += 1) {
-    const pixelIndex = queue[cursor] ?? 0
-    const x = pixelIndex % width
-    const y = Math.floor(pixelIndex / width)
-    // 8 邻域：4 正方向 + 4 对角。对角混合像素若不处理，封边会在转角处留下点状缺隙。
-    for (let dy = -1; dy <= 1; dy += 1) {
-      const ny = y + dy
-      if (ny < 0 || ny >= height) continue
-      for (let dx = -1; dx <= 1; dx += 1) {
-        const nx = x + dx
-        if (nx < 0 || nx >= width) continue
-        const offset = (ny * width + nx) * 4
-        if (pixelMatches(data, offset, target)) continue
-        const currentAlpha = data[offset + 3] ?? 0
-        // 仅对半透明抗锯齿像素进行底层混合，不透明墨线（currentAlpha === 255）保持完整
-        if (currentAlpha > 0 && currentAlpha < 255) {
-          const alphaNorm = currentAlpha / 255
-          const invAlpha = 1 - alphaNorm
-          data[offset] = Math.round((data[offset] ?? 0) * alphaNorm + replacement[0] * invAlpha)
-          data[offset + 1] = Math.round(
-            (data[offset + 1] ?? 0) * alphaNorm + replacement[1] * invAlpha,
-          )
-          data[offset + 2] = Math.round(
-            (data[offset + 2] ?? 0) * alphaNorm + replacement[2] * invAlpha,
-          )
-          data[offset + 3] = 255
-        }
-      }
-    }
-  }
-  context.putImageData(image, 0, 0)
+  if (filled > 0) context.putImageData(image, 0, 0)
 }
 
 /** 取画布 2D 上下文（绘图/填充需频繁读像素）。 */
@@ -310,7 +207,7 @@ function redraw(): void {
   if (!context) return
   context.clearRect(0, 0, context.canvas.width, context.canvas.height)
   for (const command of visibleCommands.value) {
-    if (command.kind === 'stroke') drawStroke(context, command)
+    if (command.kind === 'stroke') renderStroke(context, command)
     else drawFill(context, command)
   }
   if (activePoints.value.length) {
@@ -320,7 +217,7 @@ function redraw(): void {
       (command) => command.kind === 'stroke' && command.id === activeStrokeId,
     )
     const confirmedCount = confirmedStroke?.kind === 'stroke' ? confirmedStroke.points.length : 0
-    drawStroke(
+    drawPreviewStroke(
       context,
       {
         kind: 'stroke',
@@ -364,7 +261,7 @@ function drawIncoming(context: CanvasRenderingContext2D): void {
     }
     const prev = drawnPoints.get(command.id) ?? 0
     if (command.points.length > prev) {
-      drawStroke(context, command, prev)
+      renderStroke(context, command, prev)
       drawnPoints.set(command.id, command.points.length)
     }
   }
@@ -425,7 +322,7 @@ function pointerDown(event: PointerEvent): void {
   // 本地预览立即画出落笔点
   const context = getContext()
   if (context)
-    drawStroke(context, {
+    drawPreviewStroke(context, {
       kind: 'stroke',
       id: 'local-preview',
       ...currentStrokeStyle(),
@@ -464,7 +361,7 @@ function pointerMove(event: PointerEvent): void {
   // 本地预览增量绘制新增点段（只画末尾这一小段）
   const context = getContext()
   if (context)
-    drawStroke(
+    drawPreviewStroke(
       context,
       {
         kind: 'stroke',

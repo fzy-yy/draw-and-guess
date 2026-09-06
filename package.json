@@ -8,11 +8,12 @@
     "dev": "concurrently -k -n client,server -c cyan,magenta \"pnpm --filter @draw-guess/client dev\" \"pnpm --filter @draw-guess/server dev\"",
     "build": "pnpm typecheck && pnpm --filter @draw-guess/client build",
     "start": "pnpm --filter @draw-guess/server start",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r typecheck && pnpm exec tsc -p tsconfig.test.json",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:e2e": "playwright test -c test/e2e/playwright.config.ts"
+    "test:e2e": "playwright test -c test/e2e/playwright.config.ts",
+    "test:unit": "vitest run"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -26,6 +27,7 @@
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.0",
+    "vitest": "^5.0.0",
     "vue-eslint-parser": "^10.2.0"
   }
 }
