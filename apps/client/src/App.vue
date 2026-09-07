@@ -7,11 +7,13 @@
 -->
 <script setup lang="ts">
 // 图标库：系统/操作提示/邀请横幅使用的图标
-import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { Gamepad2, LoaderCircle, LogOut, Maximize, RotateCw, WifiOff } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
 import { useAudioFeedback } from '@/composables/useAudioFeedback'
+import { useAppBootstrap } from '@/composables/useAppBootstrap'
+import { useFullscreenPrompt } from '@/composables/useFullscreenPrompt'
+import { useInviteQueue } from '@/composables/useInviteQueue'
 import { ActionBanner, AppButton, AppToaster, AvatarImage, BaseDialog } from '@/components/common'
 // 五个视图组件：对局、房间等待、设置、大厅、资料确认
 import ProfileView from '@/views/ProfileView.vue'
@@ -22,139 +24,12 @@ import SettingsView from '@/views/SettingsView.vue'
 
 // 获取全局游戏 store（连接、身份、房间、对局状态）
 const store = useGameStore()
-// 挂载全局音效反馈（Web Audio 合成提示音，随阶段/事件触发）
+const bootstrap = useAppBootstrap()
+bootstrap.start()
+// 挂载全局音效反馈（HTML5 Audio 驱动自定义音效，随阶段/事件触发）
 useAudioFeedback()
-
-// ---- 邀请横幅「拒绝」倒计时 ----
-// 秒数从 config/ui.inviteRejectCountdownSeconds 读取（禁止硬编码）；
-// 倒计时结束自动拒绝当前邀请，避免横幅无限期驻留（服务端邀请本身也会过期）。
-const rejectCountdown = ref(store.config.ui.inviteRejectCountdownSeconds)
-let rejectTimer: number | undefined
-
-/** 清除拒绝倒计时定时器（新邀请到达或横幅消失时调用）。 */
-function stopRejectCountdown(): void {
-  window.clearInterval(rejectTimer)
-  rejectTimer = undefined
-}
-
-/**
- * 启动（或重新启动）队首邀请的拒绝倒计时。
- * 从配置秒数重新计时：新邀请到达、以及「进房又退出后横幅重新出现」两种场景
- * （此时队首邀请未变，仅靠 watch id 不会重启定时器，倒计时会冻结在旧值）。
- */
-function startRejectCountdown(): void {
-  stopRejectCountdown()
-  const current = store.invites[0]
-  if (!current || store.room) return
-  rejectCountdown.value = store.config.ui.inviteRejectCountdownSeconds
-  rejectTimer = window.setInterval(() => {
-    rejectCountdown.value -= 1
-    if (rejectCountdown.value <= 0) {
-      stopRejectCountdown()
-      // 倒计时归零：自动拒绝队首邀请（服务端会同步清理邀请状态）。
-      // 队首可能在计时期间已被应答/失效，先确认仍存在再发送。
-      const pending = store.invites[0]
-      if (pending) void store.respondInvite(pending.id, false)
-    }
-  }, 1_000)
-}
-
-// 队首邀请变化时重新开始倒计时（含初始化）。
-watch(
-  () => store.invites[0]?.id,
-  () => startRejectCountdown(),
-  { immediate: true },
-)
-
-// 横幅可见性变化：邀请消失（接受/拒绝/过期）时停表；进房又退房后横幅重新出现时重开倒计时。
-watch(
-  () => store.invites.length && !store.room,
-  (visible) => {
-    if (visible) startRejectCountdown()
-    else stopRejectCountdown()
-  },
-)
-
-/** 拒绝队首邀请：先停表再发送拒绝（按钮点击入口；点击时队首必然渲染在场）。 */
-function declineCurrentInvite(): void {
-  stopRejectCountdown()
-  const current = store.invites[0]
-  if (current) void store.respondInvite(current.id, false)
-}
-
-// ---- 首次进入大厅全屏提示横幅 ----
-const showFullscreenPrompt = ref(false)
-
-function checkFullscreenPrompt(): void {
-  // 必须身处大厅且未在房间中
-  if (!store.playerId || store.page !== 'lobby' || store.room) {
-    showFullscreenPrompt.value = false
-    return
-  }
-  // 已全屏：无需提示，静默记录已处理
-  if (document.fullscreenElement) {
-    window.sessionStorage.setItem(store.config.app.fullscreenPromptSessionKey, '1')
-    showFullscreenPrompt.value = false
-    return
-  }
-  // 未全屏且本次会话未提示过
-  if (!window.sessionStorage.getItem(store.config.app.fullscreenPromptSessionKey)) {
-    showFullscreenPrompt.value = true
-  }
-}
-
-// 监听大厅页面与房间状态，在首次进入大厅时触发检测
-watch(
-  () => [store.playerId, store.page, store.room, store.invites.length],
-  () => {
-    // 若当前有邀请横幅，优先让位给邀请横幅
-    if (store.invites.length && !store.room) {
-      showFullscreenPrompt.value = false
-    } else {
-      checkFullscreenPrompt()
-    }
-  },
-  { immediate: true },
-)
-
-function handleFullscreenChange(): void {
-  if (document.fullscreenElement) {
-    window.sessionStorage.setItem(store.config.app.fullscreenPromptSessionKey, '1')
-    showFullscreenPrompt.value = false
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('fullscreenchange', handleFullscreenChange)
-})
-
-onUnmounted(() => {
-  stopRejectCountdown()
-})
-
-onUnmounted(() => {
-  document.removeEventListener('fullscreenchange', handleFullscreenChange)
-})
-
-/** 确定进入全屏：调用舞台全屏并记录本次会话已处理。 */
-async function confirmFullscreen(): Promise<void> {
-  window.sessionStorage.setItem(store.config.app.fullscreenPromptSessionKey, '1')
-  showFullscreenPrompt.value = false
-  const stage = document.querySelector<HTMLElement>('.game-stage')
-  if (stage && !document.fullscreenElement) {
-    try {
-      await stage.requestFullscreen()
-    } catch {
-      // 浏览器权限策略静默降级
-    }
-  }
-}
-
-/** 暂不开启全屏：关闭提示横幅并记录本次会话已处理，避免后续重复打扰。 */
-function dismissFullscreenPrompt(): void {
-  window.sessionStorage.setItem(store.config.app.fullscreenPromptSessionKey, '1')
-  showFullscreenPrompt.value = false
-}
+const inviteQueue = useInviteQueue()
+const fullscreenPrompt = useFullscreenPrompt()
 </script>
 
 <template>
@@ -231,8 +106,10 @@ function dismissFullscreenPrompt(): void {
         <template #actions>
           <AppButton
             variant="secondary"
-            :aria-label="strings.common.declineCountdown(Math.max(0, rejectCountdown))"
-            @click="declineCurrentInvite"
+            :aria-label="
+              strings.common.declineCountdown(Math.max(0, inviteQueue.rejectCountdown.value))
+            "
+            @click="inviteQueue.decline"
           >
             <!--
               倒计时数字用固定 2ch 宽度 + tabular-nums 承载：位数变化（10→9）时按钮宽度不变，
@@ -240,13 +117,13 @@ function dismissFullscreenPrompt(): void {
             -->
             {{ strings.common.decline
             }}<span class="inline-block min-w-[2ch] text-center tabular-nums">{{
-              Math.max(0, rejectCountdown)
+              Math.max(0, inviteQueue.rejectCountdown.value)
             }}</span>
           </AppButton>
           <AppButton
             :aria-label="strings.common.accept"
             :disabled="!store.invites[0]"
-            @click="store.invites[0] && store.respondInvite(store.invites[0].id, true)"
+            @click="inviteQueue.accept"
           >
             <Gamepad2 />{{ strings.common.accept }}
           </AppButton>
@@ -255,7 +132,7 @@ function dismissFullscreenPrompt(): void {
 
       <!-- 大厅首次全屏提示横幅：首次进入大厅且当前未全屏时弹出 -->
       <ActionBanner
-        :open="showFullscreenPrompt"
+        :open="fullscreenPrompt.showFullscreenPrompt.value"
         :aria-label="strings.lobby.fullscreenPromptAria"
         :heading="strings.lobby.fullscreenPromptHeading"
         :message="strings.lobby.fullscreenPromptBody"
@@ -269,10 +146,10 @@ function dismissFullscreenPrompt(): void {
           </div>
         </template>
         <template #actions>
-          <AppButton variant="secondary" @click="dismissFullscreenPrompt">
+          <AppButton variant="secondary" @click="fullscreenPrompt.dismiss">
             {{ strings.lobby.fullscreenPromptDismiss }}
           </AppButton>
-          <AppButton @click="confirmFullscreen">
+          <AppButton @click="fullscreenPrompt.confirm">
             <Maximize />{{ strings.lobby.fullscreenPromptConfirm }}
           </AppButton>
         </template>

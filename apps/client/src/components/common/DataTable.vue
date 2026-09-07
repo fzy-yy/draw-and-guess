@@ -11,11 +11,12 @@
   典型用法见 components/room/VocabTableView.vue（词库管理表格视图）。
 -->
 <script setup lang="ts" generic="T extends object">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
-import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-vue-next'
+import { computed, ref, useId } from 'vue'
 import { strings } from '@draw-guess/strings'
-import { useVirtualRows } from '@/composables/useVirtualRows'
+import { playInteractionSound } from '@/audio'
+import { useVirtualTableRows } from '@/composables/useVirtualTableRows'
 import { getColumnWidths } from './data-table-layout'
+import DataTableHeader from './DataTableHeader.vue'
 
 /** 列定义：key 限定为行对象的字段名；排序取值可用 sortValue 自定义（如数组 join、缺省回退） */
 export interface DataTableColumn<T> {
@@ -81,6 +82,21 @@ const emit = defineEmits<{
   'toggle-all': []
 }>()
 
+function sort(key: string): void {
+  playInteractionSound('select')
+  emit('sort', key)
+}
+
+function toggle(id: string): void {
+  playInteractionSound('select')
+  emit('toggle', id)
+}
+
+function toggleAll(): void {
+  playInteractionSound('select')
+  emit('toggle-all')
+}
+
 /** 判断某行是否处于选中态（行首复选列） */
 function isSelected(row: T): boolean {
   return props.selectedIds?.has(String(row[props.rowKey])) ?? false
@@ -95,82 +111,20 @@ function displayValue(row: T, column: DataTableColumn<T>): string {
   return String(value)
 }
 
-// —— 表体虚拟滚动：锁定实测统一行高，避免滑动过程中因动态再测量导致 totalSize 缩放跳动 ——
-const measuredRowHeight = ref(28)
 const scrollContainer = ref<HTMLElement>()
-const { virtualizer: rowVirtualizer } = useVirtualRows({
-  scrollElement: scrollContainer,
-  count: computed(() => props.rows.length),
-  estimateSize: measuredRowHeight,
-})
-
-/** 显式滚动 API：调用方在搜索、筛选或切换数据源后可稳定重置虚拟窗口。 */
-function scrollToIndex(index: number): void {
-  const safeIndex = Math.max(0, Math.min(index, Math.max(0, props.rows.length - 1)))
-  const virtualizer = rowVirtualizer.value as unknown as {
-    scrollToIndex(index: number, options?: { align: 'start' | 'center' | 'end' | 'auto' }): void
-    scrollToOffset?: (offset: number) => void
-  }
-  if (safeIndex === 0) {
-    // scrollToIndex 可能在下一帧依据旧测量值恢复偏移；先走虚拟器 API，再强制校准 DOM，
-    // 并在微任务中再校准一次，确保“相同结果数”的搜索也不会停留在列表底部。
-    virtualizer.scrollToOffset?.(0)
-    virtualizer.scrollToIndex(0, { align: 'start' })
-    if (scrollContainer.value) scrollContainer.value.scrollTop = 0
-    Promise.resolve().then(() => {
-      if (scrollContainer.value) scrollContainer.value.scrollTop = 0
-    })
-    setTimeout(() => {
-      virtualizer.scrollToOffset?.(0)
-      if (scrollContainer.value) scrollContainer.value.scrollTop = 0
-    }, 0)
-    return
-  }
-  virtualizer.scrollToIndex(safeIndex, { align: 'start' })
-}
-
-function scrollToTop(): void {
-  scrollToIndex(0)
-}
-
-defineExpose({ scrollToIndex, scrollToTop })
-
-/** 在挂载与容器尺寸变化时实测一次真实行高并广播，保证所有单行均一且拖拽滚动条平滑 */
-function updateRowHeight(): void {
-  const container = scrollContainer.value
-  if (!container) return
-  const firstRow = container.querySelector('tbody tr:not([aria-hidden])') as HTMLElement | null
-  if (firstRow) {
-    const h = firstRow.getBoundingClientRect().height
-    if (h > 0 && Math.abs(h - measuredRowHeight.value) > 0.5) {
-      measuredRowHeight.value = h
-      rowVirtualizer.value.measure()
-    }
-  }
-}
-
-onMounted(() => {
-  nextTick(updateRowHeight)
-  if (typeof ResizeObserver !== 'undefined' && scrollContainer.value) {
-    const observer = new ResizeObserver(() => updateRowHeight())
-    observer.observe(scrollContainer.value)
-    onBeforeUnmount(() => observer.disconnect())
-  }
-})
-
-// 搜索/筛选结果切换后回到列表顶部，避免虚拟列表保留旧滚动偏移而显示空白。
-watch(
-  () => props.rows,
-  async () => {
-    await nextTick()
-    scrollToTop()
-  },
+const {
+  virtualizer: rowVirtualizer,
+  topSpacerHeight,
+  bottomSpacerHeight,
+  rowAt,
+  scrollToIndex,
+  scrollToTop,
+} = useVirtualTableRows<T>(
+  computed<T[]>(() => props.rows),
+  scrollContainer,
 )
 
-/** 取虚拟行索引对应的原始行数据（每个虚拟项即单行）。 */
-function rowAt(index: number): T | undefined {
-  return props.rows[index]
-}
+defineExpose({ scrollToIndex, scrollToTop })
 
 /**
  * 可见列的内联宽度（百分比）：按权重相对占比归一化到 100%，
@@ -178,18 +132,6 @@ function rowAt(index: number): T | undefined {
  */
 const columnWidths = computed(() => {
   return getColumnWidths(props.columns, Boolean(props.selectedIds))
-})
-/** 取顶部/底部虚拟占位高度（置于 tbody 内部占位行，不再影响 table 外部结构）。 */
-const topSpacerHeight = computed(() =>
-  rowVirtualizer.value.getVirtualItems().length
-    ? rowVirtualizer.value.getVirtualItems()[0]!.start
-    : 0,
-)
-const bottomSpacerHeight = computed(() => {
-  const items = rowVirtualizer.value.getVirtualItems()
-  if (!items.length) return 0
-  const last = items.at(-1)!
-  return rowVirtualizer.value.getTotalSize() - (last.start + last.size)
 })
 </script>
 
@@ -213,67 +155,19 @@ const bottomSpacerHeight = computed(() => {
             :style="{ width: columnWidths.get(column.key) }"
           />
         </colgroup>
-        <thead class="sticky top-0 z-10 border-b-[0.2cqh] border-line bg-line">
-          <tr>
-            <!-- 行首选择列表头：多选显示三态复选框；单选仅保留同宽列与无障碍列名。 -->
-            <th v-if="props.selectedIds" class="w-[3.2em] px-[0.5em] py-[0.55cqh]">
-              <input
-                v-if="activeSelectionMode === 'multiple'"
-                type="checkbox"
-                class="h-[1.6cqh] w-[1.6cqh] rounded-none accent-blue"
-                :disabled="props.selectionDisabled"
-                :checked="props.selectAllState === 'all'"
-                :indeterminate="props.selectAllState === 'some'"
-                :aria-label="selectAllAria"
-                @change="emit('toggle-all')"
-              />
-              <span v-else class="sr-only">{{ selectAllAria }}</span>
-            </th>
-            <th
-              v-for="column in props.columns"
-              :key="column.key"
-              class="whitespace-nowrap px-[0.6em] py-[0.55cqh] font-bold text-muted"
-              :style="{ width: columnWidths.get(column.key) }"
-              :class="[
-                column.align === 'center'
-                  ? 'text-center'
-                  : column.align === 'right'
-                    ? 'text-right'
-                    : '',
-              ]"
-              :aria-sort="
-                activeSortKey === column.key
-                  ? activeSortDir === 'asc'
-                    ? 'ascending'
-                    : 'descending'
-                  : 'none'
-              "
-            >
-              <!-- 可排序列：按钮化表头 + 双向箭头指示当前排序方向 -->
-              <button
-                v-if="column.sortable !== false"
-                type="button"
-                class="inline-flex items-center gap-[0.25em] rounded-none px-[0.25em] py-[0.1cqh] hover:bg-line"
-                :aria-label="strings.common.sortByAria(column.label)"
-                @click="emit('sort', column.key)"
-              >
-                {{ column.label }}
-                <ArrowUp
-                  v-if="activeSortKey === column.key && activeSortDir === 'asc'"
-                  class="h-[1.2cqh] w-[1.2cqh] text-blue"
-                  aria-hidden="true"
-                />
-                <ArrowDown
-                  v-else-if="activeSortKey === column.key && activeSortDir === 'desc'"
-                  class="h-[1.2cqh] w-[1.2cqh] text-blue"
-                  aria-hidden="true"
-                />
-                <ArrowUpDown v-else class="h-[1.2cqh] w-[1.2cqh] text-muted" aria-hidden="true" />
-              </button>
-              <span v-else>{{ column.label }}</span>
-            </th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          :columns="props.columns"
+          :widths="columnWidths"
+          :has-selection="Boolean(props.selectedIds)"
+          :selection-mode="activeSelectionMode"
+          :selection-disabled="props.selectionDisabled"
+          :select-all-state="props.selectAllState"
+          :select-all-aria="selectAllAria"
+          :sort-key="activeSortKey"
+          :sort-dir="activeSortDir"
+          @sort="sort"
+          @toggle-all="toggleAll"
+        />
         <tbody>
           <!-- 顶部占位行：置于 tbody 内配合 colgroup，不推挤 thead，根除滚动跳动 -->
           <tr
@@ -314,8 +208,7 @@ const bottomSpacerHeight = computed(() => {
                     : undefined
                 "
                 @change="
-                  rowAt(virtualRow.index) &&
-                  emit('toggle', String(rowAt(virtualRow.index)![props.rowKey]))
+                  rowAt(virtualRow.index) && toggle(String(rowAt(virtualRow.index)![props.rowKey]))
                 "
               />
             </td>

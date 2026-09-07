@@ -37,6 +37,7 @@ const active = defineModel<K>({ required: true })
       :key="item.key"
       variant="secondary"
       :active="active === item.key"
+      audio-feedback="select"
       :aria-current="active === item.key ? 'page' : undefined"
       class="w-full justify-start gap-[0.6em] px-[0.8em] text-left"
       @click="active = item.key"

@@ -6,6 +6,7 @@
 -->
 <script setup lang="ts">
 import { ref } from 'vue'
+import type { InteractionAudioEvent } from '@/audio'
 import BaseIconButton from '@/components/common/BaseIconButton.vue'
 
 withDefaults(
@@ -14,8 +15,10 @@ withDefaults(
     label: string
     /** 禁用态。 */
     disabled?: boolean
+    /** 交互音效语义。 */
+    audioFeedback?: InteractionAudioEvent | null
   }>(),
-  { disabled: false },
+  { disabled: false, audioFeedback: 'activate' },
 )
 const emit = defineEmits<{ click: [] }>()
 const button = ref<InstanceType<typeof BaseIconButton>>()
@@ -33,6 +36,7 @@ defineExpose({ focus })
     ref="button"
     :label="label"
     :disabled="disabled"
+    :audio-feedback="audioFeedback"
     base-class="round-icon-btn"
     @click="emit('click')"
   >

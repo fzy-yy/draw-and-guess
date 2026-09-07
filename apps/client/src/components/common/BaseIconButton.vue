@@ -5,6 +5,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref, useAttrs } from 'vue'
+import { playInteractionSound, type InteractionAudioEvent } from '@/audio'
 import { cn } from '@/utils/cn'
 
 const props = withDefaults(
@@ -15,8 +16,10 @@ const props = withDefaults(
     disabled?: boolean
     /** 变体底座类（尺寸/配色/激活态由各变体拼装后传入）。 */
     baseClass: string
+    /** 交互音效语义；null 用于已有专属领域音效的操作。 */
+    audioFeedback?: InteractionAudioEvent | null
   }>(),
-  { label: undefined, disabled: false },
+  { label: undefined, disabled: false, audioFeedback: 'activate' },
 )
 
 const emit = defineEmits<{ click: [] }>()
@@ -34,6 +37,11 @@ function focus(): void {
   button.value?.focus()
 }
 
+function handleClick(): void {
+  if (props.audioFeedback) playInteractionSound(props.audioFeedback)
+  emit('click')
+}
+
 defineExpose({ focus })
 </script>
 
@@ -44,7 +52,7 @@ defineExpose({ focus })
     :aria-label="label"
     :disabled="disabled"
     :class="buttonClass"
-    @click="emit('click')"
+    @click="handleClick"
   >
     <slot />
   </button>

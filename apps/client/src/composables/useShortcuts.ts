@@ -5,6 +5,7 @@
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { EVENTS, type ToolKind } from '@draw-guess/shared'
+import { playInteractionSound } from '@/audio'
 import { normalizedShortcut } from '@/utils/keyboard'
 import type { useGameStore } from '@/stores/game'
 
@@ -29,11 +30,13 @@ export function useShortcuts(store: GameStore) {
     const key = event.key.toLocaleLowerCase()
     if ((event.ctrlKey || event.metaKey) && key === 'z') {
       event.preventDefault()
+      playInteractionSound('activate')
       void store.drawAction(event.shiftKey ? EVENTS.drawRedo : EVENTS.drawUndo)
       return
     }
     if ((event.ctrlKey || event.metaKey) && key === 'y') {
       event.preventDefault()
+      playInteractionSound('activate')
       void store.drawAction(EVENTS.drawRedo)
       return
     }
@@ -46,6 +49,7 @@ export function useShortcuts(store: GameStore) {
     const matched = shortcuts.find(([, shortcut]) => normalizedShortcut(shortcut) === key)
     if (matched) {
       event.preventDefault()
+      playInteractionSound('select')
       tool.value = matched[0]
     }
   }

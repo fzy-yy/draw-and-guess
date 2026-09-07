@@ -13,7 +13,7 @@ import { room } from './room.ts'
 import { game } from './game.ts'
 import { drawing } from './drawing.ts'
 import { vocabulary } from './vocabulary.ts'
-import { audio } from './audio.ts'
+import { audio, soundCatalog } from './audio.ts'
 import { localSettings, presets, ui } from './settings.ts'
 import { PUBLIC_CONFIG, type PublicConfig } from './public.ts'
 import { getDeploymentConfig, type DeploymentConfig } from './deployment.ts'
@@ -42,6 +42,7 @@ export {
   drawing,
   vocabulary,
   audio,
+  soundCatalog,
   localSettings,
   presets,
   ui,

@@ -5,7 +5,12 @@
 import { z, type ZodType } from 'zod'
 import { APP_CONFIG } from '../../../../config/index.ts'
 import { serverStrings } from '../../../../string/index.ts'
-import type { Ack } from '@draw-guess/shared'
+import type {
+  Ack,
+  ClientRequestEvent,
+  ClientRequestPayload,
+  ClientResponse,
+} from '@draw-guess/shared'
 import { failure, GameError, success } from '../errors.ts'
 
 export type { Ack }
@@ -35,14 +40,21 @@ function logUnexpected(
  * 统一请求包装器：所有失败都以结构化 ack 返回，避免未捕获异常断开 Socket。
  * 幂等键由“事件名 + requestId”组成，并缓存完整 ack；并发重试共享同一个执行 Promise。
  */
-export function bindRequest<T extends { requestId: string }, R>(
+export function bindRequest<E extends ClientRequestEvent>(
   socket: import('socket.io').Socket,
-  event: string,
-  schema: ZodType<T>,
-  handler: (input: T, playerId: string) => R | Promise<R>,
+  event: E,
+  schema: ZodType<ClientRequestPayload<E>>,
+  handler: (
+    input: ClientRequestPayload<E>,
+    playerId: string,
+  ) => ClientResponse<E> | Promise<ClientResponse<E>>,
   options: { registration?: boolean; rateLimit?: boolean } = {},
 ): void {
-  socket.on(event, async (raw: unknown, callback?: (ack: Ack<R>) => void) => {
+  const on = socket.on.bind(socket) as unknown as (
+    eventName: string,
+    listener: (raw: unknown, callback?: (ack: Ack<ClientResponse<E>>) => void) => void,
+  ) => void
+  on(event, async (raw: unknown, callback?: (ack: Ack<ClientResponse<E>>) => void) => {
     const provisionalId =
       typeof raw === 'object' && raw && 'requestId' in raw
         ? String((raw as { requestId: unknown }).requestId)
@@ -50,7 +62,7 @@ export function bindRequest<T extends { requestId: string }, R>(
     const respond = typeof callback === 'function' ? callback : () => undefined
 
     // 每连接一秒滑动窗口限频；绘图和网络探测已有独立策略，可由调用方关闭。
-    let input: T
+    let input: ClientRequestPayload<E>
     try {
       input = schema.parse(raw)
       const playerId = socket.data.playerId as string | undefined
@@ -61,7 +73,7 @@ export function bindRequest<T extends { requestId: string }, R>(
       const cache = socket.data.requestCache as Map<string, Ack<unknown>> | undefined
       const cached = cache?.get(cacheKey)
       if (cached) {
-        respond(cached as Ack<R>)
+        respond(cached as Ack<ClientResponse<E>>)
         return
       }
 
@@ -69,7 +81,7 @@ export function bindRequest<T extends { requestId: string }, R>(
         Map<string, Promise<Ack<unknown>>> | undefined
       const existing = inFlight?.get(cacheKey)
       if (existing) {
-        respond((await existing) as Ack<R>)
+        respond((await existing) as Ack<ClientResponse<E>>)
         return
       }
 
@@ -86,7 +98,7 @@ export function bindRequest<T extends { requestId: string }, R>(
             failure(
               new GameError('RATE_LIMITED', serverStrings.errors.RATE_LIMITED),
               input.requestId,
-            ) as Ack<R>,
+            ) as Ack<ClientResponse<E>>,
           )
           return
         }
@@ -95,13 +107,13 @@ export function bindRequest<T extends { requestId: string }, R>(
       }
 
       // Promise 在调用 handler 前先写入表，确保同一时刻的重复副作用只执行一次。
-      const execution = (async (): Promise<Ack<R>> => {
+      const execution = (async (): Promise<Ack<ClientResponse<E>>> => {
         try {
           return success(await handler(input, playerId ?? ''), input.requestId)
         } catch (error) {
           const normalized = normalizeRequestError(error)
           logUnexpected(socket, event, error, normalized)
-          return failure(normalized, input.requestId) as Ack<R>
+          return failure(normalized, input.requestId) as Ack<ClientResponse<E>>
         }
       })()
       inFlight?.set(cacheKey, execution as Promise<Ack<unknown>>)
@@ -122,7 +134,7 @@ export function bindRequest<T extends { requestId: string }, R>(
     } catch (error) {
       const normalized = normalizeRequestError(error)
       logUnexpected(socket, event, error, normalized)
-      respond(failure(normalized, provisionalId) as Ack<R>)
+      respond(failure(normalized, provisionalId) as Ack<ClientResponse<E>>)
     }
   })
 }

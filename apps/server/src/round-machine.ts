@@ -1,6 +1,6 @@
 /**
  * 回合流转状态机：开局、选词、作画、结算、暂停/恢复、弃权与逐步提示。
- * 与 GameService 组合使用（注入 service 引用调用其房间/成员助手），
+ * 与实现 RoundContext 的应用服务组合使用（只注入房间/成员所需的窄接口），
  * 便于把“回合规则”与“会话/成员/传输”职责分离、独立单测。
  */
 import { APP_CONFIG } from '../../../config/index.ts'
@@ -8,13 +8,13 @@ import { createHintSchedule } from './hint-scheduler.ts'
 import { serverStrings } from '../../../string/index.ts'
 import { canTransition, type FinalRankingEntry, type RoundResult } from '@draw-guess/shared'
 import type { MemberState, RoomSecret } from './models.ts'
-import type { GameService } from './game-service.ts'
 import { buildDrawerScore, buildGuessDetail } from './scoring.ts'
 import type { TimerHandle } from './runtime.ts'
+import type { RoundContext } from './domain/game/round-context.ts'
 
 /** 回合流转状态机；只操作房间的 game 与阶段，不直接接触 socket。 */
 export class RoundMachine {
-  constructor(private readonly service: GameService) {}
+  constructor(private readonly service: RoundContext) {}
 
   /**
    * 画家在选词阶段离开/掉线时废弃当前回合，立即进入下一回合选词。
@@ -228,12 +228,16 @@ export class RoundMachine {
         .filter((member) => !member.spectating)
         .sort((left, right) => right.score - left.score || left.joinedAt - right.joinedAt)
       let previousScore: number | undefined
+      let emittedCount = 0
       let rank = 0
-      game.finalRanking = rankedMembers.flatMap<FinalRankingEntry>((member, index) => {
+      // 排名按实际产出的条目数递增，而不是用被 flatMap 丢弃成员后的 index+1，
+      // 避免「成员无 profile 被丢弃」时后续名次跳号（见缺陷报告 #6）。
+      game.finalRanking = rankedMembers.flatMap<FinalRankingEntry>((member) => {
         const player = this.service.players.get(member.playerId)
         const profile = member.leftProfile ?? player?.profile
         if (!profile) return []
-        if (member.score !== previousScore) rank = index + 1
+        emittedCount += 1
+        if (member.score !== previousScore) rank = emittedCount
         previousScore = member.score
         return [
           {
@@ -326,14 +330,10 @@ export class RoundMachine {
     this.service.emitRoom(room.id)
   }
   /**
-   * 优化后的猜词提示调度算法：
-   * ① 逐步提示（Progressive Hints）：
-   *    - 在作画时间后半程（由 progressiveHintRatio 配置，如 0.5 即后 50%）逐步给出；
-   *    - 提示字符总数向下取整为字数的一半：Math.floor(wordLength / 2)；
-   *    - 间隔时间为：(总时长 * progressiveHintRatio) / 提示总数；
-   *    - 在对应剩余时间触发，每次随机公布答案中一个未揭示的非标点字符。
-   * ② 结构化提示（Category Hint）：
-   *    - 在倒计时剩余比例降到房间 hintStartRatio 时给出词语类别提示。
+   * 统一提示调度：全部延迟由 hint-scheduler.ts 的 createHintSchedule 计算（单一事实来源），
+   * 避免 round-machine 内联重抄一份逐步提示数学导致两处漂移。逐步提示在作画后半程按字符
+   * 数逐步揭示；结构化提示在剩余比例降到 hintStartRatio 时揭示一次分类。剩余不足时
+   * structuredDelay 以 Math.max(0, …) 归零并立即揭示（原不可达的 else 分支已合并进该值）。
    */
   public scheduleHints(room: RoomSecret): void {
     const game = this.service.requireGame(room)
@@ -344,68 +344,32 @@ export class RoundMachine {
     const currentRemainingMs = Math.max(0, game.phaseEndsAt - this.service.clock.now())
     const timers: TimerHandle[] = []
 
-    // ① 逐步提示：在后半程按字符数逐步揭示
-    if (room.settings.progressiveHints) {
-      const wordChars = Array.from(game.answer.text)
-      const hintCount = Math.floor(wordChars.length / 2)
-      if (hintCount > 0) {
-        const totalSec = Math.floor(totalMs / 1_000)
-        const windowSec = Math.floor(totalSec * APP_CONFIG.game.progressiveHintRatio)
-        const intervalSec = Math.floor(windowSec / hintCount)
-        const intervalMs = intervalSec * 1_000
-        const hintsAlreadyRevealed = game.revealedIndices.size
+    const schedule = createHintSchedule({
+      totalMs,
+      currentRemainingMs,
+      progressiveHints: room.settings.progressiveHints,
+      wordText: game.answer.text,
+      revealedCount: game.revealedIndices.size,
+      structuredHintsEnabled: room.settings.structuredHintsEnabled,
+      hasStructuredHint:
+        game.hintOrder.length > 0 && game.revealedHintCount < game.hintOrder.length,
+      revealedHintCount: game.revealedHintCount,
+      hintStartRatio: room.settings.hintStartRatio,
+    })
 
-        for (let k = 1; k <= hintCount; k += 1) {
-          // 若该轮次提示之前已触发过（如暂停前已揭示），跳过避免重复触发
-          if (k <= hintsAlreadyRevealed) continue
-
-          const targetRemainingMs = intervalMs * (hintCount - k + 1)
-          if (currentRemainingMs >= targetRemainingMs) {
-            const delay = currentRemainingMs - targetRemainingMs
-            timers.push(
-              this.service.scheduler.set(delay, () =>
-                this.service.safeRun('revealHint', () => this.revealHint(room)),
-              ),
-            )
-          }
-        }
-      }
+    for (const delay of schedule.progressiveDelays) {
+      timers.push(
+        this.service.scheduler.set(delay, () =>
+          this.service.safeRun('revealHint', () => this.revealHint(room)),
+        ),
+      )
     }
-
-    // ② 结构化提示：时间快结束时（默认剩余 15 秒）揭示分类
-    if (
-      room.settings.structuredHintsEnabled &&
-      game.hintOrder.length > 0 &&
-      game.revealedHintCount < game.hintOrder.length
-    ) {
-      const targetRemainingMs =
-        currentRemainingMs -
-        (createHintSchedule({
-          totalMs,
-          currentRemainingMs,
-          progressiveHints: false,
-          wordText: game.answer.text,
-          revealedCount: game.revealedIndices.size,
-          structuredHintsEnabled: true,
-          hasStructuredHint: true,
-          revealedHintCount: game.revealedHintCount,
-          hintStartRatio: room.settings.hintStartRatio,
-        }).structuredDelay ?? 0)
-      if (currentRemainingMs >= targetRemainingMs) {
-        const delay = currentRemainingMs - targetRemainingMs
-        timers.push(
-          this.service.scheduler.set(delay, () =>
-            this.service.safeRun('revealStructuredHint', () => this.revealStructuredHint(room)),
-          ),
-        )
-      } else {
-        // 当前剩余时间已经不足指定秒数，立即揭示
-        timers.push(
-          this.service.scheduler.set(0, () =>
-            this.service.safeRun('revealStructuredHint', () => this.revealStructuredHint(room)),
-          ),
-        )
-      }
+    if (schedule.structuredDelay !== undefined) {
+      timers.push(
+        this.service.scheduler.set(schedule.structuredDelay, () =>
+          this.service.safeRun('revealStructuredHint', () => this.revealStructuredHint(room)),
+        ),
+      )
     }
 
     game.hintTimers = timers

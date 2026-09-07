@@ -15,6 +15,7 @@ import { APP_CONFIG, PUBLIC_CONFIG } from '../../../config/index.ts'
 import { GameService } from './game-service.ts'
 import type { RuntimeLogger } from './errors.ts'
 import { loadVocabulary, type VocabularyRegistry } from './vocabulary/index.ts'
+import { isPrivateIpv4 } from './startup/lan-addresses.ts'
 import { registerSessionHandlers } from './handlers/session.ts'
 import { registerRoomHandlers } from './handlers/room.ts'
 import { registerGameHandlers } from './handlers/game.ts'
@@ -31,14 +32,15 @@ function isAllowedOrigin(origin: string | undefined): boolean {
   try {
     const url = new URL(origin)
     if (!['http:', 'https:'].includes(url.protocol)) return false
-    // 开发代理与局域网部署都需要跨端口访问，但只允许本地/私网浏览器来源。
+    // URL 对 IPv6 字面量会保留方括号（"[::1]"），先剥掉再做比较，否则 ::1 分支永远不命中。
+    const hostname = url.hostname.replace(/^\[|\]$/gu, '')
+    // 开发代理与局域网部署都需要跨端口访问，但只允许本地/私网浏览器来源；
+    // 私网判定与 findLanAddresses 播报共用 isPrivateIpv4，避免「播报的地址」被 CORS 拒绝。
     return (
-      url.hostname === 'localhost' ||
-      url.hostname === '127.0.0.1' ||
-      url.hostname === '::1' ||
-      /^10\./u.test(url.hostname) ||
-      /^192\.168\./u.test(url.hostname) ||
-      /^172\.(1[6-9]|2\d|3[01])\./u.test(url.hostname)
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '::1' ||
+      isPrivateIpv4(hostname)
     )
   } catch {
     return false
@@ -109,9 +111,18 @@ export async function createApplication(
   }
   const service = new GameService(io, vocabulary, repositories, options.logger)
 
-  // 安全头与请求解析；CSP 由客户端自行管理，跨域资源策略关闭以便局域网访问
+  // 安全头与请求解析：局域网纯 HTTP 环境下禁用 CSP（避免 upgrade-insecure-requests 导致资源走 HTTPS 产生 SSL 协议错误）、
+  // 禁用 HSTS 与 COOP（局域网 IP 属非安全上下文，避免浏览器产生 origin untrustworthy 警告与 SSL 报错）。
   app.disable('x-powered-by')
-  app.use(helmet({ crossOriginResourcePolicy: false }))
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: false,
+      crossOriginOpenerPolicy: false,
+      originAgentCluster: false,
+      hsts: false,
+    }),
+  )
   app.use(cors({ origin: (origin, callback) => callback(null, isAllowedOrigin(origin)) }))
   app.use(express.json({ limit: '32kb' }))
   // 静态资源 gzip 压缩：JS/CSS/SVG 经 compression 减小传输体积，对局域网也有明显收益。

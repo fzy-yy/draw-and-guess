@@ -49,7 +49,7 @@ draw_and_guess/
 │   ├── game.ts                   # 对局规则：轮数/作画/选词/候选数、提示阈值、分数（基础/速度/顺序/画家）
 │   ├── drawing.ts                # 画板：预设色、色正则、粗细区间、填充容差、批次/限频/历史命令与点数预算
 │   ├── vocabulary.ts             # 词库来源/路径/校验预算/去重/Provider 标识（扩展点）
-│   ├── audio.ts                  # 音效合成 cue（频率序列与时长）与增益
+│   ├── audio.ts                  # 自定义音效元数据（soundCatalog）与音量区间
 │   ├── settings.ts               # 本地设置（音量/动画/快捷键/发现偏好/自动聚焦）、UI 参数、预设安全短语
 ├── string/                       # ★唯一 UI 文案表：客户端 strings / 服务端 serverStrings
 ├── vocabulary/                   # ★唯一权威词库目录：SQLite 数据库（metadata/words 表）
@@ -70,10 +70,12 @@ draw_and_guess/
 │
 ├── packages/shared/               # 前后端共享协议（无环境依赖，可在 Node/浏览器直接单测）
 │   └── src/
-│       ├── index.ts               # 聚合出口：re-export 下列四模块（引用路径保持 @draw-guess/shared）
-│       ├── events.ts              # 全部 Socket.IO 事件名常量 EVENTS（前后端唯一事件名来源）
-│       ├── types.ts               # 领域类型：房间阶段/成员/规则/快照/绘图命令/邀请等 DTO（含 spectating）
-│       ├── schemas.ts             # Zod 运行时校验：请求载荷 + 全部版本化服务端推送信封
+│       ├── index.ts               # 聚合出口：引用路径保持 @draw-guess/shared
+│       ├── events.ts              # Socket.IO 事件名及客户端请求/响应类型契约（前后端唯一事件名来源）
+│       ├── types.ts               # DTO 兼容聚合出口；具体领域类型位于 types/
+│       ├── schemas.ts             # Schema 兼容聚合出口；具体协议 Schema 位于 protocol/
+│       ├── types/                 # common/drawing/gameplay/room/session/vocabulary/invite 分域 DTO
+│       ├── protocol/              # base/session/room/vocabulary/drawing/invite/gameplay/push 分域 Zod 协议
 │       └── pure.ts                # 纯函数：答案规范化、遮罩生成、计分、状态机转换表
 │
 ├── apps/server/                   # 服务端（Express 5 + Socket.IO + Zod + SQLite，权威领域）
@@ -84,14 +86,18 @@ draw_and_guess/
 │   └── src/
 │       ├── index.ts               # 生产入口：加载 .env（loadEnvFile）、配置校验、日志初始化（LOG_ENABLED/LOG_MAX_FILES）、局域网 IPv4 探测、监听、优雅关闭
 │       ├── app.ts                 # HTTP/Socket.IO 装配：端口、compression 静态托管 dist、SPA 回退、连接入口（含建库迁移）；createApplication 可注入 dbFile/clientDist/vocabulary/logger
-│       ├── game-service.ts        # 领域服务编排：会话/成员/房间/邀请/猜词/绘图/快照入口（权威裁决）+ 持久化接入
-│       ├── round-machine.ts       # 回合流转状态机：开局/选词/作画/结算/暂停/弃权/逐步提示/战报落盘
+│       ├── game-service.ts        # 兼容 Facade 与领域编排：会话/成员/房间/猜词/断线恢复/持久化接入
+│       ├── round-machine.ts       # 回合流转状态机：仅依赖最小 RoundContext，不反向依赖整个 GameService
 │       ├── scoring.ts             # 计分纯函数：猜中明细、画家得分（可独立单测）
 │       ├── snapshot.ts            # 角色裁剪快照构建：画家/观众视角差异化、strokesOmitted 差分（客户端落后自检后 stateResync 拉全量兜底）
 │       ├── rate-limit.ts          # 猜词/绘图滑动窗口限频
 │       ├── errors.ts              # GameError / success / failure / RuntimeLogger / SILENT_LOGGER（避免循环依赖）
 │       ├── models.ts              # 服务端内存秘密模型（PlayerSecret/RoomSecret/GameSecret/InviteSecret…）
 │       ├── runtime.ts             # 统一 Clock/Scheduler/RandomSource（生产实现与测试注入边界）
+│       ├── application/           # 应用协作者：room-publisher 负责角色裁剪快照与大厅发布
+│       ├── domain/                # 领域协作者：内存 DomainContext、drawing、invite、vocabulary、game 的窄接口
+│       ├── startup/               # 启动期配置校验、环境加载、局域网地址、优雅关闭
+│       ├── logging/               # 文件日志初始化与保留策略
 │       ├── vocabulary/            # 词库 Provider 架构：contract（接口）/normalize（共享纯函数）/sqlite.provider（SQLite 实现）/index（分发入口，loadVocabulary 可传目录）；test-fixture.ts 生成隔离测试词库
 │       ├── db/                    # SQLite 持久化：连接（WAL + 事务辅助，setDbFile 供测试注入临时库）/ 版本化迁移（db/index.ts、db/migrate.ts）
 │       ├── repositories/          # 仓储接口 + SQLite 实现（player/room/archive，领域层只依赖接口）
@@ -115,6 +121,7 @@ draw_and_guess/
 │       │   ├── rendering.ts
 │       │   ├── viewport.ts
 │       │   └── flood-fill.ts
+│       ├── audio/                 # HTML5 Audio 音效层：资源发现、清单校验、端口契约、运行时组装、音效路由、管理器与浏览器适配器
 │       ├── style/                 # 全局样式模块目录（由 index.css 聚合导出）
 │       │   ├── index.css          # ★主入口：依次导入 tailwindcss 与各分模块样式
 │       │   ├── tokens.css         # 设计令牌：@theme（字体、10 语义色、黑色变量、阴影令牌）
@@ -139,8 +146,13 @@ draw_and_guess/
 │       │   ├── snapshot-gate.ts   # 房间/对局/回合/版本/画布修订统一门禁
 │       │   └── vocabulary-request-context.ts # 词库异步请求上下文与失效控制
 │       ├── composables/
-│       │   ├── useAudioFeedback.ts # Web Audio 合成提示音（自动播放入口解锁、音量实时读取）
+│       │   ├── useAppBootstrap.ts # Socket 监听、连接生命周期、ping 与 HMR 清理
+│       │   ├── useRoomSync.ts     # 快照门禁、画布增量合并与受限全量重同步
+│       │   ├── useAudioFeedback.ts # 全局音效反馈（HTML5 Audio 驱动阶段音效、BGM、倒计时警示）
+│       │   ├── useCanvasViewport.ts / useCanvasCursor.ts / useStrokeSession.ts # 画布视口、光标与输入会话
 │       │   ├── useGameHud.ts      # 对局 HUD 计算（useTimestamp 驱动）：剩余时间/进度/猜词权限/阶段标签/排行
+│       │   ├── useInviteQueue.ts / useFullscreenPrompt.ts # 根 Shell 的邀请倒计时与全屏提示生命周期
+│       │   ├── useVirtualTableRows.ts # 虚拟表格测量、占位与滚动归零
 │       │   ├── useShortcuts.ts    # 画板快捷键：自定义单键切换工具、撤销/重做组合键
 │       │   └── useToasts.ts       # 自建 Toast 状态层：队列/去重合并(key=type:text)/超时消失/弹跳事件（小条配色统一走橙色派生）
 │       ├── components/
@@ -151,11 +163,11 @@ draw_and_guess/
 │       │   ├── AvatarPickerDialog.vue # 40 个 SVG 头像选择模态框（v-model:open）
 │       │   ├── ActionPopover.vue  # 悬浮操作面板（聊天快捷互动用）
 │       │   ├── AppToaster.vue     # 自建 Toast 堆栈渲染：画框内右上角、白色长条+橙色小条+加粗文字、样式闭环在组件内、点击消失、淡入淡出、去重左弹跳（WAAPI）
-│       │   ├── GameCanvas.vue     # 高 DPI 实时画板：直线段描边增量绘制、橡皮擦/destination-out、洪泛填充、滚轮线宽（v-model:width）
+│       │   ├── GameCanvas.vue     # 高 DPI 实时画板：组合 canvas composables，保留重放与模板渲染
 │       │   ├── game/              # 对局组件（提供 index.ts）：GameHud / ChatPanel / DrawingToolbar / PhaseOverlay / OverlayCard / ScoreStrip
 │       │   ├── room/              # 房间组件（提供 index.ts）：SeatGrid / RuleSummary / RuleRow / RulesDialog / InviteDialog / VocabularyDialog
 │       │   ├── lobby/             # 大厅组件（提供 index.ts）：CreateRoomDialog / JoinPrivateDialog
-│       │   ├── common/            # 通用原语组件（提供 index.ts）：AppInput / SearchInput / DataTable / DifficultyStars / MultiSelectPopover / IconButton / ToolButton / RoundIconButton / SectionHeader / SideNav / SettingSliderRow / SettingSwitchRow / RuleSliderField / RuleToggleField
+│       │   ├── common/            # 通用原语组件（提供 index.ts）：含 DataTable 与 DataTableHeader、各输入/按钮/规则原语
 │       │   └── settings/          # 设置页组件（提供 index.ts）：AudioTab / ShortcutsTab / AccessibilityTab / DiagnosticsTab
 │       ├── views/
 │       │   ├── ProfileView.vue    # 资料确认页（随机昵称/内置 SVG 头像选择，无上传）
@@ -415,23 +427,24 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
   - 找不到依据的规范（如 PR/CI 约定、测试框架）一律标「待确认」，不要自行编造。
 - **快速定位速查**：
 
-| 想改什么                       | 去哪个文件                                                                                                                               |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| 应用名/版本/端口/协议/限频参数 | `config/app.ts`（经 `config/index.ts` 聚合）                                                                                             |
-| 对局轮数/时间/分数/提示        | `config/game.ts`                                                                                                                         |
-| 画板颜色/粗细/批次/历史上限    | `config/drawing.ts`                                                                                                                      |
-| 词库内容                       | `vocabulary/draw_guess_words.db`（SQLite；改后重启服务）                                                                                 |
-| 新增词库来源                   | `apps/server/src/vocabulary/` 实现 VocabularyProvider → `config/vocabulary.ts` 切 provider                                               |     |
-| 新增一个请求事件               | `packages/shared/src/events.ts` → `schemas.ts` → `game-service.ts` 或对应 `handler` → `handlers/*.ts` 注册 → `stores/game.ts` 客户端方法 |
-| 回合流转/阶段                  | `apps/server/src/round-machine.ts`                                                                                                       |
-| 计分规则                       | `apps/server/src/scoring.ts`                                                                                                             |
-| 快照裁剪/隐私边界              | `apps/server/src/snapshot.ts`                                                                                                            |
-| SQLite 建表/迁移               | `apps/server/src/db/migrate.ts`（新变更追加新迁移）                                                                                      |
-| 持久化仓储（玩家/房间/战报）   | `apps/server/src/repositories/`                                                                                                          |
-| 日志开关/保留条数              | `.env`（`LOG_ENABLED`/`LOG_MAX_FILES`）→ `config/index.ts` `getDeploymentConfig` → `apps/server/src/index.ts`                            |
-| 画布渲染/增量绘制              | `apps/client/src/components/GameCanvas.vue`（直线段描边，勿引入轮廓填充平滑库）                                                          |
-| 全局样式 / Tailwind 令牌       | `apps/client/src/style/index.css`                                                                                                        |
-| 类名合并 cn()                  | `apps/client/src/utils/cn.ts`                                                                                                            |
+| 想改什么                       | 去哪个文件                                                                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 应用名/版本/端口/协议/限频参数 | `config/app.ts`（经 `config/index.ts` 聚合）                                                                                                                 |
+| 对局轮数/时间/分数/提示        | `config/game.ts`                                                                                                                                             |
+| 画板颜色/粗细/批次/历史上限    | `config/drawing.ts`                                                                                                                                          |
+| 词库内容                       | `vocabulary/draw_guess_words.db`（SQLite；改后重启服务）                                                                                                     |
+| 新增词库来源                   | `apps/server/src/vocabulary/` 实现 VocabularyProvider → `config/vocabulary.ts` 切 provider                                                                   |     |
+| 新增一个请求事件               | `packages/shared/src/events.ts` 契约 → `packages/shared/src/protocol/` Schema → `game-service.ts` 或对应领域协作者 → `handlers/*.ts` 注册 → 客户端领域 Store |
+| 回合流转/阶段                  | `apps/server/src/round-machine.ts`                                                                                                                           |
+| 计分规则                       | `apps/server/src/scoring.ts`                                                                                                                                 |
+| 快照裁剪/隐私边界              | `apps/server/src/snapshot.ts`                                                                                                                                |
+| SQLite 建表/迁移               | `apps/server/src/db/migrate.ts`（新变更追加新迁移）                                                                                                          |
+| 持久化仓储（玩家/房间/战报）   | `apps/server/src/repositories/`                                                                                                                              |
+| 日志开关/保留条数              | `.env`（`LOG_ENABLED`/`LOG_MAX_FILES`）→ `config/index.ts` `getDeploymentConfig` → `apps/server/src/index.ts`                                                |
+| 画布渲染/增量绘制              | `apps/client/src/components/GameCanvas.vue` + `composables/useCanvas*.ts` / `useStrokeSession.ts`（直线段描边，勿引入轮廓填充平滑库）                        |
+| 音效资源/播放策略              | `config/audio.ts` → `apps/client/src/audio/` → `composables/useAudioFeedback.ts`                                                                             |
+| 全局样式 / Tailwind 令牌       | `apps/client/src/style/index.css`                                                                                                                            |
+| 类名合并 cn()                  | `apps/client/src/utils/cn.ts`                                                                                                                                |
 
 ---
 

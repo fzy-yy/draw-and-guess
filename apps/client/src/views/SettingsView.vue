@@ -12,6 +12,7 @@ import {
   Volume2,
 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
+import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
 import { useCopyWithFeedback } from '@/composables/useCopyWithFeedback'
 import {
@@ -124,7 +125,13 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
   }
   store.settings[setting] = next
   store.saveSettings()
+  playInteractionSound('select')
   shortcutError.value = ''
+}
+
+function goBack(): void {
+  playInteractionSound('activate')
+  emit('back')
 }
 </script>
 
@@ -137,7 +144,7 @@ function captureShortcut(setting: ShortcutSettingKey, event: KeyboardEvent): voi
         <button
           type="button"
           class="flex items-center gap-[0.45em] rounded-[0.55em] bg-white/10 px-[0.8em] py-[0.8cqh] text-white"
-          @click="emit('back')"
+          @click="goBack"
         >
           <ArrowLeft /> {{ props.backLabel }}
         </button>

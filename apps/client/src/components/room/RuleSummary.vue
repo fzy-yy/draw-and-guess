@@ -119,6 +119,7 @@ const hintsSummary = computed(() => {
               ? strings.room.inviteDisabledHostOnly
               : strings.room.inviteDisabledTip
         "
+        :audio-feedback="null"
         @click="emit('open-invite')"
       >
         <Send /> {{ strings.room.invitePlayers }}

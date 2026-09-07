@@ -4,6 +4,7 @@
 -->
 <script setup lang="ts">
 import { Search, X } from 'lucide-vue-next'
+import { playInteractionSound } from '@/audio'
 import AppInput from '@/components/common/AppInput.vue'
 
 const model = defineModel<string>({ default: '' })
@@ -27,6 +28,7 @@ const emit = defineEmits<{
 }>()
 
 function clear(): void {
+  playInteractionSound('activate')
   model.value = ''
   emit('clear')
 }

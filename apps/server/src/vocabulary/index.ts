@@ -101,15 +101,14 @@ export async function loadVocabulary(dir?: string): Promise<VocabularyRegistry> 
     })
   }
 
-  // 默认选择词数最多的词库；若词数相同则按 id 排序稳定选择
-  let defaultPackageId = packages[0]?.id ?? ''
-  let maxWords = -1
-  for (const pkg of packages) {
-    if (pkg.wordCount > maxWords) {
-      maxWords = pkg.wordCount
-      defaultPackageId = pkg.id
-    }
-  }
+  // 默认选择词数最多的词库；词数相同时按 id 的 UTF-16 码元升序稳定选择，
+  // 避免依赖 readdirSync 遍历序导致的结果不确定（见缺陷报告 #10）。
+  const byId = (left: { id: string }, right: { id: string }): number =>
+    left.id < right.id ? -1 : left.id > right.id ? 1 : 0
+  const sortedPackages = [...packages].sort(
+    (left, right) => right.wordCount - left.wordCount || byId(left, right),
+  )
+  const defaultPackageId = sortedPackages[0]?.id ?? ''
 
   const getDefault = (): VocabularyStore => {
     const found = stores.get(defaultPackageId)

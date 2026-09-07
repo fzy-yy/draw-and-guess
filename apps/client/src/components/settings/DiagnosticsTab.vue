@@ -95,6 +95,7 @@ const showClearProfileConfirm = ref(false)
         variant="secondary"
         type="button"
         class="min-h-[5cqh]! px-[1em]! rounded-[0.6em]! gap-[0.5em]!"
+        :audio-feedback="null"
         @click="showResetConfirm = true"
       >
         <RotateCcw />{{ strings.settings.resetSettings }}
@@ -104,6 +105,7 @@ const showClearProfileConfirm = ref(false)
         type="button"
         class="min-h-[5cqh]! px-[1em]! rounded-[0.6em]! gap-[0.5em]!"
         :disabled="profileEditingDisabled"
+        :audio-feedback="null"
         @click="showClearProfileConfirm = true"
       >
         <Trash2 />{{ strings.settings.clearProfile }}

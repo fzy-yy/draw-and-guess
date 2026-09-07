@@ -14,7 +14,6 @@ import {
   countGraphemes,
   createServerPush,
   normalizeAnswer,
-  normalizeHexColor,
   truncateGraphemes,
   type ChatMessage,
   type FillCommand,
@@ -33,7 +32,7 @@ import {
   type VocabularySnapshot,
   type VocabularyWord,
 } from '@draw-guess/shared'
-import type { GameSecret, InviteSecret, MemberState, PlayerSecret, RoomSecret } from './models.ts'
+import type { GameSecret, MemberState, PlayerSecret, RoomSecret } from './models.ts'
 import { RoundMachine } from './round-machine.ts'
 import { validateRoomSettings } from './room-settings.ts'
 import { SnapshotBuilder } from './snapshot.ts'
@@ -47,6 +46,11 @@ import type {
   ArchiveRepository,
 } from './repositories/index.ts'
 import { SYSTEM_RUNTIME, type RuntimeDependencies } from './runtime.ts'
+import { DrawingService } from './domain/drawing/drawing-service.ts'
+import { InviteService } from './domain/invite/invite-service.ts'
+import { RoomVocabularyService } from './domain/vocabulary/room-vocabulary-service.ts'
+import { DomainContext } from './domain/domain-context.ts'
+import { RoomPublisher } from './application/room-publisher.ts'
 
 /** 默认房间规则只从根级配置生成，避免处理器中出现另一套默认值。 */
 export function createDefaultRoomSettings(): RoomSettings {
@@ -73,17 +77,23 @@ export function createDefaultRoomSettings(): RoomSettings {
  * 计时器全部保存在房间秘密状态中。每次切换阶段前清理旧计时器，可阻止旧回调在新回合中误执行。
  */
 export class GameService {
-  readonly players = new Map<string, PlayerSecret>()
-  readonly playersByToken = new Map<string, PlayerSecret>()
-  readonly rooms = new Map<string, RoomSecret>()
+  readonly domain = new DomainContext()
+  readonly players = this.domain.players
+  readonly playersByToken = this.domain.playersByToken
+  readonly rooms = this.domain.rooms
   /** 私密房间码到内部 UUID 的内存索引；房间关闭后立即回收。 */
-  readonly roomsByPrivateCode = new Map<string, string>()
-  readonly invites = new Map<string, InviteSecret>()
+  readonly roomsByPrivateCode = this.domain.roomsByPrivateCode
+  readonly invites = this.domain.invites
 
   /** 回合流转状态机：开局/选词/作画/结算/暂停等阶段推进逻辑。 */
   readonly round: RoundMachine
   /** 视图裁剪（快照组装）构建器。 */
   readonly snapshotter: SnapshotBuilder
+  /** 绘图命令用例协作者；GameService 保留兼容委托入口。 */
+  readonly drawing: DrawingService
+  readonly invitation: InviteService
+  readonly roomVocabulary: RoomVocabularyService
+  readonly publisher: RoomPublisher
 
   constructor(
     readonly io: Server,
@@ -99,6 +109,53 @@ export class GameService {
   ) {
     this.round = new RoundMachine(this)
     this.snapshotter = new SnapshotBuilder(this)
+    this.publisher = new RoomPublisher({
+      io: this.io,
+      rooms: this.rooms,
+      players: this.players,
+      snapshot: (room, viewerId) => this.snapshotter.snapshot(room, viewerId),
+      toPublicPlayer: (player) => this.snapshotter.toPublicPlayer(player),
+      toPublicRoom: (room) => this.snapshotter.toPublicRoom(room),
+      logError: (error, context) => this.logUnexpectedError(error, context),
+    })
+    this.drawing = new DrawingService({
+      clock: this.clock,
+      getSession: (playerId, roundId) => this.getDrawingSession(playerId, roundId),
+      emitRoom: (roomId) => this.emitRoom(roomId),
+      publishStroke: (payload) =>
+        this.io.to(payload.roomId).emit(EVENTS.drawStrokeBatch, createServerPush(payload)),
+      publishFill: (payload) =>
+        this.io.to(payload.roomId).emit(EVENTS.drawFillCommit, createServerPush(payload)),
+    })
+    this.invitation = new InviteService({
+      invites: this.invites,
+      clock: this.clock,
+      scheduler: this.scheduler,
+      random: this.random,
+      getMembership: (playerId) => this.requireMembership(playerId),
+      getPlayer: (playerId) => this.requirePlayer(playerId),
+      getRoom: (roomId) => this.rooms.get(roomId),
+      join: (playerId, room) =>
+        this.joinResolvedRoom(this.requireAvailablePlayer(playerId), room, 'invite'),
+      toPublicInvite: (invite) => this.snapshotter.toPublicInvite(invite),
+      emitInvite: (target, invite) =>
+        target.socket?.emit(EVENTS.inviteReceived, createServerPush(invite)),
+      emitResolved: (invite, id, status) => {
+        const payload = createServerPush({ id, status })
+        this.emitToPlayer(invite.fromPlayerId, EVENTS.inviteResolved, payload)
+        this.emitToPlayer(invite.toPlayerId, EVENTS.inviteResolved, payload)
+      },
+      safeRun: (label, action) => this.safeRun(label, action),
+    })
+    this.roomVocabulary = new RoomVocabularyService({
+      registry: this.vocabulary,
+      getMembership: (playerId) => this.requireMembership(playerId),
+      getHostRoom: (playerId) => this.requireHostRoom(playerId),
+      getStore: (room) => this.getRoomVocabularyStore(room),
+      addNotice: (room, text) => this.addSystemNotice(room, text),
+      persist: (room) => this.persistRoom(room),
+      emitRoom: (roomId) => this.emitRoom(roomId),
+    })
   }
 
   /** 兼容领域协作者的简洁访问，同时确保全部时间来自统一运行时。 */
@@ -816,22 +873,7 @@ export class GameService {
    * 房主与普通成员都可读（普通成员只能查看，不能修改；修改与切换仅房主）。
    */
   getVocabulary(playerId: string): VocabularySnapshot {
-    const { room } = this.requireMembership(playerId)
-    const store = this.getRoomVocabularyStore(room)
-    const packages = 'packages' in this.vocabulary ? this.vocabulary.packages : []
-    const packageId =
-      room.vocabularyPackageId ||
-      ('defaultPackageId' in this.vocabulary
-        ? this.vocabulary.defaultPackageId
-        : store.meta.id || '')
-    return {
-      packageId,
-      packages,
-      items: store.items,
-      selectedIds: [...room.selectedWordIds],
-      version: store.version,
-      categories: store.meta.categoryEnum,
-    }
+    return this.roomVocabulary.get(playerId)
   }
 
   /**
@@ -843,59 +885,11 @@ export class GameService {
     packageId: string,
     expectedVersion?: number,
   ): VocabularySnapshot {
-    const room = this.requireHostRoom(playerId)
-    if (room.phase !== 'waiting')
-      throw new GameError('SETTINGS_LOCKED', serverStrings.errors.SETTINGS_LOCKED_VOCABULARY)
-    if (expectedVersion !== undefined && room.stateVersion !== expectedVersion)
-      throw new GameError('VERSION_CONFLICT', serverStrings.errors.VERSION_CONFLICT_VOCABULARY)
-
-    let targetStore: VocabularyStore | undefined
-    if ('get' in this.vocabulary) {
-      targetStore = this.vocabulary.get(packageId)
-    }
-    if (!targetStore) {
-      throw new GameError('NOT_FOUND', serverStrings.errors.VOCABULARY_PACKAGE_NOT_FOUND)
-    }
-
-    room.vocabularyPackageId = packageId
-    // 切换词库后默认全选新词库的所有词条
-    room.selectedWordIds = new Set(targetStore.items.map((word) => word.id))
-    room.stateVersion += 1
-
-    const pkgName = targetStore.meta.name || packageId
-    this.addSystemNotice(room, serverStrings.notices.vocabularyPackageSwitched(pkgName))
-    this.persistRoom(room)
-    this.emitRoom(room.id)
-    return this.getVocabulary(playerId)
+    return this.roomVocabulary.selectPackage(playerId, packageId, expectedVersion)
   }
 
   updateVocabulary(playerId: string, ids: string[], expectedVersion: number): VocabularySnapshot {
-    const room = this.requireHostRoom(playerId)
-    if (room.phase !== 'waiting')
-      throw new GameError('SETTINGS_LOCKED', serverStrings.errors.SETTINGS_LOCKED_VOCABULARY)
-    if (room.stateVersion !== expectedVersion)
-      throw new GameError('VERSION_CONFLICT', serverStrings.errors.VERSION_CONFLICT_VOCABULARY)
-    const store = this.getRoomVocabularyStore(room)
-    const selected = new Set(ids)
-    // 词条数量不足时拒绝保存，保证整局选词阶段（6人×2轮换词×5可选词=60条）有足够候选
-    if (selected.size < MIN_SELECTED_VOCABULARY_WORDS) {
-      throw new GameError(
-        'VOCABULARY_TOO_SMALL',
-        serverStrings.errors.VOCABULARY_TOO_SMALL(MIN_SELECTED_VOCABULARY_WORDS),
-      )
-    }
-    // 每个 ID 都必须来自权威词库，防止伪造词条注入
-    for (const id of selected) {
-      if (!store.byId.has(id))
-        throw new GameError('INVALID_WORD_ID', serverStrings.errors.INVALID_WORD_ID)
-    }
-    room.selectedWordIds = selected
-    room.stateVersion += 1
-    // 词库内容变化不影响已准备状态；只有房间规则变化才要求重新确认准备。
-    this.addSystemNotice(room, serverStrings.notices.vocabularyUpdated)
-    this.persistRoom(room)
-    this.emitRoom(room.id)
-    return this.getVocabulary(playerId)
+    return this.roomVocabulary.update(playerId, ids, expectedVersion)
   }
 
   startGame(playerId: string, expectedVersion: number): RoomSnapshot {
@@ -1054,181 +1048,24 @@ export class GameService {
   }
 
   addStroke(playerId: string, roundId: string, stroke: Stroke): StrokeAck {
-    const { room } = this.requireMembership(playerId)
-    const game = this.requireDrawerGame(room, playerId, roundId)
-    enforceEventRate(this.requirePlayer(playerId), 'draw', this.clock)
-    // 序号必须严格递增，服务端拒绝迟到的旧包（网络乱序/重复发包）
-    if (stroke.sequence <= game.lastSequence)
-      throw new GameError('STALE_DRAW_EVENT', serverStrings.errors.STALE_DRAW_EVENT_STROKE)
-    const color = normalizeHexColor(stroke.color)
-    // 颜色与线宽均需合法，宽度超出范围也会被拒绝
-    if (
-      !color ||
-      stroke.width < APP_CONFIG.drawing.width.min ||
-      stroke.width > APP_CONFIG.drawing.width.max
-    ) {
-      throw new GameError('INVALID_DRAW_STYLE', serverStrings.errors.INVALID_DRAW_STYLE)
-    }
-    // 撤销语义：新命令使重做失效，且此前被撤销的命令被永久丢弃
-    if (game.undoneStrokeIds.length) {
-      const undoneSet = new Set(game.undoneStrokeIds)
-      for (const command of game.strokes) {
-        if (undoneSet.has(command.id))
-          game.strokePointTotal -= command.kind === 'stroke' ? command.points.length : 1
-      }
-      game.strokes = game.strokes.filter((command) => !undoneSet.has(command.id))
-      game.undoneStrokeIds = []
-    }
-    // 同一笔画 ID 的后续批次会追加到已有笔画上，而不是新建命令
-    const existing = game.strokes.find(
-      (candidate): candidate is Stroke => candidate.kind === 'stroke' && candidate.id === stroke.id,
-    )
-    // 依据 startPointIndex 计算实际新增点，杜绝重复连接点混入权威点数
-    if (existing) {
-      const expectedStart = existing.points.length
-      if (
-        existing.tool !== stroke.tool ||
-        existing.width !== stroke.width ||
-        existing.color !== color ||
-        stroke.startPointIndex !== expectedStart
-      ) {
-        throw new GameError('INVALID_DRAW_STYLE', serverStrings.errors.INVALID_DRAW_STYLE)
-      }
-    } else if (stroke.startPointIndex !== undefined && stroke.startPointIndex !== 0) {
-      throw new GameError('INVALID_DRAW_STYLE', serverStrings.errors.INVALID_DRAW_STYLE)
-    }
-    const newPoints = stroke.points
-
-    const nextPointTotal = game.strokePointTotal + newPoints.length
-    if (
-      nextPointTotal > APP_CONFIG.drawing.maxPointsPerRound ||
-      (existing?.points.length ?? 0) + newPoints.length > APP_CONFIG.drawing.maxPointsPerStroke
-    ) {
-      throw new GameError('DRAW_BUDGET_EXCEEDED', serverStrings.errors.DRAW_BUDGET_EXCEEDED)
-    }
-    game.lastSequence = stroke.sequence
-    game.strokePointTotal = nextPointTotal
-    if (existing) {
-      // 同一按下动作的后续批次沿用笔画 ID；只追加新增点，撤销仍能一次移除完整笔画。
-      existing.points.push(...newPoints)
-      existing.sequence = stroke.sequence
-    } else {
-      game.strokes.push({ ...stroke, color, points: [...newPoints] })
-      // 历史命令超限时丢弃最早的命令，并同步回收其点数预算，保护内存有界
-      if (game.strokes.length > APP_CONFIG.drawing.maxHistoryCommands) {
-        const dropped = game.strokes.shift()
-        if (dropped) game.strokePointTotal -= dropped.kind === 'stroke' ? dropped.points.length : 1
-      }
-    }
-    game.drawingRevision += 1
-    // 增量广播前标记房间全部成员已同步到该序号：下一次快照可省略画布历史（差分下发，见 snapshot.ts）
-    room.members.forEach((member) => (member.lastSyncedSeq = game.lastSequence))
-    // 标准化颜色后广播给房间所有成员（画家自身也会收到并用于纠正本地预览）
-    this.io.to(room.id).emit(
-      EVENTS.drawStrokeBatch,
-      createServerPush({
-        roomId: room.id,
-        gameId: game.id,
-        roundId,
-        stroke: { ...stroke, color, points: newPoints },
-        drawingRevision: game.drawingRevision,
-      }),
-    )
-    return {
-      strokeId: stroke.id,
-      pointCount: existing ? existing.points.length : newPoints.length,
-      drawingRevision: game.drawingRevision,
-      remainingBudget: Math.max(0, APP_CONFIG.drawing.maxPointsPerRound - game.strokePointTotal),
-    }
+    return this.drawing.addStroke(playerId, roundId, stroke)
   }
 
   /** 校验并提交封闭区域填充命令；客户端只上传点击位置和颜色，不上传像素数据。 */
   addFill(playerId: string, roundId: string, fill: FillCommand): void {
-    const { room } = this.requireMembership(playerId)
-    const game = this.requireDrawerGame(room, playerId, roundId)
-    enforceEventRate(this.requirePlayer(playerId), 'draw', this.clock)
-    // 序号必须严格递增，拒绝旧包
-    if (fill.sequence <= game.lastSequence)
-      throw new GameError('STALE_DRAW_EVENT', serverStrings.errors.STALE_DRAW_EVENT_FILL)
-    const color = normalizeHexColor(fill.color)
-    if (!color) throw new GameError('INVALID_FILL', serverStrings.errors.INVALID_FILL)
-    // 与 addStroke 同一撤销语义：先物理移除被撤销命令（同步回收点数预算）
-    if (game.undoneStrokeIds.length) {
-      const undoneSet = new Set(game.undoneStrokeIds)
-      for (const command of game.strokes) {
-        if (undoneSet.has(command.id))
-          game.strokePointTotal -= command.kind === 'stroke' ? command.points.length : 1
-      }
-      game.strokes = game.strokes.filter((command) => !undoneSet.has(command.id))
-      game.undoneStrokeIds = []
-    }
-    // 与笔画共用回合点数预算（填充按 1 计）；超限时先拒绝，不修改任何状态
-    if (game.strokePointTotal + 1 > APP_CONFIG.drawing.maxPointsPerRound)
-      throw new GameError('DRAW_BUDGET_EXCEEDED', serverStrings.errors.DRAW_BUDGET_EXCEEDED)
-    game.lastSequence = fill.sequence
-    game.strokePointTotal += 1
-    game.strokes.push({ ...fill, color })
-    // 丢弃最早命令时同步回收其点数预算
-    if (game.strokes.length > APP_CONFIG.drawing.maxHistoryCommands) {
-      const dropped = game.strokes.shift()
-      if (dropped) game.strokePointTotal -= dropped.kind === 'stroke' ? dropped.points.length : 1
-    }
-    game.drawingRevision += 1
-    // 标记房间全部成员同步到该序号（与笔画增量同一套差分机制）
-    room.members.forEach((member) => (member.lastSyncedSeq = game.lastSequence))
-    this.io.to(room.id).emit(
-      EVENTS.drawFillCommit,
-      createServerPush({
-        roomId: room.id,
-        gameId: game.id,
-        roundId,
-        fill: { ...fill, color },
-        drawingRevision: game.drawingRevision,
-      }),
-    )
+    this.drawing.addFill(playerId, roundId, fill)
   }
 
   undo(playerId: string, roundId: string): void {
-    const { room } = this.requireMembership(playerId)
-    const game = this.requireDrawerGame(room, playerId, roundId)
-    // 与笔画/填充同样受绘图限频保护：否则单请求可无限触发全员快照广播
-    enforceEventRate(this.requirePlayer(playerId), 'draw', this.clock)
-    const undoneSet = new Set(game.undoneStrokeIds)
-    let target: (typeof game.strokes)[number] | undefined
-    for (let index = game.strokes.length - 1; index >= 0; index -= 1) {
-      const candidate = game.strokes[index]
-      if (candidate && !undoneSet.has(candidate.id)) {
-        target = candidate
-        break
-      }
-    }
-    if (!target) return // 无可撤销内容时不广播，避免无意义的快照扇出
-    game.undoneStrokeIds.push(target.id)
-    game.drawingRevision += 1
-    this.emitRoom(room.id)
+    this.drawing.undo(playerId, roundId)
   }
 
   redo(playerId: string, roundId: string): void {
-    const { room } = this.requireMembership(playerId)
-    const game = this.requireDrawerGame(room, playerId, roundId)
-    enforceEventRate(this.requirePlayer(playerId), 'draw', this.clock)
-    if (!game.undoneStrokeIds.length) return // 撤销栈为空时不广播
-    game.undoneStrokeIds.pop() // 撤销栈是先进后出，重做即弹出最后一条
-    game.drawingRevision += 1
-    this.emitRoom(room.id)
+    this.drawing.redo(playerId, roundId)
   }
 
   clearDrawing(playerId: string, roundId: string): void {
-    const { room } = this.requireMembership(playerId)
-    const game = this.requireDrawerGame(room, playerId, roundId)
-    enforceEventRate(this.requirePlayer(playerId), 'draw', this.clock)
-    if (!game.strokes.length && !game.undoneStrokeIds.length) return // 已是空画布时不广播
-    game.strokes = []
-    game.strokePointTotal = 0 // 清空画布同步释放点数预算
-    game.undoneStrokeIds = []
-    game.lastSequence += 1 // 清空后跳号，保证后续命令仍大于历史序号
-    game.drawingRevision += 1
-    this.emitRoom(room.id)
+    this.drawing.clear(playerId, roundId)
   }
 
   pause(playerId: string, reason: string): void {
@@ -1351,70 +1188,11 @@ export class GameService {
   }
 
   sendInvite(playerId: string, targetId: string): Invite {
-    const { room } = this.requireMembership(playerId)
-    const sender = this.requirePlayer(playerId)
-    const target = this.requirePlayer(targetId)
-    // 邀请前置条件：房间等待中且有席位；非房主邀请需开启 allowPlayerInvite
-    if (room.phase !== 'waiting' || room.members.length >= room.settings.maxPlayers)
-      throw new GameError('ROOM_NOT_JOINABLE', serverStrings.errors.ROOM_NOT_JOINABLE_INVITE)
-    if (room.hostId !== playerId && !room.settings.allowPlayerInvite)
-      throw new GameError('FORBIDDEN', serverStrings.errors.FORBIDDEN_INVITE)
-    // 目标必须在线、不在房间且愿意接收邀请；若其是本房间的 leftGame 成员（稍早退出本局），
-    // 即使 player.roomId 已清空看起来「空闲」，accept 也必然被 GAME_ALREADY_LEFT 拒绝，
-    // 因此直接禁止邀请，避免发出一个注定失效的邀请（双方 UI 状态不一致）。
-    if (
-      !target.connected ||
-      target.roomId ||
-      !target.preferences.acceptsInvites ||
-      room.members.some((member) => member.playerId === targetId && member.leftGame)
-    )
-      throw new GameError('TARGET_UNAVAILABLE', serverStrings.errors.TARGET_UNAVAILABLE)
-    // 同一目标有冷却时间，防止反复骚扰
-    const last = sender.lastInviteAt.get(targetId) ?? 0
-    if (this.clock.now() - last < APP_CONFIG.network.inviteCooldownMs)
-      throw new GameError('RATE_LIMITED', serverStrings.errors.RATE_LIMITED_INVITE)
-    sender.lastInviteAt.set(targetId, this.clock.now())
-    // 创建 30 秒有效的邀请，超时自动回收
-    const id = this.random.uuid()
-    const expiresAt = this.clock.now() + APP_CONFIG.network.inviteExpiryMs
-    const invite: InviteSecret = {
-      id,
-      fromPlayerId: playerId,
-      toPlayerId: targetId,
-      roomId: room.id,
-      expiresAt,
-      timer: this.scheduler.set(APP_CONFIG.network.inviteExpiryMs, () =>
-        this.safeRun('inviteExpiry', () => this.resolveInvite(id, 'expired')),
-      ),
-    }
-    this.invites.set(id, invite)
-    const publicInvite = this.snapshotter.toPublicInvite(invite)
-    target.socket?.emit(EVENTS.inviteReceived, createServerPush(publicInvite))
-    return publicInvite
+    return this.invitation.send(playerId, targetId)
   }
 
   respondInvite(playerId: string, inviteId: string, accept: boolean): RoomSnapshot | undefined {
-    const invite = this.invites.get(inviteId)
-    // 只允许被邀请者本人应答，且邀请未过期
-    if (!invite || invite.toPlayerId !== playerId || invite.expiresAt < this.clock.now())
-      throw new GameError('INVITE_EXPIRED', serverStrings.errors.INVITE_EXPIRED)
-    const room = this.rooms.get(invite.roomId)
-    if (!accept) {
-      this.resolveInvite(inviteId, 'declined')
-      return undefined
-    }
-    // 房间已不存在：邀请确定无效，直接作废并报错
-    if (!room) {
-      this.resolveInvite(inviteId, 'declined')
-      throw new GameError('ROOM_NOT_FOUND', serverStrings.errors.ROOM_NOT_FOUND_INVITE)
-    }
-    // 定向邀请本身就是授权凭据，可加入公开或私密房，但仍需通过统一容量/阶段校验。
-    // 必须先尝试入场、成功后才消费邀请：否则满员/进行中/已在其它房间等校验失败时，
-    // 会出现「邀请已被删除但受邀者未进房」的双方状态不一致（双方 UI 都收到 accepted）。
-    const player = this.requireAvailablePlayer(playerId)
-    const snapshot = this.joinResolvedRoom(player, room, 'invite')
-    this.resolveInvite(inviteId, 'accepted')
-    return snapshot
+    return this.invitation.respond(playerId, inviteId, accept)
   }
 
   handleDisconnect(socket: Socket): void {
@@ -1539,23 +1317,7 @@ export class GameService {
    */
   /** @internal 内部协作接口（RoundMachine / 模块间调用） */
   public emitRoom(roomId?: string): void {
-    if (!roomId) return
-    const room = this.rooms.get(roomId)
-    if (!room) return
-    for (const member of room.members) {
-      if (member.leftGame) continue
-      // 逐成员兜底：快照构建对缺失身份会抛 NOT_IN_ROOM，若不隔离则一个异常成员
-      // 会中断全员广播，并把异常向上抛进计时器回调而终结进程（内存态全部丢失）。
-      try {
-        const player = this.players.get(member.playerId)
-        player?.socket?.emit(
-          EVENTS.roomSnapshot,
-          createServerPush(this.snapshotter.snapshot(room, member.playerId)),
-        )
-      } catch (error) {
-        this.logUnexpectedError(error, { roomId, memberId: member.playerId, scope: 'emitRoom' })
-      }
-    }
+    this.publisher.emitRoom(roomId)
   }
 
   /**
@@ -1577,34 +1339,17 @@ export class GameService {
    */
   /** @internal 内部协作接口（RoundMachine / 模块间调用） */
   public broadcastPresence(): void {
-    const snapshot = this.presenceSnapshot()
-    this.io.emit(EVENTS.presenceSnapshot, createServerPush(snapshot))
-    this.io.emit(EVENTS.roomListChanged, createServerPush(snapshot.rooms))
+    this.publisher.broadcastPresence()
   }
 
   /** 大厅在线状态快照：只包含可发现玩家与全部未关闭房间。 */
   presenceSnapshot(): PresenceSnapshot {
-    return {
-      players: [...this.players.values()]
-        .filter((player) => player.preferences.discoverable)
-        .map((player) => this.snapshotter.toPublicPlayer(player)),
-      rooms: [...this.rooms.values()]
-        .filter((room) => room.phase !== 'closed' && room.visibility === 'public')
-        .map((room) => this.snapshotter.toPublicRoom(room)),
-    }
+    return this.publisher.presenceSnapshot()
   }
 
   /** 取指定玩家的当前房间快照（用于断线恢复/重同步），不要求玩家在线。 */
   snapshotForPlayer(playerId: string, forceFull = false): RoomSnapshot | undefined {
-    const player = this.players.get(playerId)
-    const room = player?.roomId ? this.rooms.get(player.roomId) : undefined
-    if (!room) return undefined
-    // 全量模式：清除差分游标，让快照携带完整画布历史（客户端本地落后/丢包后的修复通道）
-    if (forceFull) {
-      const member = room.members.find((item) => item.playerId === playerId)
-      if (member) member.lastSyncedSeq = undefined
-    }
-    return this.snapshotter.snapshot(room, playerId)
+    return this.publisher.snapshotForPlayer(playerId, forceFull)
   }
 
   /** 执行合法的阶段转换；非法转换直接抛错，绝不自作主张切换。转换后版本号 +1。 */
@@ -1619,17 +1364,6 @@ export class GameService {
     room.phase = next
     this.logger.info({ roomId: room.id, from: previous, to: next }, '房间阶段已转换')
     room.stateVersion += 1
-  }
-
-  private resolveInvite(id: string, status: 'accepted' | 'declined' | 'expired'): void {
-    // 无论接受/拒绝/过期，都清除定时器并通知邀请双方
-    const invite = this.invites.get(id)
-    if (!invite) return
-    this.scheduler.clear(invite.timer)
-    this.invites.delete(id)
-    const payload = { id, status }
-    this.emitToPlayer(invite.fromPlayerId, EVENTS.inviteResolved, createServerPush(payload))
-    this.emitToPlayer(invite.toPlayerId, EVENTS.inviteResolved, createServerPush(payload))
   }
 
   private expireDisconnectedPlayer(playerId: string): void {
@@ -1941,6 +1675,18 @@ export class GameService {
     const { room } = this.requireMembership(playerId)
     if (room.hostId !== playerId) throw new GameError('FORBIDDEN', serverStrings.errors.FORBIDDEN)
     return room
+  }
+
+  /** @internal 绘图协作者的窄查询入口。 */
+  public getDrawingSession(
+    playerId: string,
+    roundId: string,
+  ): { player: PlayerSecret; room: RoomSecret; game: GameSecret } {
+    const membership = this.requireMembership(playerId)
+    return {
+      ...membership,
+      game: this.requireDrawerGame(membership.room, playerId, roundId),
+    }
   }
 
   /** 取对局秘密，房间没有进行中的游戏时抛 NO_GAME。 */

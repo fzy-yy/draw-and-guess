@@ -69,6 +69,7 @@ defineExpose({ close })
       :disabled="disabled"
       :title="triggerTitle"
       :aria-expanded="open"
+      :audio-feedback="open ? 'close' : 'open'"
       aria-haspopup="dialog"
       @click="toggle"
     >

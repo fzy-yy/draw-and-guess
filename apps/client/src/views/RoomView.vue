@@ -3,6 +3,7 @@
 import { computed, ref } from 'vue'
 import { Check, ClipboardCopy, KeyRound, LogOut, Play, ShieldCheck } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
+import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
 import { useCopyWithFeedback } from '@/composables/useCopyWithFeedback'
 import {
@@ -57,7 +58,9 @@ const copyPrivateCode = useCopyWithFeedback({
 
 /** 复制私密房间码（无房间码时静默跳过）。 */
 function handleCopyPrivateCode(): void {
-  if (store.room?.privateJoinCode) void copyPrivateCode()
+  if (!store.room?.privateJoinCode) return
+  playInteractionSound('activate')
+  void copyPrivateCode()
 }
 
 /** 打开规则弹窗：以当前房间规则初始化草稿。 */
@@ -123,6 +126,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           size="lg"
           :label="strings.common.exit"
           :title="strings.common.exit"
+          :audio-feedback="null"
           @click="showLeaveConfirm = true"
         >
           <LogOut class="h-[2.6cqh] w-[2.6cqh]" />
@@ -170,6 +174,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           type="button"
           class="w-full my-[0.8cqh]"
           :class="{ 'text-green bg-green/10 border-green': store.me?.ready }"
+          :audio-feedback="store.me?.ready ? 'activate' : null"
           @click="store.setReady(!store.me?.ready)"
         >
           {{ store.me?.ready ? strings.room.cancelReady : strings.room.readyGo }}
@@ -190,6 +195,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           type="button"
           class="w-full"
           :disabled="!allSet"
+          :audio-feedback="null"
           @click="store.startGame"
         >
           <Play /> {{ strings.room.startGame }}

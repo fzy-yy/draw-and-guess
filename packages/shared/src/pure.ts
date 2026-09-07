@@ -9,9 +9,11 @@ export function normalizeHexColor(value: string): string | undefined {
   return new RegExp(APP_CONFIG.drawing.colorPattern).test(value) ? value.toUpperCase() : undefined
 }
 
-/** 标准化猜词；Unicode NFKC 可合并全角拉丁字符，中文词面不会被破坏。 */
+/** 标准化猜词；Unicode NFKC 可合并全角拉丁字符，中文词面不会被破坏。
+ * 统一用 toLowerCase()（确定性），避免 toLocaleLowerCase() 随服务器 locale
+ * 改变大小写折叠（如土耳其语 I→ı、德语 SS/ß），否则答对判定与昵称去重不可移植。 */
 export function normalizeAnswer(value: string): string {
-  return value.normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase()
+  return value.normalize('NFKC').trim().replace(/\s+/gu, ' ').toLowerCase()
 }
 
 /** 按用户可见字符（Unicode grapheme cluster）计数，避免 emoji/组合音标被拆成多个字符。 */

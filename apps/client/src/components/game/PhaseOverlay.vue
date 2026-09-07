@@ -10,6 +10,7 @@
 import { Brush, CirclePause, CirclePlay, RefreshCw, Trophy } from 'lucide-vue-next'
 import type { GameView } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
+import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
 import type { RankedMember } from '@/composables/useGameHud'
 import AppButton from '@/components/common/AppButton.vue'
@@ -37,6 +38,11 @@ const emit = defineEmits<{
 }>()
 
 const store = useGameStore()
+
+function chooseWord(wordId: string): void {
+  playInteractionSound('select')
+  emit('choose-word', wordId)
+}
 </script>
 
 <template>
@@ -79,7 +85,7 @@ const store = useGameStore()
           :key="option.id"
           type="button"
           class="flex min-h-[7cqh] min-w-[12cqw] flex-col items-center justify-center gap-[0.3cqh] rounded-[0.7em] bg-yellow border-b-[0.6cqh] border-yellow text-navy px-[1em] text-fs-20 font-bold cursor-pointer transition-transform active:scale-95"
-          @click="emit('choose-word', option.id)"
+          @click="chooseWord(option.id)"
         >
           <span class="leading-[1.2]">{{ option.text }}</span>
           <!-- 难度星级：精确星数模式（多少难度就多少颗实心星），与词面居中对齐；
@@ -103,7 +109,7 @@ const store = useGameStore()
       <div v-if="store.isHost" class="flex gap-[0.8em] mt-[1.5cqh]">
         <AppButton variant="primary" @click="emit('resume')">
           <CirclePlay />{{ strings.game.resumeGame }}</AppButton
-        ><AppButton variant="danger" @click="emit('open-end-confirm')">
+        ><AppButton variant="danger" :audio-feedback="null" @click="emit('open-end-confirm')">
           {{ strings.game.endEarly }}
         </AppButton>
       </div>
@@ -170,7 +176,7 @@ const store = useGameStore()
         <!-- 最终结算后全员都可返回房间再来一局；不想继续的玩家可退出房间 -->
         <AppButton variant="primary" @click="emit('return-waiting')">
           {{ strings.game.backToRoom }}</AppButton
-        ><AppButton variant="secondary" @click="emit('leave-room')">
+        ><AppButton variant="secondary" :audio-feedback="null" @click="emit('leave-room')">
           {{ strings.game.leaveRoom }}
         </AppButton>
       </div>

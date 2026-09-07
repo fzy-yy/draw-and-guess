@@ -4,6 +4,8 @@
   额外的辅助说明（如最大值提示）经默认插槽放在选择框下方。
 -->
 <script setup lang="ts" generic="V extends string | number">
+import { playInteractionSound } from '@/audio'
+
 export interface RuleSelectOption<V extends string | number> {
   value: V
   label: string
@@ -24,6 +26,7 @@ const model = defineModel<V>({ required: true })
       v-model="model"
       :disabled="disabled"
       class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-navy"
+      @change="playInteractionSound('select')"
     >
       <option v-for="option in options" :key="String(option.value)" :value="option.value">
         {{ option.label }}

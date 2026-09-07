@@ -7,7 +7,6 @@ import { defineStore } from 'pinia'
 import { APP_CONFIG } from '@draw-guess/config'
 import {
   EVENTS,
-  type EventName,
   type FillCommand,
   type RoomSnapshot,
   type Stroke,
@@ -51,7 +50,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
 
   async function submitGuess(text: string): Promise<boolean> {
     if (!roomStore.room?.game) return false
-    const result = await request<undefined>(EVENTS.guessSubmit, {
+    const result = await request(EVENTS.guessSubmit, {
       roundId: roomStore.room.game.roundId,
       text,
     })
@@ -69,7 +68,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
 
   async function sendStroke(stroke: Stroke): Promise<StrokeAck | undefined> {
     if (!roomStore.room?.game) return undefined
-    const result = await request<StrokeAck>(
+    const result = await request(
       EVENTS.drawStrokeBatch,
       { roundId: roomStore.room.game.roundId, stroke },
       { quiet: true },
@@ -92,7 +91,9 @@ export const useGameplayStore = defineStore('gameplay', () => {
     )
   }
 
-  async function drawAction(event: EventName): Promise<void> {
+  async function drawAction(
+    event: typeof EVENTS.drawUndo | typeof EVENTS.drawRedo | typeof EVENTS.drawClear,
+  ): Promise<void> {
     if (!roomStore.room?.game) return
     await request(event, { roundId: roomStore.room.game.roundId }, { quiet: true })
   }
@@ -110,7 +111,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
   }
 
   async function leaveGame(): Promise<void> {
-    const result = await request<undefined>(EVENTS.gameLeave)
+    const result = await request(EVENTS.gameLeave)
     if (!result.ok) return
     roomStore.clearLocalRoomState()
     sessionStore.page = 'lobby'
@@ -131,6 +132,12 @@ export const useGameplayStore = defineStore('gameplay', () => {
       if (stroke.sequence <= existing.sequence) return
       existing.points.push(...stroke.points)
       existing.sequence = stroke.sequence
+    } else if (existing) {
+      // 该笔画 id 处于「已撤销」状态又收到迟到批次：恢复其既有历史点并追加本批点，
+      // 并把它从 undoneStrokeIds 移除（取消撤销），避免 purgeUndone 把历史点一并丢弃（#7）。
+      existing.points.push(...stroke.points)
+      existing.sequence = Math.max(existing.sequence, stroke.sequence)
+      game.undoneStrokeIds = game.undoneStrokeIds.filter((id) => id !== existing.id)
     } else {
       purgeUndone(game)
       game.strokes.push({ ...stroke, points: [...stroke.points] })

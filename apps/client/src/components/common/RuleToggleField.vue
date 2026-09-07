@@ -4,6 +4,8 @@
   v-model 双向绑定布尔值，组件不感知业务字段。
 -->
 <script setup lang="ts">
+import { playInteractionSound } from '@/audio'
+
 const model = defineModel<boolean>({ required: true })
 
 defineProps<{
@@ -16,7 +18,12 @@ defineProps<{
   <label
     class="min-w-0 flex min-h-[4.8cqh] flex-row items-center gap-[0.5cqh] rounded-[0.5em] bg-line px-[0.8em] text-fs-14 font-bold cursor-pointer"
   >
-    <input v-model="model" type="checkbox" class="h-[2.2cqh] w-[2.2cqh] accent-blue" />
+    <input
+      v-model="model"
+      type="checkbox"
+      class="h-[2.2cqh] w-[2.2cqh] accent-blue"
+      @change="playInteractionSound('toggle')"
+    />
     {{ label }}
   </label>
 </template>

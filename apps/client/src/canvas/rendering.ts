@@ -24,16 +24,19 @@ export function renderStroke(
     context.restore()
     return
   }
-  context.moveTo(first.x * canvasWidth, first.y * canvasHeight)
+  // 归一化坐标 [0,1] 映射到像素 [0, canvas-1]：末列/末行索引是 canvas-1。
+  // 若乘 canvasWidth 会把 x=1 画到 canvasWidth 处（越过最后一个像素），
+  // 与 GameCanvas 画填充种子时 clamp 到 canvas-1 不一致（见缺陷报告 #8）。
+  context.moveTo(first.x * (canvasWidth - 1), first.y * (canvasHeight - 1))
   for (const point of stroke.points.slice(start + 1))
-    context.lineTo(point.x * canvasWidth, point.y * canvasHeight)
+    context.lineTo(point.x * (canvasWidth - 1), point.y * (canvasHeight - 1))
   if (stroke.points.length === 1)
-    context.lineTo(first.x * canvasWidth + 0.01, first.y * canvasHeight + 0.01)
+    context.lineTo(first.x * (canvasWidth - 1) + 0.01, first.y * (canvasHeight - 1) + 0.01)
   else if (start >= 1 && stroke.points.length - start === 1 && stroke.points[start - 1]) {
     const previous = stroke.points[start - 1]!
     context.lineTo(
-      previous.x * canvasWidth + (first.x - previous.x) * canvasWidth + 0.01,
-      previous.y * canvasHeight + (first.y - previous.y) * canvasHeight + 0.01,
+      previous.x * (canvasWidth - 1) + (first.x - previous.x) * (canvasWidth - 1) + 0.01,
+      previous.y * (canvasHeight - 1) + (first.y - previous.y) * (canvasHeight - 1) + 0.01,
     )
   }
   context.stroke()

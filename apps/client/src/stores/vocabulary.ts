@@ -37,7 +37,7 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
   async function loadVocabulary(): Promise<void> {
     const context = requestGuard.begin(state(), roomStore.room?.vocabularyPackageId)
     if (!context) return
-    const snapshot = await request<VocabularySnapshot>(EVENTS.roomGetVocabulary)
+    const snapshot = await request(EVENTS.roomGetVocabulary)
     if (snapshot.ok && requestGuard.accepts(context, state(), snapshot.data.packageId))
       vocabulary.value = snapshot.data
   }
@@ -46,7 +46,7 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
     if (!roomStore.room) return false
     const context = requestGuard.begin(state(), roomStore.room.vocabularyPackageId)
     if (!context) return false
-    const snapshot = await request<VocabularySnapshot>(EVENTS.roomUpdateVocabulary, {
+    const snapshot = await request(EVENTS.roomUpdateVocabulary, {
       ids,
       expectedVersion: roomStore.room.stateVersion,
     })
@@ -61,7 +61,7 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
     if (!roomStore.room) return false
     const context = requestGuard.begin(state(), packageId)
     if (!context) return false
-    const snapshot = await request<VocabularySnapshot>(EVENTS.roomSelectVocabularyPackage, {
+    const snapshot = await request(EVENTS.roomSelectVocabularyPackage, {
       packageId,
       expectedVersion: roomStore.room.stateVersion,
     })

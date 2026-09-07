@@ -66,7 +66,7 @@ export const useSessionStore = defineStore('session', () => {
     clearRestoreRetry()
     busy.value = true
     try {
-      const result = await request<SessionRegistration>(
+      const result = await request(
         EVENTS.sessionRegister,
         {
           protocolVersion: APP_CONFIG.app.protocolVersion,
@@ -133,11 +133,7 @@ export const useSessionStore = defineStore('session', () => {
   async function measureLatency(): Promise<void> {
     if (!playerId.value) return
     const started = Date.now()
-    const result = await request<{ clientTime: number; serverTime: number }>(
-      EVENTS.networkPing,
-      { clientTime: started },
-      { quiet: true },
-    )
+    const result = await request(EVENTS.networkPing, { clientTime: started }, { quiet: true })
     if (!result.ok) return
     const rtt = Date.now() - started
     // Date.now() 只有毫秒精度：局域网亚毫秒级往返会测得 0，而展示层把 0 视作「尚未测得」

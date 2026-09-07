@@ -9,6 +9,7 @@
 import { Clock3, CirclePause, CirclePlay, Settings, Maximize, Minimize } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { strings } from '@draw-guess/strings'
+import { playInteractionSound } from '@/audio'
 import type { GameView, RoomMember } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
 import AvatarImage from '@/components/common/AvatarImage.vue'
@@ -83,6 +84,7 @@ watch(
 
 function toggleDrawerAnswerReveal(): void {
   if (!store.isDrawer) return
+  playInteractionSound('select')
   drawerRevealed.value = !drawerRevealed.value
 }
 

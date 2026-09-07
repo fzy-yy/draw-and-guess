@@ -59,8 +59,15 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      '/api': 'http://localhost:5174',
-      '/socket.io': { target: 'http://localhost:5174', ws: true },
+      '/api': {
+        target: 'http://127.0.0.1:5174',
+        changeOrigin: true,
+      },
+      '/socket.io': {
+        target: 'http://127.0.0.1:5174',
+        ws: true,
+        changeOrigin: true,
+      },
     },
   },
 })

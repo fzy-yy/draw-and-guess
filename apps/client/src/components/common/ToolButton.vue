@@ -4,6 +4,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { InteractionAudioEvent } from '@/audio'
 import { cn } from '@/utils/cn'
 import BaseIconButton from '@/components/common/BaseIconButton.vue'
 
@@ -17,8 +18,16 @@ const props = withDefaults(
     ariaLabel?: string
     /** 若提供则在右侧渲染快捷键 kbd（调用方应仅在“显示快捷键提示”开启时传入）。 */
     shortcut?: string
+    /** 交互音效语义；工具切换通常传 select，命令按钮沿用 activate。 */
+    audioFeedback?: InteractionAudioEvent | null
   }>(),
-  { active: false, disabled: false, ariaLabel: undefined, shortcut: undefined },
+  {
+    active: false,
+    disabled: false,
+    ariaLabel: undefined,
+    shortcut: undefined,
+    audioFeedback: 'activate',
+  },
 )
 const emit = defineEmits<{ click: [] }>()
 
@@ -34,6 +43,7 @@ const baseClass = computed(() =>
   <BaseIconButton
     :label="ariaLabel"
     :disabled="disabled"
+    :audio-feedback="audioFeedback"
     :base-class="baseClass"
     @click="emit('click')"
   >

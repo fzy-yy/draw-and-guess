@@ -16,7 +16,7 @@ export const useLobbyStore = defineStore('lobby', () => {
   const request = createRequester({ socket, notify })
 
   async function invite(targetId: string): Promise<void> {
-    const result = await request<Invite>(EVENTS.inviteSend, { targetId })
+    const result = await request(EVENTS.inviteSend, { targetId })
     if (!result.ok) return
     notify(strings.store.inviteSent)
   }
@@ -25,7 +25,7 @@ export const useLobbyStore = defineStore('lobby', () => {
     inviteId: string,
     accept: boolean,
   ): Promise<RoomSnapshot | undefined> {
-    const joined = await request<RoomSnapshot | undefined>(EVENTS.inviteRespond, {
+    const joined = await request(EVENTS.inviteRespond, {
       inviteId,
       accept,
     })

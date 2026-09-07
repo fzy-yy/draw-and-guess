@@ -12,6 +12,7 @@
 import { computed, type Component } from 'vue'
 import { ChevronDown, Filter } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
+import { playInteractionSound } from '@/audio'
 import ActionPopover from '@/components/common/ActionPopover.vue'
 
 /** 单个可选项：value 为业务值（受控集合内唯一），label 为展示文案 */
@@ -80,6 +81,7 @@ function toggleOption(value: string): void {
     ? props.selected.filter((item) => item !== value)
     : [...props.selected, value]
   emit('update:selected', next)
+  playInteractionSound('select')
 }
 
 /**
@@ -88,6 +90,7 @@ function toggleOption(value: string): void {
  */
 function toggleSelectAll(): void {
   emit('update:selected', allSelected.value ? [] : props.options.map((option) => option.value))
+  playInteractionSound('select')
 }
 </script>
 

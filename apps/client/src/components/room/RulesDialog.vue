@@ -126,7 +126,7 @@ watch(
     <template #footer>
       <!-- 底部操作：取消或保存规则 -->
       <p class="mr-auto text-muted text-fs-12">{{ strings.room.rulesChangeNote }}</p>
-      <AppButton variant="secondary" type="button" @click="handleClose">
+      <AppButton variant="secondary" type="button" audio-feedback="close" @click="handleClose">
         {{ strings.common.cancel }}
       </AppButton>
       <AppButton variant="primary" type="button" @click="emit('save', localDraft)">

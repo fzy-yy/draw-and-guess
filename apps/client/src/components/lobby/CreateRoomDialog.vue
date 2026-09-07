@@ -130,7 +130,7 @@ async function submitCreate(): Promise<void> {
     </div>
 
     <template #footer>
-      <AppButton variant="secondary" type="button" @click="open = false">
+      <AppButton variant="secondary" type="button" audio-feedback="close" @click="open = false">
         {{ strings.common.cancel }}
       </AppButton>
       <AppButton type="button" :disabled="!createForm.name.trim()" @click="submitCreate">

@@ -11,6 +11,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { Lightbulb, Send, SmilePlus } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import type { ChatMessage, RoomMember } from '@draw-guess/shared'
+import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
 import { roleTextFor } from '@/utils/roleText'
 import ActionPopover from '@/components/common/ActionPopover.vue'
@@ -57,12 +58,18 @@ async function sendGuess(): Promise<void> {
   const text = guess.value.trim()
   if (!text || !props.canGuess) return
   const delivered = await store.submitGuess(text)
-  if (delivered) guess.value = ''
+  if (delivered) {
+    playInteractionSound('activate')
+    guess.value = ''
+  }
 }
 
 /** 发送服务端白名单内的互动内容，并在送达后收起其悬浮面板。 */
 async function sendPresetAndClose(preset: string, close: () => void): Promise<void> {
-  if (await store.sendPreset(preset)) close()
+  if (await store.sendPreset(preset)) {
+    playInteractionSound('activate')
+    close()
+  }
 }
 
 /** 用户接近列表底部时跟随新消息；主动上滚后保留阅读位置。 */

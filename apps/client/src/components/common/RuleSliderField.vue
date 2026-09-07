@@ -5,6 +5,8 @@
   可选 disabled：禁用时整行半透明并阻止交互（如结构化提示关闭后的时机字段）。
 -->
 <script setup lang="ts">
+import { playInteractionSound } from '@/audio'
+
 const model = defineModel<number>({ required: true })
 
 withDefaults(
@@ -47,6 +49,7 @@ function onInput(event: Event): void {
       :disabled="disabled"
       class="accent-blue"
       @input="onInput"
+      @change="playInteractionSound('select')"
     />
     <small v-if="hint" class="text-muted text-fs-12">{{ hint }}</small>
   </label>

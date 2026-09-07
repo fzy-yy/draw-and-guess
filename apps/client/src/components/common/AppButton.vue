@@ -5,6 +5,7 @@
 -->
 <script setup lang="ts">
 import { computed, useAttrs } from 'vue'
+import { playInteractionSound, type InteractionAudioEvent } from '@/audio'
 import { cn } from '@/utils/cn'
 
 const props = withDefaults(
@@ -17,8 +18,16 @@ const props = withDefaults(
     disabled?: boolean
     /** 激活态（如导航栏选中、切换按钮选中） */
     active?: boolean
+    /** 交互音效语义；null 用于已有专属领域音效的操作。 */
+    audioFeedback?: InteractionAudioEvent | null
   }>(),
-  { variant: 'primary', type: 'button', disabled: false, active: false },
+  {
+    variant: 'primary',
+    type: 'button',
+    disabled: false,
+    active: false,
+    audioFeedback: 'activate',
+  },
 )
 
 // 三色动作按钮共用底座 + 各自颜色/描边；按钮统一不使用阴影；支持激活态扩展。
@@ -54,11 +63,15 @@ const attrs = useAttrs()
 // 追加进按钮 className，且外部类也不会经由 tailwind-merge 与内置类做冲突消解（如调用处 bg-white 覆盖内置 bg-blue）。
 // 其余 attrs（style、事件、无障碍属性等）由 Vue 单根组件的隐式透传落到 <button> 上。
 const buttonClass = computed(() => cn(variantClasses.value, attrs.class))
+
+function handleClick(): void {
+  if (props.audioFeedback) playInteractionSound(props.audioFeedback)
+}
 </script>
 
 <template>
   <!-- 外部 class 等未声明 attrs 由 Vue 单根组件特性自动透传到按钮（与 buttonClass 合并生效） -->
-  <button :type="type" :disabled="disabled" :class="buttonClass">
+  <button :type="type" :disabled="disabled" :class="buttonClass" @click="handleClick">
     <slot />
   </button>
 </template>

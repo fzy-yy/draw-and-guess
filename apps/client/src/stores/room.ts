@@ -36,28 +36,28 @@ export const useRoomStore = defineStore('room', () => {
     visibility: RoomVisibility
     settings: RoomSettings
   }): Promise<boolean> {
-    const snapshot = await request<RoomSnapshot>(EVENTS.roomCreate, input)
+    const snapshot = await request(EVENTS.roomCreate, input)
     if (!snapshot.ok) return false
     room.value = snapshot.data
     return true
   }
 
   async function joinRoom(roomId: string): Promise<boolean> {
-    const snapshot = await request<RoomSnapshot>(EVENTS.roomJoin, { roomId })
+    const snapshot = await request(EVENTS.roomJoin, { roomId })
     if (!snapshot.ok) return false
     room.value = snapshot.data
     return true
   }
 
   async function joinPrivateRoom(code: string): Promise<boolean> {
-    const snapshot = await request<RoomSnapshot>(EVENTS.roomJoinPrivate, { code })
+    const snapshot = await request(EVENTS.roomJoinPrivate, { code })
     if (!snapshot.ok) return false
     room.value = snapshot.data
     return true
   }
 
   async function leaveRoom(): Promise<void> {
-    const result = await request<undefined>(EVENTS.roomLeave)
+    const result = await request(EVENTS.roomLeave)
     if (!result.ok) return
     clearLocalRoomState()
     notify(strings.store.roomLeft)
@@ -69,7 +69,7 @@ export const useRoomStore = defineStore('room', () => {
 
   async function updateRoomSettings(patch: Partial<RoomSettings>): Promise<boolean> {
     if (!room.value) return false
-    const result = await request<RoomSnapshot>(EVENTS.roomUpdateSettings, {
+    const result = await request(EVENTS.roomUpdateSettings, {
       patch,
       expectedVersion: room.value.stateVersion,
     })

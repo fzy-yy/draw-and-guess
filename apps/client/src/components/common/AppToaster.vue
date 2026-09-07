@@ -12,9 +12,15 @@
 -->
 <script setup lang="ts">
 import { onBeforeUnmount } from 'vue'
+import { playInteractionSound } from '@/audio'
 import { useToasts } from '@/composables/useToasts'
 
 const { toasts, dismiss, onBump } = useToasts()
+
+function dismissWithSound(id: string): void {
+  playInteractionSound('close')
+  dismiss(id)
+}
 
 // 每条 toast 的 DOM 引用（v-for :ref 按 id 收纳），供左弹跳动画精确定位到元素。
 const toastEls = new Map<string, HTMLElement>()
@@ -67,7 +73,7 @@ onBeforeUnmount(unbindBump)
       class="pointer-events-auto flex max-w-[44cqw] cursor-pointer items-stretch overflow-hidden rounded-none bg-white text-navy shadow-float select-none"
       role="status"
       :aria-label="toast.text"
-      @click.stop="dismiss(toast.id)"
+      @click.stop="dismissWithSound(toast.id)"
       @pointerdown.stop
     >
       <span

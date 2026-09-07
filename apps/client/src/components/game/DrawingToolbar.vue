@@ -8,6 +8,7 @@
 import { Brush, Eraser, PaintBucket, RotateCcw, RotateCw, Trash2 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { EVENTS, type ToolKind } from '@draw-guess/shared'
+import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
 import ToolButton from '@/components/common/ToolButton.vue'
 
@@ -26,6 +27,7 @@ function setTool(nextTool: ToolKind): void {
 /** 选择预设色块。 */
 function setColor(nextColor: string): void {
   color.value = nextColor
+  playInteractionSound('select')
 }
 /** 任意颜色取色器输入（原生 input[type=color] 事件）。 */
 function onColorInput(event: Event): void {
@@ -56,6 +58,7 @@ function clearCanvas(): void {
         :disabled="!store.isDrawer"
         :aria-label="strings.game.penAria(store.settings.penShortcut)"
         :shortcut="store.settings.showShortcuts ? store.settings.penShortcut : undefined"
+        audio-feedback="select"
         @click="setTool('pen')"
       >
         <Brush />{{ strings.game.penTool }}
@@ -65,6 +68,7 @@ function clearCanvas(): void {
         :disabled="!store.isDrawer"
         :aria-label="strings.game.eraserAria(store.settings.eraserShortcut)"
         :shortcut="store.settings.showShortcuts ? store.settings.eraserShortcut : undefined"
+        audio-feedback="select"
         @click="setTool('eraser')"
       >
         <Eraser />{{ strings.game.eraserTool }}
@@ -74,6 +78,7 @@ function clearCanvas(): void {
         :disabled="!store.isDrawer"
         :aria-label="strings.game.fillAria(store.settings.fillShortcut)"
         :shortcut="store.settings.showShortcuts ? store.settings.fillShortcut : undefined"
+        audio-feedback="select"
         @click="setTool('fill')"
       >
         <PaintBucket />{{ strings.game.fillTool }}
@@ -108,6 +113,7 @@ function clearCanvas(): void {
           :disabled="!store.isDrawer"
           :aria-label="strings.game.customColorAria"
           @input="onColorInput"
+          @change="playInteractionSound('select')"
         />
       </label>
     </div>
@@ -127,6 +133,7 @@ function clearCanvas(): void {
         :disabled="!store.isDrawer || tool === 'fill'"
         :aria-label="strings.game.widthAria"
         @input="onWidthInput"
+        @change="playInteractionSound('select')"
       />
       <!-- 线宽预览圆点已移除：画笔光标已在画板上实时展示实际粗细，此处重复展示无必要 -->
     </label>
@@ -149,6 +156,7 @@ function clearCanvas(): void {
       <ToolButton
         :disabled="!store.isDrawer"
         :aria-label="strings.game.clearAria"
+        :audio-feedback="null"
         @click="clearCanvas"
       >
         <Trash2 /> {{ strings.game.clear }}

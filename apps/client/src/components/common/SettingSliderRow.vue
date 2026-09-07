@@ -3,6 +3,8 @@
   通过 v-model（modelValue + update:modelValue）双向绑定数值，拖拽结束时发出 save 由父级持久化。
 -->
 <script setup lang="ts">
+import { playInteractionSound } from '@/audio'
+
 const model = defineModel<number>({ required: true })
 
 // 标题、说明、当前值、滑块区间/步进与右侧展示文本均由调用方传入，保证行外观统一。
@@ -25,6 +27,11 @@ const emit = defineEmits<{
 function onInput(event: Event): void {
   model.value = Number((event.target as HTMLInputElement).value)
 }
+
+function save(): void {
+  playInteractionSound('select')
+  emit('save')
+}
 </script>
 
 <template>
@@ -43,7 +50,7 @@ function onInput(event: Event): void {
       :value="model"
       class="accent-blue"
       @input="onInput"
-      @change="emit('save')"
+      @change="save"
     />
     <strong>{{ display }}</strong>
   </label>

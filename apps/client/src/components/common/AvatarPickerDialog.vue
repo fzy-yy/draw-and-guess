@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import type { AvatarId } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
+import { playInteractionSound } from '@/audio'
 import AvatarImage from '@/components/common/AvatarImage.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import { useGameStore } from '@/stores/game'
@@ -13,6 +14,7 @@ const store = useGameStore()
 
 /** 只允许从配置白名单产生头像编号；点击后立即应用并关闭弹窗。 */
 function selectAvatar(avatarId: AvatarId): void {
+  playInteractionSound('select')
   modelValue.value = avatarId
   open.value = false
   emit('close')

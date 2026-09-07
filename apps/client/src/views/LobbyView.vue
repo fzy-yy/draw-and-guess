@@ -11,6 +11,7 @@ import {
   Wifi,
 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
+import { playInteractionSound } from '@/audio'
 import {
   AppButton,
   AvatarImage,
@@ -39,6 +40,11 @@ const statusText = {
   playing: strings.status.playerPlaying,
   reconnecting: strings.status.playerReconnecting,
 } as const
+
+function openSettings(): void {
+  playInteractionSound('activate')
+  store.page = 'settings'
+}
 </script>
 
 <template>
@@ -69,7 +75,7 @@ const statusText = {
           <button
             type="button"
             class="flex items-center gap-[0.4em] rounded-[0.55em] bg-white/5 px-[0.8em] py-[0.8cqh] text-sky hover:bg-white/10 transition-colors"
-            @click="store.page = 'settings'"
+            @click="openSettings"
           >
             <Settings /> {{ strings.lobby.settingsEntry }}
           </button>

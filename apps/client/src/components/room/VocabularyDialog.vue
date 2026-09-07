@@ -11,15 +11,9 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch, type Component } from 'vue'
-import { useDebounceFn } from '@vueuse/core'
 import { Library, ListFilter, Star, Tags } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
-import {
-  MIN_SELECTED_VOCABULARY_WORDS,
-  normalizeAnswer,
-  type VocabularyPackageInfo,
-  type VocabularyWord,
-} from '@draw-guess/shared'
+import { MIN_SELECTED_VOCABULARY_WORDS, type VocabularyWord } from '@draw-guess/shared'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import SectionHeader from '@/components/common/SectionHeader.vue'
@@ -32,7 +26,9 @@ import type { DataTableColumn } from '@/components/common/DataTable.vue'
 import VocabTableView from '@/components/room/VocabTableView.vue'
 import VocabPackageTableView from '@/components/room/VocabPackageTableView.vue'
 import { useGameStore } from '@/stores/game'
-import { useTableSort } from '@/composables/useTableSort'
+import { useVocabularyPackages } from '@/composables/useVocabularyPackages'
+import { useVocabularyQuery } from '@/composables/useVocabularyQuery'
+import { useVocabularySelection } from '@/composables/useVocabularySelection'
 
 const open = defineModel<boolean>('open', { default: false })
 const loading = defineModel<boolean>('loading', { default: false })
@@ -41,9 +37,6 @@ const store = useGameStore()
 
 // ---- 词库弹窗内部状态 ----
 const viewMode = ref<'words' | 'packages'>('words')
-const search = ref('') // 搜索框即时输入
-const searchKeyword = ref('') // 防抖后的实际筛选关键词
-const selectedIds = ref(new Set<string>()) // 使用响应式 Set，5000+ 词条下单选仍为 O(1)
 const vocabularyLoading = ref(false) // 拉取中标记（防重复打开）
 let loadGeneration = 0
 type ScrollableTable = { scrollToTop(): void; scrollToIndex(index: number): void }
@@ -51,21 +44,13 @@ const wordTable = ref<ScrollableTable>()
 const packageTable = ref<ScrollableTable>()
 /** 只读标志：非房主可打开查看，但不可选择词条（无复选框/无保存）。 */
 const isReadOnly = computed(() => !store.isHost)
-
-// ---- 词条表格状态（受控状态，子组件只渲染不持有） ----
-const { sortKey, sortDir, handleSort } = useTableSort()
-const filterSelections = ref<Record<string, string[]>>({
-  category: [],
-  difficulty: [],
-}) // 字段多选筛选（空数组 = 不筛选）
-
-// ---- 词库包选择状态 ----
-const packageSort = useTableSort()
-const packageSortKey = packageSort.sortKey
-const packageSortDir = packageSort.sortDir
 const activePackageId = computed(() => store.vocabulary?.packageId ?? '')
-const pendingPackageId = ref<string>()
-const displayedPackageId = computed(() => pendingPackageId.value ?? activePackageId.value)
+const words = computed(() => store.vocabulary?.items ?? [])
+const packages = computed(() => store.vocabulary?.packages ?? [])
+const selection = useVocabularySelection(() => isReadOnly.value)
+const selectedIds = selection.selectedIds
+const toggleWord = selection.toggle
+const setSelection = selection.setSelection
 
 /**
  * 全部词条 ID。统一走可选链而非 `store.vocabulary!` 非空断言：
@@ -73,89 +58,6 @@ const displayedPackageId = computed(() => pendingPackageId.value ?? activePackag
  * 直接断言会在点击「恢复默认/确认选择」时抛 TypeError。
  */
 const allWordIds = computed(() => (store.vocabulary?.items ?? []).map((item) => item.id))
-
-/** 词面与别称的拼接分隔符：用 NUL 字符（用户输入几乎不可能包含），
- *  保证「词面+别称」连成一条后，关键词不会跨越字段边界产生误匹配。
- *  用 String.fromCharCode(0) 生成，源码里保持纯 ASCII，避免出现不可见的控制字节。 */
-const SEARCH_SEP = String.fromCharCode(0)
-
-/** 词面+别称的规范化搜索索引：仅在词库快照变化时重建一次，避免每次输入重复处理大数组。 */
-const searchableWords = computed(() =>
-  (store.vocabulary?.items ?? []).map((word) => ({
-    word,
-    searchText: [word.text, ...word.aliases].map((text) => normalizeAnswer(text)).join(SEARCH_SEP),
-  })),
-)
-
-/** 第一层过滤：关键词搜索（匹配词面或任一别称）。 */
-const searchedWords = computed<VocabularyWord[]>(() => {
-  // 关键词与索引同一规范化口径（NFKC + 折叠空白 + 忽略大小写），与猜词判定的 normalizeAnswer 一致
-  const keyword = normalizeAnswer(searchKeyword.value)
-  return searchableWords.value
-    .filter((entry) => !keyword || entry.searchText.includes(keyword))
-    .map((entry) => entry.word)
-})
-
-/**
- * 第二层过滤：字段多选筛选与搜索取交集。
- * 每个筛选字段只筛「包含任一选中值」；空选中集合表示该字段不筛选。
- */
-const filteredWords = computed<VocabularyWord[]>(() => {
-  const selections = filterSelections.value
-  return searchedWords.value.filter((word) => {
-    const categorySelection = selections.category ?? []
-    // 词库单词条仅一个分类：命中任一选中分类即保留
-    if (categorySelection.length && !categorySelection.includes(word.category)) return false
-    const difficultySelection = selections.difficulty ?? []
-    if (difficultySelection.length && !difficultySelection.includes(String(word.difficulty)))
-      return false
-    return true
-  })
-})
-
-/** 表格行：在筛选结果上应用排序。 */
-const tableRows = computed<VocabularyWord[]>(() => {
-  if (!sortKey.value) return filteredWords.value
-  const column = allColumns.value.find((candidate) => candidate.key === sortKey.value)
-  if (!column) return filteredWords.value
-  const value = (word: VocabularyWord): string | number =>
-    column.sortValue ? column.sortValue(word) : String(word[column.key as keyof VocabularyWord])
-  const sorted = [...filteredWords.value].sort((left, right) => {
-    const leftValue = value(left)
-    const rightValue = value(right)
-    if (typeof leftValue === 'number' && typeof rightValue === 'number')
-      return leftValue - rightValue
-    return String(leftValue).localeCompare(String(rightValue), 'zh-Hans-CN')
-  })
-  return sortDir.value === 'desc' ? sorted.reverse() : sorted
-})
-
-/** 表头点击：同列翻转方向，异列默认升序。 */
-/** 勾选/取消单个词条：选择集合由父组件持有。 */
-function toggleWord(id: string): void {
-  if (isReadOnly.value) return
-  if (selectedIds.value.has(id)) selectedIds.value.delete(id)
-  else selectedIds.value.add(id)
-}
-
-/** 批量增删选中词条；响应式 Set 避免每次点击复制整个 5000 项数组。 */
-function setSelection(ids: string[], selected: boolean): void {
-  if (isReadOnly.value) return
-  for (const id of ids) {
-    if (selected) selectedIds.value.add(id)
-    else selectedIds.value.delete(id)
-  }
-}
-
-/** 统一复选框点击（表头）：未全选 → 全选当前结果；已全选 → 取消当前结果。 */
-function toggleSelectAll(): void {
-  if (isReadOnly.value) return
-  const select = ![...filteredWords.value].every((word) => selectedIds.value.has(word.id))
-  setSelection(
-    filteredWords.value.map((word) => word.id),
-    select,
-  )
-}
 
 /** 保存词库选择；失败由统一请求层提示，并保留当前弹窗和选择供重试。 */
 async function saveVocabulary(): Promise<void> {
@@ -192,6 +94,48 @@ const allColumns = computed<DataTableColumn<VocabularyWord>[]>(() => [
   },
 ])
 
+const query = useVocabularyQuery({
+  words,
+  packages,
+  columns: allColumns,
+  debounceMs: store.config.ui.searchDebounceMs,
+})
+const {
+  search,
+  searchKeyword,
+  filterSelections,
+  filteredWords,
+  wordRows: tableRows,
+  filteredPackages,
+  sortKey,
+  sortDir,
+  handleSort,
+} = query
+const packageState = useVocabularyPackages({
+  packages: filteredPackages,
+  activePackageId,
+  isReadOnly: () => isReadOnly.value,
+  select: (packageId) => store.selectVocabularyPackage(packageId),
+  onSelected: async () => {
+    if (store.vocabulary) selection.reset(store.vocabulary.selectedIds)
+    await nextTick()
+    packageTable.value?.scrollToTop()
+  },
+})
+const {
+  pendingPackageId,
+  displayedPackageId,
+  rows: tablePackageRows,
+  sortKey: packageSortKey,
+  sortDir: packageSortDir,
+  handleSort: handlePackageSort,
+  select: handleSelectPackage,
+} = packageState
+
+function toggleSelectAll(): void {
+  selection.toggleAll(filteredWords.value)
+}
+
 /** 字段筛选定义：分类（来自词库白名单 categoryEnum）/ 难度（1~上限）。 */
 const filterDefs = computed<
   Array<{ key: string; label: string; icon: Component; options: MultiSelectOption[] }>
@@ -221,71 +165,19 @@ const filterDefs = computed<
 
 /** 更新某个筛选字段的选中集合（MultiSelectPopover 受控回写）。 */
 function updateFilter(key: string, values: string[]): void {
-  filterSelections.value = { ...filterSelections.value, [key]: values }
+  query.updateFilter(key, values)
   void nextTick(() => wordTable.value?.scrollToTop())
 }
-
-// 搜索防抖：用 @vueuse/core 的 useDebounceFn 替代手写 setTimeout + onBeforeUnmount 清理。
-// 防抖后回到列表顶部，保证筛选结果与虚拟窗口起点一致。
-const debouncedSearch = useDebounceFn((value: string) => {
-  searchKeyword.value = value
-}, store.config.ui.searchDebounceMs)
-watch(search, (value) => debouncedSearch(value))
 watch(searchKeyword, () => {
   void nextTick(() =>
     viewMode.value === 'words' ? wordTable.value?.scrollToTop() : packageTable.value?.scrollToTop(),
   )
 })
 
-/** 词库包搜索过滤：匹配名称或描述 */
-const filteredPackages = computed<VocabularyPackageInfo[]>(() => {
-  const packages = store.vocabulary?.packages ?? []
-  const keyword = normalizeAnswer(searchKeyword.value)
-  if (!keyword) return packages
-  return packages.filter((pkg) => {
-    const text = normalizeAnswer(`${pkg.name} ${pkg.description}`)
-    return text.includes(keyword)
-  })
-})
-
-/** 词库包排序 */
-const tablePackageRows = computed<VocabularyPackageInfo[]>(() => {
-  if (!packageSortKey.value) return filteredPackages.value
-  const key = packageSortKey.value as keyof VocabularyPackageInfo
-  const sorted = [...filteredPackages.value].sort((left, right) => {
-    const leftVal = left[key]
-    const rightVal = right[key]
-    if (typeof leftVal === 'number' && typeof rightVal === 'number') {
-      return leftVal - rightVal
-    }
-    return String(leftVal ?? '').localeCompare(String(rightVal ?? ''), 'zh-Hans-CN')
-  })
-  return packageSortDir.value === 'desc' ? sorted.reverse() : sorted
-})
-
-const handlePackageSort = packageSort.handleSort
-
-/** 切换词库包 */
-async function handleSelectPackage(packageId: string): Promise<void> {
-  if (isReadOnly.value || pendingPackageId.value || packageId === activePackageId.value) return
-  pendingPackageId.value = packageId
-  try {
-    const ok = await store.selectVocabularyPackage(packageId)
-    if (ok && store.vocabulary) {
-      selectedIds.value = new Set(store.vocabulary.selectedIds)
-      await nextTick()
-      packageTable.value?.scrollToTop()
-    }
-  } finally {
-    pendingPackageId.value = undefined
-  }
-}
-
 /** 切换视图模式：词条列表 <-> 词库包选择 */
 function toggleViewMode(): void {
   viewMode.value = viewMode.value === 'words' ? 'packages' : 'words'
-  search.value = ''
-  searchKeyword.value = ''
+  query.clearSearch()
   void nextTick(() =>
     viewMode.value === 'words' ? wordTable.value?.scrollToTop() : packageTable.value?.scrollToTop(),
   )
@@ -293,9 +185,9 @@ function toggleViewMode(): void {
 
 function handleClose(): void {
   loadGeneration += 1
-  debouncedSearch.cancel()
+  query.cancel()
   store.cancelVocabularyRequests()
-  pendingPackageId.value = undefined
+  packageState.resetPending()
   vocabularyLoading.value = false
   loading.value = false
   open.value = false
@@ -308,9 +200,9 @@ watch(
   async (isOpen) => {
     const generation = ++loadGeneration
     if (!isOpen) {
-      debouncedSearch.cancel()
+      query.cancel()
       store.cancelVocabularyRequests()
-      pendingPackageId.value = undefined
+      packageState.resetPending()
       vocabularyLoading.value = false
       loading.value = false
       return
@@ -331,9 +223,8 @@ watch(
       handleClose()
       return
     }
-    selectedIds.value = new Set(vocab.selectedIds)
-    search.value = ''
-    searchKeyword.value = ''
+    selection.reset(vocab.selectedIds)
+    query.clearSearch()
     viewMode.value = 'words'
     await nextTick()
   },
@@ -399,6 +290,7 @@ watch(
                   ? strings.room.vocabSwitchToPackages
                   : strings.room.vocabSwitchToWords
               "
+              audio-feedback="select"
               @click="toggleViewMode"
             >
               <Library v-if="viewMode === 'words'" class="h-[2.2cqh] w-[2.2cqh]" />
@@ -465,7 +357,12 @@ watch(
         <p class="mr-auto min-w-0 text-muted text-fs-12" role="status">
           {{ strings.room.vocabPackageTotal(store.vocabulary?.packages.length ?? 0) }}
         </p>
-        <AppButton variant="secondary" type="button" @click="viewMode = 'words'">
+        <AppButton
+          variant="secondary"
+          type="button"
+          audio-feedback="select"
+          @click="viewMode = 'words'"
+        >
           {{ strings.room.vocabSwitchToWords }}
         </AppButton>
       </template>

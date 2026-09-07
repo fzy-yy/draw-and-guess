@@ -9,6 +9,7 @@
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useFocusTrap } from '@vueuse/integrations/useFocusTrap'
 import { X } from 'lucide-vue-next'
+import { playInteractionSound } from '@/audio'
 import { selectTopmostDialog } from './dialog-stack'
 
 const open = defineModel<boolean>('open', { default: false })
@@ -46,6 +47,7 @@ const emit = defineEmits<{ close: [] }>()
 
 function closeDialog(): void {
   if (!props.dismissible) return
+  playInteractionSound('close')
   open.value = false
   emit('close')
 }
@@ -110,6 +112,7 @@ watch(
   open,
   async (isOpen) => {
     if (isOpen) {
+      playInteractionSound('open')
       document.addEventListener('keydown', handleKeydown)
       await nextTick()
       // 激活焦点陷阱：让 Tab 循环从弹窗内部开始，初次聚焦进入容器。

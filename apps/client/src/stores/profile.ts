@@ -69,7 +69,7 @@ export const useProfileStore = defineStore('profile', () => {
   /** 提交资料修改并保存。 */
   async function updateProfile(): Promise<void> {
     try {
-      const result = await request<Profile>(EVENTS.sessionUpdateProfile, {
+      const result = await request(EVENTS.sessionUpdateProfile, {
         profile: { nickname: profile.value.nickname, avatarId: profile.value.avatarId },
       })
       if (!result.ok) return

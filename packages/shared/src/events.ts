@@ -3,14 +3,24 @@
  * 此模块只描述可公开的数据结构，绝不声明服务端秘密答案容器或密码字段。
  */
 import type {
+  Ack,
   FillPush,
+  FillCommand,
   Invite,
   MemberConnectionChange,
   PresenceSnapshot,
+  PublicPlayer,
   PublicRoom,
   RoomSnapshot,
+  RoomSettings,
+  RoomVisibility,
   ServerPushEnvelope,
+  SessionRegistration,
+  Stroke,
+  StrokeAck,
   StrokePush,
+  VocabularySnapshot,
+  Profile,
 } from './types.ts'
 
 /**
@@ -72,6 +82,125 @@ export const EVENTS = {
 
 /** 协议事件名联合类型，禁止业务层绕过 EVENTS 手写任意字符串。 */
 export type EventName = (typeof EVENTS)[keyof typeof EVENTS]
+
+interface BaseRequestPayload {
+  requestId: string
+}
+
+/** 客户端请求事件的 payload/ack 契约；请求封装与 binder 从此映射推导类型。 */
+export interface ClientRequestContract {
+  [EVENTS.sessionRegister]: {
+    payload: BaseRequestPayload & {
+      protocolVersion: string
+      profile: Profile
+      recoveryToken?: string
+      preferences: { discoverable: boolean; acceptsInvites: boolean }
+    }
+    response: SessionRegistration
+  }
+  [EVENTS.sessionLogout]: { payload: BaseRequestPayload; response: { success: true } }
+  [EVENTS.sessionUpdateProfile]: {
+    payload: BaseRequestPayload & { profile: Profile }
+    response: PublicPlayer
+  }
+  [EVENTS.presenceUpdatePreferences]: {
+    payload: BaseRequestPayload & { discoverable: boolean; acceptsInvites: boolean }
+    response: void
+  }
+  [EVENTS.roomList]: { payload: BaseRequestPayload; response: PublicRoom[] }
+  [EVENTS.roomCreate]: {
+    payload: BaseRequestPayload & {
+      name: string
+      visibility: RoomVisibility
+      settings: RoomSettings
+    }
+    response: RoomSnapshot
+  }
+  [EVENTS.roomJoin]: { payload: BaseRequestPayload & { roomId: string }; response: RoomSnapshot }
+  [EVENTS.roomJoinPrivate]: {
+    payload: BaseRequestPayload & { code: string }
+    response: RoomSnapshot
+  }
+  [EVENTS.roomLeave]: { payload: BaseRequestPayload; response: void }
+  [EVENTS.roomUpdateSettings]: {
+    payload: BaseRequestPayload & { patch: Partial<RoomSettings>; expectedVersion: number }
+    response: RoomSnapshot
+  }
+  [EVENTS.roomGetVocabulary]: { payload: BaseRequestPayload; response: VocabularySnapshot }
+  [EVENTS.roomUpdateVocabulary]: {
+    payload: BaseRequestPayload & { ids: string[]; expectedVersion: number }
+    response: VocabularySnapshot
+  }
+  [EVENTS.roomSelectVocabularyPackage]: {
+    payload: BaseRequestPayload & { packageId: string; expectedVersion?: number }
+    response: VocabularySnapshot
+  }
+  [EVENTS.roomSetReady]: {
+    payload: BaseRequestPayload & { ready: boolean }
+    response: RoomSnapshot
+  }
+  [EVENTS.roomKick]: { payload: BaseRequestPayload & { targetId: string }; response: void }
+  [EVENTS.roomTransferHost]: { payload: BaseRequestPayload & { targetId: string }; response: void }
+  [EVENTS.inviteSend]: { payload: BaseRequestPayload & { targetId: string }; response: Invite }
+  [EVENTS.inviteRespond]: {
+    payload: BaseRequestPayload & { inviteId: string; accept: boolean }
+    response: RoomSnapshot | undefined
+  }
+  [EVENTS.gameStart]: {
+    payload: BaseRequestPayload & { expectedVersion: number }
+    response: RoomSnapshot
+  }
+  [EVENTS.gameChooseWord]: {
+    payload: BaseRequestPayload & { roundId: string; wordId: string }
+    response: void
+  }
+  [EVENTS.gameRerollWords]: { payload: BaseRequestPayload & { roundId: string }; response: void }
+  [EVENTS.gamePauseRequest]: {
+    payload: BaseRequestPayload & { reason: string }
+    response: void
+  }
+  [EVENTS.gameResume]: { payload: BaseRequestPayload; response: void }
+  [EVENTS.gameEndEarly]: { payload: BaseRequestPayload; response: void }
+  [EVENTS.gameLeave]: { payload: BaseRequestPayload; response: void }
+  [EVENTS.gameReturnWaiting]: { payload: BaseRequestPayload; response: void }
+  [EVENTS.guessSubmit]: {
+    payload: BaseRequestPayload & { roundId: string; text: string }
+    response: { correct: boolean }
+  }
+  [EVENTS.chatPreset]: {
+    payload: BaseRequestPayload & { roundId: string; preset: string }
+    response: void
+  }
+  [EVENTS.drawStrokeBatch]: {
+    payload: BaseRequestPayload & { roundId: string; stroke: Stroke }
+    response: StrokeAck
+  }
+  [EVENTS.drawFillCommit]: {
+    payload: BaseRequestPayload & { roundId: string; fill: FillCommand }
+    response: void
+  }
+  [EVENTS.drawUndo]: { payload: BaseRequestPayload & { roundId: string }; response: void }
+  [EVENTS.drawRedo]: { payload: BaseRequestPayload & { roundId: string }; response: void }
+  [EVENTS.drawClear]: { payload: BaseRequestPayload & { roundId: string }; response: void }
+  [EVENTS.stateResync]: {
+    payload: BaseRequestPayload & { roomId?: string; gameId?: string; roundId?: string }
+    response: RoomSnapshot | undefined
+  }
+  [EVENTS.networkPing]: {
+    payload: BaseRequestPayload & { clientTime: number }
+    response: { clientTime: number; serverTime: number }
+  }
+}
+
+export type ClientRequestEvent = keyof ClientRequestContract
+export type ClientRequestPayload<E extends ClientRequestEvent> = ClientRequestContract[E]['payload']
+export type ClientResponse<E extends ClientRequestEvent> = ClientRequestContract[E]['response']
+export type ClientToServerEvents = {
+  [E in ClientRequestEvent]: (
+    payload: ClientRequestPayload<E>,
+    ack: (response: Ack<ClientResponse<E>>) => void,
+  ) => void
+}
 
 /** Socket.IO 服务端主动推送类型图；每项都强制使用版本化信封。 */
 export interface ServerToClientEvents {

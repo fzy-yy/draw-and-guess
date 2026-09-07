@@ -26,7 +26,7 @@ describe('幂等请求重试', () => {
     } as unknown as ClientSocket
     const notify = vi.fn()
     const request = createRequester({ socket: fakeSocket, notify })
-    const pending = request<{ done: boolean }>(EVENTS.gameStart, { expectedVersion: 1 })
+    const pending = request(EVENTS.gameStart, { expectedVersion: 1 })
     await vi.advanceTimersByTimeAsync(1_000)
 
     await expect(pending).resolves.toEqual({ ok: true, data: { done: true } })
@@ -51,9 +51,9 @@ describe('幂等请求重试', () => {
           listener = callback
         },
       } as unknown as BinderSocket
-      bindRequest(socket, EVENTS.gameStart, RequestSchema, () => {
+      bindRequest(socket, EVENTS.sessionLogout, RequestSchema, () => {
         handlerCalls += 1
-        return { started: true }
+        return { success: true }
       })
       return () => listener
     }
@@ -69,7 +69,7 @@ describe('幂等请求重试', () => {
     await secondListener({ requestId }, (ack) => (replayed = ack))
 
     expect(handlerCalls).toBe(1)
-    expect(replayed).toMatchObject({ ok: true, data: { started: true }, requestId })
+    expect(replayed).toMatchObject({ ok: true, data: { success: true }, requestId })
   })
 
   it('失败 ack 不缓存，同一 requestId 修复瞬时条件后可重新执行', async () => {
@@ -84,10 +84,10 @@ describe('幂等请求重试', () => {
       },
       on: (_event: string, callback: typeof listener) => (listener = callback),
     } as unknown as BinderSocket
-    bindRequest(socket, EVENTS.gameStart, RequestSchema, () => {
+    bindRequest(socket, EVENTS.sessionLogout, RequestSchema, () => {
       calls += 1
       if (calls === 1) throw new GameError('VERSION_CONFLICT', '版本冲突')
-      return { started: true }
+      return { success: true }
     })
     if (!listener) throw new Error('未绑定监听器')
     const request = { requestId: '00000000-0000-4000-8000-000000000098' }

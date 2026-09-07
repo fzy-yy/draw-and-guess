@@ -184,6 +184,7 @@ function handleFullscreenToggle(): void {
             variant="danger"
             type="button"
             class="min-h-[4.4cqh] rounded-[0.55em] px-[0.8em] py-[0.8cqh] text-fs-14"
+            :audio-feedback="null"
             @click="showLeaveGameConfirm = true"
           >
             <LogOut />{{ strings.game.leaveGame }}

@@ -58,7 +58,7 @@ function confirm(): void {
     <h2 :id="titleId">{{ title }}</h2>
     <p class="max-w-[30em] leading-[1.6] text-muted">{{ body }}</p>
     <template #footer>
-      <AppButton variant="secondary" type="button" @click="cancel">
+      <AppButton variant="secondary" type="button" audio-feedback="close" @click="cancel">
         {{ cancelLabel }}
       </AppButton>
       <AppButton :variant="confirmVariant" type="button" @click="confirm">

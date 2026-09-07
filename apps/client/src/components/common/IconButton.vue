@@ -4,6 +4,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { InteractionAudioEvent } from '@/audio'
 import { cn } from '@/utils/cn'
 import BaseIconButton from '@/components/common/BaseIconButton.vue'
 
@@ -15,8 +16,10 @@ const props = withDefaults(
     size?: 'default' | 'lg'
     /** 禁用态（如房间顶栏退出按钮在非等待阶段禁用）。 */
     disabled?: boolean
+    /** 交互音效语义。 */
+    audioFeedback?: InteractionAudioEvent | null
   }>(),
-  { size: 'default', disabled: false },
+  { size: 'default', disabled: false, audioFeedback: 'activate' },
 )
 const emit = defineEmits<{ click: [] }>()
 
@@ -32,6 +35,7 @@ const baseClass = computed(() =>
   <BaseIconButton
     :label="label"
     :disabled="disabled"
+    :audio-feedback="audioFeedback"
     :base-class="baseClass"
     @click="emit('click')"
   >
