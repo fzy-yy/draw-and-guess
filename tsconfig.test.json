@@ -8,6 +8,6 @@
     // 因此不直接 import socket.io/better-sqlite3（见各测试文件注释），
     // 这里也无需额外 paths；@draw-guess/* 已由根 tsconfig 提供。
   },
-  "include": ["test/unit/**/*.ts", "vitest.config.ts"],
+  "include": ["test/unit/**/*.ts", "test/type/**/*.ts", "vitest.config.ts"],
   "exclude": ["node_modules", "dist", "apps", "packages"]
 }

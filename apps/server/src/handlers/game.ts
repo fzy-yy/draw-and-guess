@@ -1,14 +1,7 @@
 /**
  * 对局控制事件处理器：开始、选词、暂停/恢复、提前结束、返回房间。
  */
-import {
-  ChooseWordSchema,
-  EVENTS,
-  PauseGameSchema,
-  RerollWordsSchema,
-  RequestSchema,
-  StartGameSchema,
-} from '@draw-guess/shared'
+import { CLIENT_REQUEST_SCHEMAS, EVENTS } from '@draw-guess/shared'
 import { bindRequest } from '../protocol/binder.ts'
 import type { GameService } from '../game-service.ts'
 
@@ -17,28 +10,52 @@ export function registerGameHandlers(
   socket: import('socket.io').Socket,
   service: GameService,
 ): void {
-  bindRequest(socket, EVENTS.gameStart, StartGameSchema, (input, playerId) =>
-    service.startGame(playerId, input.expectedVersion),
+  bindRequest(
+    socket,
+    EVENTS.gameStart,
+    CLIENT_REQUEST_SCHEMAS[EVENTS.gameStart],
+    (input, playerId) => service.startGame(playerId, input.expectedVersion),
   )
-  bindRequest(socket, EVENTS.gameChooseWord, ChooseWordSchema, (input, playerId) =>
-    service.chooseWord(playerId, input.roundId, input.wordId),
+  bindRequest(
+    socket,
+    EVENTS.gameChooseWord,
+    CLIENT_REQUEST_SCHEMAS[EVENTS.gameChooseWord],
+    (input, playerId) => service.chooseWord(playerId, input.roundId, input.wordId),
   )
-  bindRequest(socket, EVENTS.gameRerollWords, RerollWordsSchema, (input, playerId) =>
-    service.rerollWordOptions(playerId, input.roundId),
+  bindRequest(
+    socket,
+    EVENTS.gameRerollWords,
+    CLIENT_REQUEST_SCHEMAS[EVENTS.gameRerollWords],
+    (input, playerId) => service.rerollWordOptions(playerId, input.roundId),
   )
-  bindRequest(socket, EVENTS.gamePauseRequest, PauseGameSchema, (input, playerId) =>
-    service.pause(playerId, input.reason),
+  bindRequest(
+    socket,
+    EVENTS.gamePauseRequest,
+    CLIENT_REQUEST_SCHEMAS[EVENTS.gamePauseRequest],
+    (input, playerId) => service.pause(playerId, input.reason),
   )
-  bindRequest(socket, EVENTS.gameResume, RequestSchema, (_input, playerId) =>
-    service.resume(playerId),
+  bindRequest(
+    socket,
+    EVENTS.gameResume,
+    CLIENT_REQUEST_SCHEMAS[EVENTS.gameResume],
+    (_input, playerId) => service.resume(playerId),
   )
-  bindRequest(socket, EVENTS.gameEndEarly, RequestSchema, (_input, playerId) =>
-    service.endEarly(playerId),
+  bindRequest(
+    socket,
+    EVENTS.gameEndEarly,
+    CLIENT_REQUEST_SCHEMAS[EVENTS.gameEndEarly],
+    (_input, playerId) => service.endEarly(playerId),
   )
-  bindRequest(socket, EVENTS.gameLeave, RequestSchema, (_input, playerId) =>
-    service.leaveGame(playerId),
+  bindRequest(
+    socket,
+    EVENTS.gameLeave,
+    CLIENT_REQUEST_SCHEMAS[EVENTS.gameLeave],
+    (_input, playerId) => service.leaveGame(playerId),
   )
-  bindRequest(socket, EVENTS.gameReturnWaiting, RequestSchema, (_input, playerId) =>
-    service.returnWaiting(playerId),
+  bindRequest(
+    socket,
+    EVENTS.gameReturnWaiting,
+    CLIENT_REQUEST_SCHEMAS[EVENTS.gameReturnWaiting],
+    (_input, playerId) => service.returnWaiting(playerId),
   )
 }

@@ -10,6 +10,56 @@ type BinderSocket = Parameters<typeof bindRequest>[0]
 afterEach(() => vi.useRealTimers())
 
 describe('幂等请求重试', () => {
+  it('请求结果明确区分业务拒绝与传输失败', async () => {
+    const businessSocket = {
+      timeout: () => businessSocket,
+      emitWithAck: () =>
+        Promise.resolve({
+          ok: false,
+          error: { code: 'DRAW_BUDGET_EXCEEDED', message: '绘图预算已用尽' },
+        }),
+    } as unknown as ClientSocket
+    const transportSocket = {
+      timeout: () => transportSocket,
+      emitWithAck: () => Promise.reject(new Error('operation has timed out')),
+    } as unknown as ClientSocket
+
+    await expect(
+      createRequester({ socket: businessSocket, notify: vi.fn() })(
+        EVENTS.drawStrokeBatch,
+        {
+          roundId: '00000000-0000-4000-8000-000000000001',
+          stroke: {
+            kind: 'stroke',
+            id: '00000000-0000-4000-8000-000000000002',
+            tool: 'pen',
+            color: '#1F2937',
+            width: 5,
+            points: [{ x: 0.1, y: 0.1 }],
+            sequence: 1,
+            startPointIndex: 0,
+          },
+        },
+        { quiet: true },
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      failureKind: 'business',
+      code: 'DRAW_BUDGET_EXCEEDED',
+      timeout: false,
+    })
+    await expect(
+      createRequester({ socket: transportSocket, notify: vi.fn() })(
+        EVENTS.networkPing,
+        { clientTime: 1 },
+        {
+          quiet: true,
+          retry: false,
+        },
+      ),
+    ).resolves.toMatchObject({ ok: false, failureKind: 'transport', timeout: true })
+  })
+
   it('ack 丢失后自动重试复用同一 requestId，且最终只提示零次错误', async () => {
     vi.useFakeTimers()
     const payloads: Array<Record<string, unknown>> = []

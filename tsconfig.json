@@ -12,8 +12,8 @@
     "noEmit": true,
     "paths": {
       "@draw-guess/shared": ["./packages/shared/src/index.ts"],
-      "@draw-guess/config": ["./config/index.ts"],
-      "@draw-guess/strings": ["./string/index.ts"],
+      "@draw-guess/config": ["./packages/config/src/index.ts"],
+      "@draw-guess/strings": ["./packages/strings/src/index.ts"],
       "@/*": ["./apps/client/src/*"]
     }
   }

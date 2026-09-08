@@ -64,7 +64,7 @@ function scheduleDismiss(id: string, duration: number): void {
 
 /**
  * 推送一条通知。
- * @param text 展示文案（调用方传入，文案来源统一遵守 config/strings.ts）
+ * @param text 展示文案（调用方传入，文案来源统一遵守 @draw-guess/strings）
  * @param type 通知类型（沿用旧 API）
  */
 export function notify(text: string, type: ToastType = 'success'): void {

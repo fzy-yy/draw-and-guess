@@ -21,7 +21,6 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomBytes } from 'node:crypto'
 import { createApplication } from '../../apps/server/src/app.ts'
-import { closeDb } from '../../apps/server/src/db/index.ts'
 import { loadVocabulary } from '../../apps/server/src/vocabulary/index.ts'
 import { SILENT_LOGGER } from '../../apps/server/src/errors.ts'
 import { createMinimalVocabularyDb } from '../../apps/server/src/vocabulary/test-fixture.ts'
@@ -149,13 +148,11 @@ async function main(): Promise<void> {
   application.service.recoverOnStartup()
 
   let cleanedUp = false
-  const cleanup = () => {
+  const cleanup = async () => {
     if (cleanedUp) return
     cleanedUp = true
     try {
-      application.io.close()
-      closeDb()
-      application.httpServer.close()
+      await application.close()
       safeRemoveDir(runDir)
       console.log('[e2e-test-server] 已清理本次运行的临时目录与资源')
     } catch (error) {
@@ -180,8 +177,7 @@ async function main(): Promise<void> {
   // 4. 优雅退出：Playwright 结束 webServer 时若能收到 SIGINT/SIGTERM 则即时清理
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.once(signal, () => {
-      cleanup()
-      process.exit(0)
+      void cleanup().finally(() => process.exit(0))
     })
   }
   // 另外注册同步的 exit 兜底：node 正常退出时尽量回收本次运行目录（io.close 为异步，此处仅删目录）

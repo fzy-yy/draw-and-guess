@@ -1,4 +1,4 @@
-import { APP_CONFIG } from '../../../config/index.ts'
+import { APP_CONFIG } from './config/index.ts'
 
 /** 回合提示调度的纯计算层：不创建定时器、不修改房间状态，便于独立测试。 */
 export interface HintScheduleInput {

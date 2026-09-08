@@ -12,7 +12,7 @@
  * - 时间用毫秒整数（epoch ms），与前端/内存一致。
  */
 import type { Database } from 'better-sqlite3'
-import { getDb } from './index.ts'
+import type { DatabaseContext } from './index.ts'
 
 export interface Migration {
   version: number
@@ -134,8 +134,8 @@ export const MIGRATIONS: Migration[] = [
  * - 每个迁移在独立事务内执行，失败即回滚该条，不污染既有数据。
  * 首次启动会创建 schema_version 并跑完全部迁移；升级时新增迁移会被自动应用。
  */
-export function runMigrations(): void {
-  const database: Database = getDb()
+export function runMigrations(context: DatabaseContext): void {
+  const database: Database = context.connection
   // 记录已应用迁移版本的表；不存在则先创建。
   database.exec(`
     CREATE TABLE IF NOT EXISTS schema_version (

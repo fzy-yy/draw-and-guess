@@ -4,7 +4,7 @@ import type { SoundName } from './types.ts'
  * 音效资源清单纯逻辑：把「配置声明的键（soundCatalog）」与「assets 目录实际存在资源」做对齐，
  * 得到每个键的可用性（available / missing）、是否有重复扩展名冲突，以及可定位的校验问题。
  *
- * - 键的唯一合法来源是 config/audio.ts 的 soundCatalog；assets 目录只会被「发现」，不会定义键。
+ * - 键的唯一合法来源是 @draw-guess/config 的 soundCatalog；assets 目录只会被「发现」，不会定义键。
  * - 本模块为纯函数/纯类型，不触碰 Vite（import.meta.glob）、import.meta.env 或配置运行时对象，
  *   以便在 Node 下直接被单元测试；需要读取运行时清单 / 环境的逻辑放在 runtime.ts。
  */
@@ -22,7 +22,7 @@ export interface DiscoveredSound {
   ext: 'mp3' | 'wav'
 }
 
-/** 单个配置键的元数据（与 config/audio.ts 的 soundCatalog 条目结构一致）。 */
+/** 单个配置键的元数据（与 @draw-guess/config 的 soundCatalog 条目结构一致）。 */
 export interface SoundMeta {
   readonly volumeMultiplier: number
   readonly cooldownMs: number

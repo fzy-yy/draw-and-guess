@@ -1,5 +1,5 @@
-import { APP_CONFIG } from '../../../../../config/index.ts'
-import { serverStrings } from '../../../../../string/index.ts'
+import { APP_CONFIG } from '../../config/index.ts'
+import { serverStrings } from '@draw-guess/strings'
 import {
   normalizeHexColor,
   type FillCommand,

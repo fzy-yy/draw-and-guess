@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { APP_CONFIG } from '../../config/index.ts'
+import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
 import { startTwoPlayerGame, createGameHarness, testRoomSettings } from './helpers/game-harness.ts'
 
 describe('统一假运行时驱动完整回合生命周期', () => {

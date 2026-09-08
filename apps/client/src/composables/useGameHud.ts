@@ -57,7 +57,7 @@ export function useGameHud(store: GameStore) {
       !store.me?.guessed &&
       store.me?.connection === 'online',
   )
-  // 阶段中文标签（画布状态遮罩 / 各面板复用；统一来自 config/strings.ts）
+  // 阶段中文标签（画布状态遮罩 / 各面板复用；统一来自 @draw-guess/strings）
   const phaseLabel = computed(
     () =>
       ({

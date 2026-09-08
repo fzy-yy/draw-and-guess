@@ -31,7 +31,15 @@ export type NotifyFn = (text: string, type?: 'success' | 'warning' | 'error') =>
  */
 export type RequestResult<T> =
   | { ok: true; data: T; timeout?: false }
-  | { ok: false; error: string; code?: string; timeout?: boolean }
+  | {
+      ok: false
+      failureKind: 'business' | 'transport'
+      error: string
+      code?: string
+      timeout: boolean
+    }
+
+export type RequestFailure = Extract<RequestResult<never>, { ok: false }>
 
 type RequestInput<E extends ClientRequestEvent> = Omit<ClientRequestPayload<E>, 'requestId'>
 type RequestArguments<E extends ClientRequestEvent> = keyof RequestInput<E> extends never
@@ -79,7 +87,13 @@ export function createRequester(options: { socket: Socket; notify: NotifyFn }): 
         if (!ack.ok) {
           // 业务失败没有产生副作用且服务端不缓存；调用方应修正状态后发起新的逻辑请求。
           if (!requestOptions.quiet) notify(ack.error.message, 'error')
-          return { ok: false, error: ack.error.message, code: ack.error.code, timeout: false }
+          return {
+            ok: false,
+            failureKind: 'business',
+            error: ack.error.message,
+            code: ack.error.code,
+            timeout: false,
+          }
         }
         return { ok: true, data: ack.data }
       } catch (error) {
@@ -95,7 +109,12 @@ export function createRequester(options: { socket: Socket; notify: NotifyFn }): 
     const errorMessage = transport.timeout ? strings.request.timeoutMessage : transport.message
     // 所有自动尝试均失败后只提示一次，避免瞬时重连产生重复 Toast。
     if (!requestOptions.quiet) notify(errorMessage, 'error')
-    return { ok: false, error: errorMessage, timeout: transport.timeout }
+    return {
+      ok: false,
+      failureKind: 'transport',
+      error: errorMessage,
+      timeout: transport.timeout,
+    }
   }
   return request
 }

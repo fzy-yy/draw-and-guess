@@ -24,6 +24,7 @@ import SettingsView from '@/views/SettingsView.vue'
 import { useGameHud } from '@/composables/useGameHud'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { fireGuessCorrectConfetti } from '@/utils/confetti'
+import type { RequestResult } from '@/stores/request'
 
 const store = useGameStore()
 
@@ -62,10 +63,13 @@ const fullscreenTarget = computed<HTMLElement | null>(() =>
 )
 const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(fullscreenTarget)
 
-function submitStroke(stroke: Stroke, callback?: (ack?: StrokeAck) => void): void {
-  void store.sendStroke(stroke).then((ack) => {
-    if (callback) callback(ack)
-  })
+function submitStroke(stroke: Stroke, callback: (result: RequestResult<StrokeAck>) => void): void {
+  void store.sendStroke(stroke).then(callback)
+}
+
+/** 乐观批次失败后统一请求权威画布；Room Store 内部负责并发合并与冷却。 */
+function recoverAuthoritativeDrawing(): void {
+  void store.requestFullSnapshot()
 }
 /** 填充点击由服务端校验并广播，所有客户端按相同历史重放封闭区域。 */
 function submitFill(command: FillCommand): void {
@@ -133,6 +137,7 @@ function handleFullscreenToggle(): void {
         :color="color"
         :revision="store.drawRevision"
         @stroke="submitStroke"
+        @stroke-failure="recoverAuthoritativeDrawing"
         @fill="submitFill"
       />
       <!-- 画布状态遮罩：选词/结算/暂停等非作画阶段覆盖在画布上 -->

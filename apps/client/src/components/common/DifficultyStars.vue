@@ -4,7 +4,7 @@
   - 选词面板：候选词按钮下方展示该词难度；
   - 词库管理表格：难度列内展示；
   - 后续任何需要「数值星级」的场景均可复用（颜色与尺寸由调用处按上下文传入）。
-  难度上限取自全局配置（config/settings.ts 的 ui.difficultyMax），组件内不硬编码。
+  难度上限取自 @draw-guess/config 的 ui.difficultyMax，组件内不硬编码。
 -->
 <script setup lang="ts">
 import { computed } from 'vue'

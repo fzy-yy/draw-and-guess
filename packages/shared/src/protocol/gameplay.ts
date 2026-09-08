@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import { APP_CONFIG } from '../../../../config/index.ts'
 import { RequestSchema, WordIdSchema } from './base.ts'
+import { PLAYER_PROTOCOL_LIMITS } from './constants.ts'
 
 export const GuessWordSchema = RequestSchema.extend({
   roundId: z.string().uuid(),
-  text: z.string().min(1).max(APP_CONFIG.player.chatMaxLength),
+  text: z.string().min(1).max(PLAYER_PROTOCOL_LIMITS.chatMaxLength),
 })
 export const SendPresetSchema = RequestSchema.extend({
   roundId: z.string().uuid(),

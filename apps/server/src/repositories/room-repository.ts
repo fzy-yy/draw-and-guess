@@ -10,7 +10,7 @@
  * 由本文件内的 toSnake/fromSnake 私有方法负责双向转换，SQL 命名参数统一用蛇形（与列名一致）。
  */
 import type { Database } from 'better-sqlite3'
-import { getDb } from '../db/index.ts'
+import type { DatabaseContext } from '../db/index.ts'
 
 /** 房间可存档对象（驼峰，供领域层使用）。settings/selectedWords 以 JSON 字符串存储以保可扩展。 */
 export interface RoomRecord {
@@ -81,7 +81,11 @@ interface RoomMemberRow {
 }
 
 export class SqliteRoomRepository implements RoomRepository {
-  private readonly db: Database = getDb()
+  private readonly db: Database
+
+  constructor(database: DatabaseContext) {
+    this.db = database.connection
+  }
 
   upsertRoom(record: RoomRecord): void {
     this.db

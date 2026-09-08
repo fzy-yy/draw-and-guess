@@ -1,13 +1,13 @@
 import { z } from 'zod'
-import { APP_CONFIG } from '../../../../config/index.ts'
 import { EVENTS } from '../events.ts'
 import { AvatarIdSchema, RoomPhaseSchema, WordIdSchema } from './base.ts'
+import { PROTOCOL_VERSION } from './constants.ts'
 import { FillCommandSchema, StrokeSchema } from './drawing.ts'
 import { RoomSettingsSchema } from './room.ts'
 
-const ConnectionStateSchema = z.enum(['online', 'reconnecting', 'left'])
-const PresenceStatusSchema = z.enum(['idle', 'in_room', 'playing', 'reconnecting'])
-const PublicPlayerSchema = z
+export const ConnectionStateSchema = z.enum(['online', 'reconnecting', 'left'])
+export const PresenceStatusSchema = z.enum(['idle', 'in_room', 'playing', 'reconnecting'])
+export const PublicPlayerSchema = z
   .object({
     id: z.string().uuid(),
     nickname: z.string(),
@@ -16,7 +16,7 @@ const PublicPlayerSchema = z
     roomId: z.string().uuid().optional(),
   })
   .strict()
-const PublicRoomSchema = z
+export const PublicRoomSchema = z
   .object({
     visibility: z.literal('public'),
     id: z.string().uuid(),
@@ -30,14 +30,14 @@ const PublicRoomSchema = z
     joinPolicy: z.enum(['forbid', 'spectate', 'next_game']),
   })
   .strict()
-const MemberStatsSchema = z
+export const MemberStatsSchema = z
   .object({
     correctCount: z.number().int().nonnegative(),
     totalGuessMs: z.number().nonnegative(),
     drawingCorrectCount: z.number().int().nonnegative(),
   })
   .strict()
-const RoomMemberSchema = PublicPlayerSchema.extend({
+export const RoomMemberSchema = PublicPlayerSchema.extend({
   seatIndex: z.number().int().nonnegative(),
   seatColor: z.string(),
   ready: z.boolean(),
@@ -50,7 +50,7 @@ const RoomMemberSchema = PublicPlayerSchema.extend({
   connection: ConnectionStateSchema,
   stats: MemberStatsSchema,
 }).strict()
-const ChatMessageSchema = z
+export const ChatMessageSchema = z
   .object({
     id: z.string().uuid(),
     type: z.enum(['guess', 'system', 'correct', 'preset']),
@@ -59,7 +59,7 @@ const ChatMessageSchema = z
     createdAt: z.number(),
   })
   .strict()
-const ScoreDetailSchema = z
+export const ScoreDetailSchema = z
   .object({
     playerId: z.string().uuid(),
     base: z.number(),
@@ -68,10 +68,10 @@ const ScoreDetailSchema = z
     total: z.number(),
   })
   .strict()
-const RoundResultSchema = z
+export const RoundResultSchema = z
   .object({ answer: z.string(), details: z.array(ScoreDetailSchema), drawerScore: z.number() })
   .strict()
-const FinalRankingEntrySchema = z
+export const FinalRankingEntrySchema = z
   .object({
     id: z.string().uuid(),
     nickname: z.string(),
@@ -81,11 +81,11 @@ const FinalRankingEntrySchema = z
     stats: MemberStatsSchema,
   })
   .strict()
-const DrawingCommandSchema = z.discriminatedUnion('kind', [
+export const DrawingCommandSchema = z.discriminatedUnion('kind', [
   StrokeSchema.strict(),
   FillCommandSchema.strict(),
 ])
-const GameViewSchema = z
+export const GameViewSchema = z
   .object({
     gameId: z.string().uuid(),
     roundId: z.union([z.string().uuid(), z.literal('')]),
@@ -152,7 +152,7 @@ export const MemberConnectionChangeSchema = z
   .strict()
 
 function pushEnvelope<T extends z.ZodType>(data: T) {
-  return z.object({ protocolVersion: z.literal(APP_CONFIG.app.protocolVersion), data }).strict()
+  return z.object({ protocolVersion: z.literal(PROTOCOL_VERSION), data }).strict()
 }
 
 export const SERVER_PUSH_SCHEMAS = {
@@ -193,6 +193,17 @@ export const SERVER_PUSH_SCHEMAS = {
 
 export type ServerPushEventName = keyof typeof SERVER_PUSH_SCHEMAS
 
-export function createServerPush<T>(data: T): { protocolVersion: string; data: T } {
-  return { protocolVersion: APP_CONFIG.app.protocolVersion, data }
+export type ServerPushEnvelope<E extends ServerPushEventName = ServerPushEventName> = z.infer<
+  (typeof SERVER_PUSH_SCHEMAS)[E]
+>
+export type ServerPushData<E extends ServerPushEventName> = ServerPushEnvelope<E>['data']
+export type ServerToClientEvents = {
+  [E in ServerPushEventName]: (payload: ServerPushEnvelope<E>) => void
+}
+
+export function createServerPush<T>(data: T): {
+  protocolVersion: typeof PROTOCOL_VERSION
+  data: T
+} {
+  return { protocolVersion: PROTOCOL_VERSION, data }
 }

@@ -1,36 +1,20 @@
-export interface DrawPoint {
-  x: number
-  y: number
-}
-export interface Stroke {
-  kind: 'stroke'
-  id: string
-  tool: 'pen' | 'eraser'
-  color: string
-  width: number
-  points: DrawPoint[]
-  sequence: number
-  startPointIndex?: number
-}
+import type { z } from 'zod'
+import type { DrawPointSchema, FillCommandSchema, StrokeSchema } from '../protocol/drawing.ts'
+import type { DrawingCommandSchema, ServerPushData } from '../protocol/push.ts'
+import type { EVENTS } from '../events.ts'
+
+export type DrawPoint = z.infer<typeof DrawPointSchema>
+export type Stroke = z.infer<typeof StrokeSchema>
+export type FillCommand = z.infer<typeof FillCommandSchema>
+export type DrawingCommand = z.infer<typeof DrawingCommandSchema>
+
 export interface StrokeAck {
   strokeId: string
   pointCount: number
   drawingRevision: number
   remainingBudget: number
 }
-export interface FillCommand {
-  kind: 'fill'
-  id: string
-  point: DrawPoint
-  color: string
-  sequence: number
-}
-export interface DrawingPushContext {
-  roomId: string
-  gameId: string
-  roundId: string
-  drawingRevision: number
-}
-export type StrokePush = DrawingPushContext & { stroke: Stroke }
-export type FillPush = DrawingPushContext & { fill: FillCommand }
-export type DrawingCommand = Stroke | FillCommand
+
+export type StrokePush = ServerPushData<typeof EVENTS.drawStrokeBatch>
+export type FillPush = ServerPushData<typeof EVENTS.drawFillCommit>
+export type DrawingPushContext = Omit<StrokePush, 'stroke'>

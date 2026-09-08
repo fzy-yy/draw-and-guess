@@ -2,7 +2,7 @@ import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pino from 'pino'
-import type { DeploymentConfig } from '../../../../config/index.ts'
+import type { DeploymentConfig } from '../config/index.ts'
 import { SILENT_LOGGER, type RuntimeLogger } from '../errors.ts'
 
 const LOG_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../log')

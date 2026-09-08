@@ -12,7 +12,7 @@
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import Database from 'better-sqlite3'
-import { APP_CONFIG } from '../../../../config/index.ts'
+import { APP_CONFIG } from '../config/index.ts'
 
 export interface MinimalVocabularyFixtureOptions {
   wordCount?: number

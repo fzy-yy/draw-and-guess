@@ -9,7 +9,9 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@draw-guess/config": "workspace:*",
     "@draw-guess/shared": "workspace:*",
+    "@draw-guess/strings": "workspace:*",
     "better-sqlite3": "^13.0.3",
     "compression": "^1.8.1",
     "cors": "^2.8.5",

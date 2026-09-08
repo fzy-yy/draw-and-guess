@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { APP_CONFIG } from '../../../../config/index.ts'
+import { APP_CONFIG } from '../config/index.ts'
 
 /** 启动前校验关键业务配置与跨字段关系。 */
 export function validateBusinessConfig(): void {

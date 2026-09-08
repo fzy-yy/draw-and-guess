@@ -1,4 +1,4 @@
-import { APP_CONFIG } from '../../../config/index.ts'
+import { APP_CONFIG } from '../../../apps/server/src/config/index.ts'
 import type { RoomSettings } from '@draw-guess/shared'
 import { GameService, createDefaultRoomSettings } from '../../../apps/server/src/game-service.ts'
 import { SILENT_LOGGER } from '../../../apps/server/src/errors.ts'

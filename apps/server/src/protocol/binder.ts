@@ -3,8 +3,8 @@
  * 领域服务只负责执行，是否允许、是否重复由这一层统一处理。
  */
 import { z, type ZodType } from 'zod'
-import { APP_CONFIG } from '../../../../config/index.ts'
-import { serverStrings } from '../../../../string/index.ts'
+import { APP_CONFIG } from '../config/index.ts'
+import { serverStrings } from '@draw-guess/strings'
 import type {
   Ack,
   ClientRequestEvent,

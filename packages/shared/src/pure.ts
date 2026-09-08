@@ -2,11 +2,13 @@
  * 共享领域纯函数：答案规范化、遮罩生成、计分与状态机转换表。
  * 无任何运行时依赖，可在 Node 与浏览器中直接单测。
  */
-import { APP_CONFIG } from '../../../config/index.ts'
+import { DRAWING_PROTOCOL_LIMITS } from './protocol/constants.ts'
 import type { RoomPhase, ScoreDetail } from './types.ts'
 
 export function normalizeHexColor(value: string): string | undefined {
-  return new RegExp(APP_CONFIG.drawing.colorPattern).test(value) ? value.toUpperCase() : undefined
+  return new RegExp(DRAWING_PROTOCOL_LIMITS.colorPattern).test(value)
+    ? value.toUpperCase()
+    : undefined
 }
 
 /** 标准化猜词；Unicode NFKC 可合并全角拉丁字符，中文词面不会被破坏。

@@ -11,7 +11,7 @@ import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
 import { Server } from 'socket.io'
-import { APP_CONFIG, PUBLIC_CONFIG } from '../../../config/index.ts'
+import { APP_CONFIG, PUBLIC_CONFIG } from './config/index.ts'
 import { GameService } from './game-service.ts'
 import type { RuntimeLogger } from './errors.ts'
 import { loadVocabulary, type VocabularyRegistry } from './vocabulary/index.ts'
@@ -24,8 +24,8 @@ import { registerDrawHandlers } from './handlers/draw.ts'
 import { SqlitePlayerRepository } from './repositories/player-repository.ts'
 import { SqliteRoomRepository } from './repositories/room-repository.ts'
 import { SqliteArchiveRepository } from './repositories/archive-repository.ts'
+import { createDatabase } from './db/index.ts'
 import { runMigrations } from './db/migrate.ts'
-import { setDbFile } from './db/index.ts'
 
 function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return true
@@ -51,6 +51,8 @@ export interface RunningApplication {
   httpServer: HttpServer
   io: Server
   service: GameService
+  /** 幂等关闭本应用拥有的 Socket、HTTP 与 SQLite 资源。 */
+  close(): Promise<void>
 }
 
 /** 注册一个连接的全部协议事件：按领域分组挂载，并把服务挂到 socket.data 供日志回调使用。 */
@@ -71,7 +73,7 @@ function registerSocketHandlers(socket: import('socket.io').Socket, service: Gam
  *
  * 注入项均为「基础设施」参数：dbFile / clientDist 仅供测试或嵌入场景指向隔离目录，
  * 生产路径保持默认（apps/server/data/game.db 与 ../client/dist）；本文件不承载任何业务规则，
- * 业务规则仍只读取 config/（经此处按 ROLE 裁剪的快照与计分逻辑不变）。
+ * 业务规则读取公开配置包与服务端私有配置的组合视图（按 ROLE 裁剪的快照与计分逻辑不变）。
  */
 export async function createApplication(
   options: {
@@ -85,10 +87,14 @@ export async function createApplication(
   } = {},
 ): Promise<RunningApplication> {
   const vocabulary = options.vocabulary ?? (await loadVocabulary())
-  // 建库并执行迁移（幂等）：首次启动建全部表，升级时应用新增迁移。
-  // 测试可先通过 dbFile 让连接指向临时目录；默认仍落在 apps/server/data/game.db。
-  if (options.dbFile) setDbFile(options.dbFile)
-  runMigrations()
+  // 每个应用实例拥有独立数据库上下文；迁移、仓储和事务都绑定到这一连接。
+  const database = createDatabase(options.dbFile)
+  try {
+    runMigrations(database)
+  } catch (error) {
+    database.close()
+    throw error
+  }
   const app = express()
   const httpServer = createHttpServer(app)
   // Socket.IO 只负责传输重连；身份、业务房间与遗漏画布一律由秘密令牌 + 权威全量快照恢复。
@@ -105,9 +111,9 @@ export async function createApplication(
   const baseUrl = options.publicBaseUrl ?? (() => `http://localhost:${APP_CONFIG.network.port}`)
   // 持久化仓储：SQLite 实现，注入领域服务（领域层只依赖接口，便于测试换内存实现）。
   const repositories = {
-    players: new SqlitePlayerRepository(),
-    rooms: new SqliteRoomRepository(),
-    archive: new SqliteArchiveRepository(),
+    players: new SqlitePlayerRepository(database),
+    rooms: new SqliteRoomRepository(database),
+    archive: new SqliteArchiveRepository(database),
   }
   const service = new GameService(io, vocabulary, repositories, options.logger)
 
@@ -152,5 +158,24 @@ export async function createApplication(
   )
   // 每个新连接注册全部协议事件处理器
   io.on('connection', (socket) => registerSocketHandlers(socket, service))
-  return { httpServer, io, service }
+
+  let closePromise: Promise<void> | undefined
+  const close = (): Promise<void> => {
+    closePromise ??= (async () => {
+      try {
+        io.disconnectSockets(true)
+        await new Promise<void>((resolve) => io.close(() => resolve()))
+        if (httpServer.listening) {
+          await new Promise<void>((resolve, reject) =>
+            httpServer.close((error) => (error ? reject(error) : resolve())),
+          )
+        }
+      } finally {
+        database.close()
+      }
+    })()
+    return closePromise
+  }
+
+  return { httpServer, io, service, close }
 }

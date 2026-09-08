@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { APP_CONFIG } from '../../../../config/index.ts'
+import { AVATAR_IDS, PLAYER_PROTOCOL_LIMITS } from './constants.ts'
 
 export const RequestSchema = z.object({ requestId: z.string().uuid() }).strict()
 export const WordIdSchema = z
@@ -7,14 +7,14 @@ export const WordIdSchema = z
   .min(1)
   .max(64)
   .regex(/^[A-Za-z0-9:_-]+$/u, { message: 'invalid word id' })
-export const AvatarIdSchema = z.enum(APP_CONFIG.player.avatarIds)
+export const AvatarIdSchema = z.enum(AVATAR_IDS)
 export const ProfileSchema = z
   .object({
     nickname: z
       .string()
       .trim()
-      .min(1)
-      .max(APP_CONFIG.player.nicknameMaxLength * 2),
+      .min(PLAYER_PROTOCOL_LIMITS.nicknameMinLength)
+      .max(PLAYER_PROTOCOL_LIMITS.nicknameMaxLength * 2),
     avatarId: AvatarIdSchema,
   })
   .strict()

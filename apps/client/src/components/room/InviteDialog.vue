@@ -2,7 +2,7 @@
   邀请在线玩家弹窗（房主或允许邀请的成员）——列出空闲且允许接收邀请的在线玩家，点击发送按钮即邀请。
   原 RoomView.vue 邀请弹窗迁入本组件，基于 BaseDialog 复用外壳；可用玩家列表内部计算。
   发送按钮复用 RoundIconButton 图标按钮组件；点击后进入冷却倒计时
-  （秒数来自 config/ui.inviteCooldownSeconds，与服务端邀请冷却一致），防止对同一玩家重复邀请；
+  （秒数来自 @draw-guess/config 的 UI 配置），防止对同一玩家重复邀请；
   发送结果由 store.invite 内统一 Toast 提示「邀请已发出/失败」。
 -->
 <script setup lang="ts">

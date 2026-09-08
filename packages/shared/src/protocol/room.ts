@@ -1,46 +1,48 @@
 import { z } from 'zod'
-import { APP_CONFIG } from '../../../../config/index.ts'
 import { RequestSchema } from './base.ts'
+import { PLAYER_PROTOCOL_LIMITS, PRIVATE_ROOM_CODE, ROOM_RULE_LIMITS } from './constants.ts'
+
+export const RoomVisibilitySchema = z.enum(['public', 'private'])
 
 export const RoomSettingsSchema = z
   .object({
     maxPlayers: z
       .number()
       .int()
-      .min(APP_CONFIG.player.minPlayers)
-      .max(APP_CONFIG.player.maxPlayers),
+      .min(PLAYER_PROTOCOL_LIMITS.minPlayers)
+      .max(PLAYER_PROTOCOL_LIMITS.maxPlayers),
     roundsPerPlayer: z
       .number()
       .int()
-      .min(APP_CONFIG.game.roundsPerPlayer.min)
-      .max(APP_CONFIG.game.roundsPerPlayer.max),
+      .min(ROOM_RULE_LIMITS.roundsPerPlayer.min)
+      .max(ROOM_RULE_LIMITS.roundsPerPlayer.max),
     drawSeconds: z
       .number()
       .int()
-      .min(APP_CONFIG.game.drawSeconds.min)
-      .max(APP_CONFIG.game.drawSeconds.max),
+      .min(ROOM_RULE_LIMITS.drawSeconds.min)
+      .max(ROOM_RULE_LIMITS.drawSeconds.max),
     chooseSeconds: z
       .number()
       .int()
-      .min(APP_CONFIG.game.chooseSeconds.min)
-      .max(APP_CONFIG.game.chooseSeconds.max),
+      .min(ROOM_RULE_LIMITS.chooseSeconds.min)
+      .max(ROOM_RULE_LIMITS.chooseSeconds.max),
     optionCount: z
       .number()
       .int()
-      .min(APP_CONFIG.game.optionCount.min)
-      .max(APP_CONFIG.game.optionCount.max),
+      .min(ROOM_RULE_LIMITS.optionCount.min)
+      .max(ROOM_RULE_LIMITS.optionCount.max),
     showWordLength: z.boolean(),
     progressiveHints: z.boolean(),
     structuredHintsEnabled: z.boolean(),
     hintStartRatio: z
       .number()
-      .min(APP_CONFIG.game.hintStartRatioRange.min)
-      .max(APP_CONFIG.game.hintStartRatioRange.max),
+      .min(ROOM_RULE_LIMITS.hintStartRatio.min)
+      .max(ROOM_RULE_LIMITS.hintStartRatio.max),
     guessBaseScore: z
       .number()
       .int()
-      .min(APP_CONFIG.game.score.guessBaseRange.min)
-      .max(APP_CONFIG.game.score.guessBaseRange.max),
+      .min(ROOM_RULE_LIMITS.guessBaseScore.min)
+      .max(ROOM_RULE_LIMITS.guessBaseScore.max),
     scoreMode: z.enum(['standard', 'flat']),
     allowPlayerInvite: z.boolean(),
     allowPause: z.boolean(),
@@ -54,13 +56,13 @@ export const PrivateRoomCodeSchema = z
   .transform((value) => value.replace(/[\s-]/gu, '').toUpperCase())
   .refine(
     (value) =>
-      value.length === APP_CONFIG.room.privateCodeLength &&
-      [...value].every((character) => APP_CONFIG.room.privateCodeAlphabet.includes(character)),
+      value.length === PRIVATE_ROOM_CODE.length &&
+      [...value].every((character) => PRIVATE_ROOM_CODE.alphabet.includes(character)),
     { message: 'invalid private room code' },
   )
 export const CreateRoomSchema = RequestSchema.extend({
-  name: z.string().trim().min(1).max(APP_CONFIG.player.roomNameMaxLength),
-  visibility: z.enum(['public', 'private']),
+  name: z.string().trim().min(1).max(PLAYER_PROTOCOL_LIMITS.roomNameMaxLength),
+  visibility: RoomVisibilitySchema,
   settings: RoomSettingsSchema,
 })
 export const JoinRoomSchema = RequestSchema.extend({ roomId: z.string().uuid() })

@@ -2,25 +2,39 @@
  * 前后端共享协议、运行时校验与无环境依赖领域纯函数。
  * 此模块只描述可公开的数据结构，绝不声明服务端秘密答案容器或密码字段。
  */
+import { z } from 'zod'
+import { ProfileSchema, RequestSchema } from './protocol/base.ts'
+import { FillCommandSchema, StrokeSchema } from './protocol/drawing.ts'
+import {
+  ChooseWordSchema,
+  GuessWordSchema,
+  PauseGameSchema,
+  RerollWordsSchema,
+  SendPresetSchema,
+  StartGameSchema,
+} from './protocol/gameplay.ts'
+import { RespondInviteSchema, SendInviteSchema } from './protocol/invite.ts'
+import {
+  CreateRoomSchema,
+  JoinPrivateRoomSchema,
+  JoinRoomSchema,
+  KickMemberSchema,
+  SetReadySchema,
+  TransferHostSchema,
+  UpdateRoomSettingsSchema,
+} from './protocol/room.ts'
+import { LogoutSchema, RegisterSchema, StateResyncSchema } from './protocol/session.ts'
+import { SelectVocabularyPackageSchema, UpdateVocabularySchema } from './protocol/vocabulary.ts'
 import type {
   Ack,
-  FillPush,
-  FillCommand,
   Invite,
-  MemberConnectionChange,
   PresenceSnapshot,
   PublicPlayer,
   PublicRoom,
   RoomSnapshot,
-  RoomSettings,
-  RoomVisibility,
-  ServerPushEnvelope,
   SessionRegistration,
-  Stroke,
   StrokeAck,
-  StrokePush,
   VocabularySnapshot,
-  Profile,
 } from './types.ts'
 
 /**
@@ -36,6 +50,7 @@ export const EVENTS = {
   sessionRegister: 'session:register',
   sessionLogout: 'session:logout',
   sessionUpdateProfile: 'session:updateProfile',
+  presenceGet: 'presence:get',
   presenceUpdatePreferences: 'presence:updatePreferences',
   roomList: 'room:list',
   roomCreate: 'room:create',
@@ -83,138 +98,99 @@ export const EVENTS = {
 /** 协议事件名联合类型，禁止业务层绕过 EVENTS 手写任意字符串。 */
 export type EventName = (typeof EVENTS)[keyof typeof EVENTS]
 
-interface BaseRequestPayload {
-  requestId: string
+const DrawingRoundSchema = RequestSchema.extend({ roundId: z.string().uuid() })
+
+/** 客户端请求事件到 Zod Schema 的唯一映射；payload 类型与 binder 输入均由这里推导。 */
+export const CLIENT_REQUEST_SCHEMAS = {
+  [EVENTS.sessionRegister]: RegisterSchema,
+  [EVENTS.sessionLogout]: LogoutSchema,
+  [EVENTS.sessionUpdateProfile]: RequestSchema.extend({ profile: ProfileSchema }),
+  [EVENTS.presenceGet]: RequestSchema,
+  [EVENTS.presenceUpdatePreferences]: RequestSchema.extend({
+    discoverable: z.boolean(),
+    acceptsInvites: z.boolean(),
+  }),
+  [EVENTS.roomList]: RequestSchema,
+  [EVENTS.roomCreate]: CreateRoomSchema,
+  [EVENTS.roomJoin]: JoinRoomSchema,
+  [EVENTS.roomJoinPrivate]: JoinPrivateRoomSchema,
+  [EVENTS.roomLeave]: RequestSchema,
+  [EVENTS.roomUpdateSettings]: UpdateRoomSettingsSchema,
+  [EVENTS.roomGetVocabulary]: RequestSchema,
+  [EVENTS.roomUpdateVocabulary]: UpdateVocabularySchema,
+  [EVENTS.roomSelectVocabularyPackage]: SelectVocabularyPackageSchema,
+  [EVENTS.roomSetReady]: SetReadySchema,
+  [EVENTS.roomKick]: KickMemberSchema,
+  [EVENTS.roomTransferHost]: TransferHostSchema,
+  [EVENTS.inviteSend]: SendInviteSchema,
+  [EVENTS.inviteRespond]: RespondInviteSchema,
+  [EVENTS.gameStart]: StartGameSchema,
+  [EVENTS.gameChooseWord]: ChooseWordSchema,
+  [EVENTS.gameRerollWords]: RerollWordsSchema,
+  [EVENTS.gamePauseRequest]: PauseGameSchema,
+  [EVENTS.gameResume]: RequestSchema,
+  [EVENTS.gameEndEarly]: RequestSchema,
+  [EVENTS.gameLeave]: RequestSchema,
+  [EVENTS.gameReturnWaiting]: RequestSchema,
+  [EVENTS.guessSubmit]: GuessWordSchema,
+  [EVENTS.chatPreset]: SendPresetSchema,
+  [EVENTS.drawStrokeBatch]: DrawingRoundSchema.extend({ stroke: StrokeSchema }),
+  [EVENTS.drawFillCommit]: DrawingRoundSchema.extend({ fill: FillCommandSchema }),
+  [EVENTS.drawUndo]: DrawingRoundSchema,
+  [EVENTS.drawRedo]: DrawingRoundSchema,
+  [EVENTS.drawClear]: DrawingRoundSchema,
+  [EVENTS.stateResync]: StateResyncSchema,
+  [EVENTS.networkPing]: RequestSchema.extend({ clientTime: z.number() }),
+} as const
+
+/** ack 数据仍由用例返回值定义；请求 payload 则完全由 CLIENT_REQUEST_SCHEMAS 推导。 */
+export interface ClientResponseContract {
+  [EVENTS.sessionRegister]: SessionRegistration
+  [EVENTS.sessionLogout]: { success: true }
+  [EVENTS.sessionUpdateProfile]: PublicPlayer
+  [EVENTS.presenceGet]: PresenceSnapshot
+  [EVENTS.presenceUpdatePreferences]: void
+  [EVENTS.roomList]: PublicRoom[]
+  [EVENTS.roomCreate]: RoomSnapshot
+  [EVENTS.roomJoin]: RoomSnapshot
+  [EVENTS.roomJoinPrivate]: RoomSnapshot
+  [EVENTS.roomLeave]: void
+  [EVENTS.roomUpdateSettings]: RoomSnapshot
+  [EVENTS.roomGetVocabulary]: VocabularySnapshot
+  [EVENTS.roomUpdateVocabulary]: VocabularySnapshot
+  [EVENTS.roomSelectVocabularyPackage]: VocabularySnapshot
+  [EVENTS.roomSetReady]: RoomSnapshot
+  [EVENTS.roomKick]: void
+  [EVENTS.roomTransferHost]: void
+  [EVENTS.inviteSend]: Invite
+  [EVENTS.inviteRespond]: RoomSnapshot | undefined
+  [EVENTS.gameStart]: RoomSnapshot
+  [EVENTS.gameChooseWord]: void
+  [EVENTS.gameRerollWords]: void
+  [EVENTS.gamePauseRequest]: void
+  [EVENTS.gameResume]: void
+  [EVENTS.gameEndEarly]: void
+  [EVENTS.gameLeave]: void
+  [EVENTS.gameReturnWaiting]: void
+  [EVENTS.guessSubmit]: { correct: boolean }
+  [EVENTS.chatPreset]: void
+  [EVENTS.drawStrokeBatch]: StrokeAck
+  [EVENTS.drawFillCommit]: void
+  [EVENTS.drawUndo]: void
+  [EVENTS.drawRedo]: void
+  [EVENTS.drawClear]: void
+  [EVENTS.stateResync]: RoomSnapshot | undefined
+  [EVENTS.networkPing]: { clientTime: number; serverTime: number }
 }
 
-/** 客户端请求事件的 payload/ack 契约；请求封装与 binder 从此映射推导类型。 */
-export interface ClientRequestContract {
-  [EVENTS.sessionRegister]: {
-    payload: BaseRequestPayload & {
-      protocolVersion: string
-      profile: Profile
-      recoveryToken?: string
-      preferences: { discoverable: boolean; acceptsInvites: boolean }
-    }
-    response: SessionRegistration
-  }
-  [EVENTS.sessionLogout]: { payload: BaseRequestPayload; response: { success: true } }
-  [EVENTS.sessionUpdateProfile]: {
-    payload: BaseRequestPayload & { profile: Profile }
-    response: PublicPlayer
-  }
-  [EVENTS.presenceUpdatePreferences]: {
-    payload: BaseRequestPayload & { discoverable: boolean; acceptsInvites: boolean }
-    response: void
-  }
-  [EVENTS.roomList]: { payload: BaseRequestPayload; response: PublicRoom[] }
-  [EVENTS.roomCreate]: {
-    payload: BaseRequestPayload & {
-      name: string
-      visibility: RoomVisibility
-      settings: RoomSettings
-    }
-    response: RoomSnapshot
-  }
-  [EVENTS.roomJoin]: { payload: BaseRequestPayload & { roomId: string }; response: RoomSnapshot }
-  [EVENTS.roomJoinPrivate]: {
-    payload: BaseRequestPayload & { code: string }
-    response: RoomSnapshot
-  }
-  [EVENTS.roomLeave]: { payload: BaseRequestPayload; response: void }
-  [EVENTS.roomUpdateSettings]: {
-    payload: BaseRequestPayload & { patch: Partial<RoomSettings>; expectedVersion: number }
-    response: RoomSnapshot
-  }
-  [EVENTS.roomGetVocabulary]: { payload: BaseRequestPayload; response: VocabularySnapshot }
-  [EVENTS.roomUpdateVocabulary]: {
-    payload: BaseRequestPayload & { ids: string[]; expectedVersion: number }
-    response: VocabularySnapshot
-  }
-  [EVENTS.roomSelectVocabularyPackage]: {
-    payload: BaseRequestPayload & { packageId: string; expectedVersion?: number }
-    response: VocabularySnapshot
-  }
-  [EVENTS.roomSetReady]: {
-    payload: BaseRequestPayload & { ready: boolean }
-    response: RoomSnapshot
-  }
-  [EVENTS.roomKick]: { payload: BaseRequestPayload & { targetId: string }; response: void }
-  [EVENTS.roomTransferHost]: { payload: BaseRequestPayload & { targetId: string }; response: void }
-  [EVENTS.inviteSend]: { payload: BaseRequestPayload & { targetId: string }; response: Invite }
-  [EVENTS.inviteRespond]: {
-    payload: BaseRequestPayload & { inviteId: string; accept: boolean }
-    response: RoomSnapshot | undefined
-  }
-  [EVENTS.gameStart]: {
-    payload: BaseRequestPayload & { expectedVersion: number }
-    response: RoomSnapshot
-  }
-  [EVENTS.gameChooseWord]: {
-    payload: BaseRequestPayload & { roundId: string; wordId: string }
-    response: void
-  }
-  [EVENTS.gameRerollWords]: { payload: BaseRequestPayload & { roundId: string }; response: void }
-  [EVENTS.gamePauseRequest]: {
-    payload: BaseRequestPayload & { reason: string }
-    response: void
-  }
-  [EVENTS.gameResume]: { payload: BaseRequestPayload; response: void }
-  [EVENTS.gameEndEarly]: { payload: BaseRequestPayload; response: void }
-  [EVENTS.gameLeave]: { payload: BaseRequestPayload; response: void }
-  [EVENTS.gameReturnWaiting]: { payload: BaseRequestPayload; response: void }
-  [EVENTS.guessSubmit]: {
-    payload: BaseRequestPayload & { roundId: string; text: string }
-    response: { correct: boolean }
-  }
-  [EVENTS.chatPreset]: {
-    payload: BaseRequestPayload & { roundId: string; preset: string }
-    response: void
-  }
-  [EVENTS.drawStrokeBatch]: {
-    payload: BaseRequestPayload & { roundId: string; stroke: Stroke }
-    response: StrokeAck
-  }
-  [EVENTS.drawFillCommit]: {
-    payload: BaseRequestPayload & { roundId: string; fill: FillCommand }
-    response: void
-  }
-  [EVENTS.drawUndo]: { payload: BaseRequestPayload & { roundId: string }; response: void }
-  [EVENTS.drawRedo]: { payload: BaseRequestPayload & { roundId: string }; response: void }
-  [EVENTS.drawClear]: { payload: BaseRequestPayload & { roundId: string }; response: void }
-  [EVENTS.stateResync]: {
-    payload: BaseRequestPayload & { roomId?: string; gameId?: string; roundId?: string }
-    response: RoomSnapshot | undefined
-  }
-  [EVENTS.networkPing]: {
-    payload: BaseRequestPayload & { clientTime: number }
-    response: { clientTime: number; serverTime: number }
-  }
-}
-
-export type ClientRequestEvent = keyof ClientRequestContract
-export type ClientRequestPayload<E extends ClientRequestEvent> = ClientRequestContract[E]['payload']
-export type ClientResponse<E extends ClientRequestEvent> = ClientRequestContract[E]['response']
+export type ClientRequestEvent = keyof typeof CLIENT_REQUEST_SCHEMAS & keyof ClientResponseContract
+export type ClientRequestPayload<E extends ClientRequestEvent> = z.infer<
+  (typeof CLIENT_REQUEST_SCHEMAS)[E]
+>
+export type ClientResponse<E extends ClientRequestEvent> = ClientResponseContract[E]
 export type ClientToServerEvents = {
   [E in ClientRequestEvent]: (
     payload: ClientRequestPayload<E>,
     ack: (response: Ack<ClientResponse<E>>) => void,
   ) => void
-}
-
-/** Socket.IO 服务端主动推送类型图；每项都强制使用版本化信封。 */
-export interface ServerToClientEvents {
-  [EVENTS.presenceSnapshot]: (payload: ServerPushEnvelope<PresenceSnapshot>) => void
-  [EVENTS.roomListChanged]: (payload: ServerPushEnvelope<PublicRoom[]>) => void
-  [EVENTS.inviteReceived]: (payload: ServerPushEnvelope<Invite>) => void
-  [EVENTS.inviteResolved]: (payload: ServerPushEnvelope<{ id: string; status: string }>) => void
-  [EVENTS.roomSnapshot]: (payload: ServerPushEnvelope<RoomSnapshot>) => void
-  [EVENTS.roomMemberConnectionChanged]: (
-    payload: ServerPushEnvelope<MemberConnectionChange>,
-  ) => void
-  [EVENTS.roomClosed]: (payload: ServerPushEnvelope<{ reason: string }>) => void
-  [EVENTS.systemNotice]: (payload: ServerPushEnvelope<{ text: string }>) => void
-  [EVENTS.systemError]: (payload: ServerPushEnvelope<{ text: string }>) => void
-  [EVENTS.drawStrokeBatch]: (payload: ServerPushEnvelope<StrokePush>) => void
-  [EVENTS.drawFillCommit]: (payload: ServerPushEnvelope<FillPush>) => void
 }

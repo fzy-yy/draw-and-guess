@@ -46,6 +46,7 @@ export const useGameStore = defineStore('game', () => {
     clockOffset,
     busy,
     kickedNotice,
+    protocolMismatch,
   } = storeToRefs(sessionStore)
   const { presence, invites } = storeToRefs(lobbyStore)
   const { room, me, isHost, isDrawer } = storeToRefs(roomStore)
@@ -123,6 +124,7 @@ export const useGameStore = defineStore('game', () => {
     vocabulary,
     invites,
     kickedNotice,
+    protocolMismatch,
     drawRevision,
     busy,
     me,
@@ -141,6 +143,7 @@ export const useGameStore = defineStore('game', () => {
     joinRoom: roomStore.joinRoom,
     joinPrivateRoom: roomStore.joinPrivateRoom,
     leaveRoom: roomStore.leaveRoom,
+    requestFullSnapshot: roomStore.requestFullSnapshot,
     setReady: roomStore.setReady,
     updateRoomSettings: roomStore.updateRoomSettings,
     loadVocabulary: vocabularyStore.loadVocabulary,

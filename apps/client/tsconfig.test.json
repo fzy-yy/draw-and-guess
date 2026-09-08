@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.vue",
+    "../../test/client/**/*.ts",
+    "../../test/component/**/*.ts",
+    "../../test/integration/**/*.ts",
+    "../../packages/config/src/**/*.ts",
+    "../../packages/strings/src/**/*.ts",
+    "../../packages/shared/src/**/*.ts"
+  ],
+  "exclude": ["../../node_modules", "dist"]
+}

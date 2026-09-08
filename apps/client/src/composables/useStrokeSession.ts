@@ -4,8 +4,16 @@ import { APP_CONFIG } from '@draw-guess/config'
 import type { DrawPoint, FillCommand, Stroke, StrokeAck, ToolKind } from '@draw-guess/shared'
 import { createUuid } from '@/utils/createUuid'
 import { renderStroke } from '@/canvas/rendering'
+import type { RequestFailure, RequestResult } from '@/stores/request'
 
 type StrokeStyle = { tool: 'pen' | 'eraser'; color: string; width: number }
+
+export interface PendingStrokeBatch {
+  strokeId: string
+  startPointIndex: number
+  sequence: number
+  roundId: string
+}
 
 /** 单次按压笔画的采样、分批、序号与 ack 回滚会话。 */
 export function useStrokeSession(options: {
@@ -14,12 +22,14 @@ export function useStrokeSession(options: {
   canDraw: () => boolean
   tool: () => ToolKind
   color: () => string
+  roundId: () => string
   lastSequence: () => number
   strokes: () => readonly { sequence: number }[]
   drawnPoints: Map<string, number>
   getContext: () => CanvasRenderingContext2D | null
   redraw: () => void
-  emitStroke: (stroke: Stroke, onAck?: (ack?: StrokeAck) => void) => void
+  emitStroke: (stroke: Stroke, onResult: (result: RequestResult<StrokeAck>) => void) => void
+  onBatchFailure: (batch: PendingStrokeBatch, failure: RequestFailure) => void
   emitFill: (fill: FillCommand) => void
 }) {
   const activePoints = ref<DrawPoint[]>([])
@@ -28,6 +38,7 @@ export function useStrokeSession(options: {
   let activeStrokeId = ''
   let activeStyle: StrokeStyle | null = null
   let sentPointCount = 0
+  const pendingBatches = new Map<number, PendingStrokeBatch>()
 
   function currentStrokeStyle(): StrokeStyle {
     return (
@@ -71,22 +82,44 @@ export function useStrokeSession(options: {
     for (let index = 0; index < unsent.length; index += APP_CONFIG.drawing.maxPointsPerBatch) {
       const points = unsent.slice(index, index + APP_CONFIG.drawing.maxPointsPerBatch)
       if (!points.length) continue
-      const currentBatchStrokeId = activeStrokeId
-      options.emitStroke(
-        {
-          kind: 'stroke',
-          id: activeStrokeId,
-          ...currentStrokeStyle(),
-          points,
-          startPointIndex: fromIndex + index,
-          sequence: nextSequence(),
-        },
-        (ack) => {
-          if (ack || activeStrokeId !== currentBatchStrokeId) return
-          reset()
-          options.redraw()
-        },
-      )
+      const batchStroke: Stroke = {
+        kind: 'stroke',
+        id: activeStrokeId,
+        ...currentStrokeStyle(),
+        points,
+        startPointIndex: fromIndex + index,
+        sequence: nextSequence(),
+      }
+      const pending: PendingStrokeBatch = {
+        strokeId: batchStroke.id,
+        startPointIndex: batchStroke.startPointIndex ?? 0,
+        sequence: batchStroke.sequence,
+        roundId: options.roundId(),
+      }
+      pendingBatches.set(pending.sequence, pending)
+      options.emitStroke(batchStroke, (result) => {
+        const current = pendingBatches.get(pending.sequence)
+        if (!current || current.strokeId !== pending.strokeId) return
+        pendingBatches.delete(pending.sequence)
+        if (result.ok || pending.roundId !== options.roundId()) return
+
+        // 同一笔后续批次依赖连续点下标；其中一批失败后全部降级为权威快照，
+        // 但只清理该 strokeId 的乐观痕迹，不能打断或误删后来开始的新笔画。
+        for (const [sequenceKey, candidate] of pendingBatches) {
+          if (candidate.strokeId === pending.strokeId) pendingBatches.delete(sequenceKey)
+        }
+        if (activeStrokeId === pending.strokeId) {
+          drawing.value = false
+          activePoints.value = []
+          activeStrokeId = ''
+          activeStyle = null
+          sentPointCount = 0
+          stopBatchTimer()
+        }
+        options.drawnPoints.delete(pending.strokeId)
+        options.redraw()
+        options.onBatchFailure(pending, result)
+      })
     }
     sentPointCount = activePoints.value.length
   }
@@ -181,6 +214,7 @@ export function useStrokeSession(options: {
     activeStrokeId = ''
     activeStyle = null
     sentPointCount = 0
+    pendingBatches.clear()
     stopBatchTimer()
   }
 
@@ -197,11 +231,15 @@ export function useStrokeSession(options: {
     )
   }
 
-  onBeforeUnmount(stopBatchTimer)
+  onBeforeUnmount(() => {
+    pendingBatches.clear()
+    stopBatchTimer()
+  })
 
   return {
     activePoints,
     drawing,
+    pendingBatches,
     get activeStrokeId() {
       return activeStrokeId
     },

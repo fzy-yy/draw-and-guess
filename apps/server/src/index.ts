@@ -1,5 +1,5 @@
 /** 局域网生产入口：组合环境、日志、应用、监听与关闭生命周期。 */
-import { APP_CONFIG, getDeploymentConfig } from '../../../config/index.ts'
+import { APP_CONFIG, getDeploymentConfig } from './config/index.ts'
 import { createApplication } from './app.ts'
 import { makeLogger } from './logging/file-logger.ts'
 import { loadProjectEnv } from './startup/environment.ts'
@@ -45,7 +45,7 @@ async function main(): Promise<void> {
       console.error(`端口 ${deployment.port} 已被占用。请通过 PORT 环境变量更换端口。`)
       logger.error(
         { port: deployment.port },
-        `端口 ${deployment.port} 已被占用。请通过 PORT 环境变量或 config/app.ts 更换端口。`,
+        `端口 ${deployment.port} 已被占用。请通过 PORT 环境变量更换端口。`,
       )
     } else {
       console.error('服务器启动失败:', error)

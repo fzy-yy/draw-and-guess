@@ -7,8 +7,8 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.vue",
-    "../../config/**/*.ts",
-    "../../string/**/*.ts",
+    "../../packages/config/src/**/*.ts",
+    "../../packages/strings/src/**/*.ts",
     "../../packages/shared/src/**/*.ts"
   ]
 }

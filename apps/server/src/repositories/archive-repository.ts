@@ -10,7 +10,7 @@
  * 不改变裁决逻辑，保证「展示分 = 入账分」。战绩为低频写，无性能顾虑。
  */
 import type { Database } from 'better-sqlite3'
-import { getDb, withTransaction } from '../db/index.ts'
+import type { DatabaseContext } from '../db/index.ts'
 
 /** 一局战报（game_archive 行）。finalRanking 为 JSON 序列化的最终排行。 */
 export interface GameArchiveRecord {
@@ -41,10 +41,14 @@ export interface ArchiveRepository {
 
 /** SQLite 实现：全部写操作在事务内执行，保证档案与结果一致。 */
 export class SqliteArchiveRepository implements ArchiveRepository {
-  private readonly db: Database = getDb()
+  private readonly db: Database
+
+  constructor(private readonly database: DatabaseContext) {
+    this.db = database.connection
+  }
 
   saveGame(archive: GameArchiveRecord, results: GameResultRecord[]): void {
-    withTransaction(() => {
+    this.database.withTransaction(() => {
       this.db
         .prepare(
           `INSERT INTO game_archive(id, room_id, started_at, finished_at, total_rounds, final_ranking, reason)

@@ -1,4 +1,4 @@
-import { serverStrings } from '../../../../../string/index.ts'
+import { serverStrings } from '@draw-guess/strings'
 import { MIN_SELECTED_VOCABULARY_WORDS, type VocabularySnapshot } from '@draw-guess/shared'
 import { GameError } from '../../errors.ts'
 import type { RoomSecret } from '../../models.ts'

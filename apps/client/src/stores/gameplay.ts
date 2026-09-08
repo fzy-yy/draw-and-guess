@@ -16,6 +16,7 @@ import { strings } from '@draw-guess/strings'
 import { notify } from '@/composables/useToasts'
 import { socket } from './socket.ts'
 import { createRequester } from './request.ts'
+import type { RequestResult } from './request.ts'
 import { useRoomStore } from './room.ts'
 import { useSessionStore } from './session.ts'
 
@@ -66,8 +67,15 @@ export const useGameplayStore = defineStore('gameplay', () => {
     return result.ok
   }
 
-  async function sendStroke(stroke: Stroke): Promise<StrokeAck | undefined> {
-    if (!roomStore.room?.game) return undefined
+  async function sendStroke(stroke: Stroke): Promise<RequestResult<StrokeAck>> {
+    if (!roomStore.room?.game)
+      return {
+        ok: false,
+        failureKind: 'business',
+        error: strings.request.genericFailure,
+        code: 'STALE_DRAWING_CONTEXT',
+        timeout: false,
+      }
     const result = await request(
       EVENTS.drawStrokeBatch,
       { roundId: roomStore.room.game.roundId, stroke },
@@ -77,9 +85,9 @@ export const useGameplayStore = defineStore('gameplay', () => {
       if (result.code === 'DRAW_BUDGET_EXCEEDED') {
         notify(result.error ?? strings.request.genericFailure, 'warning')
       }
-      return undefined
+      return result
     }
-    return result.data
+    return result
   }
 
   async function sendFill(fill: FillCommand): Promise<void> {

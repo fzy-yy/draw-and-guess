@@ -3,8 +3,8 @@
  * 所有公开数据结构都由此模块按观看者角色生成，服务端秘密字段（答案、令牌、计时、候选）绝不外泄；
  * 与 GameService 组合使用，方便对“角色裁剪规则”独立测试。
  */
-import { APP_CONFIG } from '../../../config/index.ts'
-import { serverStrings } from '../../../string/index.ts'
+import { APP_CONFIG } from './config/index.ts'
+import { serverStrings } from '@draw-guess/strings'
 import {
   createAnswerMask,
   type GameView,

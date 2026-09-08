@@ -1,6 +1,6 @@
-import { APP_CONFIG } from '../../../config/index.ts'
+import { APP_CONFIG } from './config/index.ts'
 import type { RoomSettings } from '@draw-guess/shared'
-import { serverStrings } from '../../../string/index.ts'
+import { serverStrings } from '@draw-guess/strings'
 import { GameError } from './errors.ts'
 
 /** 房间规则边界的单一领域校验，供建房与修改规则共同使用。 */

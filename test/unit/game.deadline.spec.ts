@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { APP_CONFIG } from '../../config/index.ts'
+import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
 import { EVENTS } from '@draw-guess/shared'
 import type { RoomSettings } from '@draw-guess/shared'
 import { GameService } from '../../apps/server/src/game-service.ts'
@@ -13,7 +13,7 @@ import { createMemoryVocabularyRegistry } from './helpers/mini-vocabulary.ts'
 type GameServiceIo = ConstructorParameters<typeof GameService>[0]
 type RegisterSocket = Parameters<GameService['register']>[0]
 
-/** 最小合法房间设置：全部值落在 config/game.ts 与 config/room.ts 的合法区间内。 */
+/** 最小合法房间设置：全部值落在 shared protocol constants 的合法区间内。 */
 const settings: RoomSettings = {
   maxPlayers: 4,
   roundsPerPlayer: 2,

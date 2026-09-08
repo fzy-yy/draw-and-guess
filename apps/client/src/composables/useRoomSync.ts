@@ -1,17 +1,6 @@
-import { APP_CONFIG } from '@draw-guess/config'
-import {
-  EVENTS,
-  RoomSnapshotSchema,
-  type FillCommand,
-  type RoomSnapshot,
-  type Stroke,
-} from '@draw-guess/shared'
-import { notify } from '@/composables/useToasts'
-import { createRequester } from '@/stores/request'
+import { type FillCommand, type RoomSnapshot, type Stroke } from '@draw-guess/shared'
 import { useGameplayStore } from '@/stores/gameplay'
 import { useRoomStore } from '@/stores/room'
-import { useSessionStore } from '@/stores/session'
-import { socket } from '@/stores/socket'
 import {
   acceptDrawingIncrement,
   acceptRoomSnapshot,
@@ -21,50 +10,8 @@ import {
 /** 房间快照、绘图增量与受限全量重同步的单一协调器。 */
 export function useRoomSync() {
   const roomStore = useRoomStore()
-  const sessionStore = useSessionStore()
   const gameplayStore = useGameplayStore()
-  const request = createRequester({ socket, notify })
-  let resyncInFlight = false
-  let lastResyncAt = 0
-
-  async function requestFullSnapshot(): Promise<void> {
-    const current = roomStore.room
-    if (!current || resyncInFlight) return
-    const now = Date.now()
-    if (now - lastResyncAt < APP_CONFIG.network.stateResyncCooldownMs) return
-    resyncInFlight = true
-    lastResyncAt = now
-    const context = {
-      generation: sessionStore.generation,
-      roomId: current.id,
-      gameId: current.game?.gameId,
-      roundId: current.game?.roundId,
-    }
-    try {
-      const result = await request(
-        EVENTS.stateResync,
-        {
-          roomId: context.roomId,
-          ...(context.gameId ? { gameId: context.gameId } : {}),
-          ...(context.roundId ? { roundId: context.roundId } : {}),
-        },
-        { quiet: true, retry: true },
-      )
-      if (!result.ok || result.data === undefined) return
-      const parsed = RoomSnapshotSchema.safeParse(result.data)
-      if (
-        !parsed.success ||
-        sessionStore.generation !== context.generation ||
-        roomStore.room?.id !== context.roomId ||
-        parsed.data.id !== context.roomId ||
-        acceptRoomSnapshot(roomStore.room, parsed.data) !== 'accept'
-      )
-        return
-      roomStore.room = parsed.data
-    } finally {
-      resyncInFlight = false
-    }
-  }
+  const requestFullSnapshot = roomStore.requestFullSnapshot
 
   function onRoomSnapshot(snapshot: RoomSnapshot): void {
     const current = roomStore.room

@@ -38,13 +38,18 @@ pnpm typecheck     # 全 workspace 严格类型检查
 pnpm lint          # ESLint（--max-warnings=0）
 pnpm format        # 写入 Prettier 格式
 pnpm format:check  # 检查格式
+pnpm test:unit        # Node 环境的领域/纯函数单元测试
+pnpm test:component   # happy-dom 中的 Vue 组件测试
+pnpm test:integration # Pinia + MSW 客户端集成测试
+pnpm test:coverage    # 全部 Vitest 项目 + V8 覆盖率阈值
+pnpm test:e2e         # Playwright 跨浏览器端到端测试
 ```
 
-> 项目已提供 Vitest 单元测试与 Playwright E2E 测试；提交前最低验证为 `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit && pnpm test:e2e`。
+> 测试分为 Vitest 单元、组件、集成三层及 Playwright E2E；CI 会执行 V8 覆盖率门禁并上传 HTML/LCOV 报告。
 
 ## 配置与词库
 
-- **唯一业务配置**：[`config/index.ts`](config/index.ts) 聚合 `config/` 下按领域拆分的配置，按网络、玩家、房间、游戏、画板、音频、词库和 UI 分类。新增可调参数应先加入对应领域文件。
+- **配置边界**：协议版本、头像白名单和载荷范围以 [`packages/shared/src/protocol/constants.ts`](packages/shared/src/protocol/constants.ts) 为唯一来源；浏览器安全默认值由 [`@draw-guess/config`](packages/config/src/index.ts) 导出；限频、数据库路径和清理策略位于 [`apps/server/src/config/`](apps/server/src/config/)；禁止跨边界复制协议常量。
 - **部署覆盖**：复制 [`.env.example`](.env.example) 为根目录 `.env`，可配置 `HOST`、`PORT`、`LOG_LEVEL`、`LOG_ENABLED`、`LOG_MAX_FILES`；服务启动时会自动加载 `.env`（进程已有环境变量优先级更高）。环境变量不会覆盖游戏规则。
   - `LOG_ENABLED=false` 时完全不创建日志记录器、不写日志文件（零内存开销）；
   - `LOG_MAX_FILES` 控制日志文件保留条数（默认 10，每次启动新建一个 `apps/server/log/app-<秒级时间戳>.log`，超出删除最老）。
@@ -58,9 +63,11 @@ apps/client/       Vue 3 游戏舞台、内置 SVG 头像、Pinia 状态与 Canv
   └─ src/components/  # 按领域拆分：game/ 对局、room/ 房间、settings/ 设置；
                       # 共享组件 AppButton / BaseDialog / ConfirmDialog 放在 components/ 根目录
 apps/server/       Express、Socket.IO、权威领域状态与 SQLite 本地持久化
+  └─ src/config/                # 服务端私有限频、清理、数据库路径与部署参数
   └─ src/db/ 与 src/repositories/   # 数据库连接/迁移与仓储（player/room/archive）
-packages/shared/   DTO、Zod schema、事件名和领域纯函数
-config/            按领域拆分的业务配置（由 config/index.ts 聚合）
+packages/shared/   DTO、Zod schema、协议常量、事件名和领域纯函数（完全自包含）
+packages/config/   浏览器安全的公开应用配置 workspace 包
+packages/strings/  客户端与服务端展示文案 workspace 包
 vocabulary/        唯一权威词库目录（SQLite 数据库，Provider 加载）
 ```
 

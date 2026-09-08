@@ -14,6 +14,32 @@ export const useLobbyStore = defineStore('lobby', () => {
   const presence = ref<PresenceSnapshot>({ players: [], rooms: [] })
   const invites = ref<Invite[]>([])
   const request = createRequester({ socket, notify })
+  let presenceRequestInFlight = false
+  let roomListRequestInFlight = false
+
+  /** presence 推送损坏时可重复调用的权威全量入口；并发请求合并为一次。 */
+  async function refreshPresence(): Promise<void> {
+    if (presenceRequestInFlight) return
+    presenceRequestInFlight = true
+    try {
+      const result = await request(EVENTS.presenceGet, {}, { quiet: true, retry: true })
+      if (result.ok) presence.value = result.data
+    } finally {
+      presenceRequestInFlight = false
+    }
+  }
+
+  /** 房间列表推送损坏时仅补拉公开房，避免覆盖同期到达的玩家 presence。 */
+  async function refreshRooms(): Promise<void> {
+    if (roomListRequestInFlight) return
+    roomListRequestInFlight = true
+    try {
+      const result = await request(EVENTS.roomList, {}, { quiet: true, retry: true })
+      if (result.ok) presence.value.rooms = result.data
+    } finally {
+      roomListRequestInFlight = false
+    }
+  }
 
   async function invite(targetId: string): Promise<void> {
     const result = await request(EVENTS.inviteSend, { targetId })
@@ -37,6 +63,8 @@ export const useLobbyStore = defineStore('lobby', () => {
   return {
     presence,
     invites,
+    refreshPresence,
+    refreshRooms,
     invite,
     respondInvite,
   }

@@ -7,7 +7,7 @@
   工具栏单行布局：搜索框占左半行，右半行为筛选功能按钮。
   批量选择收敛为一个「统一三态复选框」放于表格表头，作用于当前搜索+筛选结果（无筛选时即全部词条）。
   词库统计（全部/搜索结果/已选）合并到底部操作栏左侧，表格区不单独占行。
-  选择集合由父组件持有；全部展示文案来自 config/strings.ts，全部上限/默认值来自 config。
+  选择集合由父组件持有；展示文案来自 @draw-guess/strings，上限与默认值来自配置包。
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch, type Component } from 'vue'

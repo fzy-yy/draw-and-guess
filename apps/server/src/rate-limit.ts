@@ -1,8 +1,8 @@
 /**
  * 事件限频工具：对高频输入使用一秒滑动窗口拒绝刷包，保护计时与聊天事件。
  */
-import { APP_CONFIG } from '../../../config/index.ts'
-import { serverStrings } from '../../../string/index.ts'
+import { APP_CONFIG } from './config/index.ts'
+import { serverStrings } from '@draw-guess/strings'
 import { GameError } from './errors.ts'
 import type { PlayerSecret } from './models.ts'
 import type { Clock } from './runtime.ts'

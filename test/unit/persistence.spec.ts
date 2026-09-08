@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { closeDb, getDb, setDbFile } from '../../apps/server/src/db/index.ts'
+import { createDatabase, type DatabaseContext } from '../../apps/server/src/db/index.ts'
 import { MIGRATIONS, runMigrations } from '../../apps/server/src/db/migrate.ts'
 import {
   SqliteArchiveRepository,
@@ -15,20 +15,21 @@ import { createMemoryVocabularyRegistry } from './helpers/mini-vocabulary.ts'
 import { createFakeRuntime } from './helpers/fake-clock.ts'
 
 let testDirectory = ''
+let database: DatabaseContext
 
 beforeEach(() => {
   testDirectory = mkdtempSync(join(tmpdir(), 'draw-guess-db-test-'))
-  setDbFile(join(testDirectory, 'test.db'))
+  database = createDatabase(join(testDirectory, 'test.db'))
 })
 
 afterEach(() => {
-  closeDb()
+  database.close()
   rmSync(testDirectory, { recursive: true, force: true })
 })
 
 describe('SQLite 迁移与事务边界', () => {
   it('从旧版本升级并可重复运行迁移', () => {
-    const db = getDb()
+    const db = database.connection
     const first = MIGRATIONS[0]!
     db.exec(`
       CREATE TABLE schema_version (
@@ -43,16 +44,16 @@ describe('SQLite 迁移与事务边界', () => {
       first.name,
       1,
     )
-    runMigrations()
-    runMigrations()
+    runMigrations(database)
+    runMigrations(database)
     const versions = db.prepare('SELECT version FROM schema_version ORDER BY version').all()
     expect(versions).toHaveLength(MIGRATIONS.length)
   })
 
   it('战报从表写入失败时回滚整局，重复归档保持单行并更新结果', () => {
-    runMigrations()
-    const db = getDb()
-    const repository = new SqliteArchiveRepository()
+    runMigrations(database)
+    const db = database.connection
+    const repository = new SqliteArchiveRepository(database)
     const archive = {
       id: 'game-1',
       roomId: 'room-1',
@@ -96,8 +97,8 @@ describe('SQLite 迁移与事务边界', () => {
   })
 
   it('启动恢复可清除包含损坏 JSON 的遗留房间记录而不解析污染领域状态', () => {
-    runMigrations()
-    const db = getDb()
+    runMigrations(database)
+    const db = database.connection
     db.prepare(
       `INSERT INTO rooms(
         id, name, host_id, visibility, private_code, phase, state_version,
@@ -114,9 +115,9 @@ describe('SQLite 迁移与事务边界', () => {
       io,
       createMemoryVocabularyRegistry(),
       {
-        players: new SqlitePlayerRepository(),
-        rooms: new SqliteRoomRepository(),
-        archive: new SqliteArchiveRepository(),
+        players: new SqlitePlayerRepository(database),
+        rooms: new SqliteRoomRepository(database),
+        archive: new SqliteArchiveRepository(database),
       },
       SILENT_LOGGER,
       createFakeRuntime(),

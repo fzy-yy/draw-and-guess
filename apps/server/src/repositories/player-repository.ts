@@ -8,7 +8,7 @@
  * 接口与行类型放在本文件，SQLite 实现用 better-sqlite3 同步适配。
  */
 import type { Database } from 'better-sqlite3'
-import { getDb } from '../db/index.ts'
+import type { DatabaseContext } from '../db/index.ts'
 
 /** 玩家可存档行：与 players 表字段一一对应。 */
 export interface PlayerRecord {
@@ -41,7 +41,11 @@ export interface PlayerRepository {
 
 /** better-sqlite3 实现。行对象命名遵循表列（蛇形），接口层再转驼峰。 */
 export class SqlitePlayerRepository implements PlayerRepository {
-  private readonly db: Database = getDb()
+  private readonly db: Database
+
+  constructor(database: DatabaseContext) {
+    this.db = database.connection
+  }
 
   upsert(record: PlayerRecord): void {
     this.db

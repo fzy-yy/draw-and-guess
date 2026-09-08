@@ -1,9 +1,4 @@
-import type { PublicPlayer } from './common.ts'
+import type { z } from 'zod'
+import type { InviteSchema } from '../protocol/push.ts'
 
-export interface Invite {
-  id: string
-  roomId: string
-  roomName: string
-  from: PublicPlayer
-  expiresAt: number
-}
+export type Invite = z.infer<typeof InviteSchema>

@@ -1,0 +1,25 @@
+* text=auto eol=lf
+
+# Windows 批处理文件必须保留 CRLF，避免 cmd.exe 兼容性问题。
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制资产禁止 Git 执行换行转换。
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+*.mp3 binary
+*.wav binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+*.zip binary
+*.gz binary

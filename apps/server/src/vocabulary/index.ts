@@ -10,7 +10,7 @@
 import { existsSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { APP_CONFIG } from '../../../../config/index.ts'
+import { APP_CONFIG } from '../config/index.ts'
 import type { VocabularyPackageInfo, VocabularyWord } from '@draw-guess/shared'
 import type { VocabularyMeta } from './contract.ts'
 import { SqliteProvider } from './sqlite.provider.ts'

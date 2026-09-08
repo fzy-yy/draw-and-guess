@@ -3,7 +3,7 @@
   消息列表 + 快捷互动工具 + 猜词输入。猜词输入、消息滚动跟随与自动聚焦逻辑全部收敛到内部；
   是否可猜词由父组件经 canGuess 传入，提交猜词/预设短语直接调用 store。
   输入框对无权限角色直接禁用（禁用样式已表达状态，不再渲染冗余的文字提示行）。
-  快捷互动收敛为两个悬浮面板：表情反应 + 快捷短语（短语列表来自 config/presets.safeChat，
+  快捷互动收敛为两个悬浮面板：表情反应 + 快捷短语（短语列表来自 @draw-guess/config，
   在 config 中可增减），均基于 ActionPopover 复用外壳。
 -->
 <script setup lang="ts">
@@ -160,7 +160,7 @@ watch(
         role="group"
         :aria-label="strings.game.chatActionsAria"
       >
-        <!-- 表情反应面板：表情列表来自 config/presets.chatReactions -->
+        <!-- 表情反应面板：表情列表来自 @draw-guess/config -->
         <ActionPopover
           :trigger-label="strings.game.reactionPickerAria"
           :panel-aria-label="strings.game.reactionPanelAria"

@@ -1,5 +1,5 @@
-import { APP_CONFIG } from '../../../../../config/index.ts'
-import { serverStrings } from '../../../../../string/index.ts'
+import { APP_CONFIG } from '../../config/index.ts'
+import { serverStrings } from '@draw-guess/strings'
 import type { Invite, RoomSnapshot } from '@draw-guess/shared'
 import { GameError } from '../../errors.ts'
 import type { InviteSecret, PlayerSecret, RoomSecret } from '../../models.ts'

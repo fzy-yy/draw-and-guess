@@ -1,38 +1,26 @@
-export type RoomPhase =
-  | 'waiting'
-  | 'starting'
-  | 'choosing_word'
-  | 'drawing'
-  | 'round_result'
-  | 'paused'
-  | 'game_result'
-  | 'closed'
-export type ConnectionState = 'online' | 'reconnecting' | 'left'
-export type PresenceStatus = 'idle' | 'in_room' | 'playing' | 'reconnecting'
-export type ToolKind = 'pen' | 'eraser' | 'fill'
-export type RoomVisibility = 'public' | 'private'
-export type AvatarId =
-  (typeof import('../../../../config/index.ts').APP_CONFIG.player.avatarIds)[number]
+import type { z } from 'zod'
+import type { ProfileSchema, RoomPhaseSchema } from '../protocol/base.ts'
+import type {
+  ConnectionStateSchema,
+  PresenceStatusSchema,
+  PublicPlayerSchema,
+} from '../protocol/push.ts'
+import type { RoomVisibilitySchema } from '../protocol/room.ts'
+import type { RegisterSchema } from '../protocol/session.ts'
 
-export interface Profile {
-  nickname: string
-  avatarId: AvatarId
-}
-export interface PresencePreferences {
-  discoverable: boolean
-  acceptsInvites: boolean
-}
-export interface PublicPlayer {
-  id: string
-  nickname: string
-  avatarId: AvatarId
-  status: PresenceStatus
-  roomId?: string
-}
-export interface ServerPushEnvelope<T> {
-  protocolVersion: string
-  data: T
-}
+export type RoomPhase = z.infer<typeof RoomPhaseSchema>
+export type ConnectionState = z.infer<typeof ConnectionStateSchema>
+export type PresenceStatus = z.infer<typeof PresenceStatusSchema>
+export type RoomVisibility = z.infer<typeof RoomVisibilitySchema>
+export type Profile = z.infer<typeof ProfileSchema>
+export type AvatarId = Profile['avatarId']
+export type PublicPlayer = z.infer<typeof PublicPlayerSchema>
+
+/** 画板 UI 工具联合；线上 stroke/fill 载荷分别由对应 Schema 推导。 */
+export type ToolKind = 'pen' | 'eraser' | 'fill'
+
+export type PresencePreferences = z.infer<typeof RegisterSchema>['preferences']
+
 export type Ack<T> =
   | { ok: true; data: T; requestId: string }
   | { ok: false; error: { code: string; message: string }; requestId: string }

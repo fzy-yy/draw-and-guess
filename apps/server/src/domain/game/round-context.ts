@@ -19,7 +19,7 @@ export interface RoundContext {
   clearHintTimers(game: GameSecret): void
   emitRoom(roomId: string): void
   broadcastPresence(): void
-  invalidateReady(room: RoomSecret, notice: string): void
+  invalidateReady(room: RoomSecret, notice: string, versionMode?: 'increment' | 'preserve'): void
   persistGameResult(room: RoomSecret, reason: string): void
   isPausable(phase: RoomPhase): boolean
   safeRun(label: string, action: () => void): void

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
 
 describe('AGENTS 文档与工程入口一致性', () => {
@@ -7,8 +8,10 @@ describe('AGENTS 文档与工程入口一致性', () => {
     const root = process.cwd()
     const agents = readFileSync(resolve(root, 'AGENTS.md'), 'utf8')
     for (const path of [
-      'config/index.ts',
-      'string/index.ts',
+      'packages/config/src/index.ts',
+      'packages/strings/src/index.ts',
+      'packages/shared/src/protocol/constants.ts',
+      'apps/server/src/config/index.ts',
       'apps/server/src/runtime.ts',
       'apps/client/src/stores/push-protocol.ts',
       'test/unit',
@@ -36,5 +39,22 @@ describe('AGENTS 文档与工程入口一致性', () => {
       'test:e2e',
     ])
       expect(rootPackage.scripts?.[command], `缺少根命令：${command}`).toBeTruthy()
+  })
+
+  it('暂存 Git tree 只跟踪大写 AGENTS.md', () => {
+    const cwd = process.cwd()
+    const stagedTree = execFileSync('git', ['write-tree'], {
+      cwd,
+      encoding: 'utf8',
+    }).trim()
+    const trackedPaths = execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', stagedTree], {
+      cwd,
+      encoding: 'utf8',
+    })
+      .split('\0')
+      .filter(Boolean)
+    const agentsPaths = trackedPaths.filter((path) => path.toLowerCase() === 'agents.md')
+
+    expect(agentsPaths).toEqual(['AGENTS.md'])
   })
 })

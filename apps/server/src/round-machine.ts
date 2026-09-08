@@ -3,9 +3,9 @@
  * 与实现 RoundContext 的应用服务组合使用（只注入房间/成员所需的窄接口），
  * 便于把“回合规则”与“会话/成员/传输”职责分离、独立单测。
  */
-import { APP_CONFIG } from '../../../config/index.ts'
+import { APP_CONFIG } from './config/index.ts'
 import { createHintSchedule } from './hint-scheduler.ts'
-import { serverStrings } from '../../../string/index.ts'
+import { serverStrings } from '@draw-guess/strings'
 import { canTransition, type FinalRankingEntry, type RoundResult } from '@draw-guess/shared'
 import type { MemberState, RoomSecret } from './models.ts'
 import { buildDrawerScore, buildGuessDetail } from './scoring.ts'
@@ -188,9 +188,8 @@ export class RoundMachine {
     game.roundSettled = true
     this.service.clearHintTimers(game)
     this.service.scheduler.clear(game.timer)
-    // 若从暂停态结算，先复位到 drawing 以走合法转换，并清理暂停残留字段
+    // paused → round_result 是领域允许的真实转换；无需伪造一次未记录的 drawing 中间阶段。
     if (room.phase === 'paused') {
-      room.phase = 'drawing'
       delete game.phaseBeforePause
       delete game.pausedRemainingMs
     }
@@ -251,16 +250,12 @@ export class RoundMachine {
         ]
       })
     }
-    // 从暂停态结束时要先回到暂停前阶段，再走合法转换到 game_result，并清理暂停字段
+    // paused → game_result 是领域允许的真实转换；直接结算并清理暂停现场。
     if (room.phase === 'paused') {
-      room.phase = game.phaseBeforePause ?? 'drawing'
       delete game.phaseBeforePause
       delete game.pausedRemainingMs
     }
-    if (room.phase !== 'game_result') {
-      if (!canTransition(room.phase, 'game_result')) room.phase = 'drawing'
-      this.service.transition(room, 'game_result')
-    }
+    if (room.phase !== 'game_result') this.service.transition(room, 'game_result')
     game.phaseStartedAt = this.service.clock.now()
     game.phaseEndsAt = 0
     // 收敛回合显示：beginChoosing 先自增 currentRound 再判断是否超限，进入最终结算时
@@ -318,15 +313,13 @@ export class RoundMachine {
   }
   public setWaiting(room: RoomSecret, notice: string, resetReady = true): void {
     // 把房间状态重置回等待：清理对局秘密、提示计时器与全员准备
-    if (room.game) this.service.clearHintTimers(room.game)
-    this.service.scheduler.clear(room.game?.timer)
+    const game = room.game
+    this.service.transition(room, 'waiting')
+    if (game) this.service.clearHintTimers(game)
+    this.service.scheduler.clear(game?.timer)
     delete room.game
-    room.phase = 'waiting'
-    if (resetReady) this.service.invalidateReady(room, notice)
-    else {
-      room.stateVersion += 1
-      this.service.addSystemNotice(room, notice)
-    }
+    if (resetReady) this.service.invalidateReady(room, notice, 'preserve')
+    else this.service.addSystemNotice(room, notice)
     this.service.emitRoom(room.id)
   }
   /**

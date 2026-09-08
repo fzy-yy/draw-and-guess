@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { APP_CONFIG } from '../../config/index.ts'
+import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
 import type { Stroke } from '@draw-guess/shared'
 import { GameError } from '../../apps/server/src/errors.ts'
 import { createGameHarness, startTwoPlayerGame, testRoomSettings } from './helpers/game-harness.ts'

@@ -11,6 +11,8 @@ import { renderStroke } from '@/canvas/rendering'
 import { useCanvasCursor } from '@/composables/useCanvasCursor'
 import { useCanvasViewport } from '@/composables/useCanvasViewport'
 import { useStrokeSession } from '@/composables/useStrokeSession'
+import type { PendingStrokeBatch } from '@/composables/useStrokeSession'
+import type { RequestFailure, RequestResult } from '@/stores/request'
 
 const width = defineModel<number>('width', { required: true })
 const props = defineProps<{
@@ -24,7 +26,8 @@ const props = defineProps<{
   revision?: number
 }>()
 const emit = defineEmits<{
-  stroke: [stroke: Stroke, onAck?: (ack?: StrokeAck) => void]
+  stroke: [stroke: Stroke, onResult: (result: RequestResult<StrokeAck>) => void]
+  strokeFailure: [batch: PendingStrokeBatch, failure: RequestFailure]
   fill: [fill: FillCommand]
 }>()
 
@@ -123,12 +126,14 @@ const strokeSession = useStrokeSession({
   canDraw: () => props.canDraw,
   tool: () => props.tool,
   color: () => props.color,
+  roundId: () => props.roundId,
   lastSequence: () => props.lastSequence,
   strokes: () => props.strokes,
   drawnPoints,
   getContext,
   redraw,
-  emitStroke: (stroke, onAck) => emit('stroke', stroke, onAck),
+  emitStroke: (stroke, onResult) => emit('stroke', stroke, onResult),
+  onBatchFailure: (batch, failure) => emit('strokeFailure', batch, failure),
   emitFill: (fill) => emit('fill', fill),
 })
 const { resizeTick } = useCanvasViewport(canvas, redraw)

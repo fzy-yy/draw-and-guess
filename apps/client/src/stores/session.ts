@@ -31,6 +31,7 @@ export const useSessionStore = defineStore('session', () => {
   const clockOffset = ref(0)
   const busy = ref(false)
   const kickedNotice = ref(false)
+  const protocolMismatch = ref(false)
   const generation = ref(0)
   let restoreRetryTimer: number | undefined
 
@@ -41,6 +42,11 @@ export const useSessionStore = defineStore('session', () => {
   function clearRestoreRetry(): void {
     window.clearTimeout(restoreRetryTimer)
     restoreRetryTimer = undefined
+  }
+
+  function markProtocolMismatch(): void {
+    protocolMismatch.value = true
+    clearRestoreRetry()
   }
 
   function scheduleRestoreRetry(registerFn: (automatic?: boolean) => Promise<void>): void {
@@ -56,6 +62,7 @@ export const useSessionStore = defineStore('session', () => {
     automatic = false,
     onRestoredRoom?: (room: SessionRegistration['room']) => void,
   ): Promise<void> {
+    if (protocolMismatch.value) return
     if (busy.value) return
     if (!socket.connected) {
       if (profileStore.profile.recoveryToken || playerId.value) sessionState.value = 'disconnected'
@@ -86,7 +93,11 @@ export const useSessionStore = defineStore('session', () => {
       )
 
       if (!result.ok) {
-        const retryable = !result.code
+        if (result.code === 'PROTOCOL_MISMATCH') {
+          markProtocolMismatch()
+          return
+        }
+        const retryable = result.failureKind === 'transport'
         if (automatic && profileStore.profile.recoveryToken && retryable) {
           scheduleRestoreRetry((auto) => register(auto, onRestoredRoom))
         } else if (automatic) {
@@ -157,11 +168,13 @@ export const useSessionStore = defineStore('session', () => {
     clockOffset,
     busy,
     kickedNotice,
+    protocolMismatch,
     generation,
     incrementGeneration,
     register,
     measureLatency,
     clearRestoreRetry,
+    markProtocolMismatch,
     dismissKickedNotice,
   }
 })

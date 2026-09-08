@@ -1,19 +1,26 @@
 import { onBeforeUnmount } from 'vue'
 import { APP_CONFIG } from '@draw-guess/config'
 import { strings, serverStrings } from '@draw-guess/strings'
-import type { MemberConnectionChange } from '@draw-guess/shared'
+import { EVENTS, type MemberConnectionChange, type ServerPushEventName } from '@draw-guess/shared'
+import type { InvalidPushReason } from '@/stores/push-protocol'
 import { notify } from '@/composables/useToasts'
 import { useLobbyStore } from '@/stores/lobby'
 import { useProfileStore } from '@/stores/profile'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
 import { attachSocketListeners, socket } from '@/stores/socket'
+import type { Socket } from 'socket.io-client'
 import { useSettingsStore } from '@/stores/settings'
 import { useVocabularyStore } from '@/stores/vocabulary'
 import { useRoomSync } from './useRoomSync'
 
 /** 应用级 Socket、恢复、ping 与 HMR 生命周期；start/stop 均幂等。 */
-export function useAppBootstrap() {
+export function useAppBootstrap(
+  socketLifecycle: {
+    socket: Socket
+    attach: typeof attachSocketListeners
+  } = { socket, attach: attachSocketListeners },
+) {
   const profileStore = useProfileStore()
   const settingsStore = useSettingsStore()
   const sessionStore = useSessionStore()
@@ -45,17 +52,42 @@ export function useAppBootstrap() {
     )
   }
 
+  function handleConnect(): void {
+    sessionStore.connected = true
+    sessionStore.connectionLabel = strings.connection.connected
+    if (sessionStore.playerId || profileStore.profile.recoveryToken) {
+      sessionStore.sessionState = 'restoring'
+      void register(true)
+    }
+  }
+
+  function handleInvalidPush(event: ServerPushEventName, reason: InvalidPushReason): void {
+    if (reason === 'protocol_mismatch') {
+      sessionStore.markProtocolMismatch()
+      return
+    }
+    if (event === EVENTS.presenceSnapshot) {
+      void lobbyStore.refreshPresence()
+      return
+    }
+    if (event === EVENTS.roomListChanged) {
+      void lobbyStore.refreshRooms()
+      return
+    }
+    if (
+      event === EVENTS.roomSnapshot ||
+      event === EVENTS.roomMemberConnectionChanged ||
+      event === EVENTS.roomClosed ||
+      event === EVENTS.drawStrokeBatch ||
+      event === EVENTS.drawFillCommit
+    )
+      void roomSync.requestFullSnapshot()
+  }
+
   function start(): void {
     if (detachListeners) return
-    detachListeners = attachSocketListeners({
-      onConnect: () => {
-        sessionStore.connected = true
-        sessionStore.connectionLabel = strings.connection.connected
-        if (sessionStore.playerId || profileStore.profile.recoveryToken) {
-          sessionStore.sessionState = 'restoring'
-          void register(true)
-        }
-      },
+    detachListeners = socketLifecycle.attach({
+      onConnect: handleConnect,
       onDisconnect: (reason) => {
         sessionStore.connected = false
         sessionStore.clearRestoreRetry()
@@ -85,7 +117,10 @@ export function useAppBootstrap() {
       },
       onIoError: () => {
         sessionStore.connectionLabel = strings.connection.unstable
-        if (!socket.connected && (sessionStore.playerId || profileStore.profile.recoveryToken))
+        if (
+          !socketLifecycle.socket.connected &&
+          (sessionStore.playerId || profileStore.profile.recoveryToken)
+        )
           sessionStore.sessionState = 'disconnected'
       },
       onPresence: (snapshot) => (lobbyStore.presence = snapshot),
@@ -108,13 +143,14 @@ export function useAppBootstrap() {
       },
       onSystemNotice: (text) => notify(text, 'warning'),
       onSystemError: (message) => notify(message, 'error'),
-      onInvalidPush: () => void roomSync.requestFullSnapshot(),
+      onInvalidPush: handleInvalidPush,
       onDrawStrokeBatch: roomSync.onStroke,
       onDrawFillCommit: roomSync.onFill,
     })
+    // 所有具名监听器注册完成后才允许连接，快速 connect/push 不会越过初始化窗口。
+    if (socketLifecycle.socket.connected) handleConnect()
+    else socketLifecycle.socket.connect()
     settingsStore.saveSettings(sessionStore.playerId)
-    if (socket.connected && profileStore.profile.recoveryToken)
-      queueMicrotask(() => void register(true))
     pingTimer = window.setInterval(
       () => void sessionStore.measureLatency(),
       APP_CONFIG.network.pingIntervalMs,
@@ -127,6 +163,8 @@ export function useAppBootstrap() {
     sessionStore.clearRestoreRetry()
     detachListeners?.()
     detachListeners = undefined
+    socketLifecycle.socket.disconnect()
+    sessionStore.connected = false
   }
 
   onBeforeUnmount(stop)

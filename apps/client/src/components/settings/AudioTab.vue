@@ -23,7 +23,7 @@ const previewSounds = computed<SoundName[]>(() =>
     .map(([key]) => key),
 )
 
-/** 音效中文名（来自 string/ 文案表；缺失时回退为键名本身）。 */
+/** 音效中文名（来自 @draw-guess/strings；缺失时回退为键名本身）。 */
 function soundLabel(key: SoundName): string {
   return strings.settings.soundLabels[key] ?? key
 }

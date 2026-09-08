@@ -30,6 +30,10 @@ bootstrap.start()
 useAudioFeedback()
 const inviteQueue = useInviteQueue()
 const fullscreenPrompt = useFullscreenPrompt()
+
+function reloadForProtocolUpdate(): void {
+  window.location.reload()
+}
 </script>
 
 <template>
@@ -48,6 +52,31 @@ const fullscreenPrompt = useFullscreenPrompt()
       <ProfileView v-else />
 
       <!-- 本人断线/会话恢复阻断框：Socket 重连后仍保持，直到身份与权威 room|null 同步完成。 -->
+      <BaseDialog
+        :open="store.protocolMismatch"
+        :dismissible="false"
+        overlay-class="z-[100]"
+        width-class="w-[47cqw]"
+        section-class="items-center gap-[1em] px-[2.2em] py-[4.5cqh] text-center"
+        :aria-label="strings.app.protocolMismatchAria"
+      >
+        <div
+          class="grid h-[10cqh] w-[10cqh] place-items-center rounded-full bg-red/10 text-red"
+          aria-hidden="true"
+        >
+          <RotateCw class="h-[5cqh] w-[5cqh]" />
+        </div>
+        <h2 class="text-fs-24 font-bold text-navy">{{ strings.app.protocolMismatchTitle }}</h2>
+        <p class="max-w-[37cqw] text-fs-14 font-bold leading-relaxed text-muted" role="alert">
+          {{ strings.app.protocolMismatchBody }}
+        </p>
+        <template #footer>
+          <AppButton type="button" @click="reloadForProtocolUpdate">
+            <RotateCw />{{ strings.app.protocolMismatchAction }}
+          </AppButton>
+        </template>
+      </BaseDialog>
+
       <BaseDialog
         :open="store.sessionState === 'disconnected' || store.sessionState === 'restoring'"
         :dismissible="false"

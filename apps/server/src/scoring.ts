@@ -2,7 +2,7 @@
  * 回合计分纯函数：猜中者得分明细与画家得分计算。
  * 独立成模块便于单元测试；同类规则必须保证 markCorrect 与 finishRound 用同口径。
  */
-import { APP_CONFIG } from '../../../config/index.ts'
+import { APP_CONFIG } from './config/index.ts'
 import { calculateGuessScore, type ScoreDetail } from '@draw-guess/shared'
 import type { GameSecret, MemberState, RoomSecret } from './models.ts'
 
