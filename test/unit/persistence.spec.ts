@@ -4,15 +4,8 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createDatabase, type DatabaseContext } from '../../apps/server/src/db/index.ts'
 import { MIGRATIONS, runMigrations } from '../../apps/server/src/db/migrate.ts'
-import {
-  SqliteArchiveRepository,
-  SqlitePlayerRepository,
-  SqliteRoomRepository,
-} from '../../apps/server/src/repositories/index.ts'
-import { GameService } from '../../apps/server/src/game-service.ts'
-import { SILENT_LOGGER } from '../../apps/server/src/errors.ts'
-import { createMemoryVocabularyRegistry } from './helpers/mini-vocabulary.ts'
-import { createFakeRuntime } from './helpers/fake-clock.ts'
+import { SqliteArchiveRepository } from '../../apps/server/src/repositories/index.ts'
+import { digestRecoveryToken } from '../../apps/server/src/security/recovery-token.ts'
 
 let testDirectory = ''
 let database: DatabaseContext
@@ -38,7 +31,8 @@ describe('SQLite 迁移与事务边界', () => {
         applied_at INTEGER NOT NULL
       );
     `)
-    db.exec(first.up)
+    if (typeof first.up === 'string') db.exec(first.up)
+    else first.up(db)
     db.prepare('INSERT INTO schema_version(version, name, applied_at) VALUES (?, ?, ?)').run(
       first.version,
       first.name,
@@ -96,33 +90,65 @@ describe('SQLite 迁移与事务边界', () => {
     expect(db.prepare('SELECT score FROM game_results').get()).toMatchObject({ score: 20 })
   })
 
-  it('启动恢复可清除包含损坏 JSON 的遗留房间记录而不解析污染领域状态', () => {
-    runMigrations(database)
+  it('升级旧库会删除从未恢复的房间表，同时保留玩家身份和完成局战报', () => {
     const db = database.connection
+    for (const migration of MIGRATIONS.slice(0, 4)) {
+      if (typeof migration.up === 'string') db.exec(migration.up)
+      else migration.up(db)
+    }
+    db.exec(`
+      CREATE TABLE schema_version (
+        version INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        applied_at INTEGER NOT NULL
+      );
+    `)
+    const markApplied = db.prepare(
+      'INSERT INTO schema_version(version, name, applied_at) VALUES (?, ?, ?)',
+    )
+    for (const migration of MIGRATIONS.slice(0, 4))
+      markApplied.run(migration.version, migration.name, 1)
+    db.prepare(
+      `INSERT INTO players(
+        id, token, nickname, avatar_id, discoverable, accepts_invites,
+        connected, joined_at, room_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('player-1', 'token-1', '玩家', '01', 1, 1, 0, 1, 'legacy-room')
     db.prepare(
       `INSERT INTO rooms(
         id, name, host_id, visibility, private_code, phase, state_version,
         settings, selected_words, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run('broken-room', '损坏房间', 'missing-host', 'public', null, 'waiting', 1, '{', '[', 1, 1)
+    ).run('legacy-room', '旧房间', 'player-1', 'public', null, 'waiting', 1, '{', '[', 1, 1)
+    db.prepare(
+      `INSERT INTO room_members(
+        room_id, player_id, seat_index, spectating, left_game, ready, score, joined_at, stats
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('legacy-room', 'player-1', 0, 0, 0, 0, 0, 1, '{}')
+    db.prepare(
+      `INSERT INTO game_archive(
+        id, room_id, started_at, finished_at, total_rounds, final_ranking, reason
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run('game-1', 'legacy-room', 1, 2, 1, '[]', '完成')
 
-    const io = {
-      to: () => ({ emit: () => undefined }),
-      in: () => ({ emit: () => undefined }),
-      emit: () => undefined,
-    } as unknown as ConstructorParameters<typeof GameService>[0]
-    const service = new GameService(
-      io,
-      createMemoryVocabularyRegistry(),
-      {
-        players: new SqlitePlayerRepository(database),
-        rooms: new SqliteRoomRepository(database),
-        archive: new SqliteArchiveRepository(database),
-      },
-      SILENT_LOGGER,
-      createFakeRuntime(),
-    )
-    expect(() => service.recoverOnStartup()).not.toThrow()
-    expect(db.prepare('SELECT COUNT(*) AS count FROM rooms').get()).toMatchObject({ count: 0 })
+    runMigrations(database)
+
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+      .all() as Array<{ name: string }>
+    expect(tables.map((table) => table.name)).not.toContain('rooms')
+    expect(tables.map((table) => table.name)).not.toContain('room_members')
+    expect(db.prepare('SELECT room_id FROM players WHERE id = ?').get('player-1')).toMatchObject({
+      room_id: null,
+    })
+    const playerColumns = db.prepare('PRAGMA table_info(players)').all() as Array<{ name: string }>
+    expect(playerColumns.map((column) => column.name)).not.toContain('token')
+    expect(
+      db.prepare('SELECT token_digest FROM players WHERE id = ?').get('player-1'),
+    ).toMatchObject({ token_digest: digestRecoveryToken('token-1') })
+    expect(db.prepare('SELECT * FROM game_archive WHERE id = ?').get('game-1')).toMatchObject({
+      room_id: 'legacy-room',
+      reason: '完成',
+    })
   })
 })

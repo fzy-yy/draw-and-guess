@@ -1,4 +1,4 @@
-import type { DataTableColumn } from './DataTable.vue'
+import type { DataTableColumn } from './data-table.types'
 
 /** 统一计算数据列宽，显式扣除固定选择列，避免 table-fixed 隐式压缩业务列。 */
 export function getColumnWidths<T extends object>(

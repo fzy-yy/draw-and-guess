@@ -22,4 +22,5 @@ export const store = {
 export const request = {
   genericFailure: '请求失败，请检查主机服务与局域网连接',
   timeoutMessage: '服务器响应超时；当前操作未确认，请检查连接后重试',
+  cancelled: '请求已取消',
 } as const

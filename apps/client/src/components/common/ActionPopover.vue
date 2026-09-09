@@ -5,7 +5,7 @@
   面板宽度/层级等细节可通过 panelClass 由调用方按场景扩展。
 -->
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { nextTick, ref, useId, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import RoundIconButton from '@/components/common/RoundIconButton.vue'
 
@@ -38,23 +38,35 @@ const props = withDefaults(
 
 const root = ref<HTMLElement>()
 const trigger = ref<InstanceType<typeof RoundIconButton>>()
+const panel = ref<HTMLElement>()
+const panelId = `action-popover-${useId()}`
 const open = ref(false)
 
-function close(restoreFocus = false): void {
+function close(restoreFocus = true): void {
   if (!open.value) return
   open.value = false
   if (restoreFocus) void nextTick(() => trigger.value?.focus())
 }
 
-function toggle(): void {
-  if (!props.disabled) open.value = !open.value
+async function toggle(): Promise<void> {
+  if (props.disabled) return
+  if (open.value) {
+    close(true)
+    return
+  }
+  open.value = true
+  await nextTick()
+  const firstFocusable = panel.value?.querySelector<HTMLElement>(
+    'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
+  )
+  ;(firstFocusable ?? panel.value)?.focus()
 }
 
-onClickOutside(root, () => close())
+onClickOutside(root, () => close(false))
 watch(
   () => props.disabled,
   (disabled) => {
-    if (disabled) close()
+    if (disabled) close(true)
   },
 )
 
@@ -69,6 +81,7 @@ defineExpose({ close })
       :disabled="disabled"
       :title="triggerTitle"
       :aria-expanded="open"
+      :aria-controls="panelId"
       :audio-feedback="open ? 'close' : 'open'"
       aria-haspopup="dialog"
       @click="toggle"
@@ -77,7 +90,11 @@ defineExpose({ close })
     </RoundIconButton>
     <div
       v-if="open"
+      :id="panelId"
+      ref="panel"
       role="dialog"
+      aria-modal="false"
+      tabindex="-1"
       :aria-label="panelAriaLabel"
       :class="[
         // 弹出方向：top 从按钮上方弹出，bottom 从按钮下方弹出（见 placement 说明）

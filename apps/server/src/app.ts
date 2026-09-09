@@ -22,12 +22,11 @@ import { registerGameHandlers } from './handlers/game.ts'
 import { registerChatHandlers } from './handlers/chat.ts'
 import { registerDrawHandlers } from './handlers/draw.ts'
 import { SqlitePlayerRepository } from './repositories/player-repository.ts'
-import { SqliteRoomRepository } from './repositories/room-repository.ts'
 import { SqliteArchiveRepository } from './repositories/archive-repository.ts'
 import { createDatabase } from './db/index.ts'
 import { runMigrations } from './db/migrate.ts'
 
-function isAllowedOrigin(origin: string | undefined): boolean {
+export function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return true
   try {
     const url = new URL(origin)
@@ -101,6 +100,8 @@ export async function createApplication(
   // 不启用 connectionStateRecovery：它会在应用层注册校验前恢复旧 socket.rooms 并重放消息，
   // 导致已经被领域层移出房间的身份仍短暂收到旧房间数据，形成跨房间状态与隐私风险。
   const io = new Server(httpServer, {
+    // CORS 只约束浏览器的 HTTP 响应；allowRequest 同步覆盖 polling 与 WebSocket 握手入口。
+    allowRequest: (request, callback) => callback(null, isAllowedOrigin(request.headers.origin)),
     cors: {
       origin: (origin, callback) => callback(null, isAllowedOrigin(origin)),
       credentials: false,
@@ -109,20 +110,35 @@ export async function createApplication(
     pingInterval: APP_CONFIG.network.pingIntervalMs,
   })
   const baseUrl = options.publicBaseUrl ?? (() => `http://localhost:${APP_CONFIG.network.port}`)
-  // 持久化仓储：SQLite 实现，注入领域服务（领域层只依赖接口，便于测试换内存实现）。
+  // 仅持久化短期身份与完成局战报；运行中房间始终是进程内权威状态。
   const repositories = {
     players: new SqlitePlayerRepository(database),
-    rooms: new SqliteRoomRepository(database),
     archive: new SqliteArchiveRepository(database),
   }
   const service = new GameService(io, vocabulary, repositories, options.logger)
 
-  // 安全头与请求解析：局域网纯 HTTP 环境下禁用 CSP（避免 upgrade-insecure-requests 导致资源走 HTTPS 产生 SSL 协议错误）、
-  // 禁用 HSTS 与 COOP（局域网 IP 属非安全上下文，避免浏览器产生 origin untrustworthy 警告与 SSL 报错）。
+  // CSP 只开放生产产物实际需要的来源；纯 HTTP 局域网部署明确不升级 HTTPS、不发送 HSTS。
   app.disable('x-powered-by')
   app.use(
     helmet({
-      contentSecurityPolicy: false,
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: {
+          defaultSrc: ["'self'"],
+          baseUri: ["'self'"],
+          connectSrc: ["'self'", 'ws:', 'wss:'],
+          fontSrc: ["'self'", 'data:'],
+          formAction: ["'self'"],
+          frameAncestors: ["'none'"],
+          imgSrc: ["'self'", 'data:', 'blob:'],
+          mediaSrc: ["'self'", 'data:', 'blob:'],
+          objectSrc: ["'none'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'"],
+          styleSrcAttr: ["'unsafe-inline'"],
+          upgradeInsecureRequests: null,
+        },
+      },
       crossOriginResourcePolicy: false,
       crossOriginOpenerPolicy: false,
       originAgentCluster: false,

@@ -20,6 +20,8 @@ function member(id: string, nickname: string, isHost: boolean, isDrawer: boolean
     isDrawer,
     guessed: false,
     spectating: false,
+    waitingForNextGame: false,
+    rematchReady: false,
     leftGame: false,
     connection: 'online',
     stats: { correctCount: 0, totalGuessMs: 0, drawingCorrectCount: 0 },

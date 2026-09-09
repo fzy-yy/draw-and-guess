@@ -6,9 +6,11 @@ test.describe('06 - 跨浏览器、DPR、触屏与后台标签页', () => {
   }, testInfo) => {
     const host = await createPlayer(browser, `兼容房主-${testInfo.project.name}`)
     const guest = await createPlayer(browser, `兼容客人-${testInfo.project.name}`)
+    const observer = await createPlayer(browser, `兼容观察者-${testInfo.project.name}`)
     try {
       const roomName = `兼容-${Date.now()}`
       await host.lobby.createRoom({ name: roomName })
+      await host.room.updateJoinPolicy('spectate')
       await guest.lobby.joinPublicRoom(roomName)
       await guest.room.toggleReady()
       await host.room.startGame()
@@ -24,17 +26,38 @@ test.describe('06 - 跨浏览器、DPR、触屏与后台标签页', () => {
       ])
       const drawer = isHostDrawer ? host : guest
       await drawer.game.chooseWord(0)
+      await observer.lobby.spectatePublicRoom(roomName)
       const canvas = drawer.page.locator('canvas.bg-white')
+      const guestCanvas = guest.page.locator('canvas.bg-white')
+      const observerCanvas = observer.page.locator('canvas.bg-white')
       await expect(canvas).toBeVisible()
       const canvasSize = await canvas.evaluate((element) => ({
         width: element.width,
         height: element.height,
         cssWidth: element.getBoundingClientRect().width,
         cssHeight: element.getBoundingClientRect().height,
+        dpr: devicePixelRatio,
+        smoothing: element.getContext('2d')?.imageSmoothingEnabled,
+        logicalWidth: (element as HTMLCanvasElement & { __logicalCanvas?: HTMLCanvasElement })
+          .__logicalCanvas?.width,
+        logicalHeight: (element as HTMLCanvasElement & { __logicalCanvas?: HTMLCanvasElement })
+          .__logicalCanvas?.height,
       }))
-      const scale = 720 / Math.max(1, Math.min(canvasSize.cssWidth, canvasSize.cssHeight))
-      expect(canvasSize.height).toBe(Math.max(1, Math.round(canvasSize.cssHeight * scale)))
-      expect(Math.abs(canvasSize.width - canvasSize.cssWidth * scale)).toBeLessThanOrEqual(0.5)
+      const logicalScale = 720 / Math.max(1, Math.min(canvasSize.cssWidth, canvasSize.cssHeight))
+      const displayScale = Math.min(canvasSize.dpr, 2)
+      expect(canvasSize.logicalHeight).toBe(
+        Math.max(1, Math.round(canvasSize.cssHeight * logicalScale)),
+      )
+      expect(
+        Math.abs((canvasSize.logicalWidth ?? 0) - canvasSize.cssWidth * logicalScale),
+      ).toBeLessThanOrEqual(0.5)
+      expect(canvasSize.width).toBe(Math.max(1, Math.round(canvasSize.cssWidth * displayScale)))
+      expect(canvasSize.height).toBe(Math.max(1, Math.round(canvasSize.cssHeight * displayScale)))
+      expect(canvasSize.smoothing).toBe(false)
+      if (canvasSize.dpr > 1) {
+        expect(canvasSize.width).toBeGreaterThan(canvasSize.cssWidth)
+        expect(canvasSize.height).toBeGreaterThan(canvasSize.cssHeight)
+      }
 
       await drawer.game.drawStroke([
         { x: 0.5, y: 0.05 },
@@ -80,6 +103,45 @@ test.describe('06 - 跨浏览器、DPR、触屏与后台标签页', () => {
       expect(samples.darkPixels).toBeGreaterThan(0)
       expect(samples.right[3]).toBe(0)
 
+      const logicalHashes = await Promise.all(
+        [canvas, guestCanvas, observerCanvas].map((target) =>
+          target.evaluate((element) => {
+            const logical = (element as HTMLCanvasElement & { __logicalCanvas?: HTMLCanvasElement })
+              .__logicalCanvas
+            if (!logical) throw new Error('逻辑画布未挂载')
+            const data = logical
+              .getContext('2d', { willReadFrequently: true })!
+              .getImageData(0, 0, logical.width, logical.height).data
+            let hash = 0x811c9dc5
+            for (const byte of data) {
+              hash ^= byte
+              hash = Math.imul(hash, 0x01000193)
+            }
+            const context = logical.getContext('2d', { willReadFrequently: true })!
+            const sample = (x: number, y: number) =>
+              [
+                ...context.getImageData(
+                  Math.round((logical.width - 1) * x),
+                  Math.round((logical.height - 1) * y),
+                  1,
+                  1,
+                ).data,
+              ]
+                .map((channel) => channel.toString(16).padStart(2, '0'))
+                .join('')
+            return {
+              hash: (hash >>> 0).toString(16).padStart(8, '0'),
+              stableSampleHash: [sample(0.2, 0.5), sample(0.5, 0.5), sample(0.8, 0.5)].join('-'),
+              width: logical.width,
+              height: logical.height,
+            }
+          }),
+        ),
+      )
+      expect(logicalHashes[0]).toEqual(logicalHashes[1])
+      expect(logicalHashes[0]).toEqual(logicalHashes[2])
+      expect(logicalHashes[0]?.stableSampleHash).toBe('ef4444ff-1f2937ff-00000000')
+
       if (testInfo.project.name.includes('touch')) {
         await drawer.game.selectTool('pen')
         const box = await canvas.boundingBox()
@@ -108,6 +170,7 @@ test.describe('06 - 跨浏览器、DPR、触屏与后台标签页', () => {
     } finally {
       await host.close()
       await guest.close()
+      await observer.close()
     }
   })
 })

@@ -9,6 +9,8 @@ import type { RoomMember } from '@draw-guess/shared'
 export function roleTextFor(member: RoomMember | undefined): string {
   if (!member) return strings.status.roleGuessing
   if (member.leftGame) return strings.status.roleLeftGame
+  if (member.rematchReady) return strings.status.roleRematchReady
+  if (member.waitingForNextGame) return strings.status.roleWaitingNextGame
   if (member.isDrawer) return strings.status.roleDrawing
   if (member.guessed) return strings.status.roleGuessed
   if (member.spectating) return strings.status.roleSpectating

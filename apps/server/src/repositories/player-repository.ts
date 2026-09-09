@@ -2,7 +2,7 @@
  * 玩家身份持久化仓储（接口 + SQLite 实现）。
  *
  * 领域层只依赖接口（见下方 PlayerRepository），便于测试时注入内存实现、生产时用 SQLite。
- * 持久化的是「跨重启可恢复」的身份关键字段（id/token/资料/偏好/连接状态），
+ * 持久化的是「跨重启可恢复」的身份关键字段（id/令牌摘要/资料/偏好/连接状态），
  * 运行时对象（socket、幂等请求缓存、限频时间窗、邀请冷却表）**不入库**——它们属于进程内瞬态，
  * 重启后由 GameService 重建（regist 时重新绑定 socket、缓存清空）。
  * 接口与行类型放在本文件，SQLite 实现用 better-sqlite3 同步适配。
@@ -13,7 +13,7 @@ import type { DatabaseContext } from '../db/index.ts'
 /** 玩家可存档行：与 players 表字段一一对应。 */
 export interface PlayerRecord {
   id: string
-  token: string
+  tokenDigest: string
   nickname: string
   avatarId: string
   discoverable: boolean
@@ -21,20 +21,22 @@ export interface PlayerRecord {
   connected: boolean
   joinedAt: number
   disconnectedAt?: number
-  roomId?: string
 }
 
 /** 玩家身份仓储接口：领域层与存储层之间的边界。 */
 export interface PlayerRepository {
   upsert(record: PlayerRecord): void
-  findByToken(token: string): PlayerRecord | undefined
+  /** 原子消费旧摘要并换成新摘要；CAS 失败表示令牌已经失效或被另一个恢复请求抢先使用。 */
+  consumeRecoveryToken(
+    tokenDigest: string,
+    nextTokenDigest: string,
+    disconnectedAfter?: number,
+  ): PlayerRecord | undefined
   /** 更新连接状态与宽限时间戳（断线/上线时调用）。 */
   setConnection(id: string, connected: boolean, disconnectedAt?: number): void
   remove(id: string): void
-  /** 启动恢复：把全部玩家标记为断线（connected=0）并清空房间归属，身份保留供宽限恢复。 */
+  /** 启动恢复：把全部玩家标记为断线，并清空旧版 room_id，身份保留供宽限恢复。 */
   markAllDisconnected(disconnectedAt: number): void
-  /** 清空全部玩家的房间归属（作废进行中局时用）。 */
-  clearAllRoomIds(): void
   /** 删除「断线时间早于 before」的过期身份记录（启动恢复时清理历史残留，防止表无限增长）。 */
   deleteStaleDisconnected(before: number): void
 }
@@ -50,26 +52,45 @@ export class SqlitePlayerRepository implements PlayerRepository {
   upsert(record: PlayerRecord): void {
     this.db
       .prepare(
-        `INSERT INTO players(id, token, nickname, avatar_id, discoverable, accepts_invites, connected, joined_at, disconnected_at, room_id)
-         VALUES (@id, @token, @nickname, @avatar_id, @discoverable, @accepts_invites, @connected, @joined_at, @disconnected_at, @room_id)
+        `INSERT INTO players(id, token_digest, nickname, avatar_id, discoverable, accepts_invites, connected, joined_at, disconnected_at)
+         VALUES (@id, @token_digest, @nickname, @avatar_id, @discoverable, @accepts_invites, @connected, @joined_at, @disconnected_at)
          ON CONFLICT(id) DO UPDATE SET
-           token = excluded.token,
+           token_digest = excluded.token_digest,
            nickname = excluded.nickname,
            avatar_id = excluded.avatar_id,
            discoverable = excluded.discoverable,
            accepts_invites = excluded.accepts_invites,
            connected = excluded.connected,
            joined_at = excluded.joined_at,
-           disconnected_at = excluded.disconnected_at,
-           room_id = excluded.room_id`,
+           disconnected_at = excluded.disconnected_at`,
       )
       .run(this.toRow(record))
   }
 
-  findByToken(token: string): PlayerRecord | undefined {
-    const row = this.db.prepare('SELECT * FROM players WHERE token = ?').get(token) as
-      PlayerRow | undefined
-    return row ? this.fromRow(row) : undefined
+  consumeRecoveryToken(
+    tokenDigest: string,
+    nextTokenDigest: string,
+    disconnectedAfter?: number,
+  ): PlayerRecord | undefined {
+    const consume = this.db.transaction(() => {
+      const result =
+        disconnectedAfter === undefined
+          ? this.db
+              .prepare('UPDATE players SET token_digest = ? WHERE token_digest = ?')
+              .run(nextTokenDigest, tokenDigest)
+          : this.db
+              .prepare(
+                `UPDATE players SET token_digest = ?
+                 WHERE token_digest = ? AND disconnected_at IS NOT NULL AND disconnected_at >= ?`,
+              )
+              .run(nextTokenDigest, tokenDigest, disconnectedAfter)
+      if (result.changes !== 1) return undefined
+      const row = this.db
+        .prepare('SELECT * FROM players WHERE token_digest = ?')
+        .get(nextTokenDigest) as PlayerRow | undefined
+      return row ? this.fromRow(row) : undefined
+    })
+    return consume()
   }
 
   setConnection(id: string, connected: boolean, disconnectedAt?: number): void {
@@ -79,11 +100,7 @@ export class SqlitePlayerRepository implements PlayerRepository {
   }
 
   remove(id: string): void {
-    const transaction = this.db.transaction(() => {
-      this.db.prepare('DELETE FROM room_members WHERE player_id = ?').run(id)
-      this.db.prepare('DELETE FROM players WHERE id = ?').run(id)
-    })
-    transaction()
+    this.db.prepare('DELETE FROM players WHERE id = ?').run(id)
   }
 
   markAllDisconnected(disconnectedAt: number): void {
@@ -92,29 +109,17 @@ export class SqlitePlayerRepository implements PlayerRepository {
       .run(disconnectedAt)
   }
 
-  clearAllRoomIds(): void {
-    this.db.prepare('UPDATE players SET room_id = NULL').run()
-  }
-
   deleteStaleDisconnected(before: number): void {
-    const transaction = this.db.transaction(() => {
-      this.db
-        .prepare(
-          'DELETE FROM room_members WHERE player_id IN (SELECT id FROM players WHERE disconnected_at IS NOT NULL AND disconnected_at < ?)',
-        )
-        .run(before)
-      this.db
-        .prepare('DELETE FROM players WHERE disconnected_at IS NOT NULL AND disconnected_at < ?')
-        .run(before)
-    })
-    transaction()
+    this.db
+      .prepare('DELETE FROM players WHERE disconnected_at IS NOT NULL AND disconnected_at < ?')
+      .run(before)
   }
 
   /** 内存记录（驼峰）→ 表行（蛇形），供 SQL 命名参数使用。 */
   private toRow(record: PlayerRecord): PlayerRow {
     return {
       id: record.id,
-      token: record.token,
+      token_digest: record.tokenDigest,
       nickname: record.nickname,
       avatar_id: record.avatarId,
       discoverable: record.discoverable ? 1 : 0,
@@ -122,14 +127,13 @@ export class SqlitePlayerRepository implements PlayerRepository {
       connected: record.connected ? 1 : 0,
       joined_at: record.joinedAt,
       disconnected_at: record.disconnectedAt ?? null,
-      room_id: record.roomId ?? null,
     }
   }
 
   private fromRow(row: PlayerRow): PlayerRecord {
     return {
       id: row.id,
-      token: row.token,
+      tokenDigest: row.token_digest,
       nickname: row.nickname,
       avatarId: row.avatar_id,
       discoverable: row.discoverable === 1,
@@ -137,7 +141,6 @@ export class SqlitePlayerRepository implements PlayerRepository {
       connected: row.connected === 1,
       joinedAt: row.joined_at,
       disconnectedAt: row.disconnected_at ?? undefined,
-      roomId: row.room_id ?? undefined,
     }
   }
 }
@@ -145,7 +148,7 @@ export class SqlitePlayerRepository implements PlayerRepository {
 /** players 表列的蛇形行类型。 */
 interface PlayerRow {
   id: string
-  token: string
+  token_digest: string
   nickname: string
   avatar_id: string
   discoverable: number
@@ -153,5 +156,4 @@ interface PlayerRow {
   connected: number
   joined_at: number
   disconnected_at: number | null
-  room_id: string | null
 }

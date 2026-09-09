@@ -72,8 +72,8 @@ function recoverAuthoritativeDrawing(): void {
   void store.requestFullSnapshot()
 }
 /** 填充点击由服务端校验并广播，所有客户端按相同历史重放封闭区域。 */
-function submitFill(command: FillCommand): void {
-  void store.sendFill(command)
+function submitFill(command: FillCommand, callback: (result: RequestResult<void>) => void): void {
+  void store.sendFill(command).then(callback)
 }
 
 async function clearDrawing(): Promise<void> {

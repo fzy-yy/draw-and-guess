@@ -64,7 +64,7 @@ apps/client/       Vue 3 游戏舞台、内置 SVG 头像、Pinia 状态与 Canv
                       # 共享组件 AppButton / BaseDialog / ConfirmDialog 放在 components/ 根目录
 apps/server/       Express、Socket.IO、权威领域状态与 SQLite 本地持久化
   └─ src/config/                # 服务端私有限频、清理、数据库路径与部署参数
-  └─ src/db/ 与 src/repositories/   # 数据库连接/迁移与仓储（player/room/archive）
+  └─ src/db/ 与 src/repositories/   # 数据库连接/迁移与仓储（player/archive）
 packages/shared/   DTO、Zod schema、协议常量、事件名和领域纯函数（完全自包含）
 packages/config/   浏览器安全的公开应用配置 workspace 包
 packages/strings/  客户端与服务端展示文案 workspace 包
@@ -79,7 +79,11 @@ vocabulary/        唯一权威词库目录（SQLite 数据库，Provider 加载
 
 客户端请求统一带 `requestId`、超时和 ack。服务端校验协议版本、恢复令牌、成员资格、房间码、角色、阶段、回合、版本、绘图序号与频率。私密房使用服务端安全随机生成的短码且不会进入大厅列表；候选词仅发送当前画家，猜中判断和计分只在服务端执行。
 
-**状态持久化边界**：服务端为「内存权威 + 低频落盘」——画布笔画、聊天消息、计时器、对局实时状态不落盘，重启即清空；玩家身份/恢复令牌/偏好、房间配置、完成局的战报经 SQLite 落盘（`apps/server/data/game.db`），重启后身份可凭令牌宽限恢复、进行中房间作废关闭、历史战报可查。业务日志写入 `apps/server/log/` 文件（不输出到控制台，避免 Windows 控制台 GBK 解码 UTF-8 中文乱码）。浏览器仅在本机保存昵称、内置头像编号、本地设置和短期恢复令牌。
+**身份恢复边界**：恢复令牌明文只返回并保存在当前客户端；服务端仅在签发或校验调用栈中短暂接触明文，常驻内存与 SQLite 都只保存 SHA-256 摘要。每次成功恢复都会签发新令牌并立即使旧令牌失效；并发恢复只有一个请求能接管原身份。
+
+**浏览器边界**：HTTP API、Socket.IO polling 与 WebSocket 握手共用本机/私网 Origin 白名单。响应启用仅覆盖同源生产脚本、Socket.IO、音频、SVG/data/blob 资源与 Vue 行内 style 属性的 CSP；为保证纯 HTTP 局域网访问，不启用 `upgrade-insecure-requests` 或 HSTS。本项目仍仅面向可信局域网，不应通过端口转发、反向代理或公网 IP 暴露到互联网。
+
+**状态持久化边界**：服务端为「内存权威 + 低频落盘」——房间、成员席位、画布笔画、聊天消息、计时器和对局实时状态均不落盘，重启即清空；仅玩家身份摘要/资料/偏好与完成局战报经 SQLite 落盘（`apps/server/data/game.db`）。重启后身份可凭客户端持有的令牌在宽限内恢复到大厅，历史战报可查。业务日志写入 `apps/server/log/` 文件（不输出到控制台，避免 Windows 控制台 GBK 解码 UTF-8 中文乱码）。浏览器仅在本机保存昵称、内置头像编号、本地设置和短期恢复令牌。
 
 ## 新版交互说明
 

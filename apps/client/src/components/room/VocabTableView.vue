@@ -11,7 +11,7 @@
 import { computed, ref } from 'vue'
 import { strings } from '@draw-guess/strings'
 import type { VocabularyWord } from '@draw-guess/shared'
-import type { DataTableColumn } from '@/components/common/DataTable.vue'
+import type { DataTableColumn } from '@/components/common/data-table.types'
 import DataTable from '@/components/common/DataTable.vue'
 import DifficultyStars from '@/components/common/DifficultyStars.vue'
 import { useSelectAllState } from '@/composables/useSelectAllState'
@@ -27,6 +27,7 @@ const props = defineProps<{
   sortKey: string | null
   /** 当前排序方向 */
   sortDir: 'asc' | 'desc'
+  difficultyMax: number
 }>()
 
 const emit = defineEmits<{
@@ -87,7 +88,7 @@ defineExpose({
     </template>
     <!-- 难度列：复用星级组件（上限来自全局配置） -->
     <template #cell-difficulty="{ row }">
-      <DifficultyStars :value="row.difficulty" />
+      <DifficultyStars :value="row.difficulty" :max="props.difficultyMax" />
     </template>
     <!-- 别称列：灰字省略，悬停可见全称 -->
     <template #cell-aliases="{ row }">

@@ -53,7 +53,9 @@ function randomize(): void {
       </p>
       <div
         class="inline-flex items-center gap-[0.55em] rounded-full px-[1.05em] py-[0.65cqh] text-fs-14 font-bold"
-        :class="store.connected ? 'text-green bg-green/10' : 'text-red bg-red/10'"
+        :class="
+          store.connected ? 'text-success-on-dark bg-green/10' : 'text-danger-on-dark bg-red/10'
+        "
       >
         <Wifi v-if="store.connected" /><WifiOff v-else />
         <span>{{ store.connectionLabel }}</span>
@@ -121,7 +123,7 @@ function randomize(): void {
           <template #suffix>
             <CheckCircle2
               v-if="nicknameValid"
-              class="text-green"
+              class="text-success-fg"
               :aria-label="strings.profile.nicknameValidAria"
             />
           </template>
@@ -150,6 +152,10 @@ function randomize(): void {
       </p>
     </section>
 
-    <AvatarPickerDialog v-model="store.profile.avatarId" v-model:open="showAvatarPicker" />
+    <AvatarPickerDialog
+      v-model="store.profile.avatarId"
+      v-model:open="showAvatarPicker"
+      :avatar-ids="store.config.player.avatarIds"
+    />
   </main>
 </template>

@@ -5,12 +5,11 @@ import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
 import AvatarImage from '@/components/common/AvatarImage.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
-import { useGameStore } from '@/stores/game'
 
 const open = defineModel<boolean>('open', { default: false })
 const modelValue = defineModel<AvatarId>({ required: true })
+const props = defineProps<{ avatarIds: readonly AvatarId[] }>()
 const emit = defineEmits<{ close: [] }>()
-const store = useGameStore()
 
 /** 只允许从配置白名单产生头像编号；点击后立即应用并关闭弹窗。 */
 function selectAvatar(avatarId: AvatarId): void {
@@ -41,14 +40,14 @@ function selectAvatar(avatarId: AvatarId): void {
     >
       <!-- 按钮组语义：单选即点即选并关闭，无需 radiogroup 的键盘约定（按钮均为独立 Tab 停靠点） -->
       <button
-        v-for="avatarId in store.config.player.avatarIds"
+        v-for="avatarId in props.avatarIds"
         :key="avatarId"
         type="button"
         class="grid aspect-square place-items-center rounded-full border-[0.22cqh] bg-white p-[0.7cqh]"
         :class="
           modelValue === avatarId
-            ? 'border-navy outline-[0.45cqh] outline-yellow outline-offset-[0.1cqh]'
-            : 'border-line'
+            ? 'border-navy outline-[0.45cqh] outline-focus outline-offset-[0.1cqh]'
+            : 'border-control'
         "
         :aria-pressed="modelValue === avatarId"
         :aria-label="strings.profile.avatarOptionAria(avatarId)"

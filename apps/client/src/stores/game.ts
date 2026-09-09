@@ -7,9 +7,7 @@ import { defineStore, storeToRefs } from 'pinia'
 import { APP_CONFIG, PUBLIC_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import { EVENTS } from '@draw-guess/shared'
-import { notify as pushToast } from '@/composables/useToasts'
-import { socket } from './socket.ts'
-import { createRequester } from './request.ts'
+import { useGameTransport } from '@/application/game-transport'
 import { useProfileStore, loadProfile, type StoredProfile } from './profile.ts'
 import { useSettingsStore, type LocalSettings } from './settings.ts'
 import {
@@ -26,6 +24,7 @@ import { useVocabularyStore } from './vocabulary.ts'
 export type { ConnectionLabel, SessionState, ShellPage, StoredProfile, LocalSettings }
 
 export const useGameStore = defineStore('game', () => {
+  const transport = useGameTransport()
   const profileStore = useProfileStore()
   const settingsStore = useSettingsStore()
   const sessionStore = useSessionStore()
@@ -53,10 +52,10 @@ export const useGameStore = defineStore('game', () => {
   const { vocabulary } = storeToRefs(vocabularyStore)
   const { drawRevision } = storeToRefs(gameplayStore)
 
-  const request = createRequester({ socket, notify: pushToast })
+  const request = transport.request
 
   function notify(text: string, type: 'success' | 'warning' | 'error' = 'success'): void {
-    pushToast(text, type)
+    transport.notify(text, type)
   }
 
   async function register(automatic = false): Promise<void> {
@@ -93,9 +92,9 @@ export const useGameStore = defineStore('game', () => {
     sessionStore.sessionState = 'idle'
     sessionStore.clearRestoreRetry()
     sessionStore.page = 'profile'
-    if (socket.connected) {
-      socket.disconnect()
-      socket.connect()
+    if (transport.socket.connected) {
+      transport.disconnect()
+      transport.connect()
     }
     notify(strings.store.profileCleared, 'warning')
   }

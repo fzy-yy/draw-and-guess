@@ -25,7 +25,7 @@ import type { TimerHandle } from './runtime.ts'
  */
 export interface PlayerSecret {
   id: string // 玩家唯一 ID（UUID）
-  token: string // 服务端签发的临时恢复令牌（仅当前进程内有效）
+  tokenDigest: string // 恢复令牌摘要；明文只在签发调用栈中短暂存在并返回客户端
   profile: Profile // 昵称与内置 SVG 头像编号
   preferences: PresencePreferences // 发现/邀请偏好
   socket?: Socket // 当前活跃的 Socket 连接（断线重连时会替换）
@@ -54,6 +54,10 @@ export interface MemberState {
   seatIndex: number // 固定席位序号，对局内颜色与玩家身份据此保持稳定
   /** 是否为观战成员：不参与准备/画家轮换/猜词/计分，游戏中加入时置位。 */
   spectating?: boolean
+  /** 是否为下一局候场成员：当前局按观战权限裁剪，回到 waiting 时自动转为普通未准备成员。 */
+  waitingForNextGame?: boolean
+  /** 最终结算中本成员是否已表达“再来一局”；进入 waiting 时清除。 */
+  rematchReady?: boolean
   /** 主动退出本局后保留结果卡片，但不再参与房间裁决或接收房间快照。 */
   leftGame?: boolean
   /** 退出时冻结公开资料，避免玩家进入其它房间后旧对局卡片发生变化。 */
@@ -116,7 +120,13 @@ export interface GameSecret {
   roundResult?: RoundResult // 回合结算数据
   /** 进入最终结算时冻结；成员随后离房不会改变已公布的排名与统计。 */
   finalRanking?: FinalRankingEntry[]
+  /** 最终结算最短展示截止时间；在此之前任何请求都不能全局返回等待。 */
+  gameResultMinEndsAt?: number
+  /** 房主在最短展示期内点击后记账，到期即执行一次全局返回。 */
+  hostReturnRequested?: boolean
   timer?: TimerHandle // 主阶段计时器
+  /** 最短展示期计时器；与最终结算自动返回主计时器分离。 */
+  rematchTimer?: TimerHandle
   /** 绘图阶段的逐步提示计时器，与主阶段计时器一起在暂停/切换时清理。 */
   hintTimers?: TimerHandle[]
 }

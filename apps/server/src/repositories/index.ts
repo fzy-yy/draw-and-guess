@@ -4,8 +4,6 @@
  */
 export type { PlayerRepository, PlayerRecord } from './player-repository.ts'
 export { SqlitePlayerRepository } from './player-repository.ts'
-export type { RoomRepository, RoomRecord, RoomMemberRecord } from './room-repository.ts'
-export { SqliteRoomRepository } from './room-repository.ts'
 export type {
   ArchiveRepository,
   GameArchiveRecord,

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createGameHarness, testRoomSettings } from './helpers/game-harness.ts'
 
 describe('RoomMembershipService 契约', () => {
-  it('加入落盘失败时回滚成员、版本、玩家归属和 Socket 房间', () => {
+  it('房间加入不写穿身份或战报仓储', () => {
     const harness = createGameHarness()
     const host = harness.register('房主')
     const guest = harness.register('访客')
@@ -12,17 +12,18 @@ describe('RoomMembershipService 契约', () => {
       settings: testRoomSettings(),
     })
     const room = harness.service.rooms.get(created.id)!
-    const version = room.stateVersion
-    vi.spyOn(harness.repositories.rooms, 'saveAggregate').mockImplementationOnce(() => {
-      throw new Error('storage unavailable')
-    })
-    expect(() => harness.service.membership.joinRoom(guest.playerId, room.id)).toThrow(
-      'storage unavailable',
-    )
-    expect(room.stateVersion).toBe(version)
-    expect(room.members.map((member) => member.playerId)).toEqual([host.playerId])
-    expect(guest.socket.rooms.has(room.id)).toBe(false)
-    expect(harness.service.requirePlayer(guest.playerId).roomId).toBeUndefined()
+    const persistIdentity = vi
+      .spyOn(harness.repositories.players, 'upsert')
+      .mockImplementation(() => {
+        throw new Error('房间流程不应触达身份仓储')
+      })
+    const persistArchive = vi.spyOn(harness.repositories.archive, 'saveGame')
+    expect(() => harness.service.membership.joinRoom(guest.playerId, room.id)).not.toThrow()
+    expect(room.members.map((member) => member.playerId)).toEqual([host.playerId, guest.playerId])
+    expect(guest.socket.rooms.has(room.id)).toBe(true)
+    expect(harness.service.requirePlayer(guest.playerId).roomId).toBe(room.id)
+    expect(persistIdentity).not.toHaveBeenCalled()
+    expect(persistArchive).not.toHaveBeenCalled()
   })
 
   it('私密房迁移房主会轮换短码，旧码失效且新房主可以踢人', () => {

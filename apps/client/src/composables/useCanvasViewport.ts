@@ -1,32 +1,54 @@
 import { onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
 import { APP_CONFIG } from '@draw-guess/config'
-import { getCanvasBackingSize } from '@/canvas/viewport'
+import { getCanvasBackingSize, getDisplayCanvasSize, presentLogicalCanvas } from '@/canvas/viewport'
 
-/** 管理 Canvas backing size 与 ResizeObserver；重绘策略由调用方注入。 */
-export function useCanvasViewport(canvas: Ref<HTMLCanvasElement | undefined>, redraw: () => void) {
+/** 管理固定逻辑层和 DPR 展示层；逻辑尺寸变化才重放命令，纯 DPR/展示缩放只重新投影。 */
+export function useCanvasViewport(
+  displayCanvas: Ref<HTMLCanvasElement | undefined>,
+  logicalCanvas: HTMLCanvasElement,
+  redrawLogical: () => void,
+) {
   const resizeTick = ref(0)
   let observer: ResizeObserver | undefined
 
   function resizeCanvas(): void {
-    const element = canvas.value
+    const element = displayCanvas.value
     if (!element) return
+    // 非枚举测试探针仅暴露同组件的逻辑层引用，便于跨客户端验证权威栅格哈希；不进入协议或序列化。
+    Object.defineProperty(element, '__logicalCanvas', {
+      configurable: true,
+      value: logicalCanvas,
+    })
     const rect = element.getBoundingClientRect()
-    const size = getCanvasBackingSize(
+    const logicalSize = getCanvasBackingSize(
       rect.width,
       rect.height,
       APP_CONFIG.drawing.referenceResolution,
     )
-    if (element.width !== size.width || element.height !== size.height) {
-      element.width = size.width
-      element.height = size.height
+    const displaySize = getDisplayCanvasSize(
+      rect.width,
+      rect.height,
+      globalThis.devicePixelRatio ?? 1,
+      APP_CONFIG.drawing.devicePixelRatioCap,
+    )
+    const logicalChanged =
+      logicalCanvas.width !== logicalSize.width || logicalCanvas.height !== logicalSize.height
+    if (logicalChanged) {
+      logicalCanvas.width = logicalSize.width
+      logicalCanvas.height = logicalSize.height
+    }
+    if (element.width !== displaySize.width || element.height !== displaySize.height) {
+      element.width = displaySize.width
+      element.height = displaySize.height
     }
     resizeTick.value += 1
-    redraw()
+    if (logicalChanged) redrawLogical()
+    else presentLogicalCanvas(logicalCanvas, element)
   }
 
   onMounted(() => {
     observer = new ResizeObserver(resizeCanvas)
-    if (canvas.value) observer.observe(canvas.value)
+    if (displayCanvas.value) observer.observe(displayCanvas.value)
     resizeCanvas()
   })
   onBeforeUnmount(() => observer?.disconnect())

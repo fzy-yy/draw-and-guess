@@ -94,8 +94,8 @@ function clearCanvas(): void {
         class="h-[3.5cqh] w-[3.5cqh] rounded-full border-[0.2cqh] bg-(--paint)"
         :class="
           color.toUpperCase() === paint
-            ? 'outline-[0.3cqh] outline-yellow outline-offset-[0.15cqh] border-navy'
-            : 'border-line'
+            ? 'outline-[0.3cqh] outline-focus outline-offset-[0.15cqh] border-navy'
+            : 'border-control'
         "
         :style="{ '--paint': paint }"
         :aria-label="strings.game.presetColorAria(paint)"
@@ -103,7 +103,7 @@ function clearCanvas(): void {
         @click="setColor(paint)"
       ></button>
       <label
-        class="relative h-[3.8cqh] w-[3.8cqh] overflow-hidden rounded-full border-[0.2cqh] border-line"
+        class="relative h-[3.8cqh] w-[3.8cqh] overflow-hidden rounded-full border-[0.2cqh] border-control"
         :title="strings.game.customColorTitle"
       >
         <input

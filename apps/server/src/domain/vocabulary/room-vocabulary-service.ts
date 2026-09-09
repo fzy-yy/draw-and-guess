@@ -10,7 +10,6 @@ export interface RoomVocabularyContext {
   getHostRoom(playerId: string): RoomSecret
   getStore(room: RoomSecret): VocabularyStore
   addNotice(room: RoomSecret, text: string): void
-  persist(room: RoomSecret): void
   emitRoom(roomId: string): void
 }
 
@@ -52,7 +51,6 @@ export class RoomVocabularyService {
       room,
       serverStrings.notices.vocabularyPackageSwitched(target.meta.name || packageId),
     )
-    this.context.persist(room)
     this.context.emitRoom(room.id)
     return this.get(playerId)
   }
@@ -77,7 +75,6 @@ export class RoomVocabularyService {
     room.selectedWordIds = selected
     room.stateVersion += 1
     this.context.addNotice(room, serverStrings.notices.vocabularyUpdated)
-    this.context.persist(room)
     this.context.emitRoom(room.id)
     return this.get(playerId)
   }

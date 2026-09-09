@@ -15,26 +15,9 @@ import { computed, ref, useId } from 'vue'
 import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
 import { useVirtualTableRows } from '@/composables/useVirtualTableRows'
+import type { DataTableColumn } from './data-table.types'
 import { getColumnWidths } from './data-table-layout'
 import DataTableHeader from './DataTableHeader.vue'
-
-/** 列定义：key 限定为行对象的字段名；排序取值可用 sortValue 自定义（如数组 join、缺省回退） */
-export interface DataTableColumn<T> {
-  key: Extract<keyof T, string>
-  label: string
-  /** 是否可点击表头排序；缺省 true */
-  sortable?: boolean
-  /** 排序取值函数；缺省直接取 row[key]（须为 string | number） */
-  sortValue?: (row: T) => string | number
-  /** 单元格内容对齐；缺省 left */
-  align?: 'left' | 'center' | 'right'
-  /**
-   * 列宽相对权重（如 22）；所有可见列按权重占比瓜分表格宽度。
-   * 不用固定百分比：列显隐后剩余列自动重新铺满整表，内容始终从左侧开始，
-   * 不会出现「隐藏字段后内容贴向右边、左侧留大片空白」的错位。
-   */
-  weight?: number
-}
 
 const props = defineProps<{
   /** 列定义（调用方已按「显示字段」过滤后的可见列） */

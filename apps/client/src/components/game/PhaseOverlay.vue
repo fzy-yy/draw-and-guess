@@ -7,8 +7,9 @@
   注：外层的 display:contents 只是为了让多个定位遮罩不参与父级 grid 布局，同时保留 TS 窄化。
 -->
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Brush, CirclePause, CirclePlay, RefreshCw, Trophy } from 'lucide-vue-next'
-import type { GameView } from '@draw-guess/shared'
+import type { GameView, RoomPhase } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
@@ -38,6 +39,19 @@ const emit = defineEmits<{
 }>()
 
 const store = useGameStore()
+const phaseAnnouncement = computed(() => {
+  const labels: Record<RoomPhase, string> = {
+    starting: strings.status.phaseStarting,
+    choosing_word: strings.status.phaseChoosing,
+    drawing: strings.status.phaseDrawing,
+    round_result: strings.status.phaseRoundResult,
+    paused: strings.status.phasePaused,
+    game_result: strings.status.phaseGameResult,
+    waiting: strings.status.phaseWaiting,
+    closed: strings.status.phaseClosed,
+  }
+  return labels[store.room?.phase ?? 'waiting']
+})
 
 function chooseWord(wordId: string): void {
   playInteractionSound('select')
@@ -48,6 +62,7 @@ function chooseWord(wordId: string): void {
 <template>
   <!-- display:contents —— 让遮罩不占 grid 格子，同时用 v-if 保证 store.room 与 game 已就绪 -->
   <div v-if="store.room && game" class="contents">
+    <span class="sr-only" aria-live="polite" aria-atomic="true">{{ phaseAnnouncement }}</span>
     <!-- 阶段遮罩：开局倒计时 -->
     <div
       v-if="store.room.phase === 'starting'"
@@ -84,7 +99,7 @@ function chooseWord(wordId: string): void {
           v-for="option in game.wordOptions ?? []"
           :key="option.id"
           type="button"
-          class="flex min-h-[7cqh] min-w-[12cqw] flex-col items-center justify-center gap-[0.3cqh] rounded-[0.7em] bg-yellow border-b-[0.6cqh] border-yellow text-navy px-[1em] text-fs-20 font-bold cursor-pointer transition-transform active:scale-95"
+          class="flex min-h-[7cqh] min-w-[12cqw] flex-col items-center justify-center gap-[0.3cqh] rounded-[0.7em] border-[0.18cqh] border-navy border-b-[0.6cqh] border-b-yellow bg-yellow text-navy px-[1em] text-fs-20 font-bold cursor-pointer transition-transform active:scale-95"
           @click="chooseWord(option.id)"
         >
           <span class="leading-[1.2]">{{ option.text }}</span>
@@ -92,6 +107,7 @@ function chooseWord(wordId: string): void {
               黄色按钮上必须用 navy 配色，否则黄星叠黄底不可见 -->
           <DifficultyStars
             :value="option.difficulty"
+            :max="store.config.ui.difficultyMax"
             exact
             tone="navy"
             class="text-fs-10 w-full justify-center"
@@ -141,7 +157,7 @@ function chooseWord(wordId: string): void {
         class="grid h-[8cqh] w-[8cqh] place-items-center rounded-full bg-yellow/25"
         aria-hidden="true"
       >
-        <Trophy class="h-[55%] w-[55%] fill-yellow text-yellow" />
+        <Trophy class="h-[55%] w-[55%] fill-warning-fg text-warning-fg" />
       </span>
       <p>{{ strings.game.gameResultLabel }}</p>
       <h2>{{ strings.game.finalRanking }}</h2>
@@ -150,7 +166,7 @@ function chooseWord(wordId: string): void {
           v-for="member in rankings"
           :key="member.id"
           class="grid grid-cols-[3em_auto_1fr_auto] items-center gap-[0.8em] px-[1em] py-[0.6cqh] text-left"
-          :class="member.rank === 1 ? 'text-yellow bg-yellow/20' : 'bg-line text-navy'"
+          :class="member.rank === 1 ? 'text-navy bg-yellow/20' : 'bg-line text-navy'"
         >
           <b>{{ strings.game.rankPrefix(member.rank) }}</b
           ><AvatarImage
@@ -173,13 +189,27 @@ function chooseWord(wordId: string): void {
         </article>
       </div>
       <div class="flex gap-[0.8em] mt-[1.5cqh]">
-        <!-- 最终结算后全员都可返回房间再来一局；不想继续的玩家可退出房间 -->
-        <AppButton variant="primary" @click="emit('return-waiting')">
-          {{ strings.game.backToRoom }}</AppButton
+        <!-- 普通成员只登记个人再来一局意愿；房主请求在服务端最短展示期结束后全局生效。 -->
+        <AppButton
+          v-if="!store.me?.spectating || store.me?.waitingForNextGame"
+          variant="primary"
+          :disabled="store.me?.rematchReady"
+          @click="emit('return-waiting')"
+        >
+          {{
+            store.me?.rematchReady
+              ? store.isHost
+                ? strings.game.hostReturnQueued
+                : strings.game.rematchReady
+              : store.isHost
+                ? strings.game.hostReturnWaiting
+                : strings.game.rematch
+          }}</AppButton
         ><AppButton variant="secondary" :audio-feedback="null" @click="emit('leave-room')">
           {{ strings.game.leaveRoom }}
         </AppButton>
       </div>
+      <span>{{ strings.game.gameResultAutoReturn(secondsLeft) }}</span>
     </OverlayCard>
   </div>
 </template>

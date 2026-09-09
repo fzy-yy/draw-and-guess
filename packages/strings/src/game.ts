@@ -83,7 +83,11 @@ export const game = {
   finalRanking: '最终排行',
   playerStats: (correct: number, avgSeconds: number, drawing: number) =>
     `猜中 ${correct} 次 · 平均 ${avgSeconds} 秒 · 作画带猜中 ${drawing} 人次`,
-  backToRoom: '返回房间 · 再来一局',
+  rematch: '再来一局',
+  rematchReady: '已选择再来一局',
+  hostReturnWaiting: '全员返回房间',
+  hostReturnQueued: '展示结束后返回',
+  gameResultAutoReturn: (seconds: number) => `${seconds} 秒后自动返回房间`,
   leaveRoom: '退出房间',
   leaveGame: '退出游戏',
   leaveGameTitle: '退出本局游戏？',

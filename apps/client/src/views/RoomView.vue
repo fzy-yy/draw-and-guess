@@ -98,7 +98,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
       <template #center>
         <div
           class="flex items-center justify-self-center gap-[0.6em] text-fs-12 font-bold"
-          :class="store.room.visibility === 'private' ? 'text-red' : 'text-yellow'"
+          :class="store.room.visibility === 'private' ? 'text-danger-on-dark' : 'text-yellow'"
         >
           <KeyRound v-if="store.room.visibility === 'private'" />
           <ShieldCheck v-else />
@@ -121,7 +121,13 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
       </template>
       <template #trailing>
         <!-- 网络状态：统一复用 NetworkStatusButton 图标按钮展示（与大厅/对局顶栏一致），悬浮查看详情 -->
-        <NetworkStatusButton size="lg" />
+        <NetworkStatusButton
+          size="lg"
+          :connected="store.connected"
+          :latency="store.latency"
+          :connection-label="store.connectionLabel"
+          :latency-good-ms="store.config.network.latencyGoodMs"
+        />
         <IconButton
           size="lg"
           :label="strings.common.exit"
@@ -163,7 +169,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
         </p>
         <p
           v-else
-          class="min-h-[2.4cqh] flex items-center justify-center gap-[0.3em] text-green text-fs-12"
+          class="min-h-[2.4cqh] flex items-center justify-center gap-[0.3em] text-success-fg text-fs-12"
         >
           <Check /> {{ strings.room.allReady }}
         </p>
@@ -173,7 +179,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           variant="secondary"
           type="button"
           class="w-full my-[0.8cqh]"
-          :class="{ 'text-green bg-green/10 border-green': store.me?.ready }"
+          :class="{ 'text-success-fg bg-green/10 border-green': store.me?.ready }"
           :audio-feedback="store.me?.ready ? 'activate' : null"
           @click="store.setReady(!store.me?.ready)"
         >

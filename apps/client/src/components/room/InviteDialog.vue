@@ -101,7 +101,7 @@ onBeforeUnmount(() => window.clearInterval(tickTimer))
         <div
           v-for="player in availablePlayers"
           :key="player.id"
-          class="flex items-center gap-[0.7em] py-[0.65cqh] px-[0.7em] text-left text-navy bg-white border-solid border-[0.16cqh] border-line rounded-[0.6em]"
+          class="flex items-center gap-[0.7em] py-[0.65cqh] px-[0.7em] text-left text-navy bg-white border-solid border-[0.16cqh] border-control rounded-[0.6em]"
         >
           <AvatarImage
             class="h-[4.7cqh] w-[4.7cqh]"

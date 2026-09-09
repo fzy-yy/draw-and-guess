@@ -3,16 +3,14 @@ import { RoomPersistenceCoordinator } from '../../apps/server/src/application/ro
 import { createGameHarness, startTwoPlayerGame } from './helpers/game-harness.ts'
 
 describe('RoomPersistenceCoordinator 映射契约', () => {
-  it('玩家与房间映射只传低频字段，成员和配置作为同一聚合写入', () => {
+  it('玩家映射只传短期身份字段，不泄漏运行期房间归属', () => {
     const harness = createGameHarness()
-    const { host, room } = startTwoPlayerGame(harness)
+    const { host } = startTwoPlayerGame(harness)
     const upsert = vi.fn()
-    const saveAggregate = vi.fn()
     const coordinator = new RoomPersistenceCoordinator({
       clock: harness.runtime.clock,
       repositories: {
         players: { upsert },
-        rooms: { saveAggregate },
         archive: { saveGame: vi.fn() },
       },
     })
@@ -27,31 +25,17 @@ describe('RoomPersistenceCoordinator 映射契约', () => {
         'id',
         'joinedAt',
         'nickname',
-        'roomId',
-        'token',
+        'tokenDigest',
       ].sort(),
     )
-    coordinator.persistRoom(room)
-    const [record, members] = saveAggregate.mock.calls[0]!
-    expect(record).toMatchObject({
-      id: room.id,
-      phase: room.phase,
-      stateVersion: room.stateVersion,
-      updatedAt: harness.runtime.now(),
-    })
-    expect(JSON.parse(record.settings)).toEqual(room.settings)
-    expect(JSON.parse(record.selectedWords)).toEqual([...room.selectedWordIds])
-    expect(record).not.toHaveProperty('game')
-    expect(members).toHaveLength(2)
-    expect(members[0]).toMatchObject({
-      roomId: room.id,
-      playerId: host.playerId,
-      leftGame: false,
-      spectating: false,
+    expect(upsert.mock.calls[0]![0]).not.toHaveProperty('roomId')
+    expect(upsert.mock.calls[0]![0]).not.toHaveProperty('token')
+    expect(upsert.mock.calls[0]![0]).toMatchObject({
+      tokenDigest: harness.service.requirePlayer(host.playerId).tokenDigest,
     })
   })
 
-  it('战报只读取冻结榜单，未结算时不写入，仓储失败原样传播', () => {
+  it('战报只读取冻结榜单，未结算时不写入', () => {
     const harness = createGameHarness()
     const { host, room } = startTwoPlayerGame(harness)
     harness.service.persistence.persistGameResult(room, '未结算')
@@ -61,9 +45,5 @@ describe('RoomPersistenceCoordinator 映射契约', () => {
     room.members.length = 0
     harness.service.persistence.persistGameResult(room, '再次映射')
     expect(harness.repositories.archive.games[1]?.results).toEqual(snapshot?.results)
-    vi.spyOn(harness.repositories.rooms, 'saveAggregate').mockImplementation(() => {
-      throw new Error('storage unavailable')
-    })
-    expect(() => harness.service.persistence.persistRoom(room)).toThrow('storage unavailable')
   })
 })

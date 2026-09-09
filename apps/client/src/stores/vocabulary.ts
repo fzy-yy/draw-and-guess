@@ -6,18 +6,16 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { EVENTS, type VocabularySnapshot } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
-import { notify } from '@/composables/useToasts'
-import { socket } from './socket.ts'
-import { createRequester } from './request.ts'
+import { useGameTransport } from '@/application/game-transport'
 import { useRoomStore } from './room.ts'
 import { useSessionStore } from './session.ts'
 import { VocabularyRequestGuard } from './vocabulary-request-context.ts'
 
 export const useVocabularyStore = defineStore('vocabulary', () => {
+  const { request, notify } = useGameTransport()
   const roomStore = useRoomStore()
   const sessionStore = useSessionStore()
   const vocabulary = ref<VocabularySnapshot>()
-  const request = createRequester({ socket, notify })
   const requestGuard = new VocabularyRequestGuard()
 
   function state() {

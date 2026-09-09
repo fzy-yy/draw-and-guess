@@ -7,9 +7,7 @@ import { defineStore } from 'pinia'
 import { APP_CONFIG } from '@draw-guess/config'
 import { RecoveryTokenSchema, type Profile } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
-import { notify } from '@/composables/useToasts'
-import { socket } from './socket.ts'
-import { createRequester } from './request.ts'
+import { useGameTransport } from '@/application/game-transport'
 import { EVENTS } from '@draw-guess/shared'
 
 export interface StoredProfile extends Profile {
@@ -49,8 +47,8 @@ export function loadProfile(): StoredProfile {
 }
 
 export const useProfileStore = defineStore('profile', () => {
+  const { request, notify } = useGameTransport()
   const profile = ref<StoredProfile>(loadProfile())
-  const request = createRequester({ socket, notify })
 
   /** 保存本地资料到 localStorage。 */
   function saveProfile(): void {

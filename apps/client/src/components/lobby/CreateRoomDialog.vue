@@ -3,9 +3,10 @@
   支持公开/私密房间单选、房间名称、最大玩家数、轮数与作画时间设定。
 -->
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { strings } from '@draw-guess/strings'
 import type { RoomSettings, RoomVisibility } from '@draw-guess/shared'
+import { createRoomSettings, type RoomPresetId } from '@draw-guess/config'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
@@ -20,22 +21,24 @@ const createForm = reactive<{ name: string; visibility: RoomVisibility }>({
   visibility: 'public',
 })
 
-const roomSettings = reactive<RoomSettings>({
-  maxPlayers: store.config.player.defaultMaxPlayers,
-  roundsPerPlayer: store.config.game.roundsPerPlayer.default,
-  drawSeconds: store.config.game.drawSeconds.default,
-  chooseSeconds: store.config.game.chooseSeconds.default,
-  optionCount: store.config.game.optionCount.default,
-  showWordLength: store.config.game.showWordLength,
-  progressiveHints: store.config.game.progressiveHints,
-  structuredHintsEnabled: store.config.game.structuredHintsEnabled,
-  hintStartRatio: store.config.game.hintStartRatio,
-  guessBaseScore: store.config.game.score.guessBase,
-  scoreMode: store.config.game.scoreMode,
-  allowPlayerInvite: store.config.room.allowPlayerInvite,
-  allowPause: store.config.room.allowPause,
-  allowWordReroll: store.config.game.allowWordReroll,
-  joinPolicy: store.config.room.joinPolicy,
+const selectedPreset = ref<RoomPresetId>('standard')
+const roomSettings = reactive<RoomSettings>(
+  createRoomSettings(selectedPreset.value, store.config.player.defaultMaxPlayers),
+)
+
+const presetOptions: readonly RuleSelectOption<RoomPresetId>[] = [
+  { value: 'standard', label: strings.room.presetStandard },
+  { value: 'relaxed', label: strings.room.presetRelaxed },
+  { value: 'speed', label: strings.room.presetSpeed },
+]
+const presetHints: Record<RoomPresetId, string> = {
+  standard: strings.room.presetStandardHint,
+  relaxed: strings.room.presetRelaxedHint,
+  speed: strings.room.presetSpeedHint,
+}
+
+watch(selectedPreset, (preset) => {
+  Object.assign(roomSettings, createRoomSettings(preset, roomSettings.maxPlayers))
 })
 
 const playerOptions = computed<readonly RuleSelectOption<number>[]>(() => {
@@ -92,7 +95,7 @@ async function submitCreate(): Promise<void> {
             },
           ]"
           :key="option.value"
-          class="flex items-center gap-[0.7em] rounded-[0.7em] border-[0.18cqh] border-line bg-white px-[1em] py-[1cqh] cursor-pointer"
+          class="flex items-center gap-[0.7em] rounded-[0.7em] border-[0.18cqh] border-control bg-white px-[1em] py-[1cqh] cursor-pointer"
         >
           <input
             v-model="createForm.visibility"
@@ -121,6 +124,17 @@ async function submitCreate(): Promise<void> {
         :label="strings.lobby.maxPlayersField"
         :options="playerOptions"
       />
+
+      <RuleSelectField
+        v-model="selectedPreset"
+        class="col-span-full"
+        :label="strings.lobby.presetField"
+        :options="presetOptions"
+      >
+        <small class="text-muted text-fs-12">
+          {{ presetHints[selectedPreset] }}
+        </small>
+      </RuleSelectField>
 
       <p class="col-span-full m-0 text-muted text-fs-12 leading-[1.6]">
         {{

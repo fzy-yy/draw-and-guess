@@ -4,6 +4,7 @@
 -->
 <script setup lang="ts">
 import { Search, X } from 'lucide-vue-next'
+import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
 import AppInput from '@/components/common/AppInput.vue'
 
@@ -55,7 +56,7 @@ function handleEnter(): void {
         v-if="model"
         type="button"
         class="grid h-[3.2cqh] w-[3.2cqh] place-items-center rounded-full text-muted hover:bg-line/60 hover:text-navy transition-colors"
-        aria-label="clear"
+        :aria-label="strings.common.clearSearchAria"
         @click="clear"
       >
         <X class="h-[2.4cqh] w-[2.4cqh]" />

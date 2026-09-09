@@ -9,6 +9,9 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
   },
+  "dependencies": {
+    "@draw-guess/shared": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5.9.3"
   }

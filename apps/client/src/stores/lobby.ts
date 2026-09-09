@@ -6,14 +6,12 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { EVENTS, type Invite, type PresenceSnapshot, type RoomSnapshot } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
-import { notify } from '@/composables/useToasts'
-import { socket } from './socket.ts'
-import { createRequester } from './request.ts'
+import { useGameTransport } from '@/application/game-transport'
 
 export const useLobbyStore = defineStore('lobby', () => {
+  const { request, notify } = useGameTransport()
   const presence = ref<PresenceSnapshot>({ players: [], rooms: [] })
   const invites = ref<Invite[]>([])
-  const request = createRequester({ socket, notify })
   let presenceRequestInFlight = false
   let roomListRequestInFlight = false
 

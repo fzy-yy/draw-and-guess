@@ -29,8 +29,23 @@ export class RoomPage {
   async updateMaxPlayers(maxPlayers: number) {
     await this.openRules()
     const dialog = this.page.getByRole('dialog')
-    const select = dialog.locator('select').first()
-    await select.selectOption(String(maxPlayers))
+    await dialog.getByLabel('最大玩家数').selectOption(String(maxPlayers))
+    await dialog.getByRole('button', { name: /保存规则/ }).click()
+    await expect(dialog).toBeHidden({ timeout: 10_000 })
+  }
+
+  async updateChooseSeconds(seconds: number) {
+    await this.openRules()
+    const dialog = this.page.getByRole('dialog')
+    await dialog.getByLabel('选词时间').fill(String(seconds))
+    await dialog.getByRole('button', { name: /保存规则/ }).click()
+    await expect(dialog).toBeHidden({ timeout: 10_000 })
+  }
+
+  async updateJoinPolicy(policy: 'forbid' | 'spectate' | 'next_game') {
+    await this.openRules()
+    const dialog = this.page.getByRole('dialog')
+    await dialog.getByLabel('中途加入').selectOption(policy)
     await dialog.getByRole('button', { name: /保存规则/ }).click()
     await expect(dialog).toBeHidden({ timeout: 10_000 })
   }

@@ -7,7 +7,7 @@
  *   避免多个可切换类串在一起产生互相覆盖的残留。
  *
  * 本项目使用 Tailwind v4 并在 @theme 中自定义了语义色令牌（见 apps/client/src/style/index.css
- * 的 @theme：navy/muted/line/paper/blue/sky/yellow/green/red/purple），
+ * 的 @theme 品牌基色与无障碍前景色），
  * 这些自定义颜色不在 tailwind-merge 的默认类名推断表内，
  * 若不加声明会被当作“普通未知类”而在冲突合并时误删。
  * 因此这里用 extendTailwindMerge 把全部自定义语义色注册进颜色合并组，
@@ -28,6 +28,12 @@ const CUSTOM_COLORS = [
   'green',
   'red',
   'purple',
+  'success-fg',
+  'success-on-dark',
+  'warning-fg',
+  'danger-on-dark',
+  'control',
+  'focus',
 ] as const
 
 /** 项目自定义语义偶数字号标尺（与 style/tokens.css 的 @theme 保持一致）。 */

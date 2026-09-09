@@ -16,7 +16,7 @@ defineProps<{
 
 <template>
   <label
-    class="min-w-0 flex min-h-[4.8cqh] flex-row items-center gap-[0.5cqh] rounded-[0.5em] bg-line px-[0.8em] text-fs-14 font-bold cursor-pointer"
+    class="min-w-0 flex min-h-[4.8cqh] flex-row items-center gap-[0.5cqh] rounded-[0.5em] border-[0.18cqh] border-control bg-line px-[0.8em] text-fs-14 font-bold cursor-pointer"
   >
     <input
       v-model="model"

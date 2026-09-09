@@ -7,9 +7,7 @@ import { defineStore } from 'pinia'
 import { APP_CONFIG, PUBLIC_CONFIG } from '@draw-guess/config'
 import { EVENTS } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
-import { notify } from '@/composables/useToasts'
-import { socket } from './socket.ts'
-import { createRequester } from './request.ts'
+import { useGameTransport } from '@/application/game-transport'
 
 export type LocalSettings = {
   -readonly [
@@ -77,8 +75,8 @@ export function loadSettings(): LocalSettings {
 }
 
 export const useSettingsStore = defineStore('settings', () => {
+  const { request, notify } = useGameTransport()
   const settings = ref<LocalSettings>(loadSettings())
-  const request = createRequester({ socket, notify })
 
   /** 保存本地设置到 localStorage，并同步到 DOM 与服务端。 */
   function saveSettings(playerId?: string): void {

@@ -1,5 +1,5 @@
 import { defineComponent, h, nextTick, ref } from 'vue'
-import { createPinia, setActivePinia, type Pinia } from 'pinia'
+import { setActivePinia, type Pinia } from 'pinia'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EVENTS, type VocabularyPackageInfo, type VocabularyWord } from '@draw-guess/shared'
@@ -18,6 +18,7 @@ import { useLobbyStore } from '@/stores/lobby'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
 import { GUEST_ID, HOST_ID, ROOM_ID, createRoomFixture } from '../client/room-fixture'
+import { createPiniaWithFakeTransport } from '../client/fake-game-transport'
 
 let pinia: Pinia
 const wrappers: VueWrapper[] = []
@@ -38,7 +39,7 @@ function mountComposable<T>(factory: () => T): T {
 }
 
 beforeEach(() => {
-  pinia = createPinia()
+  pinia = createPiniaWithFakeTransport().pinia
   setActivePinia(pinia)
   vi.useFakeTimers()
 })
@@ -84,17 +85,36 @@ describe('画布与浏览器生命周期 composables', () => {
 
   it('视口挂载、显式缩放和卸载都会维护 backing size', () => {
     const redraw = vi.fn()
+    const displayContext = {
+      save: vi.fn(),
+      clearRect: vi.fn(),
+      drawImage: vi.fn(),
+      restore: vi.fn(),
+      imageSmoothingEnabled: true,
+    } as unknown as CanvasRenderingContext2D
     const canvas = ref({
       width: 0,
       height: 0,
       getBoundingClientRect: () => ({ width: 360, height: 720 }),
-    } as HTMLCanvasElement)
-    const viewport = mountComposable(() => useCanvasViewport(canvas, redraw))
+      getContext: () => displayContext,
+    } as unknown as HTMLCanvasElement)
+    const logicalCanvas = { width: 0, height: 0 } as HTMLCanvasElement
+    const viewport = mountComposable(() => useCanvasViewport(canvas, logicalCanvas, redraw))
     viewport.resizeCanvas()
-    expect(canvas.value.width).toBe(720)
-    expect(canvas.value.height).toBe(1_440)
+    expect(logicalCanvas.width).toBe(720)
+    expect(logicalCanvas.height).toBe(1_440)
+    expect(canvas.value.width).toBe(360 * Math.min(devicePixelRatio, 2))
+    expect(canvas.value.height).toBe(720 * Math.min(devicePixelRatio, 2))
     expect(viewport.resizeTick.value).toBeGreaterThan(0)
     expect(redraw).toHaveBeenCalled()
+    expect(displayContext.imageSmoothingEnabled).toBe(false)
+    expect(displayContext.drawImage).toHaveBeenCalledWith(
+      logicalCanvas,
+      0,
+      0,
+      canvas.value.width,
+      canvas.value.height,
+    )
   })
 
   it('全屏提示可确认、关闭，并在邀请或已有房间时保持隐藏', async () => {

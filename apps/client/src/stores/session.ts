@@ -7,24 +7,24 @@ import { defineStore } from 'pinia'
 import { APP_CONFIG, PUBLIC_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import { EVENTS, type SessionRegistration } from '@draw-guess/shared'
-import { notify } from '@/composables/useToasts'
-import { socket } from './socket.ts'
-import { createRequester } from './request.ts'
+import { useGameTransport } from '@/application/game-transport'
 import { useProfileStore } from './profile.ts'
 import { useSettingsStore } from './settings.ts'
+import { getErrorRecoveryAction } from './error-recovery.ts'
 
 export type ConnectionLabel = (typeof strings.connection)[keyof typeof strings.connection]
 export type ShellPage = 'profile' | 'lobby' | 'settings'
 export type SessionState = 'idle' | 'ready' | 'disconnected' | 'restoring'
 
 export const useSessionStore = defineStore('session', () => {
+  const transport = useGameTransport()
+  const { request, notify } = transport
   const profileStore = useProfileStore()
   const settingsStore = useSettingsStore()
-  const request = createRequester({ socket, notify })
 
   const playerId = ref('')
   const page = ref<ShellPage>('profile')
-  const connected = ref(socket.connected)
+  const connected = ref(transport.socket.connected)
   const sessionState = ref<SessionState>(profileStore.profile.recoveryToken ? 'restoring' : 'idle')
   const connectionLabel = ref<ConnectionLabel>(strings.connection.connecting)
   const latency = ref(0)
@@ -53,7 +53,7 @@ export const useSessionStore = defineStore('session', () => {
     clearRestoreRetry()
     restoreRetryTimer = window.setTimeout(() => {
       restoreRetryTimer = undefined
-      if (socket.connected && sessionState.value === 'restoring') void registerFn(true)
+      if (transport.socket.connected && sessionState.value === 'restoring') void registerFn(true)
     }, PUBLIC_CONFIG.network.sessionRestoreRetryMs)
   }
 
@@ -64,7 +64,7 @@ export const useSessionStore = defineStore('session', () => {
   ): Promise<void> {
     if (protocolMismatch.value) return
     if (busy.value) return
-    if (!socket.connected) {
+    if (!transport.socket.connected) {
       if (profileStore.profile.recoveryToken || playerId.value) sessionState.value = 'disconnected'
       if (!automatic) notify(strings.store.notConnected, 'warning')
       return
@@ -93,7 +93,7 @@ export const useSessionStore = defineStore('session', () => {
       )
 
       if (!result.ok) {
-        if (result.code === 'PROTOCOL_MISMATCH') {
+        if (getErrorRecoveryAction(result.code) === 'require-upgrade') {
           markProtocolMismatch()
           return
         }

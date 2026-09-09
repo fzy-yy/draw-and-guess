@@ -205,7 +205,12 @@ const displayedAnswer = computed(() => {
       ></i>
     </HudPill>
     <!-- 网络状态：统一复用 NetworkStatusButton 图标按钮展示，悬浮查看连接详情（与各顶栏一致） -->
-    <NetworkStatusButton />
+    <NetworkStatusButton
+      :connected="store.connected"
+      :latency="store.latency"
+      :connection-label="store.connectionLabel"
+      :latency-good-ms="store.config.network.latencyGoodMs"
+    />
     <!-- 右上角操作组：暂停/继续、设置、进入或退出全屏。 -->
     <div class="flex items-center gap-[0.45em]">
       <!--

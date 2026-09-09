@@ -11,7 +11,6 @@ import { APP_CONFIG } from '../../config/index.ts'
 import { serverStrings } from '@draw-guess/strings'
 import { GameError, type RuntimeLogger } from '../../errors.ts'
 import type { GameSecret, MemberState, PlayerSecret, RoomSecret } from '../../models.ts'
-import type { RoomRepository } from '../../repositories/index.ts'
 import { type RuntimeDependencies } from '../../runtime.ts'
 import type { VocabularyRegistry, VocabularyStore } from '../../vocabulary/index.ts'
 
@@ -25,16 +24,14 @@ export interface RoomMembershipServiceContext {
   emitRoom(roomId?: string): void
   emitRoomEvent(roomId: string, event: string, payload: unknown): void
   emitToPlayer(playerId: string, event: string, payload: unknown): void
+  evaluateRematch(room: RoomSecret): void
   finishRound(room: RoomSecret, drawerAbandoned: boolean): void
   getRoomVocabularyStore(room?: RoomSecret): VocabularyStore
   isPlaying(phase: RoomPhase): boolean
   logger: RuntimeLogger
   pauseRoomInternal(room: RoomSecret, reason: string): void
-  persistPlayer(player: PlayerSecret): void
-  persistRoom(room: RoomSecret): void
   players: Map<string, PlayerSecret>
   random: RuntimeDependencies['random']
-  repositories: { rooms: Pick<RoomRepository, 'removeRoom'> }
   requirePlayer(playerId: string): PlayerSecret
   rooms: Map<string, RoomSecret>
   roomsByPrivateCode: Map<string, string>
@@ -48,7 +45,7 @@ export interface RoomMembershipServiceContext {
 
 export class RoomMembershipService {
   constructor(private readonly context: RoomMembershipServiceContext) {}
-  /** 断线代次与宽限期由会话用例校验，迁移规则与持久化由成员用例统一维护。 */
+  /** 断线代次与宽限期由会话用例校验；房主迁移只改变进程内房间状态。 */
   transferDisconnectedHost(room: RoomSecret, playerId: string): void {
     const candidate = room.members.find(
       (member) =>
@@ -68,7 +65,6 @@ export class RoomMembershipService {
           serverStrings.notices.hostFallback,
       ),
     )
-    this.context.persistRoom(room)
     this.context.emitRoom(room.id)
   }
   createRoom(
@@ -100,15 +96,7 @@ export class RoomMembershipService {
       createdAt: this.context.clock.now(),
     }
     room.members.push(this.createMember(player, room))
-    // 持久化优先：先写数据库，成功后再提交到内存 Map 与加入 Socket 房间
     player.roomId = room.id
-    try {
-      this.context.persistRoom(room)
-      this.context.persistPlayer(player)
-    } catch (err) {
-      delete player.roomId
-      throw err
-    }
     this.context.rooms.set(room.id, room)
     if (privateJoinCode) this.context.roomsByPrivateCode.set(privateJoinCode, room.id)
     this.context.logger.info(
@@ -156,71 +144,30 @@ export class RoomMembershipService {
     const activeMembers = room.members.filter((member) => !member.leftGame)
     if (activeMembers.length >= room.settings.maxPlayers)
       throw new GameError('ROOM_FULL', serverStrings.errors.ROOM_FULL)
-    const spectating = room.phase !== 'waiting'
-    if (spectating) {
+    const joiningInProgress = room.phase !== 'waiting'
+    if (joiningInProgress) {
       if (room.settings.joinPolicy === 'forbid')
         throw new GameError('GAME_IN_PROGRESS', serverStrings.errors.GAME_IN_PROGRESS_FORBID)
-      if (room.settings.joinPolicy === 'next_game')
-        throw new GameError('GAME_IN_PROGRESS', serverStrings.errors.GAME_IN_PROGRESS_NEXT)
-      const member = this.createMember(player, room, true)
-      const previousVersion = room.stateVersion
+      const waitingForNextGame = room.settings.joinPolicy === 'next_game'
+      const member = this.createMember(player, room, true, waitingForNextGame)
       room.members.push(member)
       room.stateVersion += 1
       this.context.logger.info(
         { roomId: room.id, playerId: player.id, source },
-        '玩家以观战身份加入房间',
+        waitingForNextGame ? '玩家加入房间并等待下一局' : '玩家以观战身份加入房间',
       )
       player.roomId = room.id
       player.socket?.join(room.id)
-      // 持久化：成员席位与玩家房间归属。
-      try {
-        this.context.persistPlayer(player)
-        this.context.persistRoom(room)
-      } catch (error) {
-        room.members = room.members.filter((item) => item !== member)
-        room.stateVersion = previousVersion
-        delete player.roomId
-        player.socket?.leave(room.id)
-        try {
-          this.context.persistPlayer(player)
-        } catch (rollbackError) {
-          this.context.logger.error(
-            { rollbackError, playerId: player.id, roomId: room.id },
-            '房间加入失败后的玩家归属回滚失败',
-          )
-        }
-        throw error
-      }
       this.context.emitRoom(room.id)
       this.context.broadcastPresence()
       return this.context.snapshot(room, player.id)
     }
     const member = this.createMember(player, room)
-    const previousVersion = room.stateVersion
     room.members.push(member)
     room.stateVersion += 1
     this.context.logger.info({ roomId: room.id, playerId: player.id, source }, '玩家已加入房间')
     player.roomId = room.id
     player.socket?.join(room.id)
-    // 持久化：成员席位与玩家房间归属。
-    try {
-      this.context.persistPlayer(player)
-      this.context.persistRoom(room)
-    } catch (error) {
-      room.members = room.members.filter((item) => item !== member)
-      room.stateVersion = previousVersion
-      delete player.roomId
-      player.socket?.leave(room.id)
-      try {
-        this.context.persistPlayer(player)
-      } catch (rollbackError) {
-        this.context.logger.error(
-          { rollbackError, playerId: player.id, roomId: room.id },
-          '房间加入失败后的玩家归属回滚失败',
-        )
-      }
-      throw error
-    }
     // 成员加入只改变席位和状态版本，不取消其他玩家已经完成的准备。
     this.context.addSystemNotice(room, serverStrings.notices.playerJoined(player.profile.nickname))
     this.context.emitRoom(room.id)
@@ -248,10 +195,6 @@ export class RoomMembershipService {
     this.context.logger.info({ roomId: room.id, playerId, reason }, '玩家已离开房间')
     delete player.roomId
     room.stateVersion += 1
-    // 持久化：玩家离房清空房间归属，房间成员席位移除该玩家。
-    this.context.persistPlayer(player)
-    this.context.persistRoom(room)
-
     // 空房间直接关闭；房主离开时迁移控制权；倒计时/等待/对局各有对应处理
     if (room.members.length === 0) {
       this.closeRoom(room, serverStrings.notices.closeRoomEmpty)
@@ -291,6 +234,7 @@ export class RoomMembershipService {
     ) {
       this.context.pauseRoomInternal(room, serverStrings.notices.autoPaused)
     }
+    if (room.phase === 'game_result') this.context.evaluateRematch(room)
     this.context.emitRoom(room.id)
     this.context.broadcastPresence()
   }
@@ -312,10 +256,6 @@ export class RoomMembershipService {
     delete player.roomId
     room.stateVersion += 1
     this.context.logger.info({ roomId: room.id, playerId }, '玩家主动退出当前对局并保留成绩卡')
-    // 持久化：成员席位（leftGame/ready）与玩家房间归属同步入库。
-    this.context.persistPlayer(player)
-    this.context.persistRoom(room)
-
     const payload: MemberConnectionChange = {
       playerId,
       nickname: player.profile.nickname,
@@ -361,6 +301,7 @@ export class RoomMembershipService {
       this.context.isPlaying(room.phase)
     )
       this.context.pauseRoomInternal(room, serverStrings.notices.autoPaused)
+    if (room.phase === 'game_result') this.context.evaluateRematch(room)
     this.context.emitRoom(room.id)
     this.context.broadcastPresence()
   }
@@ -399,8 +340,6 @@ export class RoomMembershipService {
         this.context.players.get(targetId)?.profile.nickname ?? serverStrings.notices.hostFallback,
       ),
     )
-    // 持久化：房主变更与轮换后的私密房码同步入库。
-    this.context.persistRoom(room)
     this.context.emitRoom(room.id)
     // hostName 会显示在大厅房间行中，房主迁移后需同步广播大厅快照，避免列表展示陈旧房主名。
     this.context.broadcastPresence()
@@ -411,6 +350,7 @@ export class RoomMembershipService {
     this.context.transition(room, 'closed')
     if (room.game) this.context.clearHintTimers(room.game)
     this.context.scheduler.clear(room.game?.timer)
+    this.context.scheduler.clear(room.game?.rematchTimer)
     this.context.emitRoomEvent(room.id, EVENTS.roomClosed, createServerPush({ reason }))
     // 房间即将从内存删除：必须同时解绑幸存成员（含观战者）的 roomId 与 Socket 房间，
     // 否则 requireAvailablePlayer 会永久抛 ALREADY_IN_ROOM，玩家无法再建房/加入/被邀请。
@@ -420,14 +360,10 @@ export class RoomMembershipService {
       player.socket?.leave(room.id)
       if (player.roomId === room.id) {
         delete player.roomId
-        // 同步持久化：房间关闭后清空仍在库玩家的房间归属（其身份仍保留，可回大厅）。
-        this.context.persistPlayer(player)
       }
     }
     if (room.privateJoinCode) this.context.roomsByPrivateCode.delete(room.privateJoinCode)
     this.context.rooms.delete(room.id)
-    // 持久化：删除房间及其成员记录（外键级联）。
-    this.context.repositories.rooms.removeRoom(room.id)
     this.context.broadcastPresence()
   }
 
@@ -473,7 +409,12 @@ export class RoomMembershipService {
     this.context.roomsByPrivateCode.set(room.privateJoinCode, room.id)
   }
 
-  private createMember(player: PlayerSecret, room: RoomSecret, spectating = false): MemberState {
+  private createMember(
+    player: PlayerSecret,
+    room: RoomSecret,
+    spectating = false,
+    waitingForNextGame = false,
+  ): MemberState {
     // 玩家加入房间时创建初始席位状态（spectating=true 表示观战身份）
     const occupied = new Set(
       room.members.filter((member) => !member.leftGame).map((member) => member.seatIndex),
@@ -484,6 +425,7 @@ export class RoomMembershipService {
       playerId: player.id,
       seatIndex,
       spectating,
+      waitingForNextGame,
       ready: false,
       score: 0,
       joinedAt: this.context.clock.now(),

@@ -6,18 +6,18 @@
  * 保证升级可重复、可回滚思路清晰。新增字段一律走「追加迁移」，不直接改已建表。
  *
  * 设计取舍：
- * - 聚合根（Player / Room）与其从表（成员、战绩）分开，保留外键便于级联与查询；
- * - 可扩展字段（房间规则、成员统计、得分明细、词库选择）用 JSON TEXT 存储，
- *   避免频繁 DDL；这些字段服务端权威快照本来就会重新裁剪，落盘仅是存档用途；
+ * - 当前只保留玩家身份与完成局战报；旧版房间聚合表由追加迁移兼容删除；
+ * - 战报中的最终排名与玩家统计用 JSON TEXT 存储，避免频繁 DDL；
  * - 时间用毫秒整数（epoch ms），与前端/内存一致。
  */
 import type { Database } from 'better-sqlite3'
 import type { DatabaseContext } from './index.ts'
+import { digestRecoveryToken } from '../security/recovery-token.ts'
 
 export interface Migration {
   version: number
   name: string
-  up: string // 建表/变更 SQL
+  up: string | ((database: Database) => void)
 }
 
 export const MIGRATIONS: Migration[] = [
@@ -36,7 +36,7 @@ export const MIGRATIONS: Migration[] = [
         connected       INTEGER NOT NULL DEFAULT 0,      -- 是否在线（宽限期内为 0）
         joined_at       INTEGER NOT NULL,                -- 注册时间（epoch ms）
         disconnected_at INTEGER,                         -- 最近断线时间（用于宽限判断）
-        room_id         TEXT                             -- 所在房间（内存态为准，这里仅用于恢复）
+        room_id         TEXT                             -- 历史兼容列；v5 起统一为空且不再读写
       );
       CREATE INDEX IF NOT EXISTS idx_players_token ON players(token);
       CREATE INDEX IF NOT EXISTS idx_players_room ON players(room_id);
@@ -45,7 +45,7 @@ export const MIGRATIONS: Migration[] = [
   {
     version: 2,
     name: 'create-rooms-and-members',
-    // 房间与成员：进行中局「作废/恢复」依赖它。settings/selected_words 用 JSON 存，便于扩展。
+    // 历史迁移：旧版房间写穿结构。不可修改，后续由 remove-transient-room-storage 删除。
     up: `
       CREATE TABLE IF NOT EXISTS rooms (
         id              TEXT PRIMARY KEY,                -- 房间 UUID
@@ -125,6 +125,74 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_rounds_game ON rounds(game_id);
     `,
   },
+  {
+    version: 5,
+    name: 'remove-transient-room-storage',
+    // 旧版曾写入房间聚合，但启动时只会整表作废且从未恢复；删除瞬态表不触碰完成局战报。
+    // players.room_id 暂留为兼容列，统一清空后不再读写，避免 SQLite 版本差异影响升级。
+    up: `
+      UPDATE players SET room_id = NULL;
+      DROP TABLE IF EXISTS room_members;
+      DROP TABLE IF EXISTS rooms;
+    `,
+  },
+  {
+    version: 6,
+    name: 'hash-player-recovery-tokens',
+    // SQLite 没有内建 SHA-256；迁移在同一事务中重建玩家表，并将历史明文一次性散列。
+    up: (database) => {
+      const legacyPlayers = database.prepare('SELECT * FROM players').all() as Array<{
+        id: string
+        token: string
+        nickname: string
+        avatar_id: string
+        discoverable: number
+        accepts_invites: number
+        connected: number
+        joined_at: number
+        disconnected_at: number | null
+      }>
+      database.exec(`
+        ALTER TABLE players RENAME TO players_with_plaintext_token;
+        DROP INDEX IF EXISTS idx_players_token;
+        DROP INDEX IF EXISTS idx_players_room;
+        CREATE TABLE players (
+          id              TEXT PRIMARY KEY,
+          token_digest    TEXT NOT NULL UNIQUE,
+          nickname        TEXT NOT NULL,
+          avatar_id       TEXT NOT NULL,
+          discoverable    INTEGER NOT NULL DEFAULT 1,
+          accepts_invites INTEGER NOT NULL DEFAULT 1,
+          connected       INTEGER NOT NULL DEFAULT 0,
+          joined_at       INTEGER NOT NULL,
+          disconnected_at INTEGER,
+          room_id         TEXT
+        );
+        CREATE INDEX idx_players_token_digest ON players(token_digest);
+        CREATE INDEX idx_players_room ON players(room_id);
+      `)
+      const insert = database.prepare(
+        `INSERT INTO players(
+          id, token_digest, nickname, avatar_id, discoverable, accepts_invites,
+          connected, joined_at, disconnected_at, room_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+      )
+      for (const player of legacyPlayers) {
+        insert.run(
+          player.id,
+          digestRecoveryToken(player.token),
+          player.nickname,
+          player.avatar_id,
+          player.discoverable,
+          player.accepts_invites,
+          player.connected,
+          player.joined_at,
+          player.disconnected_at,
+        )
+      }
+      database.exec('DROP TABLE players_with_plaintext_token;')
+    },
+  },
 ]
 
 /**
@@ -153,7 +221,8 @@ export function runMigrations(context: DatabaseContext): void {
     if (applied.has(migration.version)) continue
     // 每条迁移独立事务：失败回滚，避免半成品表结构。
     const apply = database.transaction(() => {
-      database.exec(migration.up)
+      if (typeof migration.up === 'string') database.exec(migration.up)
+      else migration.up(database)
       database
         .prepare('INSERT INTO schema_version(version, name, applied_at) VALUES (?, ?, ?)')
         .run(migration.version, migration.name, Date.now())

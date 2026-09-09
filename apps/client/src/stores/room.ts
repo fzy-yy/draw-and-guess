@@ -13,16 +13,14 @@ import {
   type RoomVisibility,
 } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
-import { notify } from '@/composables/useToasts'
-import { socket } from './socket.ts'
-import { createRequester } from './request.ts'
+import { useGameTransport } from '@/application/game-transport'
 import { useSessionStore } from './session.ts'
 import { acceptRoomSnapshot } from './snapshot-gate.ts'
 
 export const useRoomStore = defineStore('room', () => {
+  const { request, notify } = useGameTransport()
   const sessionStore = useSessionStore()
   const room = ref<RoomSnapshot>()
-  const request = createRequester({ socket, notify })
   let resyncInFlight = false
   let lastResyncAt = 0
 

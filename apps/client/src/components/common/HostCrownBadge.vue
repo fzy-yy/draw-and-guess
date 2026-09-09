@@ -21,6 +21,6 @@ defineProps<{
     :aria-label="label"
     role="img"
   >
-    <Crown class="h-[70%] w-[70%] fill-yellow text-yellow" aria-hidden="true" />
+    <Crown class="h-[70%] w-[70%] fill-warning-fg text-warning-fg" aria-hidden="true" />
   </span>
 </template>

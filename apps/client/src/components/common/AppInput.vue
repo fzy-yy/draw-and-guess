@@ -52,7 +52,7 @@ function handleKeyDown(event: KeyboardEvent): void {
   <div
     class="flex h-[4.8cqh] items-center gap-[0.5em] rounded-[0.7em] border-[0.18cqh] bg-white px-[0.75em] transition-colors focus-within:border-navy"
     :class="[
-      error ? 'border-red' : 'border-line',
+      error ? 'border-red' : 'border-control',
       disabled ? 'cursor-not-allowed opacity-50 bg-line/40' : '',
     ]"
   >
@@ -70,7 +70,7 @@ function handleKeyDown(event: KeyboardEvent): void {
       :maxlength="maxlength"
       :autocomplete="autocomplete"
       :aria-label="ariaLabel"
-      class="w-full min-w-0 border-0 bg-transparent text-navy outline-none placeholder:text-muted/60 text-fs-14 disabled:cursor-not-allowed"
+      class="w-full min-w-0 border-0 bg-transparent text-navy outline-none placeholder:text-muted text-fs-14 disabled:cursor-not-allowed"
       :class="[
         align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left',
         inputClass,

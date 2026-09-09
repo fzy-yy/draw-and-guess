@@ -140,5 +140,6 @@ const showClearProfileConfirm = ref(false)
     v-if="!profileEditingDisabled"
     v-model="store.profile.avatarId"
     v-model:open="showAvatarPicker"
+    :avatar-ids="store.config.player.avatarIds"
   />
 </template>

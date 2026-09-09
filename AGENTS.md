@@ -1,7 +1,7 @@
 # AGENTS.md
 
 > 本文件是所有后续开发（人工或 AI）的**第一入口**。下列内容以**当前代码为准**；原始需求文档已删除，若与本文件或代码冲突，一律以代码与本文件为准。
-> 仓库内其它根级文档：`README.md`（项目总览/十分钟启动）、`vocabulary/`（SQLite 词库目录）。**注意：`README.md` 部分章节（依赖清单、持久化/日志说明、已被删除的文档引用）已过时，与代码不一致时以本文件与代码为准。**
+> 仓库内其它文档：`README.md`（项目总览/十分钟启动）、`docs/`（架构决策）、`vocabulary/`（SQLite 词库目录）。**注意：`README.md` 部分章节（依赖清单、日志说明、已被删除的文档引用）可能过时，与代码不一致时以本文件与代码为准。**
 
 ---
 
@@ -10,12 +10,12 @@
 「你画我猜 / Draw and Guess —— 局域网联机版」：基于 **Vue 3 + TypeScript + Socket.IO + Express** 的 2～6 人**局域网**实时派对游戏。
 
 - **服务端权威**：身份、房间、阶段、答案、计时、绘画资格与分数全部由服务端裁决；客户端只发操作请求，结果经「角色裁剪快照」回写。
-- **公开 / 私密房间**：公开房进入大厅列表；私密房不公开，只能通过服务端生成的短码或定向邀请加入；不支持自定义密码、邀请链接或二维码。游戏中可配置为「观战可加入」（`spectate`）。
-- **内存态 + 低频持久化**：高频瞬态（画布笔画、聊天消息、计时器、对局实时状态）全部在内存，重启即清空；**低频关键态**（玩家身份/恢复令牌/偏好、房间配置、完成局的战报）经 **SQLite（better-sqlite3，WAL）** 落盘：重启后身份可凭令牌在宽限内恢复、进行中房间作废关闭、历史战报可查。数据库文件位于 `apps/server/data/game.db`（已忽略入库）。
+- **公开 / 私密房间**：公开房进入大厅列表；私密房不公开，只能通过服务端生成的短码或定向邀请加入；不支持自定义密码、邀请链接或二维码。游戏中可配置为禁止加入（`forbid`）、观战加入（`spectate`）或候场下一局（`next_game`）。
+- **内存态 + 低频持久化**：房间、成员席位、画布笔画、聊天消息、计时器与对局实时状态全部在内存，重启即清空；仅**玩家短期身份**（恢复令牌/资料/偏好）和**完成局战报**经 **SQLite（better-sqlite3，WAL）** 落盘：重启后身份可凭令牌在宽限内恢复到大厅，历史战报可查。数据库文件位于 `apps/server/data/game.db`（已忽略入库）。
 - **日志文件化**：服务端日志**不输出到控制台**（规避 Windows 控制台 GBK 解码 UTF-8 中文乱码），默认写入 `apps/server/log/app-<秒级时间戳>.log`（每次启动新建一个、最多保留 `LOG_MAX_FILES` 条）；可通过 `.env` 的 `LOG_ENABLED` 完全关闭（零内存开销）。
 - **画板**：高 DPI 实时画布，支持自由画笔、橡皮擦（`destination-out`）与封闭区域洪泛填充；画笔/橡皮擦共用连续粗细，可滚轮调整；支持预设或任意 HEX 颜色，工具可自定义单键切换。**渲染模型为「归一化点列 + 直线段描边」增量同步**（不引入轮廓填充型平滑库，曾因此导致白边/闪烁/空心缺陷）。
 - **头像**：仅允许从 40 个内置 SVG 白名单编号中选择，协议只传编号；禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像。
-- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '8'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。
+- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '10'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。
 
 ### 技术栈与运行环境
 
@@ -67,6 +67,7 @@ draw_and_guess/
 │   └── src/
 │       ├── index.ts               # 聚合出口：引用路径保持 @draw-guess/shared
 │       ├── events.ts              # Socket.IO 事件名及客户端请求/响应类型契约（前后端唯一事件名来源）
+│       ├── error-codes.ts         # ERROR_CODES / ErrorCode：线上与客户端合成错误码唯一注册表
 │       ├── types.ts               # DTO 兼容聚合出口；具体领域类型位于 types/
 │       ├── schemas.ts             # Schema 兼容聚合出口；具体协议 Schema 位于 protocol/
 │       ├── types/                 # common/drawing/gameplay/room/session/vocabulary/invite 分域 DTO
@@ -113,7 +114,7 @@ draw_and_guess/
 │   └── src/
 │       ├── main.ts                # 客户端入口：创建 App 并挂载 #app；仅引入 ./style/index.css（Toast 为自建，无需第三方样式）
 │       ├── App.vue                # 根舞台：页面互斥渲染（对局>房间>设置>大厅>资料）、自建 `<AppToaster/>`、邀请横幅、竖屏提示、断线恢复阻断框
-│       ├── canvas/                # 画布纯逻辑：直线段渲染、固定 backing size、DPR 无关洪泛填充
+│       ├── canvas/                # 双层画布：固定短边 720 的逻辑重放/填充层 + DPR 封顶的 DOM 展示层
 │       │   ├── rendering.ts
 │       │   ├── viewport.ts
 │       │   └── flood-fill.ts
@@ -241,7 +242,7 @@ pnpm format:check  # 仅检查格式
 - **回合状态机**：`round-machine.ts` + `packages/shared/src/pure.ts` 的 `LEGAL_PHASES` 白名单；非法转换由服务端拒绝（`INVALID_TRANSITION`）。
 - **计分统一口径**：`scoring.ts` 与 `pure.ts` 的 `calculateGuessScore` 使用同一规则（基础 + 速度 + 顺序；两人局禁用顺序奖）。
 - **画布增量绘制**（`GameCanvas.vue`）：坐标一律**归一化 0～1**；绘图序号单调递增，服务端拒绝旧包；橡皮擦/填充只传「点击位置 + 颜色」，不传像素，客户端按同一历史重放；`lastSequence` 用于重连续接。**渲染为直线段描边（`stroke()` + `round` 线帽），增量只补画新增段（fromIndex）**。
-- **持久化分层**：每个应用由 `createDatabase(filePath)` 创建独占 `DatabaseContext`，迁移、仓储和事务显式绑定同一连接，不允许模块级数据库单例或路径覆盖；`repositories/` 提供接口 + SQLite 实现，领域层只依赖接口。`RunningApplication.close()` 负责关闭自身 Socket、HTTP 和数据库。
+- **持久化分层**：每个应用由 `createDatabase(filePath)` 创建独占 `DatabaseContext`，迁移、身份/战报仓储和事务显式绑定同一连接，不允许模块级数据库单例或路径覆盖；恢复令牌落盘时只存 SHA-256 摘要且成功恢复必须旋转，运行期房间禁止写穿数据库。`RunningApplication.close()` 负责关闭自身 Socket、HTTP 和数据库。
 - **配置单一来源**：线上协议范围只写在 `packages/shared/src/protocol/constants.ts`；浏览器安全默认值写在 `packages/config/src/`；限频、数据库路径与清理策略写在 `apps/server/src/config/`；UI 文案只写在 `packages/strings/src/`；词库数据只写在 `vocabulary/`。
 
 ---
@@ -253,11 +254,11 @@ pnpm format:check  # 仅检查格式
 - **格式**：Prettier（无分号、单引号、行宽 100、尾逗号 all）。编码前先 `pnpm format`。
 - **换行**：由根目录 `.gitattributes` 统一管理；默认文本文件提交为 LF，`.bat`/`.cmd` 保留 CRLF，数据库、音频等二进制文件禁止换行转换。新增文件类型时同步确认其 Git 属性，不依赖开发者本机的 `core.autocrlf` 设置。
 - **注释**：中文注释，解释「为什么」而非复述代码；关键算法 / 边界处理要求注释（参考 `GameCanvas.vue`、`pure.ts`、`snapshot.ts`、`game-service.ts` 的注释质量）。
-- **错误处理**：服务端用 `GameError` + `errors.ts` 统一错误码与中文文案；客户端经 `request.ts` 统一超时 + ack + 错误翻译 + `quiet` 静默降级。
+- **错误处理**：所有可观察错误码先登记到 shared 的 `ERROR_CODES` / `ErrorCode`；服务端用 `GameError` + `errors.ts` 生成统一 ack，默认中文文案必须满足 `Record<ErrorCode, string>`；客户端经 `request.ts` 统一超时与 `quiet` 静默降级，仅对需要特殊恢复的错误码穷尽分支，其余展示服务端安全文案。
 - **日志**：由 `.env` 的 `LOG_ENABLED` 控制（默认 true）：关闭时完全不创建日志记录器、不写日志文件（零内存开销）；开启时服务端用 `pino`（默认结构化 JSON，无 ANSI 色码），**每次启动写一个新的日志文件**（`apps/server/log/app-YYYY-MM-DD-HH-mm-ss.log`，精确到秒），目录最多保留最近 `LOG_MAX_FILES` 条（默认 10，超出删除最老）；控制台只保留启动横幅，不输出业务日志；级别经 `LOG_LEVEL` 控制。
 - **UI 文案**：**严禁在组件/业务代码里硬编码展示字符**；一律从 `@draw-guess/strings` 的 `strings`（客户端）或 `serverStrings`（服务端）导入。
 - **样式**：组件/页面视觉一律用**行内 Tailwind 类**写在 Vue 模板；重复长串收敛到共享组件（`AppButton`/`BaseDialog`/`ConfirmDialog`/`IconButton`/`ToolButton`/`OverlayCard`/`RuleRow`/`RoundIconButton`）或 `style/` 共享模块类。不要写共享层之外的原生 CSS 类选择器。语义色用 `@theme` 令牌；容器单位 `cqh/cqw` 用任意值（内部空格用 `_`，如 `shadow-[0_1.2cqh_5cqh_#0009]`）。
-- **配色（≤10 色）**：全应用自定义颜色**只取自 `style/tokens.css` `@theme` 里固定的 10 个语义变量**（`navy`/`muted`/`line`/`paper`/`blue`/`sky`/`yellow`/`green`/`red`/`purple`），`packages/config/src/room.ts` 的 `seatColors` 取其中 6 个；`#fff`/`#000`（及黑色变量 `--color-black`）与透明度衍生（如 `bg-blue/10`）不计入调色板。**禁止**在组件/模板中硬编码任意 HEX（`bg-[#...]`/`text-[#...]`）或 Tailwind 默认色阶（`slate-*` 等）。`packages/config/src/drawing.ts` 的 `colors` 是**画板工具色**，属功能性工具配置，不纳入 10 色限制。
+- **配色与对比度**：品牌基色固定为 `navy`/`muted`/`line`/`paper`/`blue`/`sky`/`yellow`/`green`/`red`/`purple`；为满足 WCAG AA，可使用 `success-fg`/`success-on-dark`/`warning-fg`/`danger-on-dark`/`control`/`focus` 等集中定义于 `style/tokens.css` 的无障碍语义令牌。`packages/config/src/room.ts` 的 `seatColors` 仍只取品牌基色；`#fff`/`#000`（及黑色变量 `--color-black`）与透明度衍生（如 `bg-blue/10`）不计入调色板。普通文字至少 4.5:1，大字号与非文字控件边界至少 3:1。**禁止**在组件/模板中硬编码任意 HEX（`bg-[#...]`/`text-[#...]`）或 Tailwind 默认色阶（`slate-*` 等）。`packages/config/src/drawing.ts` 的 `colors` 是**画板工具色**，属功能性工具配置，不纳入品牌调色板限制。
 - **动画一致性**：按钮/卡片交互动效统一为 160ms（复用 `.ui-feedback` / `.hover-tint` 共享类，或依赖 `@layer base` 中 `.game-stage button` 的全局过渡）；同类控件应复用同一动画，避免各自定制造成手感不一。
 - **布局规范（外 Grid 骨架，内 Flex 排版）**：
   - **Grid 宏观骨架与二维矩阵**：主页面二维行列骨架（`ProfileView`/`LobbyView`/`RoomView`/`GameView`/`SettingsView`）、二维固定席位/头像/卡片矩阵（`SeatGrid` 2×3、`AvatarPickerDialog` 8×5、`ShortcutsTab` 3 列、`RulesDialog` 3 列表单、`ChatPanel` 3 列表情）、三列对称顶栏（`StageHeader` `grid grid-cols-[1fr_auto_1fr]`）；
@@ -367,9 +368,10 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 1. **架构与权威性**
    - 服务端必须保持**权威裁决**：答案、计分、阶段、计时、绘画资格只能由服务端判定；客户端永远不能上传「裁决结果」。
    - 服务端**不把业务日志输出到控制台**（避免 Windows 控制台 GBK 解码 UTF-8 中文乱码），每次启动写一个新日志文件（`apps/server/log/app-<秒级时间戳>.log`），保留条数由 `LOG_MAX_FILES` 控制（默认 10）。持久化边界固定如下，**禁止擅自扩大**：
-     - ✅ 允许落盘：玩家身份/恢复令牌/偏好（`players`）、房间配置与成员席位（`rooms`/`room_members`）、完成局战报（`game_archive`/`game_results`/`rounds`）；
+     - ✅ 允许落盘：玩家身份/恢复令牌/偏好（`players`）、完成局战报（`game_archive`/`game_results`/`rounds`）；
+     - ❌ 禁止落盘：运行期房间配置与成员席位；旧版 `rooms`/`room_members` 仅由兼容迁移删除，不参与恢复；
      - ❌ 禁止落盘：画布笔画、聊天消息、内部计时器、幂等请求缓存、限频时间窗等高频瞬态；
-     - 数据库经 `db/migrate.ts` 版本化迁移建表，仓储接口在 `repositories/`，领域层只依赖接口；服务重启时 `recoverOnStartup` 标记玩家断线（身份可宽限恢复）并作废进行中房间。
+     - 数据库经 `db/migrate.ts` 版本化迁移建表，仓储接口在 `repositories/`，领域层只依赖接口；服务重启时 `recoverOnStartup` 标记玩家断线（身份可宽限恢复），房间因纯内存模型自然清空。
    - 公开房必须进入大厅列表；私密房必须从大厅隐藏，短码只能由服务端安全随机生成并限频校验；禁止客户端自选弱码、自定义密码、邀请链接或二维码。
 2. **隐私与安全边界**
    - 带 `Secret` 后缀的服务端数据（恢复令牌、候选词、内部计时器、请求缓存）**绝不**原样出现在任何快照/事件中；一律经 `snapshot.ts` 裁剪。
@@ -403,7 +405,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 ## 配置、安全与敏感信息
 
 - **环境变量**：仅 `.env.example` 中的 `HOST / PORT / LOG_LEVEL / LOG_ENABLED / LOG_MAX_FILES` 可覆盖部署参数；游戏规则按 shared/public/server-private 边界修改。`.env` 已被 `.gitignore` 忽略，不入库。
-- **密钥 / 凭据**：仓库中**不包含**任何真实密钥、Token、密码或个人信息。临时身份恢复令牌由服务端内存生成、仅当前进程有效、只存于内存与客户端 `localStorage`（同时有选择地落盘到 `players.token` 以支持跨重启宽限恢复；均非公开快照字段）。
+- **密钥 / 凭据**：仓库中**不包含**任何真实密钥、Token、密码或个人信息。临时身份恢复令牌由服务端生成，明文只返回客户端并在当前服务会话内短暂持有；SQLite 仅保存 `players.token_digest` 的 SHA-256 摘要。每次成功恢复必须旋转令牌并使旧摘要失效，令牌仍不是公开快照字段。
 - **本地存储**：浏览器仅保存昵称、内置头像编号、本地设置与短期恢复令牌（见 `packages/config/src/app.ts` 的存储键）。
 - **敏感信息纪律**：禁止将真实密钥、Token、密码、私有地址或任何个人信息写入仓库、提交日志或本文件。`.gitignore` 已忽略 `.env`、`*.local`、日志与数据库文件。
 - **对外最小公开**：前端只能依赖 `@draw-guess/config`；服务端私有字段位于应用内部，生产构建后由 bundle 边界脚本扫描。`/api/info` 只返回 `PUBLIC_CONFIG` 子集。
@@ -443,7 +445,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 | 计分规则                        | `apps/server/src/scoring.ts`                                                                                                                                 |
 | 快照裁剪/隐私边界               | `apps/server/src/snapshot.ts`                                                                                                                                |
 | SQLite 建表/迁移                | `apps/server/src/db/migrate.ts`（新变更追加新迁移）                                                                                                          |
-| 持久化仓储（玩家/房间/战报）    | `apps/server/src/repositories/`                                                                                                                              |
+| 持久化仓储（玩家/战报）         | `apps/server/src/repositories/`                                                                                                                              |
 | 日志开关/保留条数               | `.env` → `apps/server/src/config/deployment.ts` → `apps/server/src/index.ts`                                                                                 |
 | 画布渲染/增量绘制               | `apps/client/src/components/GameCanvas.vue` + `composables/useCanvas*.ts` / `useStrokeSession.ts`（直线段描边，勿引入轮廓填充平滑库）                        |
 | 音效资源/播放策略               | `packages/config/src/audio.ts` → `apps/client/src/audio/` → `composables/useAudioFeedback.ts`                                                                |

@@ -41,7 +41,7 @@ const store = useGameStore()
       <label
         v-for="row in rows"
         :key="row.setting"
-        class="grid min-h-[12cqh] grid-cols-[auto_1fr_auto] items-center gap-[0.8em] rounded-[0.8em] border-[0.18cqh] border-line bg-white p-[1.2em]"
+        class="grid min-h-[12cqh] grid-cols-[auto_1fr_auto] items-center gap-[0.8em] rounded-[0.8em] border-[0.18cqh] border-control bg-white p-[1.2em]"
       >
         <component :is="row.icon" class="w-[3.6cqh] text-blue" />
         <span class="flex flex-col gap-[0.25em]"
@@ -52,7 +52,7 @@ const store = useGameStore()
           :value="store.settings[row.setting]"
           type="text"
           readonly
-          class="h-[3.2em] w-[3.2em] rounded-[0.55em] bg-blue text-center text-white uppercase font-mono font-bold leading-none cursor-pointer focus:outline-[0.3cqh] focus:outline-yellow focus:outline-offset-[0.2cqh]"
+          class="h-[3.2em] w-[3.2em] rounded-[0.55em] bg-blue text-center text-white uppercase font-mono font-bold leading-none cursor-pointer focus:outline-[0.3cqh] focus:outline-focus focus:outline-offset-[0.2cqh]"
           :aria-label="strings.settings.setShortcutAria(row.name)"
           @keydown.prevent="emit('capture', row.setting, $event)"
         />

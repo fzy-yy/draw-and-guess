@@ -6,6 +6,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { APP_CONFIG } from '@draw-guess/config'
 import {
+  ERROR_CODES,
   EVENTS,
   type FillCommand,
   type RoomSnapshot,
@@ -13,18 +14,17 @@ import {
   type StrokeAck,
 } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
-import { notify } from '@/composables/useToasts'
-import { socket } from './socket.ts'
-import { createRequester } from './request.ts'
+import { useGameTransport } from '@/application/game-transport'
 import type { RequestResult } from './request.ts'
 import { useRoomStore } from './room.ts'
 import { useSessionStore } from './session.ts'
+import { getErrorRecoveryAction } from './error-recovery.ts'
 
 export const useGameplayStore = defineStore('gameplay', () => {
+  const { request, notify } = useGameTransport()
   const roomStore = useRoomStore()
   const sessionStore = useSessionStore()
   const drawRevision = ref(0)
-  const request = createRequester({ socket, notify })
 
   function purgeUndone(game: NonNullable<RoomSnapshot['game']>): void {
     if (game.undoneStrokeIds.length) {
@@ -73,7 +73,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
         ok: false,
         failureKind: 'business',
         error: strings.request.genericFailure,
-        code: 'STALE_DRAWING_CONTEXT',
+        code: ERROR_CODES.STALE_DRAWING_CONTEXT,
         timeout: false,
       }
     const result = await request(
@@ -82,7 +82,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
       { quiet: true },
     )
     if (!result.ok) {
-      if (result.code === 'DRAW_BUDGET_EXCEEDED') {
+      if (getErrorRecoveryAction(result.code) === 'warn-drawing-budget') {
         notify(result.error ?? strings.request.genericFailure, 'warning')
       }
       return result
@@ -90,9 +90,16 @@ export const useGameplayStore = defineStore('gameplay', () => {
     return result
   }
 
-  async function sendFill(fill: FillCommand): Promise<void> {
-    if (!roomStore.room?.game) return
-    await request(
+  async function sendFill(fill: FillCommand): Promise<RequestResult<void>> {
+    if (!roomStore.room?.game)
+      return {
+        ok: false,
+        failureKind: 'business',
+        error: strings.request.genericFailure,
+        code: ERROR_CODES.STALE_DRAWING_CONTEXT,
+        timeout: false,
+      }
+    return request(
       EVENTS.drawFillCommit,
       { roundId: roomStore.room.game.roundId, fill },
       { quiet: true },

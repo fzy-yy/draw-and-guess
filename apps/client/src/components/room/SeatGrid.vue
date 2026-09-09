@@ -98,15 +98,17 @@ const hostTarget = computed(() =>
           <span
             v-if="!member.isHost || member.spectating"
             class="min-w-[7em] flex items-center justify-center gap-[0.35em] mt-[0.7cqh] py-[0.4cqh] px-[0.8em] rounded-[99em] text-fs-12 font-bold"
-            :class="member.ready ? 'text-green bg-green/10' : 'text-muted bg-line'"
+            :class="member.ready ? 'text-success-fg bg-green/10' : 'text-muted bg-line'"
             >{{
-              member.spectating
-                ? strings.status.roleSpectating
-                : member.ready
-                  ? strings.status.roleReady
-                  : member.connection === 'reconnecting'
-                    ? strings.status.roleReconnecting
-                    : strings.status.roleNotReady
+              member.waitingForNextGame
+                ? strings.status.roleWaitingNextGame
+                : member.spectating
+                  ? strings.status.roleSpectating
+                  : member.ready
+                    ? strings.status.roleReady
+                    : member.connection === 'reconnecting'
+                      ? strings.status.roleReconnecting
+                      : strings.status.roleNotReady
             }}</span
           >
           <!-- 房主移除玩家按钮：只对非自己的成员显示；先弹确认再执行（破坏性操作） -->
@@ -121,7 +123,7 @@ const hostTarget = computed(() =>
           </button>
           <button
             v-if="store.isHost && member.id !== store.playerId"
-            class="absolute left-[0.6cqh] top-[0.6cqh] grid place-items-center h-[3cqh] w-[3cqh] text-yellow bg-yellow/10 rounded-full"
+            class="absolute left-[0.6cqh] top-[0.6cqh] grid place-items-center h-[3cqh] w-[3cqh] text-warning-fg bg-yellow/10 rounded-full"
             type="button"
             :aria-label="strings.room.transferHostAria"
             @click="pendingHostId = member.id"

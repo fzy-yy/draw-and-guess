@@ -6,6 +6,8 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import { initAudio } from './audio'
+import { createGameTransport, installGameTransport } from './application/game-transport'
+import { notify } from './composables/useToasts'
 // Toast 为项目自建组件（AppToaster.vue + useToasts.ts），样式统一走 index.css，无需第三方样式。
 import './style/index.css'
 
@@ -17,5 +19,16 @@ initAudio()
 // 不做任何绕过防护（只拦截默认行为）；画板滚轮等功能不受影响。
 window.addEventListener('contextmenu', (event) => event.preventDefault(), { passive: false })
 
-// 创建应用实例并挂载到 index.html 中的 #app 容器
-createApp(App).use(createPinia()).mount('#app')
+// Socket、请求器和通知边界只在应用入口创建一次，再显式注入当前 Pinia。
+const pinia = createPinia()
+const transport = createGameTransport({ notify })
+installGameTransport(pinia, transport)
+const app = createApp(App).use(pinia)
+app.mount('#app')
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    app.unmount()
+    transport.destroy()
+  })
+}

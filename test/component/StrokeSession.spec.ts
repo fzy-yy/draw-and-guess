@@ -1,7 +1,7 @@
 import { defineComponent, h, ref } from 'vue'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Stroke, StrokeAck } from '@draw-guess/shared'
+import { ERROR_CODES, type ErrorCode, type Stroke, type StrokeAck } from '@draw-guess/shared'
 import { useStrokeSession } from '@/composables/useStrokeSession'
 import type { RequestFailure, RequestResult } from '@/stores/request'
 
@@ -14,7 +14,7 @@ function pointer(clientX: number, clientY: number, pointerId = 1): PointerEvent 
   return { button: 0, clientX, clientY, pointerId } as PointerEvent
 }
 
-function businessFailure(code = 'INVALID_STROKE'): RequestFailure {
+function businessFailure(code: ErrorCode = ERROR_CODES.INVALID_DRAW_STYLE): RequestFailure {
   return { ok: false, failureKind: 'business', error: '服务端拒绝笔画', code, timeout: false }
 }
 
@@ -34,11 +34,12 @@ function accepted(stroke: Stroke): RequestResult<StrokeAck> {
   }
 }
 
-function createSessionHarness() {
+function createSessionHarness(options: { tool?: 'pen' | 'fill'; canFill?: () => boolean } = {}) {
   const sent: SentBatch[] = []
   const authoritativeStrokes: Stroke[] = []
   const redraw = vi.fn()
   const onBatchFailure = vi.fn()
+  const emitFill = vi.fn()
   const drawnPoints = new Map<string, number>()
   let roundId = 'round-a'
   let session!: ReturnType<typeof useStrokeSession>
@@ -64,7 +65,8 @@ function createSessionHarness() {
         canvas: ref(canvas),
         width: ref(5),
         canDraw: () => true,
-        tool: () => 'pen',
+        tool: () => options.tool ?? 'pen',
+        canFill: options.canFill,
         color: () => '#1F2937',
         roundId: () => roundId,
         lastSequence: () => -1,
@@ -72,9 +74,10 @@ function createSessionHarness() {
         drawnPoints,
         getContext: () => context,
         redraw,
+        present: vi.fn(),
         emitStroke: (stroke, complete) => sent.push({ stroke, complete }),
         onBatchFailure,
-        emitFill: vi.fn(),
+        emitFill,
       })
       return () => h('div')
     },
@@ -94,6 +97,7 @@ function createSessionHarness() {
     authoritativeStrokes,
     redraw,
     onBatchFailure,
+    emitFill,
     wrapper,
     drawAndRelease,
     changeRound: (next: string) => (roundId = next),
@@ -176,5 +180,17 @@ describe('绘图乐观批次失败回滚', () => {
     expect(harness.session.pendingBatches.size).toBe(0)
     expect(harness.redraw).not.toHaveBeenCalled()
     expect(harness.onBatchFailure).not.toHaveBeenCalled()
+  })
+})
+
+describe('异步洪泛填充输入门禁', () => {
+  it('Worker 计算中忽略重复 fill 指针请求', () => {
+    const harness = createSessionHarness({ tool: 'fill', canFill: () => false })
+    mountedWrappers.push(harness.wrapper)
+
+    harness.session.pointerDown(pointer(50, 50))
+    harness.session.pointerDown(pointer(60, 60))
+
+    expect(harness.emitFill).not.toHaveBeenCalled()
   })
 })

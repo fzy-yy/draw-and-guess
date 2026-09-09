@@ -20,6 +20,7 @@ export function useStrokeSession(options: {
   canvas: Ref<HTMLCanvasElement | undefined>
   width: Ref<number>
   canDraw: () => boolean
+  canFill?: () => boolean
   tool: () => ToolKind
   color: () => string
   roundId: () => string
@@ -28,6 +29,7 @@ export function useStrokeSession(options: {
   drawnPoints: Map<string, number>
   getContext: () => CanvasRenderingContext2D | null
   redraw: () => void
+  present: () => void
   emitStroke: (stroke: Stroke, onResult: (result: RequestResult<StrokeAck>) => void) => void
   onBatchFailure: (batch: PendingStrokeBatch, failure: RequestFailure) => void
   emitFill: (fill: FillCommand) => void
@@ -101,7 +103,13 @@ export function useStrokeSession(options: {
         const current = pendingBatches.get(pending.sequence)
         if (!current || current.strokeId !== pending.strokeId) return
         pendingBatches.delete(pending.sequence)
-        if (result.ok || pending.roundId !== options.roundId()) return
+        if (result.ok) {
+          // 一笔全部确认且指针已释放后，以服务端合并后的完整点列重放一次，消除不同批次
+          // stroke() 抗锯齿顺序造成的客户端逻辑像素差异。
+          if (!activeStrokeId && pendingBatches.size === 0) options.redraw()
+          return
+        }
+        if (pending.roundId !== options.roundId()) return
 
         // 同一笔后续批次依赖连续点下标；其中一批失败后全部降级为权威快照，
         // 但只清理该 strokeId 的乐观痕迹，不能打断或误删后来开始的新笔画。
@@ -128,6 +136,7 @@ export function useStrokeSession(options: {
     if (!options.canDraw() || event.button !== 0) return
     const point = normalizedPoint(event)
     if (options.tool() === 'fill') {
+      if (options.canFill && !options.canFill()) return
       options.emitFill({
         kind: 'fill',
         id: createUuid(),
@@ -149,7 +158,7 @@ export function useStrokeSession(options: {
     activePoints.value = [point]
     options.drawnPoints.set(activeStrokeId, 1)
     const context = options.getContext()
-    if (context)
+    if (context) {
       renderStroke(context, {
         kind: 'stroke',
         id: 'local-preview',
@@ -157,6 +166,8 @@ export function useStrokeSession(options: {
         points: activePoints.value,
         sequence,
       })
+      options.present()
+    }
     startBatchTimer()
   }
 
@@ -181,7 +192,7 @@ export function useStrokeSession(options: {
     activePoints.value.push(point)
     options.drawnPoints.set(activeStrokeId, activePoints.value.length)
     const context = options.getContext()
-    if (context)
+    if (context) {
       renderStroke(
         context,
         {
@@ -193,6 +204,8 @@ export function useStrokeSession(options: {
         },
         fromIndex,
       )
+      options.present()
+    }
     if (!batchPending.value) startBatchTimer()
   }
 
@@ -204,6 +217,7 @@ export function useStrokeSession(options: {
     activeStrokeId = ''
     activeStyle = null
     sentPointCount = 0
+    if (pendingBatches.size === 0) options.redraw()
     if (options.canvas.value?.hasPointerCapture(event.pointerId))
       options.canvas.value.releasePointerCapture(event.pointerId)
   }

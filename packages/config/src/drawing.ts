@@ -7,7 +7,7 @@ export const drawing = {
   defaultColor: '#1F2937',
   /** 画笔与橡皮擦共用同一粗细值，画板滚轮按 wheelStep 连续调整。 */
   width: { ...DRAWING_PROTOCOL_LIMITS.width, default: 5, wheelStep: 1 },
-  /** 画布像素缓冲的设备像素比封顶（限制填充等大内存分配上限）。 */
+  /** DOM 展示层设备像素比封顶；逻辑填充缓冲固定短边 720，不随 DPR 增长。 */
   devicePixelRatioCap: 2.0,
   /** 线宽相对画布缩放的基准分辨率（drawStroke 用 min(宽,高)/referenceResolution 算缩放）。 */
   referenceResolution: 720,

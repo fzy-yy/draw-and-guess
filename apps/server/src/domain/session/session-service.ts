@@ -14,8 +14,9 @@ import { APP_CONFIG } from '../../config/index.ts'
 import { serverStrings } from '@draw-guess/strings'
 import { GameError, type RuntimeLogger } from '../../errors.ts'
 import type { PlayerSecret, RoomSecret } from '../../models.ts'
-import type { PlayerRecord, PlayerRepository, RoomRepository } from '../../repositories/index.ts'
+import type { PlayerRecord, PlayerRepository } from '../../repositories/index.ts'
 import { type RuntimeDependencies } from '../../runtime.ts'
+import { digestRecoveryToken } from '../../security/recovery-token.ts'
 
 /** 仅暴露本用例需要的数据与副作用端口；由应用层连接跨用例动作。 */
 export interface SessionServiceContext {
@@ -28,19 +29,17 @@ export interface SessionServiceContext {
   logger: RuntimeLogger
   persistPlayer(player: PlayerSecret): void
   players: Map<string, PlayerSecret>
-  playersByToken: Map<string, PlayerSecret>
+  playersByTokenDigest: Map<string, PlayerSecret>
   random: RuntimeDependencies['random']
   repositories: {
     players: Pick<
       PlayerRepository,
-      | 'findByToken'
-      | 'clearAllRoomIds'
+      | 'consumeRecoveryToken'
       | 'deleteStaleDisconnected'
       | 'markAllDisconnected'
       | 'remove'
       | 'setConnection'
     >
-    rooms: Pick<RoomRepository, 'listRooms' | 'removeRoom'>
   }
   requirePlayer(playerId: string): PlayerSecret
   rooms: Map<string, RoomSecret>
@@ -70,28 +69,32 @@ export class SessionService {
       throw new GameError('INVALID_AVATAR_ID', serverStrings.errors.INVALID_AVATAR_ID)
 
     // 携带恢复令牌且仍处于宽限期内的玩家：复用原身份与座位（如仍在房间）
-    const recovering = input.recoveryToken
-      ? this.context.playersByToken.get(input.recoveryToken)
+    const recoveryTokenDigest = input.recoveryToken
+      ? digestRecoveryToken(input.recoveryToken)
+      : undefined
+    const recovering = recoveryTokenDigest
+      ? this.context.playersByTokenDigest.get(recoveryTokenDigest)
       : undefined
     if (
       recovering &&
       (!recovering.disconnectedAt ||
         this.context.clock.now() - recovering.disconnectedAt <= APP_CONFIG.network.reconnectGraceMs)
     ) {
-      return this.reclaimPlayer(socket, recovering)
+      return this.rotateAndReclaimPlayer(socket, recovering)
     }
-    // 内存索引未命中时回退查持久化记录：服务重启后 playersByToken 为空，
-    // 但 SQLite 中的身份行（含令牌）仍在；只要记录断线时间仍在宽限期内，
-    // 就从持久化记录重建内存身份，实现真正的「跨重启凭令牌恢复同一 UUID」。
+    // 内存索引未命中时原子消费持久化摘要：服务重启后摘要索引为空，
+    // 只有一个并发请求能把旧摘要 CAS 为新摘要，成功者得到新的明文令牌。
     // （房间席位不恢复：进行中局在重启时已被作废，恢复后回到大厅。）
     if (!recovering && input.recoveryToken) {
-      const record = this.context.repositories.players.findByToken(input.recoveryToken)
-      const withinGrace =
-        record?.disconnectedAt !== undefined &&
-        this.context.clock.now() - record.disconnectedAt <= APP_CONFIG.network.reconnectGraceMs
-      if (record && withinGrace) {
+      const nextToken = this.context.random.token(32)
+      const record = this.context.repositories.players.consumeRecoveryToken(
+        recoveryTokenDigest!,
+        digestRecoveryToken(nextToken),
+        this.context.clock.now() - APP_CONFIG.network.reconnectGraceMs,
+      )
+      if (record) {
         const restored = this.restorePlayerFromRecord(record)
-        if (restored) return this.reclaimPlayer(socket, restored)
+        if (restored) return this.reclaimPlayer(socket, restored, nextToken)
       }
     }
     // 同一连接上重复注册（典型路径：注册 ack 超时后客户端未存到令牌、用户再点一次“进入”）
@@ -103,18 +106,16 @@ export class SessionService {
     if (bound && bound.socketId === socket.id) {
       bound.preferences = input.preferences
       this.context.logger.info({ playerId: bound.id }, '玩家在同一连接上重复注册，已复用身份')
-      return {
-        player: this.context.toPublicPlayer(bound),
-        recoveryToken: bound.token,
-        restored: true,
-      }
+      return this.rotateAndReclaimPlayer(socket, bound)
     }
     // 公开 playerId 绝不能用于恢复身份，否则大厅中的任意玩家都可据此接管他人座位。
     // 全新注册：生成随机昵称去重、UUID 身份、随机恢复令牌
     const nickname = this.makeUniqueNickname(this.cleanNickname(input.profile.nickname))
+    const playerId = this.context.random.uuid()
+    const recoveryToken = this.context.random.token(32)
     const player: PlayerSecret = {
-      id: this.context.random.uuid(),
-      token: this.context.random.token(32),
+      id: playerId,
+      tokenDigest: digestRecoveryToken(recoveryToken),
       profile: { nickname, avatarId: input.profile.avatarId },
       preferences: input.preferences,
       socket,
@@ -132,12 +133,12 @@ export class SessionService {
     this.context.persistPlayer(player)
     socket.data.playerId = player.id
     this.context.players.set(player.id, player)
-    this.context.playersByToken.set(player.token, player)
+    this.context.playersByTokenDigest.set(player.tokenDigest, player)
     this.context.logger.info({ playerId: player.id }, '玩家会话已注册')
     this.context.broadcastPresence()
     return {
       player: this.context.toPublicPlayer(player),
-      recoveryToken: player.token,
+      recoveryToken,
       restored: false,
     }
   }
@@ -148,7 +149,7 @@ export class SessionService {
       return undefined
     const player: PlayerSecret = {
       id: record.id,
-      token: record.token,
+      tokenDigest: record.tokenDigest,
       profile: {
         nickname: record.nickname,
         avatarId: record.avatarId as PlayerSecret['profile']['avatarId'],
@@ -169,29 +170,46 @@ export class SessionService {
       privateJoinAttemptTimes: [],
     }
     this.context.players.set(player.id, player)
-    this.context.playersByToken.set(player.token, player)
+    this.context.playersByTokenDigest.set(player.tokenDigest, player)
     this.context.logger.info({ playerId: player.id }, '玩家身份已从持久化记录恢复')
     return player
   }
 
-  recoverOnStartup(): void {
-    // 作废全部进行中房间：对局在内存，重启即数据丢失，作废关闭避免残留。
-    // 必须在清理过期玩家之前执行，确保 room_members 从表先清空，避免外键依赖阻碍玩家清理。
-    for (const room of this.context.repositories.rooms.listRooms()) {
-      this.context.repositories.rooms.removeRoom(room.id)
+  private rotateAndReclaimPlayer(
+    socket: Socket,
+    player: PlayerSecret,
+  ): Omit<SessionRegistration, 'room'> {
+    const previousTokenDigest = player.tokenDigest
+    const nextToken = this.context.random.token(32)
+    const nextTokenDigest = digestRecoveryToken(nextToken)
+    this.context.playersByTokenDigest.delete(previousTokenDigest)
+    player.tokenDigest = nextTokenDigest
+    try {
+      this.context.persistPlayer(player)
+    } catch (error) {
+      player.tokenDigest = previousTokenDigest
+      this.context.playersByTokenDigest.set(previousTokenDigest, player)
+      throw error
     }
-    this.context.repositories.players.clearAllRoomIds()
+    this.context.playersByTokenDigest.set(nextTokenDigest, player)
+    return this.reclaimPlayer(socket, player, nextToken)
+  }
 
+  recoverOnStartup(): void {
     // 先清理「上一次运行前就已超过恢复宽限期」的过期身份行，防止 players 表随重启无限增长；
     // 再把剩余行（含崩溃时 connected=1 的行）全部标记为断线，给它们一个全新的恢复宽限窗口。
     this.context.repositories.players.deleteStaleDisconnected(
       this.context.clock.now() - APP_CONFIG.network.reconnectGraceMs,
     )
-    // 全部玩家视为断线，开始身份宽限计时（宽限期由 APP_CONFIG.network.reconnectGraceMs 定义）。
+    // 房间从不跨进程恢复；全部玩家视为断线并清除旧版 room_id，开始新的身份宽限计时。
     this.context.repositories.players.markAllDisconnected(this.context.clock.now())
   }
 
-  private reclaimPlayer(socket: Socket, player: PlayerSecret): Omit<SessionRegistration, 'room'> {
+  private reclaimPlayer(
+    socket: Socket,
+    player: PlayerSecret,
+    recoveryToken: string,
+  ): Omit<SessionRegistration, 'room'> {
     this.context.scheduler.clear(player.disconnectTimer)
     const previousSocket = player.socket
     // 必须先把身份指向新 socket，再断开旧连接；否则旧 socket 的 disconnect 若同步/抢先触发，
@@ -226,12 +244,12 @@ export class SessionService {
       socket.to(room.id).emit(EVENTS.roomMemberConnectionChanged, createServerPush(payload))
     }
     delete player.drawingDisconnectRoomId
-    // 重新上线：持久化连接状态与房间归属，保证跨重启宽限判断正确。
+    // 重新上线：只持久化连接状态；房间归属始终由当前进程内模型维护。
     this.context.persistPlayer(player)
     this.context.broadcastPresence()
     return {
       player: this.context.toPublicPlayer(player),
-      recoveryToken: player.token,
+      recoveryToken,
       restored: true,
     }
   }
@@ -250,7 +268,7 @@ export class SessionService {
           }
         }
         this.context.players.delete(playerId)
-        this.context.playersByToken.delete(player.token)
+        this.context.playersByTokenDigest.delete(player.tokenDigest)
         try {
           this.context.repositories.players.remove(playerId)
         } catch (err) {
@@ -400,7 +418,7 @@ export class SessionService {
     if (player.roomId)
       this.context.leaveRoom(playerId, serverStrings.notices.playerReconnectedTimeout)
     this.context.players.delete(player.id)
-    this.context.playersByToken.delete(player.token)
+    this.context.playersByTokenDigest.delete(player.tokenDigest)
     // 身份宽限结束：从数据库删除该玩家记录（后续需重建身份）。
     this.context.repositories.players.remove(player.id)
     this.context.broadcastPresence()

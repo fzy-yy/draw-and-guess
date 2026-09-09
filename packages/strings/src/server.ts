@@ -2,6 +2,8 @@
  * 服务端产生的、展示在玩家界面上的文案（经 ack 错误、systemNotice、聊天消息、
  * roomClosed 原因等事件到达客户端）。仅在使用时注入动态占位（昵称、数值）。
  */
+import type { ErrorCode } from '@draw-guess/shared'
+
 export const serverStrings = {
   /* ---- 请求错误提示（GameError message，经 ack 返回客户端 Toast）---- */
   errors: {
@@ -64,6 +66,7 @@ export const serverStrings = {
     INVALID_MESSAGE_PRESET: '该互动短语不在安全列表中',
     STALE_DRAW_EVENT_STROKE: '绘图包已过期或重复',
     STALE_DRAW_EVENT_FILL: '填充命令已过期或重复',
+    STALE_DRAWING_CONTEXT: '绘图上下文已失效，请等待权威状态同步',
     INVALID_DRAW_STYLE: '画笔颜色或线宽无效',
     INVALID_FILL: '填充颜色无效',
     PAUSE_DISABLED: '本房间未开启暂停权限',
@@ -82,7 +85,6 @@ export const serverStrings = {
     PRIVATE_CODE_EXHAUSTED: '私密房间码生成失败，请重试',
     ROOM_FULL: '房间已经满员，请加入其他房间',
     GAME_IN_PROGRESS_FORBID: '本房间不允许中途加入，请等待下一局',
-    GAME_IN_PROGRESS_NEXT: '游戏进行中，请等待下一局开始后再加入',
     UNKNOWN_FAILURE: '服务暂时不可用，请稍后重试',
   },
 
@@ -128,3 +130,56 @@ export const serverStrings = {
     tooManyWords: (size: number, max: number) => `有效词条共 ${size} 个，最多支持 ${max} 个`,
   },
 } as const
+
+/** 每个公开错误码都有安全、无内部细节的默认文案；业务路径仍可选择更具体的场景文案。 */
+export const serverErrorMessages = {
+  ALREADY_GUESSED: serverStrings.errors.ALREADY_GUESSED,
+  ALREADY_IN_ROOM: serverStrings.errors.ALREADY_IN_ROOM,
+  DRAW_BUDGET_EXCEEDED: serverStrings.errors.DRAW_BUDGET_EXCEEDED,
+  DRAWER_CANNOT_GUESS: serverStrings.errors.DRAWER_CANNOT_GUESS,
+  DUPLICATE_NICKNAME: serverStrings.errors.DUPLICATE_NICKNAME,
+  FORBIDDEN: serverStrings.errors.FORBIDDEN,
+  GAME_ALREADY_LEFT: serverStrings.errors.GAME_ALREADY_LEFT,
+  GAME_IN_PROGRESS: serverStrings.errors.GAME_IN_PROGRESS_FORBID,
+  INTERNAL_ERROR: serverStrings.errors.UNKNOWN_FAILURE,
+  INVALID_AVATAR_ID: serverStrings.errors.INVALID_AVATAR_ID,
+  INVALID_DRAW_STYLE: serverStrings.errors.INVALID_DRAW_STYLE,
+  INVALID_FILL: serverStrings.errors.INVALID_FILL,
+  INVALID_MESSAGE: serverStrings.errors.INVALID_MESSAGE_EMPTY,
+  INVALID_NICKNAME: serverStrings.errors.INVALID_NICKNAME(1, 20),
+  INVALID_PAYLOAD: serverStrings.errors.INVALID_PAYLOAD,
+  INVALID_PHASE: serverStrings.errors.INVALID_PHASE_READY,
+  INVALID_SETTINGS: serverStrings.errors.INVALID_SETTINGS,
+  INVALID_TARGET: serverStrings.errors.INVALID_TARGET_SELF,
+  INVALID_TRANSITION: serverStrings.errors.INVALID_TRANSITION('当前阶段', '目标阶段'),
+  INVALID_WORD_ID: serverStrings.errors.INVALID_WORD_ID,
+  INVITE_EXPIRED: serverStrings.errors.INVITE_EXPIRED,
+  NOT_ALL_READY: serverStrings.errors.NOT_ALL_READY,
+  NOT_DRAWER: serverStrings.errors.NOT_DRAWER,
+  NOT_ENOUGH_PLAYERS: serverStrings.errors.NOT_ENOUGH_PLAYERS,
+  NOT_FOUND: serverStrings.errors.VOCABULARY_PACKAGE_NOT_FOUND,
+  NOT_IN_ROOM: serverStrings.errors.NOT_IN_ROOM,
+  NO_GAME: serverStrings.errors.NO_GAME,
+  PAUSE_DISABLED: serverStrings.errors.PAUSE_DISABLED,
+  PHASE_EXPIRED: serverStrings.errors.PHASE_EXPIRED,
+  PRIVATE_CODE_EXHAUSTED: serverStrings.errors.PRIVATE_CODE_EXHAUSTED,
+  PRIVATE_ROOM_HIDDEN: serverStrings.errors.ROOM_NOT_FOUND,
+  PRIVATE_ROOM_NOT_FOUND: serverStrings.errors.PRIVATE_ROOM_NOT_FOUND,
+  PROFILE_LOCKED: serverStrings.errors.PROFILE_LOCKED,
+  PROTOCOL_MISMATCH: serverStrings.errors.PROTOCOL_MISMATCH,
+  RATE_LIMITED: serverStrings.errors.RATE_LIMITED,
+  REROLL_ALREADY_USED: serverStrings.errors.REROLL_ALREADY_USED,
+  REROLL_DISABLED: serverStrings.errors.REROLL_DISABLED,
+  ROOM_FULL: serverStrings.errors.ROOM_FULL,
+  ROOM_NOT_FOUND: serverStrings.errors.ROOM_NOT_FOUND,
+  ROOM_NOT_JOINABLE: serverStrings.errors.ROOM_NOT_JOINABLE_INVITE,
+  SETTINGS_LOCKED: serverStrings.errors.SETTINGS_LOCKED_UPDATE,
+  SPECTATOR_CANNOT_CHAT: serverStrings.errors.SPECTATOR_CANNOT_CHAT,
+  SPECTATOR_CANNOT_GUESS: serverStrings.errors.SPECTATOR_CANNOT_GUESS,
+  STALE_DRAW_EVENT: serverStrings.errors.STALE_DRAW_EVENT_STROKE,
+  STALE_DRAWING_CONTEXT: serverStrings.errors.STALE_DRAWING_CONTEXT,
+  TARGET_UNAVAILABLE: serverStrings.errors.TARGET_UNAVAILABLE,
+  UNAUTHORIZED: serverStrings.errors.UNAUTHORIZED,
+  VERSION_CONFLICT: serverStrings.errors.VERSION_CONFLICT_SETTINGS,
+  VOCABULARY_TOO_SMALL: serverStrings.errors.VOCABULARY_TOO_SMALL(1),
+} satisfies Record<ErrorCode, string>

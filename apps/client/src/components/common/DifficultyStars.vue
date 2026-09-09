@@ -4,20 +4,19 @@
   - 选词面板：候选词按钮下方展示该词难度；
   - 词库管理表格：难度列内展示；
   - 后续任何需要「数值星级」的场景均可复用（颜色与尺寸由调用处按上下文传入）。
-  难度上限取自 @draw-guess/config 的 ui.difficultyMax，组件内不硬编码。
+  难度上限由调用方注入，组件不读取业务配置。
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Star } from 'lucide-vue-next'
-import { PUBLIC_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 
 const props = withDefaults(
   defineProps<{
     /** 当前难度值（1~max） */
     value: number
-    /** 难度上限；缺省用全局配置（避免组件内硬编码） */
-    max?: number
+    /** 难度上限，由领域容器注入。 */
+    max: number
     /** 无障碍标签；缺省用统一文案「难度 n 星」 */
     ariaLabel?: string
     /**
@@ -33,7 +32,6 @@ const props = withDefaults(
     tone?: 'yellow' | 'navy'
   }>(),
   {
-    max: PUBLIC_CONFIG.ui.difficultyMax,
     ariaLabel: undefined,
     exact: false,
     tone: 'yellow',
@@ -50,7 +48,7 @@ const positions = computed(() =>
 )
 // 实心星/空心星配色：随 tone 切换；navy 用于黄色底，yellow 用于白/浅色底
 const filledClass = computed(() =>
-  props.tone === 'navy' ? 'fill-navy text-navy' : 'fill-yellow text-yellow',
+  props.tone === 'navy' ? 'fill-navy text-navy' : 'fill-warning-fg text-warning-fg',
 )
 const emptyClass = computed(() => (props.tone === 'navy' ? 'text-navy/30' : 'text-muted'))
 </script>

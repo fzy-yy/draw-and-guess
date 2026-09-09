@@ -35,8 +35,52 @@ describe('SessionService 与 Facade 契约', () => {
     expect(harness.service.requirePlayer(second.playerId).connected).toBe(true)
     harness.service.session.logout(second.socket as never)
     expect(harness.service.players.size).toBe(0)
-    expect(harness.service.playersByToken.size).toBe(0)
+    expect(harness.service.playersByTokenDigest.size).toBe(0)
     expect(second.socket.data.playerId).toBeUndefined()
     expect(second.socket.data.requestCache).toEqual(new Map())
+  })
+
+  it('并发恢复只有一个请求能接管原身份，且每次成功后旧令牌立即失效', async () => {
+    const original = createGameHarness()
+    const player = original.register('并发恢复')
+    original.service.handleDisconnect(player.socket as never)
+
+    const first = createGameHarness({
+      runtime: original.runtime,
+      repositories: original.repositories,
+    })
+    const second = createGameHarness({
+      runtime: original.runtime,
+      repositories: original.repositories,
+    })
+    const [firstResult, secondResult] = await Promise.all([
+      Promise.resolve().then(() =>
+        first.register('首次竞争', 'recovery-first', player.recoveryToken),
+      ),
+      Promise.resolve().then(() =>
+        second.register('第二次竞争', 'recovery-second', player.recoveryToken),
+      ),
+    ])
+
+    const winners = [firstResult, secondResult].filter(
+      (result) => result.playerId === player.playerId,
+    )
+    expect(winners).toHaveLength(1)
+    expect(winners[0]?.recoveryToken).not.toBe(player.recoveryToken)
+
+    const retry = createGameHarness({
+      runtime: original.runtime,
+      repositories: original.repositories,
+    }).register('旧令牌重试', 'recovery-retry', player.recoveryToken)
+    expect(retry.playerId).not.toBe(player.playerId)
+
+    const winnerHarness = firstResult.playerId === player.playerId ? first : second
+    const rotatedAgain = winnerHarness.register(
+      '再次恢复',
+      'recovery-rotated',
+      winners[0]!.recoveryToken,
+    )
+    expect(rotatedAgain.playerId).toBe(player.playerId)
+    expect(rotatedAgain.recoveryToken).not.toBe(winners[0]!.recoveryToken)
   })
 })

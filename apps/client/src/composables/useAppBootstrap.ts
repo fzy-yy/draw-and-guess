@@ -3,24 +3,18 @@ import { APP_CONFIG } from '@draw-guess/config'
 import { strings, serverStrings } from '@draw-guess/strings'
 import { EVENTS, type MemberConnectionChange, type ServerPushEventName } from '@draw-guess/shared'
 import type { InvalidPushReason } from '@/stores/push-protocol'
-import { notify } from '@/composables/useToasts'
+import { useGameTransport, type GameTransport } from '@/application/game-transport'
 import { useLobbyStore } from '@/stores/lobby'
 import { useProfileStore } from '@/stores/profile'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
-import { attachSocketListeners, socket } from '@/stores/socket'
-import type { Socket } from 'socket.io-client'
 import { useSettingsStore } from '@/stores/settings'
 import { useVocabularyStore } from '@/stores/vocabulary'
 import { useRoomSync } from './useRoomSync'
 
 /** 应用级 Socket、恢复、ping 与 HMR 生命周期；start/stop 均幂等。 */
-export function useAppBootstrap(
-  socketLifecycle: {
-    socket: Socket
-    attach: typeof attachSocketListeners
-  } = { socket, attach: attachSocketListeners },
-) {
+export function useAppBootstrap(transport: GameTransport = useGameTransport()) {
+  const { notify } = transport
   const profileStore = useProfileStore()
   const settingsStore = useSettingsStore()
   const sessionStore = useSessionStore()
@@ -86,7 +80,7 @@ export function useAppBootstrap(
 
   function start(): void {
     if (detachListeners) return
-    detachListeners = socketLifecycle.attach({
+    detachListeners = transport.attach({
       onConnect: handleConnect,
       onDisconnect: (reason) => {
         sessionStore.connected = false
@@ -118,7 +112,7 @@ export function useAppBootstrap(
       onIoError: () => {
         sessionStore.connectionLabel = strings.connection.unstable
         if (
-          !socketLifecycle.socket.connected &&
+          !transport.socket.connected &&
           (sessionStore.playerId || profileStore.profile.recoveryToken)
         )
           sessionStore.sessionState = 'disconnected'
@@ -148,8 +142,8 @@ export function useAppBootstrap(
       onDrawFillCommit: roomSync.onFill,
     })
     // 所有具名监听器注册完成后才允许连接，快速 connect/push 不会越过初始化窗口。
-    if (socketLifecycle.socket.connected) handleConnect()
-    else socketLifecycle.socket.connect()
+    if (transport.socket.connected) handleConnect()
+    else transport.connect()
     settingsStore.saveSettings(sessionStore.playerId)
     pingTimer = window.setInterval(
       () => void sessionStore.measureLatency(),
@@ -163,7 +157,7 @@ export function useAppBootstrap(
     sessionStore.clearRestoreRetry()
     detachListeners?.()
     detachListeners = undefined
-    socketLifecycle.socket.disconnect()
+    transport.disconnect()
     sessionStore.connected = false
   }
 

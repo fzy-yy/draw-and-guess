@@ -30,6 +30,27 @@ test.describe('02 - 大厅房间与席位网格 (Lobby, Room & Seats)', () => {
     }
   })
 
+  test('房主保存规则后，全员准备状态由服务端统一失效', async ({ browser }) => {
+    const host = await createPlayer(browser, '规则房主')
+    const guest = await createPlayer(browser, '规则客人')
+
+    try {
+      const roomName = `规则失效-${Date.now()}`
+      await host.lobby.createRoom({ name: roomName, visibility: 'public' })
+      await guest.lobby.joinPublicRoom(roomName)
+      await guest.room.toggleReady()
+      await expect(host.page.getByRole('button', { name: /开始游戏/ })).toBeEnabled()
+
+      await host.room.updateChooseSeconds(20)
+
+      await expect(host.page.getByRole('button', { name: /开始游戏/ })).toBeDisabled()
+      await expect(guest.page.getByRole('button', { name: /我准备好了/ })).toBeVisible()
+    } finally {
+      await host.close()
+      await guest.close()
+    }
+  })
+
   test('私密房间生成专属短码，外部玩家凭借房间码成功加入', async ({ browser }) => {
     const host = await createPlayer(browser, '私密房主')
     const guest = await createPlayer(browser, '输入码客人')

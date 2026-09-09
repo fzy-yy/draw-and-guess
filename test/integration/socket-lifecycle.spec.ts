@@ -10,6 +10,11 @@ import { useLobbyStore } from '@/stores/lobby'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
 import { attachSocketListeners, disposeSocketLifecycle, type SocketHandlers } from '@/stores/socket'
+import {
+  createGameTransport,
+  installGameTransport,
+  type GameTransport,
+} from '@/application/game-transport'
 
 const transport = vi.hoisted(() => {
   type Listener = (...args: unknown[]) => void
@@ -109,6 +114,7 @@ const transport = vi.hoisted(() => {
 
 const wrappers: VueWrapper[] = []
 let pinia: Pinia
+let gameTransport: GameTransport
 
 function handlers(): SocketHandlers {
   return {
@@ -136,10 +142,7 @@ function mountBootstrap() {
   const wrapper = mount(
     defineComponent({
       setup() {
-        bootstrap = useAppBootstrap({
-          socket: transport.socket as never,
-          attach: (handlers) => attachSocketListeners(handlers, transport.socket as never),
-        })
+        bootstrap = useAppBootstrap(gameTransport)
         return () => h('div')
       },
     }),
@@ -150,15 +153,16 @@ function mountBootstrap() {
 }
 
 beforeEach(() => {
-  disposeSocketLifecycle(transport.socket as never)
   transport.reset()
   pinia = createPinia()
+  gameTransport = createGameTransport({ socket: transport.socket as never, notify: vi.fn() })
+  installGameTransport(pinia, gameTransport)
   setActivePinia(pinia)
 })
 
 afterEach(() => {
   wrappers.splice(0).forEach((wrapper) => wrapper.unmount())
-  disposeSocketLifecycle(transport.socket as never)
+  gameTransport.destroy()
 })
 
 describe('Socket 显式连接生命周期', () => {

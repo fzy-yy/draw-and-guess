@@ -256,8 +256,20 @@ export class RoundMachine {
       delete game.pausedRemainingMs
     }
     if (room.phase !== 'game_result') this.service.transition(room, 'game_result')
-    game.phaseStartedAt = this.service.clock.now()
-    game.phaseEndsAt = 0
+    const now = this.service.clock.now()
+    const minimumResultMs = APP_CONFIG.game.gameResultMinSeconds * 1_000
+    // 即使未来配置误把自动上限设得更短，也绝不能绕过产品定义的最短展示期。
+    const autoReturnMs = Math.max(
+      minimumResultMs,
+      APP_CONFIG.game.gameResultAutoReturnSeconds * 1_000,
+    )
+    game.phaseStartedAt = now
+    game.gameResultMinEndsAt = now + minimumResultMs
+    game.phaseEndsAt = now + autoReturnMs
+    game.hostReturnRequested = false
+    room.members.forEach((member) => {
+      member.rematchReady = false
+    })
     // 收敛回合显示：beginChoosing 先自增 currentRound 再判断是否超限，进入最终结算时
     // 回退到总回合数，避免结算界面 HUD 短暂显示「5 / 4」这类越界数字。
     game.currentRound = Math.min(game.currentRound, game.totalRounds)
@@ -269,6 +281,18 @@ export class RoundMachine {
     } catch (err) {
       this.service.logger.error({ err, roomId: room.id }, '战绩落盘失败，已保障结算广播正常进行')
     }
+    // 最短展示期到点后统一评估全员/房主意愿；自动返回上限到点则无条件收敛到 waiting。
+    game.rematchTimer = this.service.scheduler.set(minimumResultMs, () =>
+      this.service.safeRun('gameResultMinimumElapsed', () => this.evaluateRematch(room)),
+    )
+    game.timer = this.service.scheduler.set(autoReturnMs, () =>
+      this.service.safeRun('gameResultAutoReturn', () => {
+        if (room.phase === 'game_result') {
+          this.setWaiting(room, serverStrings.notices.backToRoom)
+          this.service.broadcastPresence()
+        }
+      }),
+    )
     this.service.emitRoom(room.id)
     this.service.broadcastPresence()
   }
@@ -317,9 +341,60 @@ export class RoundMachine {
     this.service.transition(room, 'waiting')
     if (game) this.service.clearHintTimers(game)
     this.service.scheduler.clear(game?.timer)
+    this.service.scheduler.clear(game?.rematchTimer)
     delete room.game
+    room.members = room.members.filter((member) => !member.leftGame)
+    room.members.forEach((member, index) => {
+      member.seatIndex = index
+    })
+    // next_game 候场成员只在真正进入下一局 waiting 时晋升；纯观战成员保持观战。
+    room.members.forEach((member) => {
+      member.rematchReady = false
+      if (!member.waitingForNextGame) return
+      member.waitingForNextGame = false
+      member.spectating = false
+      member.ready = false
+      member.score = 0
+      member.guessedAt = undefined
+      member.stats = { correctCount: 0, totalGuessMs: 0, drawingCorrectCount: 0 }
+    })
     if (resetReady) this.service.invalidateReady(room, notice, 'preserve')
     else this.service.addSystemNotice(room, notice)
+    this.service.emitRoom(room.id)
+  }
+
+  /** 记录单个成员的再来一局意愿；重复和阶段迟到请求均按成功处理。 */
+  public requestRematch(room: RoomSecret, member: MemberState): void {
+    if (room.phase !== 'game_result' || !room.game) return
+    if (member.leftGame || (member.spectating && !member.waitingForNextGame)) return
+    if (!member.rematchReady) {
+      member.rematchReady = true
+      room.stateVersion += 1
+    }
+    if (room.hostId === member.playerId) room.game.hostReturnRequested = true
+    this.evaluateRematch(room)
+  }
+
+  /** 最短展示期后，房主请求或全部下一局有效成员就绪时一次性回到 waiting。 */
+  public evaluateRematch(room: RoomSecret): void {
+    const game = room.game
+    if (room.phase !== 'game_result' || !game || game.gameResultMinEndsAt === undefined) return
+    if (this.service.clock.now() < game.gameResultMinEndsAt) {
+      this.service.emitRoom(room.id)
+      return
+    }
+    const eligible = room.members.filter(
+      (member) => !member.leftGame && (!member.spectating || member.waitingForNextGame),
+    )
+    if (
+      game.hostReturnRequested ||
+      (eligible.length > 0 && eligible.every((member) => member.rematchReady))
+    ) {
+      this.setWaiting(room, serverStrings.notices.backToRoom)
+      this.service.broadcastPresence()
+      return
+    }
+    // 最短期结束但尚未满足转换条件时刷新一次，让新房主的全局返回按钮解锁。
     this.service.emitRoom(room.id)
   }
   /**

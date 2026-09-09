@@ -32,6 +32,7 @@ import {
 } from '@draw-guess/shared'
 import type { Server, Socket } from 'socket.io'
 import { APP_CONFIG } from './config/index.ts'
+import { createRoomSettings } from '@draw-guess/config'
 import { serverStrings } from '@draw-guess/strings'
 import { RoomPublisher } from './application/room-publisher.ts'
 import { DomainContext } from './domain/domain-context.ts'
@@ -41,7 +42,7 @@ import { RoomVocabularyService } from './domain/vocabulary/room-vocabulary-servi
 import { GameError, SILENT_LOGGER, type RuntimeLogger } from './errors.ts'
 import type { GameSecret, MemberState, PlayerSecret, RoomSecret } from './models.ts'
 import { enforceEventRate } from './rate-limit.ts'
-import type { ArchiveRepository, PlayerRepository, RoomRepository } from './repositories/index.ts'
+import type { ArchiveRepository, PlayerRepository } from './repositories/index.ts'
 import { validateRoomSettings } from './room-settings.ts'
 import { RoundMachine } from './round-machine.ts'
 import { SYSTEM_RUNTIME, type RuntimeDependencies } from './runtime.ts'
@@ -50,23 +51,7 @@ import type { VocabularyRegistry, VocabularyStore } from './vocabulary/index.ts'
 
 /** 默认房间规则只从根级配置生成，避免处理器中出现另一套默认值。 */
 export function createDefaultRoomSettings(): RoomSettings {
-  return {
-    maxPlayers: APP_CONFIG.player.defaultMaxPlayers,
-    roundsPerPlayer: APP_CONFIG.game.roundsPerPlayer.default,
-    drawSeconds: APP_CONFIG.game.drawSeconds.default,
-    chooseSeconds: APP_CONFIG.game.chooseSeconds.default,
-    optionCount: APP_CONFIG.game.optionCount.default,
-    showWordLength: APP_CONFIG.game.showWordLength,
-    progressiveHints: APP_CONFIG.game.progressiveHints,
-    structuredHintsEnabled: APP_CONFIG.game.structuredHintsEnabled,
-    hintStartRatio: APP_CONFIG.game.hintStartRatio,
-    guessBaseScore: APP_CONFIG.game.score.guessBase,
-    scoreMode: APP_CONFIG.game.scoreMode,
-    allowPlayerInvite: APP_CONFIG.room.allowPlayerInvite,
-    allowPause: APP_CONFIG.room.allowPause,
-    allowWordReroll: APP_CONFIG.game.allowWordReroll,
-    joinPolicy: APP_CONFIG.room.joinPolicy,
-  }
+  return createRoomSettings('standard', APP_CONFIG.player.defaultMaxPlayers)
 }
 
 /**
@@ -78,7 +63,7 @@ export class GameService {
   readonly persistence: RoomPersistenceCoordinator
   readonly domain = new DomainContext()
   readonly players = this.domain.players
-  readonly playersByToken = this.domain.playersByToken
+  readonly playersByTokenDigest = this.domain.playersByTokenDigest
   readonly rooms = this.domain.rooms
   /** 私密房间码到内部 UUID 的内存索引；房间关闭后立即回收。 */
   readonly roomsByPrivateCode = this.domain.roomsByPrivateCode
@@ -97,10 +82,9 @@ export class GameService {
   constructor(
     readonly io: Server,
     readonly vocabulary: VocabularyRegistry,
-    /** 持久化仓储（身份/房间/战报），由启动器注入 SQLite 实现，测试可注入内存实现。 */
+    /** 持久化仓储（短期身份/完成局战报），由启动器注入 SQLite 实现。 */
     readonly repositories: {
       players: PlayerRepository
-      rooms: RoomRepository
       archive: ArchiveRepository
     },
     readonly logger: RuntimeLogger = SILENT_LOGGER,
@@ -116,7 +100,7 @@ export class GameService {
       logger: this.logger,
       persistPlayer: (player) => this.persistence.persistPlayer(player),
       players: this.players,
-      playersByToken: this.playersByToken,
+      playersByTokenDigest: this.playersByTokenDigest,
       random: this.random,
       repositories: this.repositories,
       requirePlayer: (...args) => this.requirePlayer(...args),
@@ -136,16 +120,14 @@ export class GameService {
       emitRoom: (...args) => this.emitRoom(...args),
       emitRoomEvent: (roomId, event, payload) => this.io.to(roomId).emit(event, payload),
       emitToPlayer: (...args) => this.emitToPlayer(...args),
+      evaluateRematch: (...args) => this.round.evaluateRematch(...args),
       finishRound: (...args) => this.round.finishRound(...args),
       getRoomVocabularyStore: (...args) => this.getRoomVocabularyStore(...args),
       isPlaying: (...args) => this.isPlaying(...args),
       logger: this.logger,
       pauseRoomInternal: (...args) => this.round.pauseRoomInternal(...args),
-      persistPlayer: (player) => this.persistence.persistPlayer(player),
-      persistRoom: (room) => this.persistence.persistRoom(room),
       players: this.players,
       random: this.random,
-      repositories: this.repositories,
       requirePlayer: (...args) => this.requirePlayer(...args),
       rooms: this.rooms,
       roomsByPrivateCode: this.roomsByPrivateCode,
@@ -210,7 +192,6 @@ export class GameService {
       getHostRoom: (playerId) => this.requireHostRoom(playerId),
       getStore: (room) => this.getRoomVocabularyStore(room),
       addNotice: (room, text) => this.addSystemNotice(room, text),
-      persist: (room) => this.persistence.persistRoom(room),
       emitRoom: (roomId) => this.emitRoom(roomId),
     })
   }
@@ -276,7 +257,7 @@ export class GameService {
    * 启动恢复（服务重启时调用）：
    * - 全部持久化玩家标记为断线（connected=0，disconnected_at=now），身份与恢复令牌保留，
    *   客户端重启后仍可凭令牌在宽限期内恢复到同一 UUID；
-   * - 删除全部房间记录（进行中局是内存态，重启无法恢复，作废关闭是务实策略）。
+   * - 房间没有持久化记录，进程重启后自然回到空大厅。
    * 这样不会出现「重启后房间仍在库但无人可接管」的僵尸状态。
    */
   recoverOnStartup(): void {
@@ -372,7 +353,6 @@ export class GameService {
       })
     }
     this.invalidateReady(room, serverStrings.notices.rulesUpdated)
-    this.persistence.persistRoom(room)
     this.emitRoom(room.id)
     // maxPlayers 会显示在大厅房间行中，规则变更后需同步广播大厅快照，避免列表展示陈旧人数。
     this.broadcastPresence()
@@ -639,21 +619,10 @@ export class GameService {
     this.round.finishGame(room, serverStrings.notices.endEarlyByHost)
   }
 
-  /** 最终结算后返回等待阶段：释放本局秘密并让全员重新准备。
-   * 任意在线成员均可触发（与房主等效的全局转换）：避免结算后非房主只能退出房间。 */
+  /** 最终结算再来一局入口：普通成员只登记个人意愿，房主请求由状态机在最短展示期后全局执行。 */
   returnWaiting(playerId: string): void {
-    const { room } = this.requireMembership(playerId)
-    if (room.phase !== 'game_result')
-      throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_RETURN_WAITING)
-    this.scheduler.clear(room.game?.timer)
-    delete room.game
-    room.members = room.members.filter((member) => !member.leftGame)
-    this.transition(room, 'waiting')
-    this.invalidateReady(room, serverStrings.notices.backToRoom, 'preserve')
-    // 持久化：返回房间后成员集合与准备状态变化入库。
-    this.persistence.persistRoom(room)
-    this.emitRoom(room.id)
-    this.broadcastPresence()
+    const { room, member } = this.requireMembership(playerId)
+    this.round.requestRematch(room, member)
   }
 
   kick(playerId: string, targetId: string): void {

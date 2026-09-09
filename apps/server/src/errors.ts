@@ -2,14 +2,14 @@
  * 服务端错误类型与统一 ack 构造、运行日志接口。
  * 独立成文件避免游戏服务、回合流转、限频、协议绑定之间产生循环依赖。
  */
-import type { Ack } from '@draw-guess/shared'
-import { serverStrings } from '@draw-guess/strings'
+import { ERROR_CODES, type Ack, type ErrorCode } from '@draw-guess/shared'
+import { serverErrorMessages } from '@draw-guess/strings'
 
 /** 业务错误：带机器可读错误码，ack 回传时不会泄露内部堆栈。 */
 export class GameError extends Error {
   constructor(
-    public readonly code: string,
-    message: string,
+    public readonly code: ErrorCode,
+    message: string = serverErrorMessages[code],
   ) {
     super(message)
   }
@@ -34,9 +34,9 @@ export function failure(error: unknown, requestId: string): Ack<never> {
   return {
     ok: false,
     error: {
-      code: error instanceof GameError ? error.code : 'INTERNAL_ERROR',
+      code: error instanceof GameError ? error.code : ERROR_CODES.INTERNAL_ERROR,
       // 未知异常可能包含路径、库错误或内部状态，统一返回固定文案避免泄露。
-      message: error instanceof GameError ? error.message : serverStrings.errors.UNKNOWN_FAILURE,
+      message: error instanceof GameError ? error.message : serverErrorMessages.INTERNAL_ERROR,
     },
     requestId,
   }

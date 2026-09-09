@@ -7,6 +7,7 @@
 import { computed, ref, watch } from 'vue'
 import { strings } from '@draw-guess/strings'
 import type { RoomSettings } from '@draw-guess/shared'
+import { applyRoomPreset, matchingRoomPreset, type RoomPresetId } from '@draw-guess/config'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import SectionHeader from '@/components/common/SectionHeader.vue'
@@ -40,23 +41,51 @@ const joinPolicyOptions = [
   { value: 'spectate', label: strings.room.joinPolicySpectate },
   { value: 'next_game', label: strings.room.joinPolicyNextGame },
 ]
+const presetOptions = [
+  { value: 'custom', label: strings.room.presetCustom },
+  { value: 'standard', label: strings.room.presetStandard },
+  { value: 'relaxed', label: strings.room.presetRelaxed },
+  { value: 'speed', label: strings.room.presetSpeed },
+] satisfies Array<{ value: RoomPresetId | 'custom'; label: string }>
+const scoreModeOptions = [
+  { value: 'standard', label: strings.room.scoreModeStandard },
+  { value: 'flat', label: strings.room.scoreModeFlat },
+] satisfies Array<{ value: RoomSettings['scoreMode']; label: string }>
 
 // 本地编辑副本：所有字段均为原始值，浅拷贝即可；每次打开（draft 变化）时重新同步。
 const localDraft = ref<RoomSettings>({} as RoomSettings)
+const selectedPreset = ref<RoomPresetId | 'custom'>('standard')
 watch(
   () => props.draft,
   (draft) => {
-    if (draft) localDraft.value = { ...draft }
+    if (draft) {
+      localDraft.value = { ...draft }
+      selectedPreset.value = matchingRoomPreset(draft) ?? 'custom'
+    }
   },
   { immediate: true },
 )
+
+watch(
+  localDraft,
+  (draft) => {
+    selectedPreset.value = matchingRoomPreset(draft) ?? 'custom'
+  },
+  { deep: true },
+)
+
+function selectPreset(preset: RoomPresetId | 'custom'): void {
+  if (preset === 'custom') return
+  selectedPreset.value = preset
+  localDraft.value = applyRoomPreset(localDraft.value, preset)
+}
 </script>
 
 <template>
   <!-- 规则编辑表单：数值字段用滑块，开关用复选框；中途加入策略为下拉框 -->
   <BaseDialog
     v-model:open="open"
-    width-class="w-[56cqw]"
+    width-class="w-[68cqw]"
     labelledby="rules-title"
     :close-aria="strings.room.settingsCloseAria"
     @close="handleClose"
@@ -69,7 +98,15 @@ watch(
       ></SectionHeader>
     </template>
 
-    <div class="grid grid-cols-2 gap-[1.5cqh_1.8em] py-[2.2cqh] px-[2em]">
+    <div class="min-h-0 overflow-y-auto grid grid-cols-2 gap-[1.5cqh_1.8em] py-[2.2cqh] px-[2em]">
+      <RuleSelectField
+        :model-value="selectedPreset"
+        class="col-span-full"
+        :label="strings.room.presetField"
+        :options="presetOptions"
+        @update:model-value="selectPreset"
+      />
+
       <RuleSelectField
         v-model="localDraft.maxPlayers"
         :label="strings.room.maxPlayersField"
@@ -121,6 +158,62 @@ watch(
           :label="strings.room.toggleAllowWordReroll"
         />
       </div>
+
+      <details class="col-span-full rounded-[0.7em] border-[0.16cqh] border-line bg-paper p-[1em]">
+        <summary class="cursor-pointer font-bold text-blue">
+          {{ strings.room.advancedSettings }}
+        </summary>
+        <div class="mt-[1.5cqh] grid grid-cols-3 gap-[1.5cqh_1.4em]">
+          <RuleSliderField
+            v-model="localDraft.drawSeconds"
+            :label="strings.room.drawFallbackField"
+            :min="store.config.game.drawSeconds.min"
+            :max="store.config.game.drawSeconds.max"
+            :step="store.config.game.drawSeconds.step"
+            :display="strings.common.secondsUnit(localDraft.drawSeconds)"
+            :hint="strings.room.drawFallbackHint"
+          />
+          <RuleSliderField
+            v-model="localDraft.hintStartRatio"
+            :label="strings.room.hintStartRatioField"
+            :min="store.config.game.hintStartRatioRange.min"
+            :max="store.config.game.hintStartRatioRange.max"
+            :step="store.config.game.hintStartRatioRange.step"
+            :display="strings.room.hintStartRatioUnit(localDraft.hintStartRatio)"
+            :disabled="!localDraft.structuredHintsEnabled"
+          />
+          <RuleSliderField
+            v-model="localDraft.guessBaseScore"
+            :label="strings.room.guessBaseScoreField"
+            :min="store.config.game.score.guessBaseRange.min"
+            :max="store.config.game.score.guessBaseRange.max"
+            :step="store.config.game.score.guessBaseRange.step"
+            :display="strings.room.guessBaseScoreUnit(localDraft.guessBaseScore)"
+          />
+          <RuleSelectField
+            v-model="localDraft.scoreMode"
+            :label="strings.room.scoreModeField"
+            :options="scoreModeOptions"
+          />
+          <div class="flex flex-col gap-[0.8cqh]">
+            <RuleToggleField
+              v-model="localDraft.showWordLength"
+              :label="strings.room.toggleShowWordLength"
+            />
+            <RuleToggleField
+              v-model="localDraft.progressiveHints"
+              :label="strings.room.toggleProgressiveHints"
+            />
+          </div>
+          <div class="flex flex-col gap-[0.8cqh]">
+            <RuleToggleField
+              v-model="localDraft.structuredHintsEnabled"
+              :label="strings.room.toggleStructuredHints"
+            />
+            <RuleToggleField v-model="localDraft.allowPause" :label="strings.room.togglePause" />
+          </div>
+        </div>
+      </details>
     </div>
 
     <template #footer>

@@ -24,11 +24,12 @@ export class SnapshotBuilder {
   /** 为指定观看者生成裁剪后的房间快照（画家可见答案与候选词，结算阶段全员可见答案）。 */
   snapshot(room: RoomSecret, viewerId: string): RoomSnapshot {
     const game = room.game
-    const viewerIsDrawer = game?.drawerId === viewerId
     // 快照差分：若观看者已在线同步全部绘图增量（lastSyncedSeq 追平 lastSequence），
     // 快照用空数组 + strokesOmitted 标记省略画布历史，由客户端沿用本地已有笔画，降低序列化开销。
     const viewerMember = room.members.find((member) => member.playerId === viewerId)
     if (!viewerMember) throw new GameError('NOT_IN_ROOM', serverStrings.errors.NOT_IN_ROOM)
+    // 候场/观战身份永远不能获得画家答案权限；即使异常状态下 ID 碰巧与 drawerId 相同也要裁剪。
+    const viewerIsDrawer = !viewerMember.spectating && game?.drawerId === viewerId
     const canOmitStrokes =
       Boolean(game) &&
       game!.strokes.length > 0 &&
@@ -97,6 +98,13 @@ export class SnapshotBuilder {
           messages: game.messages.slice(-APP_CONFIG.ui.recentMessageCount),
           ...(game.roundResult ? { roundResult: game.roundResult } : {}),
           ...(game.finalRanking ? { finalRanking: game.finalRanking } : {}),
+          ...(room.phase === 'game_result' && game.gameResultMinEndsAt !== undefined
+            ? {
+                gameResultMinEndsAt: game.gameResultMinEndsAt,
+                canReturnWaiting:
+                  room.hostId === viewerId && this.service.clock.now() >= game.gameResultMinEndsAt,
+              }
+            : {}),
         }
       : undefined
     return {
@@ -134,9 +142,11 @@ export class SnapshotBuilder {
           ready: room.hostId === member.playerId || member.ready,
           score: member.score,
           isHost: room.hostId === member.playerId,
-          isDrawer: game?.drawerId === member.playerId,
+          isDrawer: !member.spectating && game?.drawerId === member.playerId,
           guessed: Boolean(member.guessedAt),
           spectating: Boolean(member.spectating),
+          waitingForNextGame: Boolean(member.waitingForNextGame),
+          rematchReady: Boolean(member.rematchReady),
           leftGame: Boolean(member.leftGame),
           connection: member.leftGame ? 'left' : player!.connected ? 'online' : 'reconnecting',
           stats: member.stats,

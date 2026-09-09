@@ -40,7 +40,7 @@ describe('房间阶段转换边界', () => {
     expect(room.phase).toBe('choosing_word')
   })
 
-  it('暂停中提前结束可直接进入最终结算并取消全部倒计时', () => {
+  it('暂停中提前结束可直接进入最终结算并只保留结算退出计时器', () => {
     const { harness, host, room, game } = enterDrawing()
     harness.service.pause(host.playerId, '暂停后提前结束')
     const pausedVersion = room.stateVersion
@@ -51,7 +51,7 @@ describe('房间阶段转换边界', () => {
     expect(room.stateVersion).toBe(pausedVersion + 1)
     expect(game.phaseBeforePause).toBeUndefined()
     expect(game.pausedRemainingMs).toBeUndefined()
-    expect(harness.runtime.pendingTimerCount()).toBe(0)
+    expect(harness.runtime.pendingTimerCount()).toBe(2)
     expect(harness.repositories.archive.games).toHaveLength(1)
   })
 
@@ -82,16 +82,18 @@ describe('房间阶段转换边界', () => {
     expect(room.phase).toBe('waiting')
   })
 
-  it('最终结算返回等待只递增一次阶段版本并清理对局', () => {
+  it('房主请求在最短展示期结束后返回等待并清理对局', () => {
     const { harness, host, room } = enterDrawing()
     harness.service.endEarly(host.playerId)
     room.members.forEach((member) => (member.ready = true))
     const resultVersion = room.stateVersion
 
     harness.service.returnWaiting(host.playerId)
+    expect(room.phase).toBe('game_result')
+    harness.runtime.advance(APP_CONFIG.game.gameResultMinSeconds * 1_000)
 
     expect(room.phase).toBe('waiting')
-    expect(room.stateVersion).toBe(resultVersion + 1)
+    expect(room.stateVersion).toBe(resultVersion + 2)
     expect(room.game).toBeUndefined()
     expect(room.members.every((member) => !member.ready)).toBe(true)
     expect(harness.runtime.pendingTimerCount()).toBe(0)
@@ -113,7 +115,6 @@ describe('房间阶段转换边界', () => {
     expect(room.phase).toBe('closed')
     expect(room.stateVersion).toBe(waitingVersion + 2)
     expect(harness.service.rooms.has(room.id)).toBe(false)
-    expect(harness.repositories.rooms.listRooms()).toHaveLength(0)
     expect(host.socket.rooms.has(room.id)).toBe(false)
   })
 

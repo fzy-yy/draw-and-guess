@@ -5,7 +5,7 @@ import {
   type VocabularyPackageInfo,
   type VocabularyWord,
 } from '@draw-guess/shared'
-import type { DataTableColumn } from '@/components/common/DataTable.vue'
+import type { DataTableColumn } from '@/components/common/data-table.types'
 import { useTableSort } from './useTableSort'
 
 const SEARCH_SEPARATOR = String.fromCharCode(0)

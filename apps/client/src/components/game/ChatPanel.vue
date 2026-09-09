@@ -173,7 +173,7 @@ watch(
                 v-for="reaction in store.config.presets.chatReactions"
                 :key="reaction"
                 type="button"
-                class="grid h-[4.2cqh] w-[4.2cqh] place-items-center rounded-full bg-line text-fs-18 hover:bg-sky"
+                class="grid h-[4.2cqh] w-[4.2cqh] place-items-center rounded-full border-[0.18cqh] border-control bg-line text-fs-18 hover:bg-sky"
                 :aria-label="strings.game.sendReactionAria(reaction)"
                 @click="sendPresetAndClose(reaction, close)"
               >

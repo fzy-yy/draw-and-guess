@@ -27,7 +27,7 @@ const store = useGameStore()
       class="grid min-h-[8.5cqh] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[0.55em] border-l-[0.35cqh] border-line px-[0.5em] py-[0.55cqh]"
       :class="[
         member.guessed ? 'bg-green/10' : 'bg-white',
-        member.connection !== 'online' && 'opacity-55 border-dashed',
+        member.connection !== 'online' && 'border-dashed bg-line/40',
       ]"
       :style="{
         '--seat-color': member.seatColor,
@@ -64,7 +64,7 @@ const store = useGameStore()
             member.isDrawer
               ? 'bg-[linear-gradient(90deg,var(--seat-color),var(--color-navy),var(--seat-color))] bg-size-[200%_100%] bg-clip-text text-transparent animate-[drawer-role-flow_1.4s_linear_infinite]'
               : member.guessed
-                ? 'text-yellow'
+                ? 'text-warning-fg'
                 : 'text-muted',
           ]"
           >{{ roleTextFor(member) }}</span

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createPinia, setActivePinia } from 'pinia'
+import { setActivePinia } from 'pinia'
 import { EVENTS, type Ack, type Stroke } from '@draw-guess/shared'
 import { useRoomSync } from '@/composables/useRoomSync'
 import { useGameplayStore } from '@/stores/gameplay'
@@ -7,7 +7,6 @@ import { useLobbyStore } from '@/stores/lobby'
 import { useProfileStore } from '@/stores/profile'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
-import { socket } from '@/stores/socket'
 import { useVocabularyStore } from '@/stores/vocabulary'
 import {
   GAME_ID,
@@ -17,19 +16,14 @@ import {
   ROUND_ID,
   createRoomFixture,
 } from '../client/room-fixture'
+import { createPiniaWithFakeTransport, type FakeGameTransport } from '../client/fake-game-transport'
 
-type SocketTimeoutResult = ReturnType<typeof socket.timeout>
+let fakeTransport: FakeGameTransport
 
 function mockAck(
   responder: (event: string, payload: Record<string, unknown>) => Ack<unknown>,
 ): void {
-  vi.spyOn(socket, 'timeout').mockImplementation(
-    () =>
-      ({
-        emitWithAck: (event: string, payload: Record<string, unknown>) =>
-          Promise.resolve(responder(event, payload)),
-      }) as SocketTimeoutResult,
-  )
+  fakeTransport.setResponder(responder)
 }
 
 function stroke(sequence: number, startPointIndex = 0): Stroke {
@@ -46,12 +40,14 @@ function stroke(sequence: number, startPointIndex = 0): Stroke {
 }
 
 beforeEach(() => {
-  setActivePinia(createPinia())
-  ;(socket as { connected: boolean }).connected = true
+  const installed = createPiniaWithFakeTransport()
+  fakeTransport = installed.fakeTransport
+  setActivePinia(installed.pinia)
+  ;(fakeTransport.socket as { connected: boolean }).connected = true
 })
 
 afterEach(() => {
-  ;(socket as { connected: boolean }).connected = false
+  fakeTransport.transport.destroy()
 })
 
 describe('Session 权威恢复', () => {

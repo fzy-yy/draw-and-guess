@@ -3,11 +3,13 @@
   视口、光标和单次笔画会话由 composable 管理；本组件只负责权威历史重放与模板事件接线。
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { DrawingCommand, FillCommand, Stroke, StrokeAck, ToolKind } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
-import { applyFloodFill, colorToRgba } from '@/canvas/flood-fill'
+import { colorToRgba } from '@/canvas/flood-fill'
+import { FloodFillWorkerClient } from '@/canvas/flood-fill-worker'
 import { renderStroke } from '@/canvas/rendering'
+import { presentLogicalCanvas } from '@/canvas/viewport'
 import { useCanvasCursor } from '@/composables/useCanvasCursor'
 import { useCanvasViewport } from '@/composables/useCanvasViewport'
 import { useStrokeSession } from '@/composables/useStrokeSession'
@@ -28,10 +30,12 @@ const props = defineProps<{
 const emit = defineEmits<{
   stroke: [stroke: Stroke, onResult: (result: RequestResult<StrokeAck>) => void]
   strokeFailure: [batch: PendingStrokeBatch, failure: RequestFailure]
-  fill: [fill: FillCommand]
+  fill: [fill: FillCommand, onResult: (result: RequestResult<void>) => void]
 }>()
 
 const canvas = ref<HTMLCanvasElement>()
+// 权威命令只在固定短边 720 的逻辑层重放；DOM canvas 仅承担按 DPR 输出。
+const logicalCanvas = document.createElement('canvas')
 const visibleCommands = computed(() =>
   props.strokes.filter((command) => !props.undoneStrokeIds.includes(command.id)),
 )
@@ -39,15 +43,27 @@ const drawnPoints = new Map<string, number>()
 let committedCount = 0
 let committedUndoLen = props.undoneStrokeIds.length
 let committedRoundId = props.roundId
+let renderGeneration = 0
+const fillBusy = ref(false)
+const fillWorker = new FloodFillWorkerClient()
 
 function getContext(): CanvasRenderingContext2D | null {
-  return canvas.value?.getContext('2d', { willReadFrequently: true }) ?? null
+  return logicalCanvas.getContext('2d', { willReadFrequently: true })
 }
 
-function drawFill(context: CanvasRenderingContext2D, command: FillCommand): void {
+function present(): void {
+  if (canvas.value) presentLogicalCanvas(logicalCanvas, canvas.value)
+}
+
+async function drawFill(
+  context: CanvasRenderingContext2D,
+  command: FillCommand,
+  generation: number,
+  roundId: string,
+): Promise<boolean> {
   const canvasWidth = context.canvas.width
   const canvasHeight = context.canvas.height
-  if (!canvasWidth || !canvasHeight) return
+  if (!canvasWidth || !canvasHeight) return false
   const startX = Math.max(
     0,
     Math.min(canvasWidth - 1, Math.round(command.point.x * (canvasWidth - 1))),
@@ -57,24 +73,39 @@ function drawFill(context: CanvasRenderingContext2D, command: FillCommand): void
     Math.min(canvasHeight - 1, Math.round(command.point.y * (canvasHeight - 1))),
   )
   const image = context.getImageData(0, 0, canvasWidth, canvasHeight)
-  const filled = applyFloodFill(
-    image.data,
-    canvasWidth,
-    canvasHeight,
-    startX,
-    startY,
-    colorToRgba(command.color),
-  )
-  if (filled > 0) context.putImageData(image, 0, 0)
+  fillBusy.value = true
+  try {
+    const result = await fillWorker.fill(image, {
+      roundId,
+      startX,
+      startY,
+      replacement: colorToRgba(command.color),
+    })
+    if (generation !== renderGeneration || roundId !== props.roundId) return false
+    if (result.filledPixels > 0) context.putImageData(result.image, 0, 0)
+    return true
+  } catch {
+    return false
+  } finally {
+    if (generation === renderGeneration) fillBusy.value = false
+  }
 }
 
 function redraw(): void {
+  renderGeneration += 1
+  fillWorker.cancel()
+  fillBusy.value = false
+  void redrawLogical(renderGeneration, props.roundId)
+}
+
+async function redrawLogical(generation: number, roundId: string): Promise<void> {
   const context = getContext()
   if (!context) return
   context.clearRect(0, 0, context.canvas.width, context.canvas.height)
   for (const command of visibleCommands.value) {
     if (command.kind === 'stroke') renderStroke(context, command)
-    else drawFill(context, command)
+    else if (!(await drawFill(context, command, generation, roundId))) return
+    if (generation !== renderGeneration || roundId !== props.roundId) return
   }
   if (strokeSession.activePoints.value.length) {
     const confirmedStroke = visibleCommands.value.find(
@@ -101,15 +132,15 @@ function redraw(): void {
   if (strokeSession.activeStrokeId && strokeSession.activePoints.value.length)
     drawnPoints.set(strokeSession.activeStrokeId, strokeSession.activePoints.value.length)
   committedUndoLen = props.undoneStrokeIds.length
+  present()
 }
 
 function drawIncoming(context: CanvasRenderingContext2D): void {
   for (const command of visibleCommands.value) {
     if (command.kind === 'fill') {
       if (drawnPoints.has(command.id)) continue
-      drawFill(context, command)
-      drawnPoints.set(command.id, -1)
-      continue
+      redraw()
+      return
     }
     const previousPointCount = drawnPoints.get(command.id) ?? 0
     if (command.points.length <= previousPointCount) continue
@@ -118,6 +149,7 @@ function drawIncoming(context: CanvasRenderingContext2D): void {
   }
   committedCount = visibleCommands.value.length
   committedRoundId = props.roundId
+  present()
 }
 
 const strokeSession = useStrokeSession({
@@ -132,11 +164,18 @@ const strokeSession = useStrokeSession({
   drawnPoints,
   getContext,
   redraw,
+  present,
+  canFill: () => !fillBusy.value,
   emitStroke: (stroke, onResult) => emit('stroke', stroke, onResult),
   onBatchFailure: (batch, failure) => emit('strokeFailure', batch, failure),
-  emitFill: (fill) => emit('fill', fill),
+  emitFill: (fill) => {
+    fillBusy.value = true
+    emit('fill', fill, (result) => {
+      if (!result.ok) fillBusy.value = false
+    })
+  },
 })
-const { resizeTick } = useCanvasViewport(canvas, redraw)
+const { resizeTick } = useCanvasViewport(canvas, logicalCanvas, redraw)
 const cursor = useCanvasCursor({
   canvas,
   width,
@@ -165,6 +204,9 @@ watch(
     if (
       roundChanged ||
       hasRemovedCommand ||
+      visibleCommands.value.some(
+        (command) => command.kind === 'fill' && !drawnPoints.has(command.id),
+      ) ||
       props.undoneStrokeIds.length !== committedUndoLen ||
       props.strokes.length < committedCount ||
       (props.strokes.length === 0 && drawnPoints.size > 0)
@@ -181,6 +223,8 @@ function handlePointerMove(event: PointerEvent): void {
   cursor.cursorTrack(event)
   strokeSession.pointerMove(event)
 }
+
+onBeforeUnmount(() => fillWorker.cancel())
 </script>
 
 <template>
@@ -195,6 +239,7 @@ function handlePointerMove(event: PointerEvent): void {
   >
     <canvas
       ref="canvas"
+      data-canvas-layer="display"
       class="block h-full w-full bg-white touch-none"
       :aria-label="canDraw ? strings.canvas.drawingAria : strings.canvas.watchingAria"
       @pointerdown="strokeSession.pointerDown"

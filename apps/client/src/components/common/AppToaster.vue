@@ -5,13 +5,15 @@
   - 只负责「渲染 + 动画」，队列状态、去重、超时、配色在 useToasts；
   - 以 .game-stage（position:relative + overflow-hidden）为定位与裁剪上下文：
     用 absolute 右上角堆叠，天然不会越出画框，无需任何第三方 fixed 覆盖 hack；
-  - 外观：白色长条 + 方角 + 最左一条主题色小条 + 加粗文字，点击即消失；
+  - 外观：白色长条 + 方角 + 最左一条主题色小条 + 加粗文字，通过具名关闭按钮消失；
   - 样式与过渡动画全部收敛于组件内部行内维护，避免全局 CSS 污染；
   - 同一提示去重时用 Web Animations API 对当前元素重放一次「左弹跳」，
     连续多次触发也能逐次重放（不依赖 CSS 类切换的强制重排）。
 -->
 <script setup lang="ts">
 import { onBeforeUnmount } from 'vue'
+import { X } from 'lucide-vue-next'
+import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
 import { useToasts } from '@/composables/useToasts'
 
@@ -63,17 +65,12 @@ onBeforeUnmount(unbindBump)
     name="toast"
     tag="div"
     class="pointer-events-none absolute top-[12.5cqh] right-[2.5cqh] z-[95] flex flex-col items-end gap-[1cqh]"
-    aria-live="polite"
-    aria-atomic="false"
   >
     <div
       v-for="toast in toasts"
       :key="toast.id"
       :ref="(el) => setToastRef(toast.id, el)"
-      class="pointer-events-auto flex max-w-[44cqw] cursor-pointer items-stretch overflow-hidden rounded-none bg-white text-navy shadow-float select-none"
-      role="status"
-      :aria-label="toast.text"
-      @click.stop="dismissWithSound(toast.id)"
+      class="pointer-events-auto flex max-w-[44cqw] items-stretch overflow-hidden rounded-none bg-white text-navy shadow-float select-none"
       @pointerdown.stop
     >
       <span
@@ -81,9 +78,20 @@ onBeforeUnmount(unbindBump)
         aria-hidden="true"
       />
       <span
+        :role="toast.type === 'error' ? 'alert' : 'status'"
+        :aria-live="toast.type === 'error' ? 'assertive' : 'polite'"
+        aria-atomic="true"
         class="min-w-0 py-[1cqh] pr-[1.6cqh] pl-[1.2cqh] text-fs-14 font-bold leading-[1.4] whitespace-nowrap"
         >{{ toast.text }}</span
       >
+      <button
+        type="button"
+        class="grid w-[4.4cqh] shrink-0 place-items-center border-l-[0.18cqh] border-control bg-white text-muted hover:bg-line"
+        :aria-label="strings.common.dismissToastAria(toast.text)"
+        @click.stop="dismissWithSound(toast.id)"
+      >
+        <X class="h-[2.2cqh] w-[2.2cqh]" aria-hidden="true" />
+      </button>
     </div>
   </TransitionGroup>
 </template>

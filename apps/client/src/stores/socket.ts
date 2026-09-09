@@ -2,7 +2,7 @@
  * Socket 连接单例与其推送事件绑定。
  * 与 store 解耦：监听器通过回调接口桥接回 store 状态，便于独立测试与复用。
  */
-import { io, type Socket } from 'socket.io-client'
+import type { Socket } from 'socket.io-client'
 import {
   EVENTS,
   type FillCommand,
@@ -51,23 +51,13 @@ function decodeData<E extends ServerPushEventName>(
   return result.data
 }
 
-/** Socket 实例放在模块级，避免 Pinia devtools 序列化传输对象和监听器。 */
-export const socket: Socket = io({
-  autoConnect: false,
-  reconnection: true,
-  reconnectionAttempts: Infinity,
-})
-
-const activeDetachers = new Set<() => void>()
+const activeDetachers = new WeakMap<Socket, Set<() => void>>()
 
 /**
  * 注册全部服务端推送事件监听（全局唯一的连接生命周期）。
  * 注意：绘图增量事件按回合 ID 与序号直接合并进本地历史，无需等待下一次快照。
  */
-export function attachSocketListeners(
-  handlers: SocketHandlers,
-  targetSocket: Socket = socket,
-): () => void {
+export function attachSocketListeners(handlers: SocketHandlers, targetSocket: Socket): () => void {
   const onConnect = () => handlers.onConnect()
   const onDisconnect = (reason: string) => handlers.onDisconnect(reason)
   const onReconnectAttempt = () => handlers.onReconnectAttempt()
@@ -160,16 +150,17 @@ export function attachSocketListeners(
     targetSocket.off(EVENTS.systemError, onSystemError)
     targetSocket.off(EVENTS.drawStrokeBatch, onDrawStrokeBatch)
     targetSocket.off(EVENTS.drawFillCommit, onDrawFillCommit)
-    activeDetachers.delete(detach)
+    activeDetachers.get(targetSocket)?.delete(detach)
   }
-  activeDetachers.add(detach)
+  const detachers = activeDetachers.get(targetSocket) ?? new Set<() => void>()
+  detachers.add(detach)
+  activeDetachers.set(targetSocket, detachers)
   return detach
 }
 
 /** HMR 与应用销毁共用：精确移除本模块注册项，不触碰其它订阅者的同名事件。 */
-export function disposeSocketLifecycle(targetSocket: Socket = socket): void {
-  for (const detach of [...activeDetachers]) detach()
+export function disposeSocketLifecycle(targetSocket: Socket): void {
+  for (const detach of [...(activeDetachers.get(targetSocket) ?? [])]) detach()
+  activeDetachers.delete(targetSocket)
   targetSocket.disconnect()
 }
-
-if (import.meta.hot) import.meta.hot.dispose(disposeSocketLifecycle)

@@ -6,7 +6,7 @@
 <script setup lang="ts">
 import { strings } from '@draw-guess/strings'
 import type { VocabularyPackageInfo } from '@draw-guess/shared'
-import type { DataTableColumn } from '@/components/common/DataTable.vue'
+import type { DataTableColumn } from '@/components/common/data-table.types'
 import DataTable from '@/components/common/DataTable.vue'
 import { computed, ref } from 'vue'
 

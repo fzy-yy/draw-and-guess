@@ -22,7 +22,7 @@ import RoundIconButton from '@/components/common/RoundIconButton.vue'
 import MultiSelectPopover, {
   type MultiSelectOption,
 } from '@/components/common/MultiSelectPopover.vue'
-import type { DataTableColumn } from '@/components/common/DataTable.vue'
+import type { DataTableColumn } from '@/components/common/data-table.types'
 import VocabTableView from '@/components/room/VocabTableView.vue'
 import VocabPackageTableView from '@/components/room/VocabPackageTableView.vue'
 import { useGameStore } from '@/stores/game'
@@ -332,6 +332,7 @@ watch(
           :selected-ids="isReadOnly ? undefined : selectedIds"
           :sort-key="sortKey"
           :sort-dir="sortDir"
+          :difficulty-max="store.config.ui.difficultyMax"
           @sort="handleSort"
           @toggle="toggleWord"
           @toggle-all="toggleSelectAll"

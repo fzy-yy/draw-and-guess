@@ -39,7 +39,7 @@ const variantClasses = computed(() => {
       if (props.active) {
         return `${base} text-blue bg-sky border border-[0.18cqh] border-blue`
       }
-      return `${base} text-navy bg-white border border-[0.18cqh] border-line`
+      return `${base} text-navy bg-white border border-[0.18cqh] border-control`
     case 'danger':
       if (props.active) {
         return `${base} text-white bg-red ring-2 ring-red/40`

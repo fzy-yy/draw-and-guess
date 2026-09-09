@@ -19,6 +19,6 @@
 
   /* 圆形图标按钮底座：ActionPopover 触发钮等统一圆形图标（与 RoundIconButton 组件等价）。 */
   .round-icon-btn {
-    @apply grid h-[4.2cqh] w-[4.2cqh] shrink-0 place-items-center rounded-full border-[0.18cqh] border-line bg-white text-blue disabled:cursor-not-allowed disabled:opacity-40;
+    @apply grid h-[4.2cqh] w-[4.2cqh] shrink-0 place-items-center rounded-full border-[0.18cqh] border-control bg-white text-blue disabled:cursor-not-allowed disabled:opacity-40;
   }
 }

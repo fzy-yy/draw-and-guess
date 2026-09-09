@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createPinia, setActivePinia } from 'pinia'
+import { setActivePinia } from 'pinia'
 import { APP_CONFIG } from '@draw-guess/config'
 import { useProfileStore } from '@/stores/profile'
+import { createPiniaWithFakeTransport } from '../client/fake-game-transport'
 
 describe('资料 Store 浏览器集成', () => {
-  beforeEach(() => setActivePinia(createPinia()))
+  beforeEach(() => setActivePinia(createPiniaWithFakeTransport().pinia))
 
   it('从 localStorage 恢复白名单头像与合法恢复令牌', () => {
     const recoveryToken = 'a'.repeat(32)

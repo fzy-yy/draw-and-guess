@@ -18,7 +18,7 @@ import { room } from './room.ts'
 import { game, canvas } from './game.ts'
 import { settings } from './settings.ts'
 import { store, request } from './client.ts'
-import { serverStrings } from './server.ts'
+import { serverErrorMessages, serverStrings } from './server.ts'
 
 export const strings = {
   meta,
@@ -36,6 +36,6 @@ export const strings = {
   request,
 } as const
 
-export { serverStrings }
+export { serverErrorMessages, serverStrings }
 export type Strings = typeof strings
 export type ServerStrings = typeof serverStrings

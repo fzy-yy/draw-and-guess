@@ -98,4 +98,11 @@ export class GamePage {
     await returnBtn.click()
     await expect(this.page.locator('text=玩家席位')).toBeVisible({ timeout: 10_000 })
   }
+
+  async requestRematch() {
+    const rematchBtn = this.page.getByRole('button', { name: '再来一局' })
+    await expect(rematchBtn).toBeVisible({ timeout: 20_000 })
+    await rematchBtn.click()
+    await expect(this.page.getByRole('button', { name: '已选择再来一局' })).toBeDisabled()
+  }
 }

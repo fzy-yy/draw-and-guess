@@ -25,7 +25,7 @@ const model = defineModel<V>({ required: true })
     <select
       v-model="model"
       :disabled="disabled"
-      class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-line bg-white px-[1em] font-bold text-navy"
+      class="min-w-0 h-[5.2cqh] rounded-[0.7em] border-[0.2cqh] border-control bg-white px-[1em] font-bold text-navy"
       @change="playInteractionSound('select')"
     >
       <option v-for="option in options" :key="String(option.value)" :value="option.value">

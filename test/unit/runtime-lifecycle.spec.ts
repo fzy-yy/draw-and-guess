@@ -51,6 +51,6 @@ describe('统一假运行时驱动完整回合生命周期', () => {
     expect(room.phase).toBe('game_result')
     expect(game.currentRound).toBe(game.totalRounds)
     expect(harness.repositories.archive.games).toHaveLength(1)
-    expect(harness.runtime.pendingTimerCount()).toBe(0)
+    expect(harness.runtime.pendingTimerCount()).toBe(2)
   })
 })

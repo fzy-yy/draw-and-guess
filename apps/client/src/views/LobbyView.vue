@@ -71,7 +71,12 @@ function openSettings(): void {
       </template>
       <template #trailing>
         <nav class="flex items-center gap-[0.7em]" :aria-label="strings.lobby.navAria">
-          <NetworkStatusButton />
+          <NetworkStatusButton
+            :connected="store.connected"
+            :latency="store.latency"
+            :connection-label="store.connectionLabel"
+            :latency-good-ms="store.config.network.latencyGoodMs"
+          />
           <button
             type="button"
             class="flex items-center gap-[0.4em] rounded-[0.55em] bg-white/5 px-[0.8em] py-[0.8cqh] text-sky hover:bg-white/10 transition-colors"
@@ -153,7 +158,9 @@ function openSettings(): void {
                 ? 'roomWaiting'
                 : publicRoom.joinPolicy === 'spectate'
                   ? 'roomSpectatable'
-                  : 'roomInProgress'
+                  : publicRoom.joinPolicy === 'next_game'
+                    ? 'roomJoinNextGame'
+                    : 'roomInProgress'
             ]
           }}</span>
           <span class="flex items-center gap-[0.35em] font-bold">
@@ -163,14 +170,16 @@ function openSettings(): void {
             type="button"
             :disabled="
               publicRoom.playerCount >= publicRoom.maxPlayers ||
-              (publicRoom.phase !== 'waiting' && publicRoom.joinPolicy !== 'spectate')
+              (publicRoom.phase !== 'waiting' && publicRoom.joinPolicy === 'forbid')
             "
             @click="store.joinRoom(publicRoom.id)"
           >
             {{
               publicRoom.phase !== 'waiting' && publicRoom.joinPolicy === 'spectate'
                 ? strings.lobby.spectateButton
-                : strings.lobby.joinButton
+                : publicRoom.phase !== 'waiting' && publicRoom.joinPolicy === 'next_game'
+                  ? strings.lobby.waitNextGameButton
+                  : strings.lobby.joinButton
             }}
           </AppButton>
         </article>
@@ -190,7 +199,7 @@ function openSettings(): void {
       <div class="flex items-end justify-between">
         <SectionHeader :eyebrow="strings.lobby.playersLabel" :title="strings.lobby.playersTitle" />
         <span
-          class="grid h-[3cqh] w-[3cqh] place-items-center rounded-full bg-green text-white text-fs-12"
+          class="grid h-[3cqh] w-[3cqh] place-items-center rounded-full bg-success-fg text-white text-fs-12"
         >
           {{ store.presence.players.length }}
         </span>
@@ -219,7 +228,7 @@ function openSettings(): void {
             <b class="truncate">{{ player.nickname }}</b>
             <span
               class="text-fs-12"
-              :class="player.status === 'idle' ? 'text-green font-bold' : 'text-muted'"
+              :class="player.status === 'idle' ? 'text-success-fg font-bold' : 'text-muted'"
             >
               {{ statusText[player.status] }}
             </span>

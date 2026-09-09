@@ -15,6 +15,18 @@ import { vocabulary } from './vocabulary.ts'
 import { audio, soundCatalog } from './audio.ts'
 import { localSettings, presets, ui } from './settings.ts'
 import { PUBLIC_CONFIG, type PublicConfig } from './public.ts'
+import {
+  ROOM_PRESETS,
+  ROOM_PRESET_IDS,
+  applyRoomPreset,
+  closestRoomPreset,
+  createRoomSettings,
+  matchingRoomPreset,
+  roomPresetDifferences,
+  type RoomPresetField,
+  type RoomPresetId,
+  type RoomPresetSettings,
+} from './room-presets.ts'
 
 /** 领域配置合并为唯一业务配置对象。 */
 export const APP_CONFIG = {
@@ -46,4 +58,14 @@ export {
   ui,
   PUBLIC_CONFIG,
   type PublicConfig,
+  ROOM_PRESETS,
+  ROOM_PRESET_IDS,
+  applyRoomPreset,
+  closestRoomPreset,
+  createRoomSettings,
+  matchingRoomPreset,
+  roomPresetDifferences,
+  type RoomPresetField,
+  type RoomPresetId,
+  type RoomPresetSettings,
 }

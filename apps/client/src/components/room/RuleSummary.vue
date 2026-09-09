@@ -7,6 +7,8 @@
 import { computed } from 'vue'
 import { BookOpenCheck, Send, Settings2 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
+import { closestRoomPreset, roomPresetDifferences, type RoomPresetId } from '@draw-guess/config'
+import type { RoomSettings } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
 import AppButton from '@/components/common/AppButton.vue'
 import RuleRow from '@/components/room/RuleRow.vue'
@@ -36,10 +38,111 @@ const hintsSummary = computed(() => {
   if (settings.progressiveHints) return strings.room.hintsMaskOnly
   return strings.room.hintsOff
 })
+
+const presetNames: Record<RoomPresetId, string> = {
+  standard: strings.room.presetStandard,
+  relaxed: strings.room.presetRelaxed,
+  speed: strings.room.presetSpeed,
+}
+
+function enabled(value: boolean): string {
+  return value ? strings.room.ruleEnabled : strings.room.ruleDisabled
+}
+
+const summaryRows = computed(() => {
+  const settings = store.room?.settings
+  if (!settings) return []
+  const preset = closestRoomPreset(settings)
+  const differences = new Set(roomPresetDifferences(settings, preset))
+  const presetName = presetNames[preset]
+  const rows: Array<{ key: string; label: string; value: string }> = [
+    {
+      key: 'preset',
+      label: strings.room.rulePresetDt,
+      value: differences.size ? strings.room.presetCustomized(presetName) : presetName,
+    },
+    {
+      key: 'maxPlayers',
+      label: strings.room.ruleCapacityDt,
+      value: strings.common.playersUnit(settings.maxPlayers),
+    },
+    {
+      key: 'roundsPerPlayer',
+      label: strings.room.ruleRoundsDt,
+      value: strings.room.ruleRoundsDd(settings.roundsPerPlayer),
+    },
+    {
+      key: 'drawSeconds',
+      label: strings.room.ruleDrawDt,
+      value: strings.room.ruleDrawFallback(settings.drawSeconds),
+    },
+  ]
+  const addDifference = (
+    field: keyof Omit<RoomSettings, 'maxPlayers'>,
+    label: string,
+    value: string,
+  ): void => {
+    if (differences.has(field)) rows.push({ key: field, label, value })
+  }
+  addDifference(
+    'chooseSeconds',
+    strings.room.chooseTimeField,
+    strings.common.secondsUnit(settings.chooseSeconds),
+  )
+  addDifference(
+    'optionCount',
+    strings.room.ruleOptionsDt,
+    strings.room.ruleOptionsDd(settings.optionCount),
+  )
+  if (differences.has('progressiveHints') || differences.has('structuredHintsEnabled'))
+    rows.push({ key: 'hints', label: strings.room.ruleHintsDt, value: hintsSummary.value })
+  addDifference(
+    'showWordLength',
+    strings.room.toggleShowWordLength,
+    enabled(settings.showWordLength),
+  )
+  if (settings.structuredHintsEnabled)
+    addDifference(
+      'hintStartRatio',
+      strings.room.ruleHintTimeDt,
+      strings.room.hintStartRatioUnit(settings.hintStartRatio),
+    )
+  addDifference(
+    'guessBaseScore',
+    strings.room.guessBaseScoreField,
+    strings.room.guessBaseScoreUnit(settings.guessBaseScore),
+  )
+  addDifference(
+    'scoreMode',
+    strings.room.scoreModeField,
+    settings.scoreMode === 'standard' ? strings.room.scoreModeStandard : strings.room.scoreModeFlat,
+  )
+  addDifference(
+    'allowPlayerInvite',
+    strings.room.togglePlayerInvite,
+    enabled(settings.allowPlayerInvite),
+  )
+  addDifference('allowPause', strings.room.togglePause, enabled(settings.allowPause))
+  addDifference(
+    'allowWordReroll',
+    strings.room.ruleRerollDt,
+    settings.allowWordReroll ? strings.room.ruleRerollOn : strings.room.ruleRerollOff,
+  )
+  addDifference(
+    'joinPolicy',
+    strings.room.joinPolicyField,
+    settings.joinPolicy === 'forbid'
+      ? strings.room.joinPolicyForbid
+      : settings.joinPolicy === 'spectate'
+        ? strings.room.joinPolicySpectate
+        : strings.room.joinPolicyNextGame,
+  )
+  return rows
+})
 </script>
 
 <template>
-  <!-- 规则摘要：作画轮数 / 时间 / 候选词 / 提示 -->
+  <!-- 规则摘要：始终展示关键项，其余只展示相对当前预设的差异。 -->
   <template v-if="store.room">
     <div>
       <div class="grid grid-cols-[1fr_auto] items-center">
@@ -57,24 +160,8 @@ const hintsSummary = computed(() => {
         </button>
       </div>
       <dl class="my-[1.4cqh] border-t-[0.16cqh] border-t-line">
-        <RuleRow :label="strings.room.ruleRoundsDt">
-          {{ strings.room.ruleRoundsDd(store.room?.settings.roundsPerPlayer ?? 0) }}
-        </RuleRow>
-        <RuleRow :label="strings.room.ruleDrawDt">
-          {{ strings.room.ruleDrawByVocab }}
-        </RuleRow>
-        <RuleRow :label="strings.room.ruleOptionsDt">
-          {{ strings.room.ruleOptionsDd(store.room?.settings.optionCount ?? 0) }}
-        </RuleRow>
-        <RuleRow :label="strings.room.ruleRerollDt">
-          {{
-            store.room?.settings.allowWordReroll
-              ? strings.room.ruleRerollOn
-              : strings.room.ruleRerollOff
-          }}
-        </RuleRow>
-        <RuleRow :label="strings.room.ruleHintsDt">
-          {{ hintsSummary }}
+        <RuleRow v-for="row in summaryRows" :key="row.key" :label="row.label">
+          {{ row.value }}
         </RuleRow>
       </dl>
     </div>

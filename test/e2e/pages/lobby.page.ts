@@ -52,6 +52,24 @@ export class LobbyPage {
     await expect(this.page.locator('text=玩家席位')).toBeVisible({ timeout: 10_000 })
   }
 
+  async joinNextGame(roomName: string) {
+    const row = this.page.locator(`article:has-text("${roomName}")`)
+    await expect(row).toBeVisible({ timeout: 10_000 })
+    await row.getByRole('button', { name: '加入候场' }).click()
+    await expect(
+      this.page.getByLabel('玩家得分').getByText('等待下一局', { exact: true }),
+    ).toBeVisible({ timeout: 10_000 })
+  }
+
+  async spectatePublicRoom(roomName: string) {
+    const row = this.page.locator(`article:has-text("${roomName}")`)
+    await expect(row).toBeVisible({ timeout: 10_000 })
+    await row.getByRole('button', { name: '观战' }).click()
+    await expect(this.page.locator('canvas[data-canvas-layer="display"]')).toBeVisible({
+      timeout: 10_000,
+    })
+  }
+
   async goToSettings() {
     await this.page.getByRole('button', { name: '设置' }).click()
     await expect(this.page.getByRole('heading', { name: '游戏设置' })).toBeVisible({

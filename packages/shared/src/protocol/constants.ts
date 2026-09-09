@@ -2,7 +2,7 @@
  * 线上协议的公开约束。前后端配置与 Zod Schema 都必须引用这里，避免边界两侧各维护一份。
  * 这里只放会影响协议兼容性或客户端可提交载荷的值；限频、持久化与清理策略属于服务端私有配置。
  */
-export const PROTOCOL_VERSION = '8' as const
+export const PROTOCOL_VERSION = '10' as const
 
 export const AVATAR_IDS = [
   '01',

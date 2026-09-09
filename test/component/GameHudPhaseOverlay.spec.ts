@@ -1,16 +1,18 @@
 import { defineComponent, h, nextTick } from 'vue'
-import { createPinia, setActivePinia, type Pinia } from 'pinia'
+import { setActivePinia, type Pinia } from 'pinia'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { strings } from '@draw-guess/strings'
 import { useGameHud } from '@/composables/useGameHud'
 import GameHud from '@/components/game/GameHud.vue'
 import PhaseOverlay from '@/components/game/PhaseOverlay.vue'
+import ScoreStrip from '@/components/game/ScoreStrip.vue'
 import { useGameStore } from '@/stores/game'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
 import { GUEST_ID, HOST_ID, createRoomFixture } from '../client/room-fixture'
+import { createPiniaWithFakeTransport } from '../client/fake-game-transport'
 
 let pinia: Pinia
 let mountedHud!: ReturnType<typeof useGameHud>
@@ -23,7 +25,7 @@ const GameHudComposableHarness = defineComponent({
 })
 
 beforeEach(() => {
-  pinia = createPinia()
+  pinia = createPiniaWithFakeTransport().pinia
   setActivePinia(pinia)
 })
 
@@ -82,6 +84,8 @@ describe('useGameHud 角色与计时派生', () => {
       id: '00000000-0000-4000-8000-000000000010',
       nickname: '观战者',
       spectating: true,
+      waitingForNextGame: false,
+      rematchReady: false,
       score: 999,
     })
     session.playerId = GUEST_ID
@@ -142,6 +146,9 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
       rankings: [],
     }) as VueWrapper
 
+    expect(wrapper.findAll('[aria-live]').length).toBe(1)
+    expect(wrapper.get('[aria-live]').text()).toBe(strings.status.phasePaused)
+
     expect(wrapper.text()).toContain(strings.game.resumeGame)
     expect(wrapper.text()).toContain(strings.game.endEarly)
     session.playerId = GUEST_ID
@@ -155,10 +162,45 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
     ]
     session.playerId = HOST_ID
     await nextTick()
+    expect(wrapper.get('[aria-live]').text()).toBe(strings.status.phaseChoosing)
     expect(wrapper.text()).toContain('苹果')
     session.playerId = GUEST_ID
     await nextTick()
     expect(wrapper.text()).not.toContain('苹果')
     wrapper.unmount()
+  })
+
+  it('最终结算中房主拥有全局返回动作，普通成员只登记个人再来一局状态', async () => {
+    const roomStore = useRoomStore()
+    const session = useSessionStore()
+    roomStore.room = createRoomFixture('game_result')
+    roomStore.room.game!.canReturnWaiting = true
+    roomStore.room.game!.finalRanking = []
+    session.playerId = HOST_ID
+    const overlay = mountWithPinia(PhaseOverlay, {
+      secondsLeft: 12,
+      game: roomStore.room.game,
+      rankings: [],
+    }) as VueWrapper
+
+    expect(overlay.text()).toContain(strings.game.hostReturnWaiting)
+    expect(overlay.text()).not.toContain(strings.game.rematchReady)
+
+    session.playerId = GUEST_ID
+    await nextTick()
+    expect(overlay.text()).toContain(strings.game.rematch)
+    expect(overlay.text()).not.toContain(strings.game.hostReturnWaiting)
+    await overlay
+      .findAll('button')
+      .find((button) => button.text().includes(strings.game.rematch))!
+      .trigger('click')
+    expect(overlay.emitted('return-waiting')).toHaveLength(1)
+
+    roomStore.room.members[1]!.rematchReady = true
+    await nextTick()
+    const strip = mountWithPinia(ScoreStrip, {}) as VueWrapper
+    expect(strip.text()).toContain(strings.status.roleRematchReady)
+    strip.unmount()
+    overlay.unmount()
   })
 })

@@ -46,6 +46,8 @@ export const RoomMemberSchema = PublicPlayerSchema.extend({
   isDrawer: z.boolean(),
   guessed: z.boolean(),
   spectating: z.boolean(),
+  waitingForNextGame: z.boolean(),
+  rematchReady: z.boolean(),
   leftGame: z.boolean(),
   connection: ConnectionStateSchema,
   stats: MemberStatsSchema,
@@ -114,6 +116,8 @@ export const GameViewSchema = z
     messages: z.array(ChatMessageSchema),
     roundResult: RoundResultSchema.optional(),
     finalRanking: z.array(FinalRankingEntrySchema).optional(),
+    gameResultMinEndsAt: z.number().optional(),
+    canReturnWaiting: z.boolean().optional(),
   })
   .strict()
 

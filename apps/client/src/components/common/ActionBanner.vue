@@ -6,12 +6,13 @@
   广泛复用于玩家房间邀请、全屏体验推荐等底部操作提示场景。
 -->
 <script setup lang="ts">
+import { nextTick, ref, watch } from 'vue'
 import { cn } from '@/utils/cn'
 
 const props = defineProps<{
   /** 横幅是否可见 */
   open: boolean
-  /** 无障碍对话框标签 */
+  /** 非模态动态区域的无障碍标签。 */
   ariaLabel?: string
   /** 顶部彩色眉题文本 */
   heading?: string
@@ -20,20 +21,43 @@ const props = defineProps<{
   /** 自定义外层样式覆盖 */
   class?: string
 }>()
+
+const root = ref<HTMLElement>()
+let previousFocus: HTMLElement | undefined
+
+watch(
+  () => props.open,
+  (open) => {
+    if (open) {
+      previousFocus =
+        document.activeElement instanceof HTMLElement ? document.activeElement : undefined
+      return
+    }
+    const active = document.activeElement
+    const focusTarget = previousFocus
+    const focusWasRemoved = active === document.body || active === document.documentElement
+    if (focusWasRemoved || root.value?.contains(active)) void nextTick(() => focusTarget?.focus())
+    previousFocus = undefined
+  },
+  { flush: 'pre' },
+)
 </script>
 
 <template>
   <Transition name="banner">
     <div
       v-if="open"
+      ref="root"
       :class="
         cn(
           'absolute bottom-[3cqh] left-1/2 z-50 grid min-h-[10cqh] w-[66cqw] grid-cols-[auto_1fr_auto_auto] items-center gap-[1em] border-[0.3cqh] border-blue border-l-[1cqh] bg-white px-[1em] py-[1cqh] shadow-float -translate-x-1/2',
           props.class,
         )
       "
-      role="dialog"
+      role="region"
       :aria-label="ariaLabel"
+      aria-live="polite"
+      aria-atomic="true"
     >
       <!-- 左侧图示插槽（SVG 头像或图标徽章） -->
       <slot name="leading" />

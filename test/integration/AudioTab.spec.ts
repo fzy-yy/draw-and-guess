@@ -6,11 +6,13 @@ import { strings } from '@draw-guess/strings'
 import { playSound } from '@/audio'
 import AudioTab from '@/components/settings/AudioTab.vue'
 import { useGameStore } from '@/stores/game'
+import { installFakeGameTransport } from '../client/fake-game-transport'
 
 describe('AudioTab 与 Pinia 集成', () => {
   it('用户切换静音后更新状态并调用 Facade 保存动作', async () => {
     const user = userEvent.setup()
     const pinia = createTestingPinia({ createSpy: vi.fn, stubActions: true })
+    installFakeGameTransport(pinia)
     render(AudioTab, { global: { plugins: [pinia] } })
     const store = useGameStore(pinia)
     store.settings.muted = false
@@ -24,6 +26,7 @@ describe('AudioTab 与 Pinia 集成', () => {
   it('试听按钮通过音效清单播放对应资源', async () => {
     const user = userEvent.setup()
     const pinia = createTestingPinia({ createSpy: vi.fn, stubActions: true })
+    installFakeGameTransport(pinia)
     render(AudioTab, { global: { plugins: [pinia] } })
 
     await user.click(

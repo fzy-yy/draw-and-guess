@@ -3,6 +3,10 @@
  * 限频、断线清理、数据库位置和服务端资源预算均在此维护。
  */
 export const serverPrivateConfig = {
+  game: {
+    gameResultMinSeconds: 5,
+    gameResultAutoReturnSeconds: 20,
+  },
   network: {
     host: '0.0.0.0',
     port: 5174,
