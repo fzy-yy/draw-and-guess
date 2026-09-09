@@ -44,10 +44,11 @@ function clearCanvas(): void {
 </script>
 
 <template>
-  <!-- 底部绘图工具栏：工具 / 颜色 / 线宽 / 历史操作（非画家时整条禁用） -->
+  <!-- 底部绘图工具栏：工具 / 颜色 / 线宽 / 历史操作（非画家时整条禁用）。
+       紧凑模式（compact-wrap）下四组控件允许换行，避免把按钮压缩到不可点。 -->
   <footer
     v-if="store.room"
-    class="col-span-full grid grid-cols-[1.35fr_1fr_0.8fr_auto] items-center gap-[1.2em] border-t-[0.25cqh] border-navy bg-paper px-[1.4cqw]"
+    class="col-span-full grid grid-cols-[minmax(0,1.35fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_auto] items-center gap-[1.2em] border-t-[0.25cqh] border-navy bg-paper px-[1.4cqw] compact-wrap compact-tight"
     :class="{ 'text-muted': !store.isDrawer || store.room.phase !== 'drawing' }"
   >
     <!-- 工具组：画笔 / 橡皮擦 / 填充，可自定义快捷键 -->
@@ -87,11 +88,13 @@ function clearCanvas(): void {
     <!-- 颜色组：预设色块 + 任意颜色选择器 -->
     <div class="flex items-center justify-center gap-[0.45em]">
       <span class="mr-[0.3em] text-muted text-fs-10 font-bold">{{ strings.game.colorGroup }}</span>
+      <!-- 色板属密集控件（8+1 个并排，间距不足以容纳 44px 命中区）：
+           视觉尺寸设 20px 像素下限，避免低高度舞台下缩到看不清/点不中。 -->
       <button
         v-for="paint in store.config.drawing.colors"
         :key="paint"
         type="button"
-        class="h-[3.5cqh] w-[3.5cqh] rounded-full border-[0.2cqh] bg-(--paint)"
+        class="h-[max(3.5cqh,20px)] w-[max(3.5cqh,20px)] shrink-0 rounded-full border-[0.2cqh] bg-(--paint)"
         :class="
           color.toUpperCase() === paint
             ? 'outline-[0.3cqh] outline-focus outline-offset-[0.15cqh] border-navy'
@@ -103,7 +106,7 @@ function clearCanvas(): void {
         @click="setColor(paint)"
       ></button>
       <label
-        class="relative h-[3.8cqh] w-[3.8cqh] overflow-hidden rounded-full border-[0.2cqh] border-control"
+        class="relative h-[max(3.8cqh,22px)] w-[max(3.8cqh,22px)] shrink-0 overflow-hidden rounded-full border-[0.2cqh] border-control"
         :title="strings.game.customColorTitle"
       >
         <input

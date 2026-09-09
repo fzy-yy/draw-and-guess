@@ -166,12 +166,33 @@ export async function createApplication(
   )
   // 静态托管前端构建产物（生产模式由 pnpm start 拉起同一进程）。
   // 测试可注入 clientDist 指向本次构建到临时目录的产物；默认托管 ../client/dist。
+  //
+  // 缓存策略（阈值见 packages/config/src/settings.ts 的 performance）：
+  // - /assets/** 的产物文件名由 Vite 写入内容哈希（name-<hash8>.ext），内容一变名字就变，
+  //   因此可长缓存 + immutable，局域网重复进入时不再回源；
+  // - 其余文件（index.html 等）用 no-cache，保证入口 HTML 每次校验，
+  //   否则发新版本后浏览器会继续拿旧 HTML、引用已删除的旧哈希产物。
+  const hashedAssetPattern = /\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/u
   const clientDist = options.clientDist ?? path.resolve(process.cwd(), '../client/dist')
-  app.use(express.static(clientDist))
-  // SPA 回退：非 API 非 Socket.IO 的路径统一返回 index.html
-  app.get(/^(?!\/api|\/socket\.io).*/, (_request, response) =>
-    response.sendFile(path.join(clientDist, 'index.html')),
+  app.use(
+    express.static(clientDist, {
+      setHeaders: (response, filePath) => {
+        // setHeaders 拿到的是平台原生路径（Windows 为反斜杠），统一成正斜杠再匹配
+        const normalized = filePath.replace(/\\/gu, '/')
+        response.setHeader(
+          'Cache-Control',
+          hashedAssetPattern.test(normalized)
+            ? `public, max-age=${APP_CONFIG.performance.immutableAssetMaxAgeSeconds}, immutable`
+            : 'no-cache',
+        )
+      },
+    }),
   )
+  // SPA 回退：非 API 非 Socket.IO 的路径统一返回 index.html（与静态托管的入口同样不缓存）
+  app.get(/^(?!\/api|\/socket\.io).*/, (_request, response) => {
+    response.setHeader('Cache-Control', 'no-cache')
+    response.sendFile(path.join(clientDist, 'index.html'))
+  })
   // 每个新连接注册全部协议事件处理器
   io.on('connection', (socket) => registerSocketHandlers(socket, service))
 

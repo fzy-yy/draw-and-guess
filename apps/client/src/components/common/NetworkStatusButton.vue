@@ -54,7 +54,7 @@ const detail = () => strings.common.connectionDetail(props.connectionLabel, prop
 <template>
   <button
     type="button"
-    class="ui-feedback flex shrink-0 items-center gap-[0.4em] rounded-[0.6em] px-[0.65em]"
+    class="touch-target compact-control ui-feedback flex shrink-0 items-center gap-[0.4em] rounded-[0.6em] px-[0.65em]"
     :class="[qualityClass[quality], props.size === 'lg' ? 'h-[4.6cqh]' : 'h-[4.4cqh]']"
     :aria-label="strings.common.networkStatusAria(props.connectionLabel, props.latency)"
     :title="detail()"

@@ -13,7 +13,7 @@ import { strings } from '@draw-guess/strings'
 import type { ChatMessage, RoomMember } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
-import { roleTextFor } from '@/utils/roleText'
+import { roleTextFor } from '@/utils/role-text'
 import ActionPopover from '@/components/common/ActionPopover.vue'
 
 // canGuess 由父组件（useGameHud）计算，这里只用于输入框权限与提交保护。
@@ -112,7 +112,7 @@ watch(
   <!-- 右侧聊天区：消息列表 + 猜词输入 / 安全预设短语 -->
   <aside
     v-if="store.room"
-    class="flex min-w-0 flex-col border-l-[0.2cqh] border-line bg-paper px-[0.9cqw] py-[1.5cqh]"
+    class="flex min-w-0 flex-col border-l-[0.2cqh] border-line bg-paper px-[0.9cqw] py-[1.5cqh] compact-tight"
   >
     <header class="flex items-center justify-between border-b-[0.18cqh] border-line pb-[1cqh]">
       <div>
@@ -173,7 +173,7 @@ watch(
                 v-for="reaction in store.config.presets.chatReactions"
                 :key="reaction"
                 type="button"
-                class="grid h-[4.2cqh] w-[4.2cqh] place-items-center rounded-full border-[0.18cqh] border-control bg-line text-fs-18 hover:bg-sky"
+                class="grid h-[max(4.2cqh,28px)] w-[max(4.2cqh,28px)] place-items-center rounded-full border-[0.18cqh] border-control bg-line text-fs-18 hover:bg-sky"
                 :aria-label="strings.game.sendReactionAria(reaction)"
                 @click="sendPresetAndClose(reaction, close)"
               >
@@ -196,7 +196,7 @@ watch(
                 v-for="phrase in store.config.presets.safeChat"
                 :key="phrase"
                 type="button"
-                class="min-h-[3.4cqh] truncate rounded-[0.5em] bg-line px-[0.6em] py-[0.35cqh] text-left text-fs-12 font-bold text-navy hover:bg-sky"
+                class="min-h-[max(3.4cqh,28px)] truncate rounded-[0.5em] bg-line px-[0.6em] py-[0.35cqh] text-left text-fs-12 font-bold text-navy hover:bg-sky"
                 :aria-label="strings.game.sendQuickPhraseAria(phrase)"
                 :title="phrase"
                 @click="sendPresetAndClose(phrase, close)"
@@ -215,13 +215,13 @@ watch(
           v-model="guess"
           :maxlength="store.config.player.chatMaxLength"
           autocomplete="off"
-          class="h-[5.2cqh] min-w-0 flex-1 rounded-[0.65em] border-[0.2cqh] border-blue bg-white px-[0.8em] outline-0 disabled:cursor-not-allowed disabled:border-line disabled:bg-line disabled:text-muted"
+          class="h-[5.2cqh] min-w-0 flex-1 rounded-[0.65em] border-[0.2cqh] border-blue bg-white px-[0.8em] outline-0 disabled:cursor-not-allowed disabled:border-line disabled:bg-line disabled:text-muted compact-control"
           :disabled="!canGuess"
           :placeholder="strings.game.guessPlaceholder"
         />
         <button
           type="submit"
-          class="grid h-[5.2cqh] w-[5.2cqh] shrink-0 place-items-center rounded-[0.65em] bg-blue text-white disabled:cursor-not-allowed disabled:bg-line"
+          class="touch-target grid h-[5.2cqh] w-[5.2cqh] shrink-0 place-items-center rounded-[0.65em] bg-blue text-white disabled:cursor-not-allowed disabled:bg-line compact-control compact-control-square"
           :disabled="!canGuess || !guess.trim()"
           :aria-label="strings.game.sendGuessAria"
         >

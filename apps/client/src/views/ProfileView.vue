@@ -26,8 +26,9 @@ function randomize(): void {
 </script>
 
 <template>
-  <!-- 玩家资料确认页：左侧品牌介绍，右侧头像在上、昵称在下的资料表单。 -->
-  <main class="grid h-full grid-cols-[43%_57%]">
+  <!-- 玩家资料确认页：左侧品牌介绍，右侧头像在上、昵称在下的资料表单。
+       relative：为懒加载弹窗的 loading/error 占位提供定位容器（见 utils/lazy-component.ts）。 -->
+  <main class="relative grid h-full grid-cols-[43%_57%]">
     <section
       class="relative flex flex-col items-start justify-center overflow-hidden bg-navy px-[7cqw] py-[8cqh] text-white before:absolute before:right-[-12cqh] before:top-[-10cqh] before:h-[34cqh] before:w-[34cqh] before:rounded-full before:border-[0.5cqh] before:border-white/10 before:content-[''] after:absolute after:bottom-[-7cqh] after:left-[-9cqh] after:h-[22cqh] after:w-[22cqh] after:rounded-full after:border-[0.5cqh] after:border-white/10 after:content-['']"
       :aria-label="strings.profile.brandAria"
@@ -129,7 +130,8 @@ function randomize(): void {
           </template>
         </AppInput>
       </div>
-      <p class="mt-[0.6cqh] text-muted text-fs-12">
+      <!-- 昵称规则说明属非关键辅助文案：低高度舞台下折叠，把空间留给输入与主操作。 -->
+      <p class="mt-[0.6cqh] text-muted text-fs-12 compact-hide">
         {{
           strings.profile.nicknameHelp(
             store.config.player.nicknameMinLength,

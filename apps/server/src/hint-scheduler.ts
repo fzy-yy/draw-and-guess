@@ -29,7 +29,7 @@ export function createHintSchedule(input: HintScheduleInput): HintSchedule {
     const hintCount = Math.min(Math.floor(chars.length / 2), maxReveals)
     if (hintCount > 0) {
       // 用毫秒计算间隔，避免 Math.floor(windowSec/hintCount)=0 时把所有提示坍缩到同一时刻
-      //（否则长答案会失去全部逐步提示，见缺陷报告 #3）。
+      //（否则长答案会失去全部逐步提示，见 docs/adr/0001-progressive-hint-interval.md）。
       const windowMs = Math.max(0, input.totalMs * APP_CONFIG.game.progressiveHintRatio)
       const intervalMs = windowMs / hintCount
       for (let k = Math.max(1, input.revealedCount + 1); k <= hintCount; k += 1) {

@@ -266,7 +266,8 @@ export class SoundManager {
     if (port) {
       port.pause()
       port.currentTime = 0
-      port.dispose() // 释放 src，避免切歌/停止时旧实例残留（见缺陷报告 #12）
+      // 释放 src，避免切歌/停止时旧实例残留（理由与代价见 docs/adr/0006-bgm-teardown-dispose.md）
+      port.dispose()
     }
     this.currentBgmPort = null
     this.currentBgmName = null

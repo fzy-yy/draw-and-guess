@@ -96,7 +96,8 @@ onBeforeUnmount(() => window.clearInterval(tickTimer))
     </template>
 
     <!-- 可邀请玩家列表：行内发送按钮为图标按钮，冷却期显示剩余秒数 -->
-    <div class="min-h-[40cqh] py-[2cqh] px-[2em]">
+    <!-- 玩家列表在弹窗内自行滚动：人数多或舞台低时不会溢出弹窗 -->
+    <div class="min-h-[40cqh] overflow-y-auto py-[2cqh] px-[2em] overscroll-contain">
       <div class="flex flex-col gap-[0.7cqh]">
         <div
           v-for="player in availablePlayers"

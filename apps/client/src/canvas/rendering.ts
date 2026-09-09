@@ -26,7 +26,7 @@ export function renderStroke(
   }
   // 归一化坐标 [0,1] 映射到像素 [0, canvas-1]：末列/末行索引是 canvas-1。
   // 若乘 canvasWidth 会把 x=1 画到 canvasWidth 处（越过最后一个像素），
-  // 与 GameCanvas 画填充种子时 clamp 到 canvas-1 不一致（见缺陷报告 #8）。
+  // 与 GameCanvas 画填充种子时 clamp 到 canvas-1 不一致（见 docs/adr/0003-canvas-coordinate-bounds.md）。
   context.moveTo(first.x * (canvasWidth - 1), first.y * (canvasHeight - 1))
   for (const point of stroke.points.slice(start + 1))
     context.lineTo(point.x * (canvasWidth - 1), point.y * (canvasHeight - 1))

@@ -27,10 +27,11 @@ const emit = defineEmits<{ sort: [key: string]; 'toggle-all': [] }>()
   <thead class="sticky top-0 z-10 border-b-[0.2cqh] border-line bg-line">
     <tr>
       <th v-if="hasSelection" class="w-[3.2em] px-[0.5em] py-[0.55cqh]">
+        <!-- 表格内密集控件：视觉尺寸设 20px 下限（responsive.minDenseTargetPx），避免低高度舞台下缩到看不见 -->
         <input
           v-if="selectionMode === 'multiple'"
           type="checkbox"
-          class="h-[1.6cqh] w-[1.6cqh] rounded-none accent-blue"
+          class="h-[max(1.6cqh,20px)] w-[max(1.6cqh,20px)] rounded-none accent-blue"
           :disabled="selectionDisabled"
           :checked="selectAllState === 'all'"
           :indeterminate="selectAllState === 'some'"
@@ -55,7 +56,7 @@ const emit = defineEmits<{ sort: [key: string]; 'toggle-all': [] }>()
         <button
           v-if="column.sortable !== false"
           type="button"
-          class="inline-flex items-center gap-[0.25em] rounded-none px-[0.25em] py-[0.1cqh] hover:bg-line"
+          class="inline-flex items-center gap-[0.25em] rounded-none px-[0.25em] py-[max(0.1cqh,0.3em)] hover:bg-line"
           :aria-label="strings.common.sortByAria(column.label)"
           @click="emit('sort', column.key)"
         >

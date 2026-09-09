@@ -179,7 +179,7 @@ const columnWidths = computed(() => {
               <input
                 :type="activeSelectionMode === 'single' ? 'radio' : 'checkbox'"
                 :name="activeSelectionMode === 'single' ? selectionGroupName : undefined"
-                class="h-[1.6cqh] w-[1.6cqh] accent-blue disabled:cursor-not-allowed disabled:opacity-60"
+                class="h-[max(1.6cqh,20px)] w-[max(1.6cqh,20px)] accent-blue disabled:cursor-not-allowed disabled:opacity-60"
                 :class="{ 'rounded-none': activeSelectionMode === 'multiple' }"
                 :disabled="props.selectionDisabled"
                 :checked="rowAt(virtualRow.index) ? isSelected(rowAt(virtualRow.index)!) : false"

@@ -52,10 +52,12 @@ function handleEnter(): void {
       <Search class="h-[3.2cqh] w-[3.2cqh] text-muted" />
     </template>
     <template #suffix>
+      <!-- 内联清除按钮：视觉尺寸设 24px 下限（WCAG 2.5.8 目标尺寸），
+           不用 .touch-target 外扩——外扩命中区会覆盖左侧文本输入区，点击文字变成清空。 -->
       <button
         v-if="model"
         type="button"
-        class="grid h-[3.2cqh] w-[3.2cqh] place-items-center rounded-full text-muted hover:bg-line/60 hover:text-navy transition-colors"
+        class="grid h-[max(3.2cqh,24px)] w-[max(3.2cqh,24px)] place-items-center rounded-full text-muted hover:bg-line/60 hover:text-navy transition-colors"
         :aria-label="strings.common.clearSearchAria"
         @click="clear"
       >

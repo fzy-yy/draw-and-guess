@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 import { APP_CONFIG } from '../config/index.ts'
 import type { VocabularyPackageInfo, VocabularyWord } from '@draw-guess/shared'
 import type { VocabularyMeta } from './contract.ts'
-import { SqliteProvider } from './sqlite.provider.ts'
+import { SqliteProvider } from './sqlite-provider.ts'
 
 export type { LoadedVocabulary, VocabularyMeta, VocabularyProvider } from './contract.ts'
 
@@ -102,7 +102,7 @@ export async function loadVocabulary(dir?: string): Promise<VocabularyRegistry> 
   }
 
   // 默认选择词数最多的词库；词数相同时按 id 的 UTF-16 码元升序稳定选择，
-  // 避免依赖 readdirSync 遍历序导致的结果不确定（见缺陷报告 #10）。
+  // 避免依赖 readdirSync 遍历序导致的结果不确定（见 docs/adr/0004-vocabulary-default-package.md）。
   const byId = (left: { id: string }, right: { id: string }): number =>
     left.id < right.id ? -1 : left.id > right.id ? 1 : 0
   const sortedPackages = [...packages].sort(

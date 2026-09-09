@@ -50,7 +50,7 @@ function handleKeyDown(event: KeyboardEvent): void {
 
 <template>
   <div
-    class="flex h-[4.8cqh] items-center gap-[0.5em] rounded-[0.7em] border-[0.18cqh] bg-white px-[0.75em] transition-colors focus-within:border-navy"
+    class="flex h-[4.8cqh] items-center gap-[0.5em] rounded-[0.7em] border-[0.18cqh] bg-white px-[0.75em] transition-colors focus-within:border-navy compact-control"
     :class="[
       error ? 'border-red' : 'border-control',
       disabled ? 'cursor-not-allowed opacity-50 bg-line/40' : '',

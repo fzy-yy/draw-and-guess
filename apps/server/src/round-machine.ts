@@ -230,7 +230,7 @@ export class RoundMachine {
       let emittedCount = 0
       let rank = 0
       // 排名按实际产出的条目数递增，而不是用被 flatMap 丢弃成员后的 index+1，
-      // 避免「成员无 profile 被丢弃」时后续名次跳号（见缺陷报告 #6）。
+      // 避免「成员无 profile 被丢弃」时后续名次跳号（见 docs/adr/0002-final-ranking-no-gaps.md）。
       game.finalRanking = rankedMembers.flatMap<FinalRankingEntry>((member) => {
         const player = this.service.players.get(member.playerId)
         const profile = member.leftProfile ?? player?.profile

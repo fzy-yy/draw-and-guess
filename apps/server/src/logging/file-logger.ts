@@ -23,7 +23,7 @@ export function prepareLogDir(maxFiles: number): string {
   for (let suffix = 2; existing.has(basename(newPath)); suffix += 1)
     newPath = join(LOG_DIR, base.replace(/\.log$/u, `-${suffix}.log`))
   // 按文件创建时间升序删最旧：绝对不能按文件名排序，因为同秒文件名 `-10.log < -2.log`，
-  // 会让字典序把后创建的文件当作更旧删除（见缺陷报告 #11）。
+  // 会让字典序把后创建的文件当作更旧删除（见 docs/adr/0005-log-retention-order.md）。
   const fileAge = (name: string): number => {
     const stat = statSync(join(LOG_DIR, name))
     // birthtime 为创建时间；极少数不支持的文件系统回退 mtime。

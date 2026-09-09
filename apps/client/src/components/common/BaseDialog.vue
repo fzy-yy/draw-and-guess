@@ -128,8 +128,10 @@ onBeforeUnmount(releaseFocus)
 
 <template>
   <!-- 用 <Transition name="modal"> 包裹，让遮罩淡入淡出、对话框同步缩放（见 index.css 的 modal-* 钩子）。
-       v-if="open" 放在内部根元素上，保证 enter/leave 只在开关时触发，Esc/关闭钮行为不变。 -->
-  <Transition name="modal">
+       v-if="open" 放在内部根元素上，保证 enter/leave 只在开关时触发，Esc/关闭钮行为不变。
+       appear：懒加载弹窗会在「首次打开」时才挂载（此时 open 已为 true），
+       没有 appear 的话首次出现会缺一次淡入缩放，与其它弹窗手感不一致。 -->
+  <Transition name="modal" appear>
     <div
       v-if="open"
       ref="overlayRef"
@@ -154,7 +156,7 @@ onBeforeUnmount(releaseFocus)
           <button
             v-if="closeAria && dismissible"
             type="button"
-            class="grid h-[4cqh] w-[4cqh] place-items-center rounded-full bg-white/10 text-white text-fs-18"
+            class="touch-target compact-control compact-control-square grid h-[4cqh] w-[4cqh] place-items-center rounded-full bg-white/10 text-white text-fs-18"
             :aria-label="closeAria"
             @click="closeDialog"
           >

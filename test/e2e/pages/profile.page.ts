@@ -44,7 +44,7 @@ export class ProfilePage {
   }
 
   async enterLobby() {
-    const submitBtn = this.page.getByRole('button', { name: /进入.*大厅/ })
+    const submitBtn = this.page.getByRole('button', { name: /^进入.*大厅$/ })
     await expect(submitBtn).toBeEnabled({ timeout: 10_000 })
     await submitBtn.click()
     // 等待大厅标题出现

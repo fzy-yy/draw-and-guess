@@ -77,7 +77,10 @@ async function submitCreate(): Promise<void> {
       <h2 id="create-title">{{ strings.lobby.createDialogTitle }}</h2>
     </template>
 
-    <div class="grid grid-cols-2 gap-[1.8cqh_1.4em] px-[2em] py-[2.8cqh]">
+    <!-- 表单区在弹窗内自行滚动：低高度舞台下不会把底部操作按钮挤出可视区 -->
+    <div
+      class="grid min-h-0 grid-cols-2 gap-[1.8cqh_1.4em] overflow-y-auto px-[2em] py-[2.8cqh] overscroll-contain"
+    >
       <!-- 可见性单选组 -->
       <fieldset class="col-span-full m-0 grid grid-cols-2 gap-[0.8em] border-0 p-0">
         <legend class="mb-[0.7cqh] font-bold">{{ strings.lobby.visibilityField }}</legend>

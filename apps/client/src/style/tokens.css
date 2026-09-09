@@ -6,18 +6,22 @@
   --font-mono: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
 
   /* ========== 偶数字号标尺（基准 1em = 16px @ 1080p 舞台） ==========
-     字号均为偶数（10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 96），底层使用相对比例 em 随舞台等比缩放 */
-  --text-fs-10: 0.625em;
-  --text-fs-12: 0.75em;
-  --text-fs-14: 0.875em;
-  --text-fs-16: 1em;
-  --text-fs-18: 1.125em;
-  --text-fs-20: 1.25em;
-  --text-fs-24: 1.5em;
-  --text-fs-28: 1.75em;
-  --text-fs-36: 2.25em;
-  --text-fs-48: 3em;
-  --text-fs-96: 6em;
+     字号均为偶数（10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 96），底层使用相对比例 em 随舞台等比缩放；
+     每档同时用 max() 声明**绝对像素下限**，保证低高度舞台下字号不再无限缩小
+     （正文 fs-16 ≥ 12px、辅助 fs-12 ≥ 10px、微标签 fs-10 ≥ 9px，阈值见 packages/config/src/settings.ts 的
+      responsive.minBodyFontPx / minSecondaryFontPx / minMicroFontPx）。
+     下限仅在舞台高度不足时生效：1280×720 及以上（舞台高 ≥ 700px）仍完全按 em 等比缩放。 */
+  --text-fs-10: max(0.625em, 9px);
+  --text-fs-12: max(0.75em, 10px);
+  --text-fs-14: max(0.875em, 11px);
+  --text-fs-16: max(1em, 12px);
+  --text-fs-18: max(1.125em, 13px);
+  --text-fs-20: max(1.25em, 14px);
+  --text-fs-24: max(1.5em, 16px);
+  --text-fs-28: max(1.75em, 18px);
+  --text-fs-36: max(2.25em, 22px);
+  --text-fs-48: max(3em, 28px);
+  --text-fs-96: max(6em, 40px);
 
   /* ========== 背景与基色令牌 ========== */
   --color-black: #000000;

@@ -2,7 +2,7 @@ import { onBeforeUnmount, ref, type Ref } from 'vue'
 import { useTimeoutFn } from '@vueuse/core'
 import { APP_CONFIG } from '@draw-guess/config'
 import type { DrawPoint, FillCommand, Stroke, StrokeAck, ToolKind } from '@draw-guess/shared'
-import { createUuid } from '@/utils/createUuid'
+import { createUuid } from '@/utils/create-uuid'
 import { renderStroke } from '@/canvas/rendering'
 import type { RequestFailure, RequestResult } from '@/stores/request'
 

@@ -21,4 +21,31 @@
   .round-icon-btn {
     @apply grid h-[4.2cqh] w-[4.2cqh] shrink-0 place-items-center rounded-full border-[0.18cqh] border-control bg-white text-blue disabled:cursor-not-allowed disabled:opacity-40;
   }
+
+  /*
+   * 触控命中区契约（Touch Target）：
+   * 视觉尺寸保持不变，命中区经 ::after 扩展到至少 44×44 CSS px（WCAG 2.5.5 AAA，
+   * 数值见 packages/config/src/settings.ts 的 responsive.minTouchTargetPx）。
+   *
+   * 必须定义在 components 层而非 utilities 层：position: relative 只是「默认定位」，
+   * 需要让调用处的 Tailwind absolute/fixed（utilities 层）能够覆盖它——
+   * 例如 PhaseOverlay 的「换一组」按钮是 absolute 定位，若本类在 utilities 层会把定位改回 relative。
+   *
+   * 只用于「关键交互控件」：动作按钮、图标按钮、开关行、弹窗按钮。
+   * 密集控件（画板色板、表情、表格复选框）横向间距不足以容纳 44px 命中区，
+   * 接入会导致相邻命中区重叠误点，因此不接入本类，改走 responsive.minDenseTargetPx 降级标准。
+   */
+  .touch-target {
+    position: relative;
+  }
+
+  .touch-target::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    translate: -50% -50%;
+  }
 }

@@ -48,7 +48,7 @@ function openSettings(): void {
 </script>
 
 <template>
-  <main class="grid h-full grid-cols-[minmax(0,1fr)_28%] grid-rows-[11%_89%] bg-sky">
+  <main class="grid h-full grid-cols-[minmax(0,1fr)_28%] grid-rows-[11%_89%] bg-sky compact-rows-2">
     <StageHeader>
       <template #leading>
         <AvatarImage
@@ -79,7 +79,7 @@ function openSettings(): void {
           />
           <button
             type="button"
-            class="flex items-center gap-[0.4em] rounded-[0.55em] bg-white/5 px-[0.8em] py-[0.8cqh] text-sky hover:bg-white/10 transition-colors"
+            class="touch-target compact-control flex items-center gap-[0.4em] rounded-[0.55em] bg-white/5 px-[0.8em] py-[0.8cqh] text-sky hover:bg-white/10 transition-colors"
             @click="openSettings"
           >
             <Settings /> {{ strings.lobby.settingsEntry }}
@@ -88,7 +88,10 @@ function openSettings(): void {
       </template>
     </StageHeader>
 
-    <section class="min-w-0 border-r-[0.2cqh] border-line px-[2cqw] py-[3cqh]">
+    <!-- 左侧房间区：flex 纵向骨架 + 房间列表 flex-1，低高度时列表内部滚动而不裁切 -->
+    <section
+      class="flex min-h-0 min-w-0 flex-col border-r-[0.2cqh] border-line px-[2cqw] py-[3cqh] compact-tight"
+    >
       <div class="flex items-end justify-between">
         <SectionHeader :eyebrow="strings.lobby.roomsLabel" :title="strings.lobby.roomsTitle" />
         <span class="text-muted text-fs-14">{{
@@ -105,7 +108,7 @@ function openSettings(): void {
         -->
         <button
           type="button"
-          class="flex h-[12cqh] items-center gap-[1em] rounded-[0.9em] bg-blue px-[1.4em] text-left text-white ui-feedback"
+          class="flex min-h-[12cqh] items-center gap-[1em] rounded-[0.9em] bg-blue px-[1.4em] text-left text-white ui-feedback"
           @click="showCreate = true"
         >
           <CirclePlus class="first:h-[4.5cqh] first:w-[4.5cqh] first:text-yellow" />
@@ -118,7 +121,7 @@ function openSettings(): void {
 
         <button
           type="button"
-          class="flex h-[12cqh] items-center gap-[1em] rounded-[0.9em] bg-navy px-[1.4em] text-left text-white ui-feedback"
+          class="flex min-h-[12cqh] items-center gap-[1em] rounded-[0.9em] bg-navy px-[1.4em] text-left text-white ui-feedback"
           @click="showJoinPrivate = true"
         >
           <KeyRound class="first:h-[4.5cqh] first:w-[4.5cqh] first:text-yellow" />
@@ -131,7 +134,7 @@ function openSettings(): void {
       </div>
 
       <div
-        class="flex h-[49cqh] flex-col gap-[0.85cqh] overflow-y-auto overscroll-contain"
+        class="flex min-h-0 flex-1 flex-col gap-[0.85cqh] overflow-y-auto overscroll-contain"
         :aria-label="strings.lobby.roomListAria"
       >
         <article
@@ -195,7 +198,7 @@ function openSettings(): void {
       </div>
     </section>
 
-    <aside class="flex min-w-0 flex-col bg-paper px-[1.6cqw] pb-[2cqh] pt-[3cqh]">
+    <aside class="flex min-w-0 flex-col bg-paper px-[1.6cqw] pb-[2cqh] pt-[3cqh] compact-tight">
       <div class="flex items-end justify-between">
         <SectionHeader :eyebrow="strings.lobby.playersLabel" :title="strings.lobby.playersTitle" />
         <span
@@ -240,8 +243,9 @@ function openSettings(): void {
         </p>
       </div>
 
+      <!-- 局域网提示属非关键辅助说明：低高度舞台下折叠。 -->
       <footer
-        class="flex items-start gap-[0.65em] border-l-[0.35cqh] border-l-blue bg-sky px-[0.75em] py-[1.1cqh] text-fs-12 text-blue"
+        class="flex items-start gap-[0.65em] border-l-[0.35cqh] border-l-blue bg-sky px-[0.75em] py-[1.1cqh] text-fs-12 text-blue compact-hide"
       >
         <Wifi />
         <span class="flex flex-col leading-[1.45]">

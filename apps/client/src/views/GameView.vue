@@ -20,11 +20,14 @@ import {
   PhaseOverlay,
   ScoreStrip,
 } from '@/components/game'
-import SettingsView from '@/views/SettingsView.vue'
+import { defineLazyComponent } from '@/utils/lazy-component'
 import { useGameHud } from '@/composables/useGameHud'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { fireGuessCorrectConfetti } from '@/utils/confetti'
 import type { RequestResult } from '@/stores/request'
+
+// 对局内设置页复用同一个懒加载定义（低频模块，不进首屏包）
+const SettingsView = defineLazyComponent(() => import('@/views/SettingsView.vue'))
 
 const store = useGameStore()
 
@@ -34,7 +37,8 @@ watch(
   (guessed, prev) => {
     if (guessed && !prev && store.room?.phase === 'drawing') {
       if (store.settings.animationsEnabled) {
-        fireGuessCorrectConfetti()
+        // 礼花模块按需下载，失败静默降级（见 utils/confetti.ts）
+        void fireGuessCorrectConfetti()
       }
     }
   },
@@ -106,7 +110,7 @@ function handleFullscreenToggle(): void {
        画框以外区域统一使用 paper（近白）语义色，与画布白底协调 -->
   <main
     v-if="store.room && game"
-    class="grid h-full grid-cols-[17%_minmax(0,61%)_22%] grid-rows-[11%_minmax(0,76%)_13%] bg-paper"
+    class="grid h-full grid-cols-[17%_minmax(0,61%)_22%] grid-rows-[11%_minmax(0,76%)_13%] bg-paper compact-rows-3"
   >
     <!-- 顶栏 HUD：回合数、当前画家、答案、计时器、网络状态与暂停按钮 -->
     <GameHud

@@ -1,7 +1,7 @@
 /**
  * 浏览器安全的应用配置 workspace 包（统一聚合导出）。
  *
- * 各领域配置按 app/network/player/room/game/drawing/vocabulary/audio/localSettings/ui/presets/public
+ * 各领域配置按 app/network/player/room/game/drawing/vocabulary/audio/localSettings/ui/responsive/performance/presets/public
  * 拆分在包内，本文件统一组装成 APP_CONFIG；协议约束引用 @draw-guess/shared，服务端私有策略不在本包声明。
  *
  * UI 展示文案由独立的 @draw-guess/strings workspace 包提供。
@@ -13,7 +13,7 @@ import { game } from './game.ts'
 import { drawing } from './drawing.ts'
 import { vocabulary } from './vocabulary.ts'
 import { audio, soundCatalog } from './audio.ts'
-import { localSettings, presets, ui } from './settings.ts'
+import { localSettings, performance, presets, responsive, ui } from './settings.ts'
 import { PUBLIC_CONFIG, type PublicConfig } from './public.ts'
 import {
   ROOM_PRESETS,
@@ -40,6 +40,8 @@ export const APP_CONFIG = {
   audio,
   localSettings,
   ui,
+  responsive,
+  performance,
   presets,
 } as const
 
@@ -56,6 +58,8 @@ export {
   localSettings,
   presets,
   ui,
+  responsive,
+  performance,
   PUBLIC_CONFIG,
   type PublicConfig,
   ROOM_PRESETS,

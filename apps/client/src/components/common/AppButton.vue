@@ -31,9 +31,10 @@ const props = withDefaults(
 )
 
 // 三色动作按钮共用底座 + 各自颜色/描边；按钮统一不使用阴影；支持激活态扩展。
+// touch-target：命中区 ≥44×44（视觉尺寸不变）；compact-control：低高度舞台下保底可点高度。
 const variantClasses = computed(() => {
   const base =
-    'inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-bold'
+    'touch-target compact-control inline-flex min-h-[5.2cqh] items-center justify-center gap-[0.65em] rounded-[0.7em] px-[1.35em] font-bold'
   switch (props.variant) {
     case 'secondary':
       if (props.active) {

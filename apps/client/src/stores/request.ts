@@ -11,7 +11,7 @@ import type {
   ClientResponse,
   ErrorCode,
 } from '@draw-guess/shared'
-import { createUuid } from '@/utils/createUuid'
+import { createUuid } from '@/utils/create-uuid'
 import type { Socket } from 'socket.io-client'
 import { reactive, readonly } from 'vue'
 

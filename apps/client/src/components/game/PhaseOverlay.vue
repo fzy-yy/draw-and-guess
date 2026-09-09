@@ -99,7 +99,7 @@ function chooseWord(wordId: string): void {
           v-for="option in game.wordOptions ?? []"
           :key="option.id"
           type="button"
-          class="flex min-h-[7cqh] min-w-[12cqw] flex-col items-center justify-center gap-[0.3cqh] rounded-[0.7em] border-[0.18cqh] border-navy border-b-[0.6cqh] border-b-yellow bg-yellow text-navy px-[1em] text-fs-20 font-bold cursor-pointer transition-transform active:scale-95"
+          class="touch-target compact-control flex min-h-[7cqh] min-w-[12cqw] flex-col items-center justify-center gap-[0.3cqh] rounded-[0.7em] border-[0.18cqh] border-navy border-b-[0.6cqh] border-b-yellow bg-yellow text-navy px-[1em] text-fs-20 font-bold cursor-pointer transition-transform active:scale-95"
           @click="chooseWord(option.id)"
         >
           <span class="leading-[1.2]">{{ option.text }}</span>

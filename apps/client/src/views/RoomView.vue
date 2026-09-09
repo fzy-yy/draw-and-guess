@@ -1,6 +1,6 @@
 <!-- 房间等待界面：固定六个游戏席位、权威准备门槛、房主规则与本局词库管理。 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Check, ClipboardCopy, KeyRound, LogOut, Play, ShieldCheck } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
@@ -13,14 +13,12 @@ import {
   NetworkStatusButton,
   StageHeader,
 } from '@/components/common'
-import {
-  InviteDialog,
-  RuleSummary,
-  RulesDialog,
-  SeatGrid,
-  VocabularyDialog,
-} from '@/components/room'
+import { InviteDialog, RuleSummary, RulesDialog, SeatGrid } from '@/components/room'
+import { defineLazyComponent } from '@/utils/lazy-component'
 import type { RoomSettings } from '@draw-guess/shared'
+
+// 词库管理弹窗低频且体积较大（含虚拟表格依赖）：懒加载，不进首屏包。
+const VocabularyDialog = defineLazyComponent(() => import('@/components/room/VocabularyDialog.vue'))
 
 const store = useGameStore()
 // ---- 弹窗开关状态 ----
@@ -30,6 +28,13 @@ const showInvite = ref(false) // 邀请弹窗（可用玩家计算与发送在 I
 const showLeaveConfirm = ref(false) // 退出确认弹窗
 const settingsDraft = ref<RoomSettings>() // 规则编辑草稿（保存前可取消）
 const vocabularyLoading = ref(false) // 词库拉取中（RuleSummary 禁用按钮 + VocabularyDialog v-model）
+
+// 词库弹窗首次打开后才挂载：否则常驻渲染会在进入房间时就把 chunk 拉下来；
+// 挂载后保持常驻，以保留 BaseDialog 的关闭过渡动画。
+const vocabularyMounted = ref(false)
+watch(showVocabulary, (open) => {
+  if (open) vocabularyMounted.value = true
+})
 
 // 开局/全员就绪判定：服务端快照已把房主裁剪为「隐式已准备」（见 snapshot.ts 的 ready 字段），
 // 因此房主与非房主共用同一个条件：≥ minPlayers 名可玩成员在线且全部已准备（下限取共享配置，与服务端开局门槛一致）。
@@ -81,9 +86,10 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
 
 <template>
   <!-- 房间等待界面骨架：左侧席位区 + 右侧控制区，顶栏含房间名与退出 -->
+  <!-- relative：为懒加载词库弹窗的 loading/error 占位提供定位容器（见 utils/lazy-component.ts） -->
   <main
     v-if="store.room"
-    class="grid h-full grid-cols-[minmax(0,67%)_33%] grid-rows-[11%_89%] bg-sky"
+    class="relative grid h-full grid-cols-[minmax(0,67%)_33%] grid-rows-[11%_89%] bg-sky compact-rows-2"
   >
     <!-- 顶栏：房间名、房间可见性标识、连接状态与退出按钮（共享 StageHeader 骨架） -->
     <StageHeader>
@@ -110,7 +116,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           <button
             v-if="store.room.privateJoinCode"
             type="button"
-            class="flex items-center gap-[0.4em] py-[0.55cqh] px-[0.75em] text-navy bg-yellow rounded-[0.55em] tracking-[0.16em]"
+            class="touch-target compact-control flex items-center gap-[0.4em] py-[0.55cqh] px-[0.75em] text-navy bg-yellow rounded-[0.55em] tracking-[0.16em]"
             :aria-label="strings.room.copyPrivateCodeAria"
             @click="handleCopyPrivateCode"
           >
@@ -144,7 +150,10 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
     <SeatGrid />
 
     <!-- 右侧控制区：规则摘要、词库管理、邀请、准备与开始 -->
-    <aside class="min-w-0 flex flex-col py-[2.5cqh] px-[1.6cqw] bg-paper">
+    <!-- 右侧控制区：低高度时整列内部滚动，保证准备/开始按钮始终可达 -->
+    <aside
+      class="min-w-0 flex flex-col py-[2.5cqh] px-[1.6cqw] bg-paper compact-tight compact-scroll"
+    >
       <RuleSummary
         :vocabulary-loading="vocabularyLoading"
         @open-vocabulary="openVocabulary"
@@ -154,10 +163,10 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
 
       <!-- 房主只显示开始按钮；其他玩家保留准备按钮，观战者不能参与准备。 -->
       <div class="mt-auto pt-[1.3cqh] border-t-[0.2cqh] border-t-line text-center">
-        <p v-if="store.me?.spectating" class="min-h-[2.4cqh] text-muted text-fs-12">
+        <p v-if="store.me?.spectating" class="min-h-[1.6em] text-muted text-fs-12">
           {{ strings.room.spectatorReadyHint }}
         </p>
-        <p v-else-if="!allSet" class="min-h-[2.4cqh] text-muted text-fs-12">
+        <p v-else-if="!allSet" class="min-h-[1.6em] text-muted text-fs-12">
           {{
             (store.room.members || []).filter((member) => !member.spectating).length <
             store.config.player.minPlayers
@@ -169,7 +178,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
         </p>
         <p
           v-else
-          class="min-h-[2.4cqh] flex items-center justify-center gap-[0.3em] text-success-fg text-fs-12"
+          class="min-h-[1.6em] flex items-center justify-center gap-[0.3em] text-success-fg text-fs-12"
         >
           <Check /> {{ strings.room.allReady }}
         </p>
@@ -214,6 +223,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
       只由 v-model:open 控制显隐。
     -->
     <VocabularyDialog
+      v-if="vocabularyMounted"
       v-model:open="showVocabulary"
       v-model:loading="vocabularyLoading"
       @close="showVocabulary = false"

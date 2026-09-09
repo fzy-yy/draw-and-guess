@@ -21,7 +21,11 @@ import {
   type ShortcutSettingKey,
 } from '@/utils/keyboard'
 import { StageHeader, SideNav, type SideNavItem } from '@/components/common'
-import { AccessibilityTab, AudioTab, DiagnosticsTab, ShortcutsTab } from '@/components/settings'
+import { AccessibilityTab, AudioTab, ShortcutsTab } from '@/components/settings'
+import { defineLazyComponent } from '@/utils/lazy-component'
+
+// 诊断页低频（含诊断文本与恢复/清除入口）：懒加载，切到该分类时才下载
+const DiagnosticsTab = defineLazyComponent(() => import('@/components/settings/DiagnosticsTab.vue'))
 
 const store = useGameStore()
 const props = withDefaults(
@@ -137,13 +141,13 @@ function goBack(): void {
 
 <template>
   <!-- 设置子页骨架：顶栏 + 下方左右两栏（左侧导航 / 右侧正文：声音/显示/快捷键/资料诊断） -->
-  <main class="grid h-full grid-rows-[11%_minmax(0,1fr)] bg-sky">
+  <main class="grid h-full grid-rows-[11%_minmax(0,1fr)] bg-sky compact-rows-2">
     <!-- 顶栏：复用 StageHeader 统一步调骨架，返回动作可配置，header-actions 插槽可按使用场景追加按钮。 -->
     <StageHeader>
       <template #leading>
         <button
           type="button"
-          class="flex items-center gap-[0.45em] rounded-[0.55em] bg-white/10 px-[0.8em] py-[0.8cqh] text-white"
+          class="touch-target compact-control flex items-center gap-[0.45em] rounded-[0.55em] bg-white/10 px-[0.8em] py-[0.8cqh] text-white"
           @click="goBack"
         >
           <ArrowLeft /> {{ props.backLabel }}
@@ -164,10 +168,13 @@ function goBack(): void {
       </template>
     </StageHeader>
 
-    <!-- 下方两栏：左侧分类导航（声音 / 显示与操作 / 快捷键 / 资料与诊断），右侧对应正文 -->
-    <div class="grid min-h-0 grid-cols-[15%_minmax(0,1fr)]">
+    <!-- 下方两栏：左侧分类导航（声音 / 显示与操作 / 快捷键 / 资料与诊断），右侧对应正文。
+         导航列取「15% 与 11em 的较大值」：低高度舞台下 15% 会窄到把条目文字截断，需保底宽度。 -->
+    <div class="grid min-h-0 grid-cols-[minmax(11em,15%)_minmax(0,1fr)]">
       <SideNav v-model="tab" :items="navItems" :label="strings.settings.categoryAria" />
-      <div class="min-h-0 min-w-0">
+      <!-- 正文区：低高度舞台下允许本区内部滚动，不裁切任何设置项；
+           relative：为懒加载诊断页的 loading/error 占位提供定位容器（见 utils/lazy-component.ts） -->
+      <div class="relative min-h-0 min-w-0 compact-scroll">
         <!-- 声音设置 -->
         <AudioTab v-if="tab === 'audio'" />
         <!-- 显示与操作设置 -->

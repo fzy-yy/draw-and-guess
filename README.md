@@ -8,7 +8,7 @@
 - pnpm 10+
 - Chromium、Edge、Chrome 或 Firefox 的现代版本
 
-前端已引入并可直接使用：`@tanstack/vue-virtual`（虚拟列表）、`@vueuse/core` + `@vueuse/integrations`（组合式工具，含 `useFocusTrap`）、`nanoid`（短 ID）、`clsx` + `tailwind-merge`（类名合并 `cn()`）；**Toast 为自建组件（`AppToaster.vue` + `useToasts.ts`）**，已替换第三方通知库；UI 图标来自 `lucide-vue-next`，样式基于 Tailwind CSS v4（容器单位 `cqh/cqw` 整屏缩放）。画布渲染采用「归一化点列 + 直线段描边」的增量同步模型。服务端另含 `better-sqlite3`（本地持久化，WAL）、`compression`（静态 gzip）。
+前端运行时依赖：`vue@3` + `pinia`（状态）、`socket.io-client`（实时通信）、`zod`（经共享包引入，协议校验）、`@tanstack/vue-virtual`（词库虚拟列表，随词库弹窗按需加载）、`@vueuse/core` + `@vueuse/integrations`（组合式工具，含 `useFocusTrap`）、`nanoid`（短 ID）、`clsx` + `tailwind-merge`（类名合并 `cn()`）、`canvas-confetti`（猜中礼花，按需加载）、`focus-trap`（弹窗焦点陷阱 peer）。**Toast 为自建组件（`components/common/AppToaster.vue` + `composables/useToasts.ts`）**，未使用第三方通知库；UI 图标来自 `lucide-vue-next`，样式基于 Tailwind CSS v4（容器单位 `cqh/cqw` 整屏缩放）。画布渲染采用「归一化点列 + 直线段描边」的增量同步模型。服务端另含 `better-sqlite3`（本地持久化，WAL）、`compression`（静态 gzip）。
 
 ## 十分钟启动
 
@@ -46,6 +46,8 @@ pnpm test:e2e         # Playwright 跨浏览器端到端测试
 ```
 
 > 测试分为 Vitest 单元、组件、集成三层及 Playwright E2E；CI 会执行 V8 覆盖率门禁并上传 HTML/LCOV 报告。
+> 提交前最低验证：`pnpm format && pnpm lint && pnpm typecheck && pnpm build`；
+> 涉及规则/状态机/绘图/持久化等关键逻辑时额外跑 `pnpm test:unit` 与 `pnpm test:e2e`（均为隔离环境，不碰真实数据）。
 
 ## 配置与词库
 
@@ -60,8 +62,13 @@ pnpm test:e2e         # Playwright 跨浏览器端到端测试
 
 ```text
 apps/client/       Vue 3 游戏舞台、内置 SVG 头像、Pinia 状态与 Canvas 实时画板
-  └─ src/components/  # 按领域拆分：game/ 对局、room/ 房间、settings/ 设置；
-                      # 共享组件 AppButton / BaseDialog / ConfirmDialog 放在 components/ 根目录
+  └─ src/components/  # 按领域分子目录，各自提供 index.ts barrel：
+                      #   common/   共享原语（AppButton / BaseDialog / ConfirmDialog / 输入与开关等）
+                      #   game/     对局（HUD / 画布 / 工具栏 / 聊天 / 阶段遮罩）
+                      #   lobby/    大厅弹窗（建房 / 私密房加入）
+                      #   room/     房间（席位 / 规则 / 邀请 / 词库）
+                      #   settings/ 设置页分类（声音 / 显示 / 快捷键 / 诊断）
+  └─ src/views/       ProfileView / LobbyView / RoomView / GameView / SettingsView
 apps/server/       Express、Socket.IO、权威领域状态与 SQLite 本地持久化
   └─ src/config/                # 服务端私有限频、清理、数据库路径与部署参数
   └─ src/db/ 与 src/repositories/   # 数据库连接/迁移与仓储（player/archive）
@@ -69,9 +76,18 @@ packages/shared/   DTO、Zod schema、协议常量、事件名和领域纯函数
 packages/config/   浏览器安全的公开应用配置 workspace 包
 packages/strings/  客户端与服务端展示文案 workspace 包
 vocabulary/        唯一权威词库目录（SQLite 数据库，Provider 加载）
+docs/adr/          架构决策记录（背景 / 决策 / 后果），源码注释引用此处
 ```
 
-客户端样式采用「单一 `apps/client/src/style/index.css`（Tailwind `@theme` 令牌 + `@layer base` 全局层与 `@layer components` 共享组件类）+ 组件内行内 Tailwind 类」的约定，不新建分片 CSS 文件。
+客户端样式采用**模块化分层**：`apps/client/src/style/index.css` 只做聚合导入，具体规则分散在同目录
+`tokens.css`（`@theme` 设计令牌）、`base.css`（reset 与舞台容器上下文）、`components.css`（共享组件类）、
+`utilities.css`（交互修饰类与紧凑布局契约类）、`animations.css`（过渡钩子与关键帧）、`other.css`（设备方向）。
+组件/页面自身视觉一律写成 Vue 模板内的行内 Tailwind 类；不在共享层之外新增原生 CSS 类选择器，也不新建分片 CSS 文件。
+
+## 版本与发布
+
+- **应用版本的唯一权威源**是 [`packages/config/src/app.ts`](packages/config/src/app.ts) 的 `app.version`：启动横幅、`/api/health`、设置页诊断都取它，文档里出现的版本号也必须与之一致。
+- 仓库内各 `package.json`（根与 `apps/*`、`packages/*`）都是 `private: true` 的 workspace 包，**不发布到 npm**；其中的 `version` 字段只是占位，与产品版本无关，不要作为版本依据。
 
 > 完整文件职责逐行说明与项目约定，见根级 [AGENTS.md](AGENTS.md)（面向后续开发者/AI，最权威）。
 
@@ -83,7 +99,7 @@ vocabulary/        唯一权威词库目录（SQLite 数据库，Provider 加载
 
 **浏览器边界**：HTTP API、Socket.IO polling 与 WebSocket 握手共用本机/私网 Origin 白名单。响应启用仅覆盖同源生产脚本、Socket.IO、音频、SVG/data/blob 资源与 Vue 行内 style 属性的 CSP；为保证纯 HTTP 局域网访问，不启用 `upgrade-insecure-requests` 或 HSTS。本项目仍仅面向可信局域网，不应通过端口转发、反向代理或公网 IP 暴露到互联网。
 
-**状态持久化边界**：服务端为「内存权威 + 低频落盘」——房间、成员席位、画布笔画、聊天消息、计时器和对局实时状态均不落盘，重启即清空；仅玩家身份摘要/资料/偏好与完成局战报经 SQLite 落盘（`apps/server/data/game.db`）。重启后身份可凭客户端持有的令牌在宽限内恢复到大厅，历史战报可查。业务日志写入 `apps/server/log/` 文件（不输出到控制台，避免 Windows 控制台 GBK 解码 UTF-8 中文乱码）。浏览器仅在本机保存昵称、内置头像编号、本地设置和短期恢复令牌。
+**状态持久化边界**：服务端为「内存权威 + 低频落盘」——房间、成员席位、画布笔画、聊天消息、计时器和对局实时状态均不落盘，重启即清空；仅玩家身份摘要/资料/偏好与完成局战报经 SQLite 落盘（`apps/server/data/game.db`）。重启后身份可凭客户端持有的令牌在宽限内恢复到大厅，历史战报可查。业务日志写入 `apps/server/log/` 文件（不输出到控制台，避免 Windows 控制台 GBK 解码 UTF-8 中文乱码）。浏览器本地只保存三个键：`draw-and-guess-profile-v1`（昵称 / 内置头像编号 / 短期恢复令牌）、`draw-and-guess-settings-v1`（本地设置），以及 `sessionStorage` 的 `draw-and-guess-fullscreen-prompt-v1`（全屏提示已读标记）。
 
 ## 新版交互说明
 

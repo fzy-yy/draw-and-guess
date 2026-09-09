@@ -98,7 +98,10 @@ function selectPreset(preset: RoomPresetId | 'custom'): void {
       ></SectionHeader>
     </template>
 
-    <div class="min-h-0 overflow-y-auto grid grid-cols-2 gap-[1.5cqh_1.8em] py-[2.2cqh] px-[2em]">
+    <!-- 表单区在弹窗内自行滚动：低高度舞台下不会把底部操作按钮挤出可视区 -->
+    <div
+      class="grid min-h-0 grid-cols-2 gap-[1.5cqh_1.8em] overflow-y-auto py-[2.2cqh] px-[2em] overscroll-contain"
+    >
       <RuleSelectField
         :model-value="selectedPreset"
         class="col-span-full"
@@ -106,7 +109,6 @@ function selectPreset(preset: RoomPresetId | 'custom'): void {
         :options="presetOptions"
         @update:model-value="selectPreset"
       />
-
       <RuleSelectField
         v-model="localDraft.maxPlayers"
         :label="strings.room.maxPlayersField"

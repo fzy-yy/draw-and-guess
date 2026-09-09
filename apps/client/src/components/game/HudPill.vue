@@ -8,9 +8,10 @@ import { computed, useAttrs } from 'vue'
 import { cn } from '@/utils/cn'
 
 const attrs = useAttrs()
+// min-h 而非固定 h：字号有像素下限后，低高度舞台下胶囊需随内容增高，避免文字被裁切。
 const rootClass = computed(() =>
   cn(
-    'flex h-[6.5cqh] min-w-0 items-center gap-[0.45em] rounded-[0.65em] bg-white/10 px-[0.7em] whitespace-nowrap',
+    'flex min-h-[6.5cqh] min-w-0 items-center gap-[0.45em] rounded-[0.65em] bg-white/10 px-[0.7em] whitespace-nowrap',
     attrs.class,
   ),
 )

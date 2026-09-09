@@ -123,7 +123,8 @@ const displayedAnswer = computed(() => {
   >
     <!-- 回合指示：胶囊底衬（与计时器一致），横排「ROUND 1 / 4」 -->
     <HudPill>
-      <span class="text-sky text-fs-12">{{ strings.game.roundLabel }}</span>
+      <!-- 回合英文标签属装饰性说明：低高度舞台下折叠，把横向空间留给答案与计时。 -->
+      <span class="text-sky text-fs-12 compact-hide">{{ strings.game.roundLabel }}</span>
       <b class="text-white text-fs-24 leading-none tabular-nums">
         <!-- 当前回合固定 2ch 宽：两位数回合（如 9→10）不会挤动顶栏后续栏目 -->
         <span class="inline-block min-w-[2ch] text-center">{{ roundDisplay }}</span>
@@ -150,7 +151,7 @@ const displayedAnswer = computed(() => {
          底衬统一复用 HudPill 胶囊底衬（与计时器底框一致）；
          猜词玩家与画家视觉底框一致，画家额外支持点击切换明文/遮罩（以便观察猜词玩家逐字提示进度）。 -->
     <HudPill
-      class="justify-self-center min-w-[16cqw] flex-col justify-center px-[1.2em] py-[0.3cqh] h-auto min-h-[6.5cqh] transition-colors"
+      class="justify-self-center min-w-[16cqw] flex-col justify-center px-[1.2em] py-[0.3cqh] h-auto min-h-[6.5cqh] transition-colors compact-control"
       :class="{
         'cursor-pointer hover:bg-white/15 active:bg-white/20 select-none': store.isDrawer,
       }"

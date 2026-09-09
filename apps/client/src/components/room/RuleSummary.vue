@@ -153,7 +153,7 @@ const summaryRows = computed(() => {
         <button
           v-if="store.isHost"
           type="button"
-          class="col-start-2 row-[1/3] flex items-center gap-[0.4em] text-blue bg-transparent font-bold"
+          class="touch-target col-start-2 row-[1/3] flex items-center gap-[0.4em] text-blue bg-transparent font-bold"
           @click="emit('edit-rules')"
         >
           <Settings2 /> {{ strings.room.rulesEdit }}
@@ -168,7 +168,7 @@ const summaryRows = computed(() => {
 
     <!-- 词库管理入口：房主可编辑、非房主可打开查看（只读），展示已选/总词条数 -->
     <button
-      class="flex items-center gap-[0.75em] min-h-[7cqh] py-[0.8cqh] px-[0.8em] text-blue bg-sky border-l-[0.45cqh] border-l-blue text-left"
+      class="touch-target compact-control flex items-center gap-[0.75em] min-h-[7cqh] py-[0.8cqh] px-[0.8em] text-blue bg-sky border-l-[0.45cqh] border-l-blue text-left"
       type="button"
       :disabled="props.vocabularyLoading"
       @click="emit('open-vocabulary')"

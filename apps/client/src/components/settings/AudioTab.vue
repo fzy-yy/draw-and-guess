@@ -42,7 +42,7 @@ function previewSound(key: SoundName): void {
 </script>
 
 <template>
-  <section class="min-h-0 px-[5cqw] py-[3cqh]">
+  <section class="min-h-0 px-[5cqw] py-[3cqh] compact-tight">
     <SettingsSectionHeader
       :icon="Music2"
       :title="strings.settings.audioTitle"
@@ -98,7 +98,7 @@ function previewSound(key: SoundName): void {
             v-for="key in previewSounds"
             :key="key"
             type="button"
-            class="inline-flex items-center gap-[0.45em] rounded-[0.6em] border-[0.18cqh] border-control bg-white px-[0.85em] py-[0.5em] text-fs-14 font-bold"
+            class="touch-target compact-control inline-flex items-center gap-[0.45em] rounded-[0.6em] border-[0.18cqh] border-control bg-white px-[0.85em] py-[0.5em] text-fs-14 font-bold"
             :class="
               isSoundAvailable(key) ? 'ui-feedback hover-tint' : 'opacity-45 cursor-not-allowed'
             "

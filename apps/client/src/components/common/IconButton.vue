@@ -23,9 +23,10 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ click: [] }>()
 
+// compact-control-square：低高度舞台下保持 40×40 的可点方形（命中区由 BaseIconButton 的 .touch-target 保证 44×44）。
 const baseClass = computed(() =>
   cn(
-    'grid place-items-center rounded-[0.6em] bg-white/10 text-white disabled:cursor-not-allowed disabled:opacity-40',
+    'grid place-items-center rounded-[0.6em] bg-white/10 text-white disabled:cursor-not-allowed disabled:opacity-40 compact-control-square',
     props.size === 'lg' ? 'h-[4.6cqh] w-[4.6cqh]' : 'h-[4.4cqh] w-[4.4cqh]',
   ),
 )

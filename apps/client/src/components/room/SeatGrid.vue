@@ -39,8 +39,11 @@ const hostTarget = computed(() =>
 </script>
 
 <template>
-  <!-- 席位区：固定网格展示全部玩家座位与准备状态 -->
-  <section v-if="store.room" class="min-w-0 py-[3cqh] px-[2.5cqw] border-r-[0.2cqh] border-r-line">
+  <!-- 席位区：网格展示全部玩家座位与准备状态；席位网格占满剩余高度（低高度时不裁切） -->
+  <section
+    v-if="store.room"
+    class="flex min-h-0 min-w-0 flex-col py-[3cqh] px-[2.5cqw] border-r-[0.2cqh] border-r-line compact-tight"
+  >
     <div>
       <SectionHeader
         :eyebrow="strings.room.playersEyebrow"
@@ -57,7 +60,7 @@ const hostTarget = computed(() =>
       >
     </div>
     <!-- 席位网格：已占用的显示玩家信息，空位显示邀请提示；房主可踢人 -->
-    <div class="grid h-[67cqh] grid-cols-3 grid-rows-2 gap-[2cqh_1.5cqw] mt-[2.5cqh]">
+    <div class="grid min-h-0 flex-1 grid-cols-3 grid-rows-2 gap-[2cqh_1.5cqw] mt-[2.5cqh]">
       <article
         v-for="(member, index) in slots"
         :key="member?.id ?? index"
@@ -112,9 +115,10 @@ const hostTarget = computed(() =>
             }}</span
           >
           <!-- 房主移除玩家按钮：只对非自己的成员显示；先弹确认再执行（破坏性操作） -->
+          <!-- 踢人/移交房主：席位角上的关键图标操作，命中区经 .touch-target 扩展到 ≥44×44 -->
           <button
             v-if="store.isHost && member.id !== store.playerId"
-            class="absolute right-[0.6cqh] top-[0.6cqh] grid place-items-center h-[3cqh] w-[3cqh] text-red bg-red/10 rounded-full"
+            class="touch-target absolute right-[0.6cqh] top-[0.6cqh] grid place-items-center h-[max(3cqh,24px)] w-[max(3cqh,24px)] text-red bg-red/10 rounded-full"
             type="button"
             :aria-label="strings.room.kickAria"
             @click="pendingKickId = member.id"
@@ -123,7 +127,7 @@ const hostTarget = computed(() =>
           </button>
           <button
             v-if="store.isHost && member.id !== store.playerId"
-            class="absolute left-[0.6cqh] top-[0.6cqh] grid place-items-center h-[3cqh] w-[3cqh] text-warning-fg bg-yellow/10 rounded-full"
+            class="touch-target absolute left-[0.6cqh] top-[0.6cqh] grid place-items-center h-[max(3cqh,24px)] w-[max(3cqh,24px)] text-warning-fg bg-yellow/10 rounded-full"
             type="button"
             :aria-label="strings.room.transferHostAria"
             @click="pendingHostId = member.id"

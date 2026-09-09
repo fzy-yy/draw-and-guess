@@ -37,7 +37,7 @@ defineExpose({ focus })
     :label="label"
     :disabled="disabled"
     :audio-feedback="audioFeedback"
-    base-class="round-icon-btn"
+    base-class="round-icon-btn compact-control-square"
     @click="emit('click')"
   >
     <slot />

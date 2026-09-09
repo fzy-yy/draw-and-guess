@@ -127,7 +127,7 @@ test.describe('02 - 大厅房间与席位网格 (Lobby, Room & Seats)', () => {
       await host.lobby.createRoom({ name: roomName, visibility: 'public' })
 
       // 1. 打开词库弹窗
-      await host.page.getByRole('button', { name: /词库/ }).click()
+      await host.page.getByRole('button', { name: /^本局词库/ }).click()
       const dialog = host.page.getByRole('dialog')
       await expect(dialog).toBeVisible({ timeout: 10_000 })
 
@@ -198,7 +198,7 @@ test.describe('02 - 大厅房间与席位网格 (Lobby, Room & Seats)', () => {
       await expect(dialog).toBeHidden({ timeout: 10_000 })
 
       // 关闭后重开不会接受上一轮 debounce/pending UI 写回。
-      await host.page.getByRole('button', { name: /词库/ }).click()
+      await host.page.getByRole('button', { name: /^本局词库/ }).click()
       await expect(dialog).toBeVisible()
       await expect(dialog.getByRole('textbox', { name: /搜索词条/ })).toHaveValue('')
       await dialog.getByRole('button', { name: /关闭词库/ }).click()

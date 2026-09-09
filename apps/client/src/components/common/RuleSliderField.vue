@@ -32,8 +32,10 @@ function onInput(event: Event): void {
 </script>
 
 <template>
+  <!-- 命中区由滑块自身承担（min-h 44px）：不能在包着 range 的 label 上挂 .touch-target——
+       伪元素会盖住 range，range 只响应指针按下/拖拽（label 只转发 click），滑块将完全无法拖动。 -->
   <label
-    class="min-w-0 flex flex-col gap-[0.4cqh] text-fs-14 font-bold"
+    class="compact-control min-w-0 flex flex-col gap-[0.4cqh] text-fs-14 font-bold"
     :class="{ 'opacity-45 pointer-events-none': disabled }"
   >
     <span class="flex items-baseline justify-between gap-[0.5em]">
@@ -47,7 +49,7 @@ function onInput(event: Event): void {
       :step="step"
       :value="model"
       :disabled="disabled"
-      class="accent-blue"
+      class="min-h-[2.75rem] accent-blue"
       @input="onInput"
       @change="playInteractionSound('select')"
     />

@@ -15,13 +15,15 @@ defineProps<{
 </script>
 
 <template>
+  <!-- 整行即命中区：touch-target 保证 ≥44×44，compact-control 保证低高度舞台下不缩到不可点。 -->
   <label
-    class="min-w-0 flex min-h-[4.8cqh] flex-row items-center gap-[0.5cqh] rounded-[0.5em] border-[0.18cqh] border-control bg-line px-[0.8em] text-fs-14 font-bold cursor-pointer"
+    class="touch-target compact-control min-w-0 flex min-h-[4.8cqh] flex-row items-center gap-[0.5cqh] rounded-[0.5em] border-[0.18cqh] border-control bg-line px-[0.8em] text-fs-14 font-bold cursor-pointer"
   >
+    <!-- relative z-[1]：让复选框位于 .touch-target 伪元素之上，直接点击/自动化 check() 都能命中它 -->
     <input
       v-model="model"
       type="checkbox"
-      class="h-[2.2cqh] w-[2.2cqh] accent-blue"
+      class="relative z-[1] h-[max(2.2cqh,18px)] w-[max(2.2cqh,18px)] accent-blue"
       @change="playInteractionSound('toggle')"
     />
     {{ label }}

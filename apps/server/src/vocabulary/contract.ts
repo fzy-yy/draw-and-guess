@@ -3,7 +3,7 @@
  *
  * 领域层（GameService/RoundMachine/Snapshot）只依赖本文件定义的接口与 LoadedVocabulary 结构，
  * 与「词库数据从哪来」彻底解耦：
- * - 当前实现：sqlite.provider.ts（SQLite 词库库文件，words/metadata 表）；
+ * - 当前实现：sqlite-provider.ts（SQLite 词库库文件，words/metadata 表）；
  * - 将来扩展：新增其它 Provider 实现本接口，并在服务端私有配置的 provider 字段
  *   切换标识即可接入，领域代码零改动。
  *

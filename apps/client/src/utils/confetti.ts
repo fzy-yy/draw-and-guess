@@ -1,11 +1,19 @@
 /**
- * 礼花特效工具：基于 canvas-confetti。
- * 在玩家猜对词语时触发礼花喷放，增添派对游戏正向反馈。
+ * 礼花特效工具：基于 canvas-confetti（**按需动态加载**）。
+ * 只有玩家猜中时才会用到，因此不进入首屏包；加载失败属非关键装饰性反馈，静默降级。
  */
-import confetti from 'canvas-confetti'
+import type confettiFactory from 'canvas-confetti'
 
-/** 触发猜中庆祝礼花（双侧喷射，覆盖全屏上方与中央） */
-export function fireGuessCorrectConfetti(): void {
+/** 触发猜中庆祝礼花（双侧喷射，覆盖全屏上方与中央）；canvas-confetti 首次调用时才下载。 */
+export async function fireGuessCorrectConfetti(): Promise<void> {
+  let confetti: typeof confettiFactory
+  try {
+    confetti = (await import('canvas-confetti')).default
+  } catch {
+    // 装饰性反馈，加载失败不影响对局
+    return
+  }
+
   // 左下侧斜上方喷射
   confetti({
     // 整数（默认值：50）：发射的彩纸数量
