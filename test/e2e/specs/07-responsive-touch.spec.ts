@@ -27,7 +27,11 @@ import { responsive } from '../../../packages/config/src/settings.ts'
  * 平板横屏 1024×768、手机横屏 844×390）下的六类界面：
  * 资料 / 大厅 / 房间 / 游戏工具栏 / 设置 / 弹窗。
  *
- * 每个基准断言四件事：
+ * 每个基准是一条串行流程（test.describe.configure({ mode: 'serial' })）：
+ * 先在 beforeAll 建好主客两端浏览器上下文，再按界面拆成独立用例，
+ * 便于失败定位与 `--grep` 局部重跑；任一用例失败会跳过该基准后续界面（流程有先后依赖）。
+ *
+ * 断言四件事：
  * 1. 截图留档（随测试报告归档，便于人工复核视觉）；
  * 2. 关键分区不裁切（非滚动容器 scrollHeight ≤ clientHeight）；
  * 3. 关键控件不被遮挡且命中区 ≥ 44×44 CSS px（密集控件走 ≥20px 降级标准）；
@@ -58,18 +62,29 @@ async function openClient(browser: Browser, baseline: Baseline) {
 }
 
 for (const baseline of BASELINES) {
-  test(`${baseline.label} ${baseline.width}×${baseline.height}：六类界面无裁切无遮挡且触控达标`, async ({
-    browser,
-  }, testInfo) => {
-    const host = await openClient(browser, baseline)
-    const guest = await openClient(browser, baseline)
-    const page = host.page
-    const compact = await (async () => {
-      await host.profile.goto()
-      return isCompact(page)
-    })()
+  test.describe(`${baseline.label} ${baseline.width}×${baseline.height}`, () => {
+    test.describe.configure({ mode: 'serial' })
 
-    try {
+    let host: Awaited<ReturnType<typeof openClient>>
+    let guest: Awaited<ReturnType<typeof openClient>>
+    let compact = false
+    let roomName = ''
+
+    test.beforeAll(async ({ browser }) => {
+      host = await openClient(browser, baseline)
+      guest = await openClient(browser, baseline)
+      await host.profile.goto()
+      compact = await isCompact(host.page)
+    })
+
+    test.afterAll(async () => {
+      await host?.context.close()
+      await guest?.context.close()
+    })
+
+    test('资料页与头像弹窗无裁切且控件达标', async ({ browser: _browser }, testInfo) => {
+      const page = host.page
+
       // ---------- 1. 资料页 ----------
       await assertStageFitsViewport(page, baseline)
       const profilePanel = page.locator('main > section').nth(1)
@@ -120,6 +135,10 @@ for (const baseline of BASELINES) {
       await captureBaseline(page, testInfo, baseline, '02-avatar-dialog')
       await page.keyboard.press('Escape')
       await expect(avatarDialog).toBeHidden()
+    })
+
+    test('大厅与建房弹窗无裁切且控件达标', async ({ browser: _browser }, testInfo) => {
+      const page = host.page
 
       // ---------- 3. 大厅 ----------
       await host.profile.setNickname(`响应式房主-${baseline.key}`)
@@ -170,6 +189,10 @@ for (const baseline of BASELINES) {
       await captureBaseline(page, testInfo, baseline, '04-create-dialog')
       await page.keyboard.press('Escape')
       await expect(createDialog).toBeHidden()
+    })
+
+    test('设置页开关与滑块功能回归通过且控件达标', async ({ browser: _browser }, testInfo) => {
+      const page = host.page
 
       // ---------- 5. 设置页 ----------
       await host.lobby.goToSettings()
@@ -221,10 +244,14 @@ for (const baseline of BASELINES) {
       )
       await captureBaseline(page, testInfo, baseline, '05-settings')
       await page.getByRole('button', { name: /返回大厅/ }).click()
+    })
+
+    test('房间页与词库/规则弹窗无裁切且控件达标', async ({ browser: _browser }, testInfo) => {
+      const page = host.page
 
       // ---------- 6. 房间页 ----------
       // 房间名受配置长度上限约束，用短名保证列表文本可被精确定位
-      const roomName = `验收${Date.now().toString(36)}`
+      roomName = `验收${Date.now().toString(36)}`
       await host.lobby.createRoom({ name: roomName })
       await assertTouchTarget(page.getByRole('button', { name: /退出/ }), '房间页退出按钮')
       await assertTouchTarget(page.getByRole('button', { name: /编辑/ }), '房间页「编辑」规则')
@@ -282,6 +309,12 @@ for (const baseline of BASELINES) {
       await captureBaseline(page, testInfo, baseline, '08-rules-dialog')
       await page.keyboard.press('Escape')
       await expect(rulesDialog).toBeHidden()
+    })
+
+    test('对局工具栏无裁切、控件达标且紧凑模式尺寸正确', async ({
+      browser: _browser,
+    }, testInfo) => {
+      const page = host.page
 
       // ---------- 9. 对局工具栏（需要第二名玩家开局） ----------
       await guest.profile.goto()
@@ -372,9 +405,6 @@ for (const baseline of BASELINES) {
         responsive.minSecondaryFontPx,
       )
       await captureBaseline(gamePage, testInfo, baseline, '09-game-toolbar')
-    } finally {
-      await host.context.close()
-      await guest.context.close()
-    }
+    })
   })
 }

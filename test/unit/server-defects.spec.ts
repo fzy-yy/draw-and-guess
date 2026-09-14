@@ -187,4 +187,36 @@ describe('快照隐私与绘图边界', () => {
     expect(full.game?.strokesOmitted).not.toBe(true)
     expect(full.game?.strokes).toHaveLength(1)
   })
+
+  it('单回合填充次数到达上限后拒绝新填充，撤销与清空会释放额度', () => {
+    const { harness, game } = enterDrawing()
+    const fill = (sequence: number) => ({
+      kind: 'fill' as const,
+      id: `fill-${sequence}`,
+      point: { x: 0.5, y: 0.5 },
+      color: '#EF4444',
+      sequence,
+    })
+    const limit = APP_CONFIG.drawing.maxFillsPerRound
+    for (let index = 0; index < limit; index += 1) {
+      harness.runtime.advance(1_000) // 绕过服务端绘图事件限频
+      harness.service.addFill(game.drawerId, game.roundId, fill(index))
+    }
+    harness.runtime.advance(1_000)
+    expect(() => harness.service.addFill(game.drawerId, game.roundId, fill(limit))).toThrow(
+      /上限|预算/,
+    )
+
+    // 撤销一次填充释放一次额度后可以继续提交
+    harness.service.undo(game.drawerId, game.roundId)
+    harness.runtime.advance(1_000)
+    expect(() =>
+      harness.service.addFill(game.drawerId, game.roundId, fill(limit + 1)),
+    ).not.toThrow()
+
+    // 清空画布同时清零点数与填充额度
+    harness.service.clearDrawing(game.drawerId, game.roundId)
+    expect(game.fillCount).toBe(0)
+    expect(game.strokePointTotal).toBe(0)
+  })
 })

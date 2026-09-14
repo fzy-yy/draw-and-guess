@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { EVENTS } from '../events.ts'
 import { AvatarIdSchema, RoomPhaseSchema, WordIdSchema } from './base.ts'
-import { PROTOCOL_VERSION } from './constants.ts'
+import { PROTOCOL_VERSION, ROOM_CLOSE_CODES } from './constants.ts'
 import { FillCommandSchema, StrokeSchema } from './drawing.ts'
 import { RoomSettingsSchema } from './room.ts'
 
@@ -154,6 +154,7 @@ export const InviteSchema = z
 export const MemberConnectionChangeSchema = z
   .object({ playerId: z.string().uuid(), nickname: z.string(), connection: ConnectionStateSchema })
   .strict()
+export const RoomCloseCodeSchema = z.enum(ROOM_CLOSE_CODES)
 
 function pushEnvelope<T extends z.ZodType>(data: T) {
   return z.object({ protocolVersion: z.literal(PROTOCOL_VERSION), data }).strict()
@@ -168,7 +169,9 @@ export const SERVER_PUSH_SCHEMAS = {
   [EVENTS.inviteResolved]: pushEnvelope(
     z.object({ id: z.string().uuid(), status: z.string() }).strict(),
   ),
-  [EVENTS.roomClosed]: pushEnvelope(z.object({ reason: z.string() }).strict()),
+  [EVENTS.roomClosed]: pushEnvelope(
+    z.object({ reason: z.string(), code: RoomCloseCodeSchema }).strict(),
+  ),
   [EVENTS.systemNotice]: pushEnvelope(z.object({ text: z.string() }).strict()),
   [EVENTS.systemError]: pushEnvelope(z.object({ text: z.string() }).strict()),
   [EVENTS.drawStrokeBatch]: pushEnvelope(

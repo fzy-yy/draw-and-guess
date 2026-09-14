@@ -12,29 +12,34 @@ export function useVirtualTableRows<T>(
     count: computed(() => rows.value.length),
     estimateSize: measuredRowHeight,
   })
-  let resetTimer: number | undefined
+  let resetFrame: number | undefined
   let resizeObserver: ResizeObserver | undefined
 
   function scrollToIndex(index: number): void {
     const safeIndex = Math.max(0, Math.min(index, Math.max(0, rows.value.length - 1)))
     const instance = virtualizer.value as unknown as {
       scrollToIndex(index: number, options?: { align: 'start' | 'center' | 'end' | 'auto' }): void
-      scrollToOffset?: (offset: number) => void
+      scrollToOffset(offset: number): void
+      measure(): void
     }
     if (safeIndex !== 0) {
       instance.scrollToIndex(safeIndex, { align: 'start' })
       return
     }
-    const reset = (): void => {
-      instance.scrollToOffset?.(0)
-      if (scrollContainer.value) scrollContainer.value.scrollTop = 0
-    }
-    reset()
-    instance.scrollToIndex(0, { align: 'start' })
-    reset()
-    Promise.resolve().then(reset)
-    window.clearTimeout(resetTimer)
-    resetTimer = window.setTimeout(reset, 0)
+    // 归零：先按最新数据重测，再用官方滚动 API 一次性置顶。
+    // 虚拟器可能在测量修正后回写滚动位置，因此下一帧仅在确实漂移时纠正一次
+    // （替代旧的「微任务 + 多次 setTimeout 反复重置」写法）。
+    instance.measure()
+    instance.scrollToOffset(0)
+    if (scrollContainer.value) scrollContainer.value.scrollTop = 0
+    if (resetFrame !== undefined) window.cancelAnimationFrame(resetFrame)
+    resetFrame = window.requestAnimationFrame(() => {
+      resetFrame = undefined
+      const container = scrollContainer.value
+      if (!container || container.scrollTop === 0) return
+      instance.scrollToOffset(0)
+      container.scrollTop = 0
+    })
   }
 
   function updateRowHeight(): void {
@@ -55,7 +60,7 @@ export function useVirtualTableRows<T>(
     resizeObserver.observe(scrollContainer.value)
   })
   onBeforeUnmount(() => {
-    window.clearTimeout(resetTimer)
+    if (resetFrame !== undefined) window.cancelAnimationFrame(resetFrame)
     resizeObserver?.disconnect()
   })
   watch(rows, async () => {

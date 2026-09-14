@@ -35,7 +35,9 @@ export const useRoomStore = defineStore('room', () => {
   }
 
   /** 请求一次受冷却保护的权威全量快照；迟到响应必须仍属于发起时的会话与房间。 */
-  async function requestFullSnapshot(): Promise<void> {
+  async function requestFullSnapshot(
+    reason: 'invalid_push' | 'state_gap' | 'drawing_rollback' = 'state_gap',
+  ): Promise<void> {
     const current = room.value
     if (!current || resyncInFlight) return
     const now = Date.now()
@@ -55,6 +57,7 @@ export const useRoomStore = defineStore('room', () => {
           roomId: context.roomId,
           ...(context.gameId ? { gameId: context.gameId } : {}),
           ...(context.roundId ? { roundId: context.roundId } : {}),
+          reason,
         },
         { quiet: true, retry: true },
       )

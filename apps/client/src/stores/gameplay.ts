@@ -2,7 +2,6 @@
   局内对局与画布操作 Store。
   管理选词、猜词、绘图笔画与填充增量、局内暂停与提前结算。
 */
-import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { APP_CONFIG } from '@draw-guess/config'
 import {
@@ -24,7 +23,6 @@ export const useGameplayStore = defineStore('gameplay', () => {
   const { request, notify } = useGameTransport()
   const roomStore = useRoomStore()
   const sessionStore = useSessionStore()
-  const drawRevision = ref(0)
 
   function purgeUndone(game: NonNullable<RoomSnapshot['game']>): void {
     if (game.undoneStrokeIds.length) {
@@ -90,7 +88,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
     return result
   }
 
-  async function sendFill(fill: FillCommand): Promise<RequestResult<void>> {
+  async function sendFill(fill: FillCommand): Promise<RequestResult<{ drawingRevision: number }>> {
     if (!roomStore.room?.game)
       return {
         ok: false,
@@ -158,7 +156,6 @@ export const useGameplayStore = defineStore('gameplay', () => {
       game.strokes.push({ ...stroke, points: [...stroke.points] })
       if (game.strokes.length > APP_CONFIG.drawing.maxHistoryCommands) game.strokes.shift()
     }
-    drawRevision.value += 1
   }
 
   function handleFillCommit(roundId: string, fill: FillCommand): void {
@@ -168,11 +165,9 @@ export const useGameplayStore = defineStore('gameplay', () => {
     purgeUndone(game)
     game.strokes.push(fill)
     if (game.strokes.length > APP_CONFIG.drawing.maxHistoryCommands) game.strokes.shift()
-    drawRevision.value += 1
   }
 
   return {
-    drawRevision,
     startGame,
     chooseWord,
     rerollWords,

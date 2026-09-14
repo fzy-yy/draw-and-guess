@@ -2,6 +2,7 @@ import { APP_CONFIG } from '../../config/index.ts'
 import { serverStrings } from '@draw-guess/strings'
 import {
   normalizeHexColor,
+  type DrawingCommand,
   type FillCommand,
   type FillPush,
   type Stroke,
@@ -32,12 +33,21 @@ export interface DrawingContext {
 export class DrawingService {
   constructor(private readonly context: DrawingContext) {}
 
+  /** 释放一条命令占用的预算：笔画按点数，填充按「1 点 + 1 次填充」。 */
+  private releaseCommandBudget(game: GameSecret, command: DrawingCommand): void {
+    if (command.kind === 'stroke') {
+      game.strokePointTotal -= command.points.length
+      return
+    }
+    game.strokePointTotal -= 1
+    game.fillCount -= 1
+  }
+
   private discardUndone(game: GameSecret): void {
     if (!game.undoneStrokeIds.length) return
     const undone = new Set(game.undoneStrokeIds)
     for (const command of game.strokes) {
-      if (undone.has(command.id))
-        game.strokePointTotal -= command.kind === 'stroke' ? command.points.length : 1
+      if (undone.has(command.id)) this.releaseCommandBudget(game, command)
     }
     game.strokes = game.strokes.filter((command) => !undone.has(command.id))
     game.undoneStrokeIds = []
@@ -46,7 +56,7 @@ export class DrawingService {
   private trimHistory(game: GameSecret): void {
     if (game.strokes.length <= APP_CONFIG.drawing.maxHistoryCommands) return
     const dropped = game.strokes.shift()
-    if (dropped) game.strokePointTotal -= dropped.kind === 'stroke' ? dropped.points.length : 1
+    if (dropped) this.releaseCommandBudget(game, dropped)
   }
 
   addStroke(playerId: string, roundId: string, stroke: Stroke): StrokeAck {
@@ -111,7 +121,7 @@ export class DrawingService {
     }
   }
 
-  addFill(playerId: string, roundId: string, fill: FillCommand): void {
+  addFill(playerId: string, roundId: string, fill: FillCommand): { drawingRevision: number } {
     const { player, room, game } = this.context.getSession(playerId, roundId)
     enforceEventRate(player, 'draw', this.context.clock)
     if (fill.sequence <= game.lastSequence)
@@ -119,10 +129,14 @@ export class DrawingService {
     const color = normalizeHexColor(fill.color)
     if (!color) throw new GameError('INVALID_FILL', serverStrings.errors.INVALID_FILL)
     this.discardUndone(game)
-    if (game.strokePointTotal + 1 > APP_CONFIG.drawing.maxPointsPerRound)
+    if (
+      game.strokePointTotal + 1 > APP_CONFIG.drawing.maxPointsPerRound ||
+      game.fillCount + 1 > APP_CONFIG.drawing.maxFillsPerRound
+    )
       throw new GameError('DRAW_BUDGET_EXCEEDED', serverStrings.errors.DRAW_BUDGET_EXCEEDED)
     game.lastSequence = fill.sequence
     game.strokePointTotal += 1
+    game.fillCount += 1
     game.strokes.push({ ...fill, color })
     this.trimHistory(game)
     game.drawingRevision += 1
@@ -134,6 +148,7 @@ export class DrawingService {
       fill: { ...fill, color },
       drawingRevision: game.drawingRevision,
     })
+    return { drawingRevision: game.drawingRevision }
   }
 
   undo(playerId: string, roundId: string): void {
@@ -162,6 +177,7 @@ export class DrawingService {
     if (!game.strokes.length && !game.undoneStrokeIds.length) return
     game.strokes = []
     game.strokePointTotal = 0
+    game.fillCount = 0
     game.undoneStrokeIds = []
     game.lastSequence += 1
     game.drawingRevision += 1

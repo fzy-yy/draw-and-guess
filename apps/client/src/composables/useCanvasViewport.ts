@@ -14,11 +14,6 @@ export function useCanvasViewport(
   function resizeCanvas(): void {
     const element = displayCanvas.value
     if (!element) return
-    // 非枚举测试探针仅暴露同组件的逻辑层引用，便于跨客户端验证权威栅格哈希；不进入协议或序列化。
-    Object.defineProperty(element, '__logicalCanvas', {
-      configurable: true,
-      value: logicalCanvas,
-    })
     const rect = element.getBoundingClientRect()
     const logicalSize = getCanvasBackingSize(
       rect.width,
@@ -47,6 +42,15 @@ export function useCanvasViewport(
   }
 
   onMounted(() => {
+    const element = displayCanvas.value
+    // 非枚举测试探针仅暴露同组件的逻辑层引用，便于跨客户端验证权威栅格哈希；不进入协议或序列化。
+    // 默认生产构建不包含该探针；E2E 构建由 launcher 注入 VITE_EXPOSE_LOGICAL_CANVAS=1（见 test/e2e/launcher.mts）。
+    if (element && (import.meta.env.DEV || import.meta.env.VITE_EXPOSE_LOGICAL_CANVAS === '1')) {
+      Object.defineProperty(element, '__logicalCanvas', {
+        configurable: true,
+        value: logicalCanvas,
+      })
+    }
     observer = new ResizeObserver(resizeCanvas)
     if (displayCanvas.value) observer.observe(displayCanvas.value)
     resizeCanvas()

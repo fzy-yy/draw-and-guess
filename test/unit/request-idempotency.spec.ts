@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { APP_CONFIG } from '@draw-guess/config'
 import { EVENTS, RequestSchema } from '@draw-guess/shared'
 import { createRequester } from '../../apps/client/src/stores/request.ts'
 import { bindRequest } from '../../apps/server/src/protocol/binder.ts'
@@ -11,6 +12,7 @@ afterEach(() => vi.useRealTimers())
 
 describe('幂等请求重试', () => {
   it('请求结果明确区分业务拒绝与传输失败', async () => {
+    vi.useFakeTimers()
     const businessSocket = {
       timeout: () => businessSocket,
       emitWithAck: () =>
@@ -21,7 +23,7 @@ describe('幂等请求重试', () => {
     } as unknown as ClientSocket
     const transportSocket = {
       timeout: () => transportSocket,
-      emitWithAck: () => Promise.reject(new Error('operation has timed out')),
+      emitWithAck: () => new Promise(() => undefined),
     } as unknown as ClientSocket
 
     await expect(
@@ -48,16 +50,20 @@ describe('幂等请求重试', () => {
       code: 'DRAW_BUDGET_EXCEEDED',
       timeout: false,
     })
-    await expect(
-      createRequester({ socket: transportSocket, notify: vi.fn() })(
-        EVENTS.networkPing,
-        { clientTime: 1 },
-        {
-          quiet: true,
-          retry: false,
-        },
-      ),
-    ).resolves.toMatchObject({ ok: false, failureKind: 'transport', timeout: true })
+    const timeoutRequest = createRequester({ socket: transportSocket, notify: vi.fn() })(
+      EVENTS.networkPing,
+      { clientTime: 1 },
+      {
+        quiet: true,
+        retry: false,
+      },
+    )
+    await vi.advanceTimersByTimeAsync(APP_CONFIG.network.requestTimeoutMs)
+    await expect(timeoutRequest).resolves.toMatchObject({
+      ok: false,
+      failureKind: 'transport',
+      timeout: true,
+    })
   })
 
   it('ack 丢失后自动重试复用同一 requestId，且最终只提示零次错误', async () => {
@@ -70,7 +76,7 @@ describe('幂等请求重试', () => {
         payloads.push(payload)
         attempt += 1
         return attempt === 1
-          ? Promise.reject(new Error('operation has timed out'))
+          ? Promise.reject(new Error('xhr poll error'))
           : Promise.resolve({ ok: true, data: { done: true }, requestId: payload.requestId })
       },
     } as unknown as ClientSocket

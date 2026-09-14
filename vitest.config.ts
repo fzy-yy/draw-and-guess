@@ -55,6 +55,8 @@ export default defineConfig({
         'apps/client/src/**/*.{ts,vue}',
         'apps/server/src/**/*.ts',
         'packages/shared/src/**/*.ts',
+        'packages/config/src/**/*.ts',
+        'packages/strings/src/**/*.ts',
       ],
       exclude: [
         'apps/client/src/main.ts',
@@ -62,13 +64,25 @@ export default defineConfig({
         '**/*.d.ts',
         '**/assets/**',
         '**/test-fixture.ts',
+        // 视图层以编排与模板为主，由 Playwright E2E 跨浏览器验收真实链路；
+        // 其脚本逻辑如需 Vitest 级保障，应先拆为可测 composable/组件再纳入统计（见 test/COVERAGE.md）。
+        'apps/client/src/views/**',
       ],
       thresholds: {
-        // 全局底线保持历史门禁不下降；它只负责防止全仓覆盖率整体坍塌。
-        statements: 32,
-        branches: 27,
-        functions: 26,
-        lines: 33,
+        // 全局底线贴近当前实测（约 67/60/62/70），防止总体覆盖率在新增代码后悄悄回落。
+        statements: 60,
+        branches: 52,
+        functions: 54,
+        lines: 62,
+        // 配置包与文案包是所有公开默认值与展示文案的单一来源，必须纳入统计（此前完全不在报告中）。
+        'packages/config/src/**': {
+          statements: 80,
+          branches: 70,
+        },
+        'packages/strings/src/**': {
+          statements: 55,
+          branches: 60,
+        },
         // 第一阶段直接覆盖完整客户端状态层；目录内新增文件不能再由其它高覆盖目录平均掉。
         'apps/client/src/composables/**': {
           statements: 60,
@@ -77,6 +91,13 @@ export default defineConfig({
         'apps/client/src/stores/**': {
           statements: 60,
           branches: 50,
+        },
+        // 画布核心的组件级保障：重放/增量/批次上送/填充降级路径。
+        'apps/client/src/components/game/GameCanvas.vue': {
+          statements: 60,
+          branches: 50,
+          functions: 55,
+          lines: 62,
         },
         // 关键链路保留更贴近当前实际覆盖率的独立门禁，后续优先逐步上调这些值。
         'apps/client/src/composables/{useGameHud,useRoomSync}.ts': {
@@ -121,6 +142,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      // 轻量协议常量先于 barrel 匹配，避免测试环境打包/解析时把 zod 与全量 schema 拖入。
+      '@draw-guess/shared/protocol/constants': fileURLToPath(
+        new URL('./packages/shared/src/protocol/constants.ts', import.meta.url),
+      ),
       '@draw-guess/shared': fileURLToPath(
         new URL('./packages/shared/src/index.ts', import.meta.url),
       ),

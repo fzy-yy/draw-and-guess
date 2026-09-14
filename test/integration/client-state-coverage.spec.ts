@@ -141,7 +141,6 @@ describe('Gameplay 权威增量合并', () => {
       sequence: 5,
     })
     expect(room.room?.game?.strokes).toHaveLength(2)
-    expect(gameplay.drawRevision).toBe(4)
   })
 
   it('不同回合的增量被忽略', () => {
@@ -152,7 +151,6 @@ describe('Gameplay 权威增量合并', () => {
     gameplay.handleStrokeBatch('old-round', stroke(1))
 
     expect(room.room.game?.strokes).toEqual([])
-    expect(gameplay.drawRevision).toBe(0)
   })
 
   it('绘图请求保留业务拒绝类型，无当前回合时返回本地上下文失败', async () => {
@@ -245,6 +243,39 @@ describe('useRoomSync 修订门禁', () => {
 
     expect(room.room.id).toBe(ROOM_ID)
     expect(room.room.game?.strokes).toEqual([])
+  })
+
+  it('绘图修订未前进的展示型快照复用本地画笔数组引用，避免画布整块重投影', () => {
+    const room = useRoomStore()
+    const localStroke = stroke(3)
+    room.room = createRoomFixture('drawing', {
+      strokes: [localStroke],
+      lastSequence: 3,
+      drawingRevision: 2,
+    })
+    const localStrokes = room.room.game!.strokes
+    const sync = useRoomSync()
+
+    // 同修订但 strokes 是解码后的新数组（如消息/成员变化）→ 保留本地引用
+    sync.onRoomSnapshot(
+      createRoomFixture('drawing', {
+        strokes: [{ ...localStroke }],
+        lastSequence: 3,
+        drawingRevision: 2,
+      }),
+    )
+    expect(room.room.game?.strokes).toBe(localStrokes)
+
+    // 修订前进 → 采用服务端下发的新数组
+    sync.onRoomSnapshot(
+      createRoomFixture('drawing', {
+        strokes: [stroke(4)],
+        lastSequence: 4,
+        drawingRevision: 3,
+      }),
+    )
+    expect(room.room.game?.strokes).not.toBe(localStrokes)
+    expect(room.room.game?.strokes).toHaveLength(1)
   })
 })
 

@@ -15,6 +15,7 @@ import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
 import { roleTextFor } from '@/utils/role-text'
 import ActionPopover from '@/components/common/ActionPopover.vue'
+import AppInput from '@/components/common/AppInput.vue'
 
 // canGuess 由父组件（useGameHud）计算，这里只用于输入框权限与提交保护。
 const props = defineProps<{
@@ -94,7 +95,8 @@ watch(
 )
 
 // 按「自动聚焦猜词框」开关在进入可猜词状态时聚焦输入框（替代静态 autofocus）。
-const guessInput = ref<HTMLInputElement>()
+// AppInput 经 defineExpose 暴露 focus()，输入元素本身仍是原语内部实现细节。
+const guessInput = ref<{ focus: () => void }>()
 watch(
   () =>
     store.room?.phase === 'drawing' &&
@@ -209,13 +211,13 @@ watch(
       </div>
       <form class="mt-[0.65cqh] flex gap-[0.5em]" @submit.prevent="sendGuess">
         <label for="guess-input" class="sr-only">{{ strings.game.guessLabel }}</label>
-        <input
+        <AppInput
           id="guess-input"
           ref="guessInput"
           v-model="guess"
+          size="body"
+          class="min-w-0 flex-1"
           :maxlength="store.config.player.chatMaxLength"
-          autocomplete="off"
-          class="h-[5.2cqh] min-w-0 flex-1 rounded-[0.65em] border-[0.2cqh] border-blue bg-white px-[0.8em] outline-0 disabled:cursor-not-allowed disabled:border-line disabled:bg-line disabled:text-muted compact-control"
           :disabled="!canGuess"
           :placeholder="strings.game.guessPlaceholder"
         />

@@ -20,9 +20,10 @@
 逻辑缓冲哈希共同锁定。
 
 空白和复杂区域 p95 仍超过 16ms，因此生产路径使用 Web Worker，并以 transferable
-`ArrayBuffer` 交接 ImageData，避免主线程复制和长任务。内部 job 协议包含 `jobId`、`roundId`、尺寸、
-种子、颜色和像素缓冲：计算期间画布拒绝重复 fill；新任务、重放或回合变化会终止旧 Worker，且只有
-jobId、roundId 和当前渲染代次同时匹配的结果可以写回逻辑 Canvas。
+`ArrayBuffer` 交接 ImageData，避免主线程复制和长任务。Worker 客户端按需懒创建并常驻复用：
+内部 job 协议包含 `jobId`、`roundId`、尺寸、种子、颜色、容差与像素缓冲；计算期间画布拒绝重复
+fill；新任务、重放或回合变化只废弃旧 job 的结果回写（不重建线程），组件卸载时统一 terminate。
 
 `pnpm benchmark:flood-fill` 会输出 `mainThreadOverBudget` 与 `executionMode`；若同步 p95 超过 16ms
-而执行模式不是 `worker`，命令以失败退出。
+而执行模式不是 `worker`，命令以失败退出。CI 在 Node 22 质量任务中运行本命令并把 JSON 作为趋势
+工件上传（`continue-on-error`：机器性能差异大，暂不设硬阈值，供人工对照本文件基线）。

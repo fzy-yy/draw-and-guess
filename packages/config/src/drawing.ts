@@ -1,3 +1,5 @@
+import { DRAWING_PROTOCOL_LIMITS } from '@draw-guess/shared/protocol/constants'
+
 /**
  * 领域配置：浏览器画板与公开载荷预算；协议字段范围复用 shared 约束。
  */
@@ -32,5 +34,7 @@ export const drawing = {
   // maxPointsPerRound：整回合的总点数预算，直接限定内存与“全量快照/断线重放”的序列化成本。
   maxPointsPerStroke: 1_200,
   maxPointsPerRound: 40_000,
+  // maxFillsPerRound：单回合区域填充次数上限。每次填充在重连/撤销重绘时都必须完整重放
+  //   （720p 单次约 10~30ms），该上限防止极端刷填充让重放成本与内存失控；正常回合远低于此值。
+  maxFillsPerRound: 60,
 } as const
-import { DRAWING_PROTOCOL_LIMITS } from '@draw-guess/shared'

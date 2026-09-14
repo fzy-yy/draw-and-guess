@@ -7,7 +7,12 @@
 import { computed, ref, watch } from 'vue'
 import { strings } from '@draw-guess/strings'
 import type { RoomSettings } from '@draw-guess/shared'
-import { applyRoomPreset, matchingRoomPreset, type RoomPresetId } from '@draw-guess/config'
+import {
+  applyRoomPreset,
+  createRoomSettings,
+  matchingRoomPreset,
+  type RoomPresetId,
+} from '@draw-guess/config'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import SectionHeader from '@/components/common/SectionHeader.vue'
@@ -53,7 +58,8 @@ const scoreModeOptions = [
 ] satisfies Array<{ value: RoomSettings['scoreMode']; label: string }>
 
 // 本地编辑副本：所有字段均为原始值，浅拷贝即可；每次打开（draft 变化）时重新同步。
-const localDraft = ref<RoomSettings>({} as RoomSettings)
+// 初值用配置工厂生成完整合法对象，避免用类型断言绕过 RoomSettings 的字段约束。
+const localDraft = ref<RoomSettings>(createRoomSettings('standard', store.config.player.maxPlayers))
 const selectedPreset = ref<RoomPresetId | 'custom'>('standard')
 watch(
   () => props.draft,

@@ -1,7 +1,9 @@
 import {
   EVENTS,
+  ROOM_CLOSE_CODE,
   createServerPush,
   type MemberConnectionChange,
+  type RoomCloseCode,
   type RoomPhase,
   type RoomSettings,
   type RoomSnapshot,
@@ -197,11 +199,15 @@ export class RoomMembershipService {
     room.stateVersion += 1
     // 空房间直接关闭；房主离开时迁移控制权；倒计时/等待/对局各有对应处理
     if (room.members.length === 0) {
-      this.closeRoom(room, serverStrings.notices.closeRoomEmpty)
+      this.closeRoom(room, serverStrings.notices.closeRoomEmpty, ROOM_CLOSE_CODE.roomEmpty)
       return
     }
     if (room.hostId === playerId && !this.transferHostInternal(room)) {
-      this.closeRoom(room, serverStrings.notices.closeRoomNoPlayableHost)
+      this.closeRoom(
+        room,
+        serverStrings.notices.closeRoomNoPlayableHost,
+        ROOM_CLOSE_CODE.noPlayableHost,
+      )
       return
     }
     if (room.phase === 'starting')
@@ -268,7 +274,11 @@ export class RoomMembershipService {
     )
 
     if (room.hostId === playerId && !this.transferHostInternal(room)) {
-      this.closeRoom(room, serverStrings.notices.closeRoomNoPlayableHost)
+      this.closeRoom(
+        room,
+        serverStrings.notices.closeRoomNoPlayableHost,
+        ROOM_CLOSE_CODE.noPlayableHost,
+      )
       return
     }
 
@@ -314,11 +324,14 @@ export class RoomMembershipService {
       throw new GameError('INVALID_TARGET', serverStrings.errors.INVALID_TARGET_SELF)
     if (!room.members.some((member) => member.playerId === targetId))
       throw new GameError('NOT_IN_ROOM', serverStrings.errors.NOT_IN_ROOM_KICK)
-    // 先通知被踢玩家房间关闭，再走标准离开流程释放座位
+    // 先通知被踢玩家房间关闭，再走标准离开流程释放座位；用稳定关闭码而非文案表达语义
     this.context.emitToPlayer(
       targetId,
       EVENTS.roomClosed,
-      createServerPush({ reason: serverStrings.notices.kickedReason }),
+      createServerPush({
+        reason: serverStrings.notices.kickedReason,
+        code: ROOM_CLOSE_CODE.kicked,
+      }),
     )
     this.leaveRoom(targetId, serverStrings.notices.kickedLog)
   }
@@ -345,13 +358,13 @@ export class RoomMembershipService {
     this.context.broadcastPresence()
   }
 
-  private closeRoom(room: RoomSecret, reason: string): void {
+  private closeRoom(room: RoomSecret, reason: string, code: RoomCloseCode): void {
     // 清理全部计时器，广播关闭原因后从内存移除房间
     this.context.transition(room, 'closed')
     if (room.game) this.context.clearHintTimers(room.game)
     this.context.scheduler.clear(room.game?.timer)
     this.context.scheduler.clear(room.game?.rematchTimer)
-    this.context.emitRoomEvent(room.id, EVENTS.roomClosed, createServerPush({ reason }))
+    this.context.emitRoomEvent(room.id, EVENTS.roomClosed, createServerPush({ reason, code }))
     // 房间即将从内存删除：必须同时解绑幸存成员（含观战者）的 roomId 与 Socket 房间，
     // 否则 requireAvailablePlayer 会永久抛 ALREADY_IN_ROOM，玩家无法再建房/加入/被邀请。
     for (const member of room.members) {

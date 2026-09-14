@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { EVENTS, ROOM_CLOSE_CODE } from '@draw-guess/shared'
+import { serverStrings } from '@draw-guess/strings'
 import { createGameHarness, testRoomSettings } from './helpers/game-harness.ts'
 
 describe('RoomMembershipService 契约', () => {
@@ -45,5 +47,17 @@ describe('RoomMembershipService 契约', () => {
     harness.service.membership.kick(guest.playerId, host.playerId)
     expect(room.members.map((member) => member.playerId)).toEqual([guest.playerId])
     expect(host.socket.rooms.has(room.id)).toBe(false)
+    // 被踢通知必须携带稳定关闭码，客户端不再依赖展示文案判定业务语义。
+    expect(host.socket.events).toContainEqual(
+      expect.objectContaining({
+        event: EVENTS.roomClosed,
+        payload: expect.objectContaining({
+          data: expect.objectContaining({
+            reason: serverStrings.notices.kickedReason,
+            code: ROOM_CLOSE_CODE.kicked,
+          }),
+        }),
+      }),
+    )
   })
 })

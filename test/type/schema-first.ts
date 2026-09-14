@@ -47,3 +47,16 @@ type RoomEnvelope = Parameters<ServerToClientEvents[typeof EVENTS.roomSnapshot]>
 // @ts-expect-error room:snapshot 不能接受 presence:snapshot 的 data
 const wrongRoom = createServerPush({ players: [], rooms: [] }) satisfies RoomEnvelope
 void wrongRoom
+
+type RoomClosedEnvelope = Parameters<ServerToClientEvents[typeof EVENTS.roomClosed]>[0]
+const roomClosed = createServerPush({
+  reason: '任意展示文案',
+  code: 'kicked',
+}) satisfies RoomClosedEnvelope
+void roomClosed
+// @ts-expect-error room:closed 必须携带登记过的稳定关闭码，禁止用未登记的字符串
+const wrongRoomClosed: RoomClosedEnvelope = createServerPush({
+  reason: '任意展示文案',
+  code: 'unknown',
+})
+void wrongRoomClosed

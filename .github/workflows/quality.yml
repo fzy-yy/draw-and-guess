@@ -12,53 +12,119 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
+  verify-node-22:
+    name: Node 22 full quality gate
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Set up Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm format:check
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test:coverage
-      - run: pnpm build
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Audit dependencies
+        # npmmirror 未实现 audit API；默认使用 npm 官方 registry，可用仓库变量 NPM_AUDIT_REGISTRY 覆盖（内网镜像环境）。
+        run: pnpm audit --audit-level=high --registry="${{ vars.NPM_AUDIT_REGISTRY || 'https://registry.npmjs.org' }}"
+      - name: Check formatting
+        run: pnpm format:check
+      - name: Lint
+        run: pnpm lint
+      - name: Type-check
+        run: pnpm typecheck
+      - name: Run Vitest with coverage and JUnit
+        run: pnpm test:coverage:ci
+      - name: Build
+        run: pnpm build
+
+      - name: Flood-fill benchmark (trend artifact)
+        # 洪泛填充 p95 门禁暂不入 CI（机器性能差异大）：先上传趋势工件，人工对照 docs/flood-fill-performance.md。
+        continue-on-error: true
+        run: pnpm benchmark:flood-fill > benchmark-flood-fill.json
+
+      - name: Upload flood-fill benchmark
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flood-fill-benchmark-node-22
+          path: benchmark-flood-fill.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload Vitest JUnit on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vitest-junit-node-22
+          path: test/test-results/vitest/junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: coverage-report
+          name: coverage-report-node-22
           path: coverage/
           if-no-files-found: ignore
           retention-days: 14
 
-  e2e:
+  e2e-node-22:
+    name: Node 22 Playwright
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Set up Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium firefox
-      - run: pnpm test:e2e
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium firefox
+      - name: Run Playwright
+        run: pnpm test:e2e
 
-      - name: Upload Playwright report
+      - name: Upload Playwright diagnostics on failure
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-report
+          name: playwright-diagnostics-node-22
           path: |
             test/test-results/
             test/playwright-report/
           if-no-files-found: ignore
           retention-days: 7
+
+  compatibility-node-24:
+    name: Node 24 compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Set up Node.js 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Type-check
+        run: pnpm typecheck
+      - name: Run unit tests
+        run: pnpm test:unit
+      - name: Build
+        run: pnpm build

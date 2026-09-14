@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { APP_CONFIG } from '@draw-guess/config'
 import { EVENTS } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { createGameTransport } from '../../apps/client/src/application/game-transport.ts'
@@ -34,13 +35,15 @@ function socketWith(
 afterEach(() => vi.useRealTimers())
 
 describe('GameTransport 请求契约', () => {
-  it('超时返回 transport 失败，只通知一次并恢复可观测 pending 状态', async () => {
+  it('超时由自有哨兵判定：返回 transport 失败，只通知一次并恢复可观测 pending 状态', async () => {
+    vi.useFakeTimers()
     const notify = vi.fn()
-    const { socket } = socketWith(() => Promise.reject(new Error('operation has timed out')))
+    const { socket } = socketWith(() => new Promise(() => undefined))
     const transport = createGameTransport({ socket, notify })
 
     const pending = transport.request(EVENTS.networkPing, { clientTime: 1 }, { retry: false })
     expect(transport.requestState.pendingCount).toBe(1)
+    await vi.advanceTimersByTimeAsync(APP_CONFIG.network.requestTimeoutMs)
 
     await expect(pending).resolves.toMatchObject({
       ok: false,
@@ -55,10 +58,12 @@ describe('GameTransport 请求契约', () => {
   it('传输重试复用同一 requestId 并只提交一个逻辑请求状态', async () => {
     vi.useFakeTimers()
     const payloads: Record<string, unknown>[] = []
+    let attempts = 0
     const { socket } = socketWith((_event, payload) => {
       payloads.push(payload)
-      return payloads.length === 1
-        ? Promise.reject(new Error('operation has timed out'))
+      attempts += 1
+      return attempts === 1
+        ? new Promise(() => undefined)
         : Promise.resolve({ ok: true, data: { done: true }, requestId: payload.requestId })
     })
     const transport = createGameTransport({ socket, notify: vi.fn() })
@@ -69,7 +74,7 @@ describe('GameTransport 请求契约', () => {
       { requestId: '00000000-0000-4000-8000-000000000099' },
     )
     expect(transport.requestState.pendingCount).toBe(1)
-    await vi.advanceTimersByTimeAsync(1_000)
+    await vi.advanceTimersByTimeAsync(APP_CONFIG.network.requestTimeoutMs + 1_000)
 
     await expect(pending).resolves.toEqual({ ok: true, data: { done: true } })
     expect(payloads.map(({ requestId }) => requestId)).toEqual([
@@ -100,15 +105,20 @@ describe('GameTransport 请求契约', () => {
     expect(notify).toHaveBeenCalledWith('当前阶段不能执行此操作', 'error')
   })
 
-  it('quiet 请求默认不重试且不发送失败通知', async () => {
+  it('quiet 请求默认不重试、不发送失败通知，未知传输错误只暴露统一中文文案', async () => {
     const notify = vi.fn()
-    const emitWithAck = vi.fn(() => Promise.reject(new Error('network down')))
+    const emitWithAck = vi.fn(() => Promise.reject(new Error('xhr poll error')))
     const { socket } = socketWith(emitWithAck)
     const transport = createGameTransport({ socket, notify })
 
     await expect(
       transport.request(EVENTS.networkPing, { clientTime: 1 }, { quiet: true }),
-    ).resolves.toMatchObject({ ok: false, failureKind: 'transport', timeout: false })
+    ).resolves.toMatchObject({
+      ok: false,
+      failureKind: 'transport',
+      error: strings.request.genericFailure,
+      timeout: false,
+    })
     expect(emitWithAck).toHaveBeenCalledOnce()
     expect(notify).not.toHaveBeenCalled()
   })

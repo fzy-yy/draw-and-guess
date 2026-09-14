@@ -175,7 +175,7 @@ export interface ClientResponseContract {
   [EVENTS.guessSubmit]: { correct: boolean }
   [EVENTS.chatPreset]: void
   [EVENTS.drawStrokeBatch]: StrokeAck
-  [EVENTS.drawFillCommit]: void
+  [EVENTS.drawFillCommit]: { drawingRevision: number }
   [EVENTS.drawUndo]: void
   [EVENTS.drawRedo]: void
   [EVENTS.drawClear]: void

@@ -30,15 +30,10 @@ export function renderStroke(
   context.moveTo(first.x * (canvasWidth - 1), first.y * (canvasHeight - 1))
   for (const point of stroke.points.slice(start + 1))
     context.lineTo(point.x * (canvasWidth - 1), point.y * (canvasHeight - 1))
-  if (stroke.points.length === 1)
+  // 本段只有一个点可画（首点，或本批仅新增 1 点/本地预览已追平）时，moveTo 后没有 lineTo
+  // 不会产生任何像素；补一段 +0.01 的微小偏移，让 round 线帽把该点渲染成圆点。
+  if (stroke.points.length - start === 1)
     context.lineTo(first.x * (canvasWidth - 1) + 0.01, first.y * (canvasHeight - 1) + 0.01)
-  else if (start >= 1 && stroke.points.length - start === 1 && stroke.points[start - 1]) {
-    const previous = stroke.points[start - 1]!
-    context.lineTo(
-      previous.x * (canvasWidth - 1) + (first.x - previous.x) * (canvasWidth - 1) + 0.01,
-      previous.y * (canvasHeight - 1) + (first.y - previous.y) * (canvasHeight - 1) + 0.01,
-    )
-  }
   context.stroke()
   context.restore()
 }

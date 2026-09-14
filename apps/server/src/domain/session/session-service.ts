@@ -12,7 +12,7 @@ import {
 import type { Socket } from 'socket.io'
 import { APP_CONFIG } from '../../config/index.ts'
 import { serverStrings } from '@draw-guess/strings'
-import { GameError, type RuntimeLogger } from '../../errors.ts'
+import { GameError, runtimeErrorType, type RuntimeLogger } from '../../errors.ts'
 import type { PlayerSecret, RoomSecret } from '../../models.ts'
 import type { PlayerRecord, PlayerRepository } from '../../repositories/index.ts'
 import { type RuntimeDependencies } from '../../runtime.ts'
@@ -264,7 +264,10 @@ export class SessionService {
           try {
             this.context.leaveRoom(playerId)
           } catch (err) {
-            this.context.logger.error({ err, playerId }, '玩家注销离房失败')
+            this.context.logger.error(
+              { errorType: runtimeErrorType(err), playerId },
+              '玩家注销离房失败',
+            )
           }
         }
         this.context.players.delete(playerId)
@@ -272,7 +275,10 @@ export class SessionService {
         try {
           this.context.repositories.players.remove(playerId)
         } catch (err) {
-          this.context.logger.error({ err, playerId }, '清理玩家持久化记录失败')
+          this.context.logger.error(
+            { errorType: runtimeErrorType(err), playerId },
+            '清理玩家持久化记录失败',
+          )
         }
       }
       delete socket.data.playerId
@@ -331,7 +337,10 @@ export class SessionService {
     try {
       this.context.repositories.players.setConnection(player.id, false, player.disconnectedAt)
     } catch (err) {
-      this.context.logger.error({ err, playerId: player.id }, '断线状态持久化异常')
+      this.context.logger.error(
+        { errorType: runtimeErrorType(err), playerId: player.id },
+        '断线状态持久化异常',
+      )
     }
     this.context.logger.info(
       { playerId, roomId: player.roomId, retainedSeat: retainDrawingSeat },

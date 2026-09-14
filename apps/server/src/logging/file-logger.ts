@@ -3,7 +3,12 @@ import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pino from 'pino'
 import type { DeploymentConfig } from '../config/index.ts'
-import { SILENT_LOGGER, type RuntimeLogger } from '../errors.ts'
+import {
+  SILENT_LOGGER,
+  type RuntimeLogContext,
+  type RuntimeLogMessage,
+  type RuntimeLogger,
+} from '../errors.ts'
 
 const LOG_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../log')
 
@@ -37,16 +42,103 @@ export function prepareLogDir(maxFiles: number): string {
   return newPath
 }
 
-export function makeLogger(deployment: DeploymentConfig): RuntimeLogger {
+const REDACTED_LOG_PATHS = [
+  'answer',
+  'chat',
+  'message',
+  'payload',
+  'raw',
+  'recoveryToken',
+  'text',
+  'token',
+  'tokenDigest',
+] as const
+
+const SAFE_CONTEXT_KEYS = [
+  'errorType',
+  'event',
+  'from',
+  'host',
+  'label',
+  'lanAddressCount',
+  'logPath',
+  'playerId',
+  'port',
+  'reason',
+  'retainedSeat',
+  'roomId',
+  'scope',
+  'signal',
+  'source',
+  'to',
+  'visibility',
+  'waitingForNextGame',
+] as const satisfies readonly (keyof RuntimeLogContext)[]
+
+function sanitizeContext(context: RuntimeLogContext): RuntimeLogContext {
+  const safe: RuntimeLogContext = {}
+  for (const key of SAFE_CONTEXT_KEYS) {
+    const value = context[key]
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      Object.assign(safe, { [key]: value })
+    }
+  }
+  return safe
+}
+
+/** 创建异步文件日志器；logPath 注入仅供隔离测试，不改变生产日志保留策略。 */
+export function makeLogger(
+  deployment: DeploymentConfig,
+  options: { logPath?: string } = {},
+): RuntimeLogger {
   if (!deployment.logEnabled) return SILENT_LOGGER
-  const logPath = prepareLogDir(deployment.logMaxFiles)
+  const logPath = options.logPath ?? prepareLogDir(deployment.logMaxFiles)
+  const destination = pino.destination({
+    dest: logPath,
+    sync: false,
+    minLength: 4_096,
+    periodicFlush: 1_000,
+  })
   const logger = pino(
-    { level: deployment.logLevel },
-    pino.destination({ dest: logPath, sync: true }),
+    {
+      level: deployment.logLevel,
+      redact: { paths: [...REDACTED_LOG_PATHS], remove: true },
+    },
+    destination,
   )
   logger.info({ logPath }, '日志文件已创建')
+  let closePromise: Promise<void> | undefined
+
+  const flush = (): Promise<void> =>
+    new Promise((resolve, reject) =>
+      destination.flush((error) => (error ? reject(error) : resolve())),
+    )
+
+  const close = (): Promise<void> => {
+    closePromise ??= new Promise((resolve, reject) => {
+      const onError = (error: Error) => reject(error)
+      destination.once('error', onError)
+      destination.once('finish', () => {
+        destination.off('error', onError)
+        resolve()
+      })
+      destination.end()
+    })
+    return closePromise
+  }
+
+  const write =
+    (level: 'debug' | 'info' | 'warn' | 'error') =>
+    (context: RuntimeLogContext, message: RuntimeLogMessage): void =>
+      void logger[level](sanitizeContext(context), message)
+
   return {
-    info: (context, message) => void logger.info(context, message),
-    error: (context, message) => void logger.error(context, message),
+    debug: write('debug'),
+    info: write('info'),
+    warn: write('warn'),
+    error: write('error'),
+    flush,
+    close,
+    flushSync: () => destination.flushSync(),
   }
 }

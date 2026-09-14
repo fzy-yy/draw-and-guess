@@ -11,6 +11,7 @@ import type { MemberState, RoomSecret } from './models.ts'
 import { buildDrawerScore, buildGuessDetail } from './scoring.ts'
 import type { TimerHandle } from './runtime.ts'
 import type { RoundContext } from './domain/game/round-context.ts'
+import { runtimeErrorType } from './errors.ts'
 
 /** 回合流转状态机；只操作房间的 game 与阶段，不直接接触 socket。 */
 export class RoundMachine {
@@ -67,6 +68,7 @@ export class RoundMachine {
     game.answer = undefined
     game.strokes = []
     game.strokePointTotal = 0 // 新回合重置画布点数预算
+    game.fillCount = 0 // 新回合重置填充次数预算
     game.undoneStrokeIds = []
     game.lastSequence = -1
     game.messages = []
@@ -279,7 +281,10 @@ export class RoundMachine {
     try {
       this.service.persistGameResult(room, reason)
     } catch (err) {
-      this.service.logger.error({ err, roomId: room.id }, '战绩落盘失败，已保障结算广播正常进行')
+      this.service.logger.error(
+        { errorType: runtimeErrorType(err), roomId: room.id },
+        '战绩落盘失败，已保障结算广播正常进行',
+      )
     }
     // 最短展示期到点后统一评估全员/房主意愿；自动返回上限到点则无条件收敛到 waiting。
     game.rematchTimer = this.service.scheduler.set(minimumResultMs, () =>

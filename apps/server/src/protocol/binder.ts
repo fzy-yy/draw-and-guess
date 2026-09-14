@@ -10,8 +10,11 @@ import type {
   ClientRequestEvent,
   ClientRequestPayload,
   ClientResponse,
+  ErrorCode,
 } from '@draw-guess/shared'
+import { EVENTS } from '@draw-guess/shared'
 import { failure, GameError, success } from '../errors.ts'
+import type { OperationalMetrics } from '../observability/metrics.ts'
 
 export type { Ack }
 
@@ -55,16 +58,40 @@ export function bindRequest<E extends ClientRequestEvent>(
     listener: (raw: unknown, callback?: (ack: Ack<ClientResponse<E>>) => void) => void,
   ) => void
   on(event, async (raw: unknown, callback?: (ack: Ack<ClientResponse<E>>) => void) => {
+    const service = socket.data.service as
+      | {
+          clock?: { now: () => number }
+          metrics?: OperationalMetrics
+        }
+      | undefined
+    const startedAt = service?.clock?.now()
     const provisionalId =
       typeof raw === 'object' && raw && 'requestId' in raw
         ? String((raw as { requestId: unknown }).requestId)
         : 'invalid-request'
-    const respond = typeof callback === 'function' ? callback : () => undefined
+    let metricsRecorded = false
+    const respond = (ack: Ack<ClientResponse<E>>): void => {
+      if (!metricsRecorded) {
+        metricsRecorded = true
+        const finishedAt = service?.clock?.now()
+        service?.metrics?.recordAcknowledgement(
+          event,
+          startedAt === undefined || finishedAt === undefined ? 0 : finishedAt - startedAt,
+          ack.ok ? undefined : (ack.error.code as ErrorCode),
+        )
+      }
+      if (typeof callback === 'function') callback(ack)
+    }
 
     // 每连接一秒滑动窗口限频；绘图和网络探测已有独立策略，可由调用方关闭。
     let input: ClientRequestPayload<E>
     try {
       input = schema.parse(raw)
+      if (event === EVENTS.stateResync) {
+        service?.metrics?.recordResync(
+          (input as ClientRequestPayload<typeof EVENTS.stateResync>).reason === 'invalid_push',
+        )
+      }
       const playerId = socket.data.playerId as string | undefined
       if (!options.registration && !playerId)
         throw new GameError('UNAUTHORIZED', serverStrings.errors.UNAUTHORIZED_REGISTER)
@@ -86,7 +113,7 @@ export function bindRequest<E extends ClientRequestEvent>(
       }
 
       if (options.rateLimit !== false) {
-        const clock = (socket.data.service as { clock?: { now: () => number } } | undefined)?.clock
+        const clock = service?.clock
         if (!clock) throw new Error('binder runtime clock is not initialized')
         const now = clock.now()
         const history = ((socket.data.eventTimes as number[] | undefined) ?? []).filter(

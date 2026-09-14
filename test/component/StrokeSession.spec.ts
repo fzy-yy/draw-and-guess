@@ -70,7 +70,6 @@ function createSessionHarness(options: { tool?: 'pen' | 'fill'; canFill?: () => 
         color: () => '#1F2937',
         roundId: () => roundId,
         lastSequence: () => -1,
-        strokes: () => authoritativeStrokes,
         drawnPoints,
         getContext: () => context,
         redraw,

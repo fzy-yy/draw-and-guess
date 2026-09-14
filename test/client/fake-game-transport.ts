@@ -30,6 +30,11 @@ export interface FakeGameTransport {
   notifications: Array<{ text: string; type?: 'success' | 'warning' | 'error' }>
   setResponder(responder: Responder): void
   emit(event: string, ...args: unknown[]): void
+  emitManager(event: string, ...args: unknown[]): void
+  listenerCount(event: string): number
+  managerListenerCount(event: string): number
+  connectCalls(): number
+  disconnectCalls(): number
 }
 
 export function createFakeGameTransport(): FakeGameTransport {
@@ -37,6 +42,8 @@ export function createFakeGameTransport(): FakeGameTransport {
   const managerListeners = new Map<string, Set<Listener>>()
   const requests: FakeGameTransport['requests'] = []
   const notifications: FakeGameTransport['notifications'] = []
+  let connectCallCount = 0
+  let disconnectCallCount = 0
   let responder: Responder = (_event, payload) => ({
     ok: true,
     requestId: String(payload.requestId),
@@ -67,11 +74,13 @@ export function createFakeGameTransport(): FakeGameTransport {
       return fakeSocket
     },
     connect() {
+      connectCallCount += 1
       fakeSocket.connected = true
       emitFrom(socketListeners, 'connect')
       return fakeSocket
     },
     disconnect() {
+      disconnectCallCount += 1
       fakeSocket.connected = false
       return fakeSocket
     },
@@ -94,6 +103,11 @@ export function createFakeGameTransport(): FakeGameTransport {
     notifications,
     setResponder: (next) => (responder = next),
     emit: (event, ...args) => emitFrom(socketListeners, event, ...args),
+    emitManager: (event, ...args) => emitFrom(managerListeners, event, ...args),
+    listenerCount: (event) => socketListeners.get(event)?.size ?? 0,
+    managerListenerCount: (event) => managerListeners.get(event)?.size ?? 0,
+    connectCalls: () => connectCallCount,
+    disconnectCalls: () => disconnectCallCount,
   }
 }
 

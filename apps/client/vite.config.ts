@@ -122,6 +122,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // 轻量协议常量必须先于 barrel 匹配：Worker 等独立 bundle 只应带上纯常量，
+      // 不能被 @draw-guess/shared barrel 拖入 zod 与 schema 运行时。
+      '@draw-guess/shared/protocol/constants': fileURLToPath(
+        new URL('../../packages/shared/src/protocol/constants.ts', import.meta.url),
+      ),
       '@draw-guess/shared': fileURLToPath(
         new URL('../../packages/shared/src/index.ts', import.meta.url),
       ),

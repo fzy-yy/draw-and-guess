@@ -25,6 +25,7 @@ import { SqlitePlayerRepository } from './repositories/player-repository.ts'
 import { SqliteArchiveRepository } from './repositories/archive-repository.ts'
 import { createDatabase } from './db/index.ts'
 import { runMigrations } from './db/migrate.ts'
+import type { OperationalMetrics } from './observability/metrics.ts'
 
 export function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return true
@@ -46,10 +47,16 @@ export function isAllowedOrigin(origin: string | undefined): boolean {
   }
 }
 
+/** 详细运维指标只能从本机回环地址读取，且不信任可伪造的转发头。 */
+export function isLoopbackAddress(address: string | undefined): boolean {
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1'
+}
+
 export interface RunningApplication {
   httpServer: HttpServer
   io: Server
   service: GameService
+  metrics: OperationalMetrics
   /** 幂等关闭本应用拥有的 Socket、HTTP 与 SQLite 资源。 */
   close(): Promise<void>
 }
@@ -83,6 +90,8 @@ export async function createApplication(
     dbFile?: string
     /** 测试隔离用：托管前端构建产物的目录，避免依赖恰好存在的 dist。 */
     clientDist?: string
+    /** 显式开启后仍只允许回环请求读取详细指标；默认仅返回安全摘要。 */
+    healthMetricsEnabled?: boolean
   } = {},
 ): Promise<RunningApplication> {
   const vocabulary = options.vocabulary ?? (await loadVocabulary())
@@ -116,6 +125,7 @@ export async function createApplication(
     archive: new SqliteArchiveRepository(database),
   }
   const service = new GameService(io, vocabulary, repositories, options.logger)
+  const metrics = service.metrics
 
   // CSP 只开放生产产物实际需要的来源；纯 HTTP 局域网部署明确不升级 HTTPS、不发送 HSTS。
   app.disable('x-powered-by')
@@ -150,16 +160,27 @@ export async function createApplication(
   // 静态资源 gzip 压缩：JS/CSS/SVG 经 compression 减小传输体积，对局域网也有明显收益。
   // 放在静态托管前，仅对可压缩内容（text/javascript/css/svg 等）生效。
   app.use(compression())
-  // 健康检查：对外暴露服务名称、版本与词库规模
-  app.get('/api/health', (_request, response) =>
-    response.json({
+  // 健康检查默认只返回安全摘要；详细指标必须显式开启且请求来自真实回环地址。
+  app.get('/api/health', (request, response) => {
+    response.setHeader('Cache-Control', 'no-store')
+    const summary = {
       ok: true,
       app: APP_CONFIG.app.name,
       version: APP_CONFIG.app.version,
       protocolVersion: APP_CONFIG.app.protocolVersion,
-      vocabularyCount: vocabulary.items.length,
-    }),
-  )
+    }
+    if (!options.healthMetricsEnabled || !isLoopbackAddress(request.socket.remoteAddress)) {
+      response.json(summary)
+      return
+    }
+    response.json({
+      ...summary,
+      details: {
+        vocabularyCount: vocabulary.items.length,
+        metrics: metrics.snapshot(service.rooms.size),
+      },
+    })
+  })
   // 信息接口：返回可公开配置与当前服务器地址，供客户端与调试工具使用
   app.get('/api/info', (_request, response) =>
     response.json({ config: PUBLIC_CONFIG, serverTime: Date.now(), serverUrl: baseUrl() }),
@@ -194,7 +215,16 @@ export async function createApplication(
     response.sendFile(path.join(clientDist, 'index.html'))
   })
   // 每个新连接注册全部协议事件处理器
-  io.on('connection', (socket) => registerSocketHandlers(socket, service))
+  io.on('connection', (socket) => {
+    metrics.connectionOpened()
+    let counted = true
+    socket.once('disconnect', () => {
+      if (!counted) return
+      counted = false
+      metrics.connectionClosed()
+    })
+    registerSocketHandlers(socket, service)
+  })
 
   let closePromise: Promise<void> | undefined
   const close = (): Promise<void> => {
@@ -214,5 +244,5 @@ export async function createApplication(
     return closePromise
   }
 
-  return { httpServer, io, service, close }
+  return { httpServer, io, service, metrics, close }
 }

@@ -1,4 +1,4 @@
-import { PRIVATE_ROOM_CODE } from '@draw-guess/shared'
+import { PRIVATE_ROOM_CODE } from '@draw-guess/shared/protocol/constants'
 import { ROOM_PRESETS } from './room-presets.ts'
 
 /**

@@ -19,10 +19,15 @@ export default defineConfig({
   },
   fullyParallel: false, // 对局联机测试避免多测试之间竞争
   workers: 1,
-  reporter: [['list']],
+  // CI 上对瞬时抖动（字体度量、计时、压缩）重试一次，本地保持零重试以便暴露不稳定用例。
+  retries: process.env.CI ? 1 : 0,
+  reporter: process.env.CI
+    ? [['list'], ['html', { outputFolder: '../playwright-report', open: 'never' }]]
+    : [['list']],
   use: {
     baseURL: `http://127.0.0.1:${TEST_PORT}`,
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
     viewport: { width: 1280, height: 800 },
     actionTimeout: 10_000,
   },

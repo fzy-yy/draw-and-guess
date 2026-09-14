@@ -13,10 +13,10 @@
 - **服务端权威**：身份、房间、阶段、答案、计时、绘画资格与分数全部由服务端裁决；客户端只发操作请求，结果经「角色裁剪快照」回写。
 - **公开 / 私密房间**：公开房进入大厅列表；私密房不公开，只能通过服务端生成的短码或定向邀请加入；不支持自定义密码、邀请链接或二维码。游戏中可配置为禁止加入（`forbid`）、观战加入（`spectate`）或候场下一局（`next_game`）。
 - **内存态 + 低频持久化**：房间、成员席位、画布笔画、聊天消息、计时器与对局实时状态全部在内存，重启即清空；仅**玩家短期身份**（恢复令牌/资料/偏好）和**完成局战报**经 **SQLite（better-sqlite3，WAL）** 落盘：重启后身份可凭令牌在宽限内恢复到大厅，历史战报可查。数据库文件位于 `apps/server/data/game.db`（已忽略入库）。
-- **日志文件化**：服务端日志**不输出到控制台**（规避 Windows 控制台 GBK 解码 UTF-8 中文乱码），默认写入 `apps/server/log/app-<秒级时间戳>.log`（每次启动新建一个、最多保留 `LOG_MAX_FILES` 条）；可通过 `.env` 的 `LOG_ENABLED` 完全关闭（零内存开销）。
+- **日志文件化**：服务端日志**不输出到控制台**（规避 Windows 控制台 GBK 解码 UTF-8 中文乱码），通过 Pino 异步缓冲写入 `apps/server/log/app-<秒级时间戳>.log`（每次启动新建一个、最多保留 `LOG_MAX_FILES` 条），优雅关闭时 flush/close；可通过 `.env` 的 `LOG_ENABLED` 完全关闭（零内存开销）。
 - **画板**：高 DPI 实时画布，支持自由画笔、橡皮擦（`destination-out`）与封闭区域洪泛填充；画笔/橡皮擦共用连续粗细，可滚轮调整；支持预设或任意 HEX 颜色，工具可自定义单键切换。**渲染模型为「归一化点列 + 直线段描边」增量同步**（不引入轮廓填充型平滑库，曾因此导致白边/闪烁/空心缺陷）。
 - **头像**：仅允许从 40 个内置 SVG 白名单编号中选择，协议只传编号；禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像。
-- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '10'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
+- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '11'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
 
 ### 技术栈与运行环境
 
@@ -37,10 +37,10 @@ draw_and_guess/
 ├── pnpm-workspace.yaml           # pnpm workspace：apps/* 与 packages/*（勿手改）
 ├── pnpm-lock.yaml                # 依赖锁文件（勿手改）
 ├── tsconfig.json                 # 根 TS 严格配置 + 路径别名（@draw-guess/shared / @draw-guess/config / @draw-guess/strings / @/）
-├── eslint.config.js              # ESLint 扁平配置（Vue/TS/Node，DOM globals 白名单 + 自有 sfc 惯例规则）
+├── eslint.config.js              # ESLint 扁平配置（Vue/TS/Node，console/运行时依赖/SFC 文案等工程规则）
 ├── .prettierrc.json              # Prettier 格式（无分号/单引号/行宽 100/尾逗号 all）
 ├── .prettierignore               # 忽略 node_modules/dist/.pi
-├── .env.example                  # 部署环境变量示例：HOST/PORT/LOG_LEVEL/LOG_ENABLED/LOG_MAX_FILES（复制为 .env 使用）
+├── .env.example                  # 部署变量：HOST/PORT/日志开关与 HEALTH_METRICS_ENABLED（复制为 .env 使用）
 ├── .env                          # 本地部署覆盖（已被 .gitignore 忽略，不入库）
 ├── .gitignore                    # 忽略 node_modules/dist/日志/数据库/.env/.pi/.playwright-mcp 等
 ├── packages/config/              # @draw-guess/config：仅浏览器安全的应用默认值与 UI/音频配置
@@ -97,6 +97,7 @@ draw_and_guess/
 │       ├── domain/                # 领域协作者：session 会话、room 成员、drawing/invite/vocabulary/game 窄接口；candidate-selector 为纯函数
 │       ├── startup/               # 启动期配置校验、环境加载、局域网地址、优雅关闭
 │       ├── logging/               # 文件日志初始化与保留策略
+│       ├── observability/         # 有界进程指标：连接/房间/ack/错误/重同步（仅安全聚合）
 │       ├── vocabulary/            # 词库 Provider 架构：contract（接口）/normalize（共享纯函数）/sqlite-provider（SQLite 实现）/index（分发入口，loadVocabulary 可传目录）；test-fixture.ts 生成隔离测试词库
 │       ├── db/                    # SQLite 实例上下文：createDatabase(filePath) 绑定连接/事务/关闭；迁移显式接收上下文
 │       ├── repositories/          # 仓储接口 + SQLite 实现（player/room/archive，领域层只依赖接口）
@@ -217,7 +218,7 @@ pnpm start      # 单一 Express + Socket.IO 生产服务（tsx src/index.ts）
 - 终端会醒目输出主机访问地址、一个或多个 `http://局域网IP:5174` 候选地址、端口与加入说明（横幅保留在控制台；业务日志只在日志文件）。
 - 其它玩家连接**同一局域网**后在浏览器输入上述地址即可。
 - 常见问题：IP/端口与终端输出不一致、设备不在同一网段、防火墙未放行 Node.js 专用网络、版本不兼容（刷新/清缓存）。
-- 部署参数可覆盖：`PORT=5180 pnpm start`、`HOST=0.0.0.0`、`LOG_LEVEL=debug`、`LOG_ENABLED=false`（关闭则完全不创建日志记录器、不写日志文件）、`LOG_MAX_FILES=3`（日志文件保留上限）。服务启动时会自动加载项目根目录 `.env`（复制 `.env.example` 即可）；进程已有环境变量优先级高于 `.env`。环境变量**不会**覆盖游戏规则。
+- 部署参数可覆盖：`PORT=5180 pnpm start`、`HOST=0.0.0.0`、`LOG_LEVEL=debug`、`LOG_ENABLED=false`（关闭则完全不创建日志记录器、不写日志文件）、`LOG_MAX_FILES=3`（日志文件保留上限）、`HEALTH_METRICS_ENABLED=true`（仅允许本机查看详细健康指标）。服务启动时会自动加载项目根目录 `.env`（复制 `.env.example` 即可）；进程已有环境变量优先级高于 `.env`。环境变量**不会**覆盖游戏规则。
 
 ### 其它命令（全部通过根 `package.json` scripts）
 
@@ -241,11 +242,12 @@ pnpm format:check  # 仅检查格式
 - **Schema-first 线协议**：`packages/shared/src/protocol/` 的 Zod Schema 是公开 DTO 与请求 payload 的权威来源；`PublicPlayer`、`RoomSnapshot`、`GameView`、`Invite` 等通过 `z.infer` 导出，推送事件类型由 `SERVER_PUSH_SCHEMAS` 自动映射。服务端 Secret 与仓储记录继续独立手写，禁止依赖 Zod 推导。
 - **幂等传输重试**：普通客户端请求发生超时/断线等传输故障时，以同一 `requestId` 自动重试；服务端只缓存成功 ack，并让并发重复请求共享同一个执行 Promise。高频 `quiet` 绘图请求默认不重试。
 - **版本化主动推送**：服务端主动事件一律使用 `createServerPush()` 包装；客户端先经 `SERVER_PUSH_SCHEMAS` 完整 Zod 解码，再通过 `snapshot-gate.ts` 校验房间、对局、回合、`stateVersion` 与 `drawingRevision`。非法推送只记录脱敏诊断，并以冷却窗口触发一次全量重同步。
-- **统一运行时依赖**：`GameService`、`RoundMachine`、`rate-limit.ts`、`protocol/binder.ts` 的领域时间、定时器与随机数统一来自 `runtime.ts` 的 `Clock` / `Scheduler` / `RandomSource`；这些领域文件禁止直接调用系统时间、随机数或定时器，ESLint 会阻止回退。
+- **统一运行时依赖**：`GameService`、`RoundMachine`、`rate-limit.ts`、`snapshot.ts`、`scoring.ts`、`hint-scheduler.ts` 及 `apps/server/src/domain/`、`application/`、`protocol/` 全目录的领域时间、定时器与随机数统一来自 `runtime.ts` 的 `Clock` / `Scheduler` / `RandomSource`；这些作用域禁止直接调用系统时间、随机数或定时器，只有 `runtime.ts` 生产适配层放行，ESLint 会阻止回退。
 - **回合状态机**：`round-machine.ts` + `packages/shared/src/pure.ts` 的 `LEGAL_PHASES` 白名单；非法转换由服务端拒绝（`INVALID_TRANSITION`）。
 - **计分统一口径**：`scoring.ts` 与 `pure.ts` 的 `calculateGuessScore` 使用同一规则（基础 + 速度 + 顺序；两人局禁用顺序奖）。
 - **画布增量绘制**（`GameCanvas.vue`）：坐标一律**归一化 0～1**；绘图序号单调递增，服务端拒绝旧包；橡皮擦/填充只传「点击位置 + 颜色」，不传像素，客户端按同一历史重放；`lastSequence` 用于重连续接。**渲染为直线段描边（`stroke()` + `round` 线帽），增量只补画新增段（fromIndex）**。
 - **持久化分层**：每个应用由 `createDatabase(filePath)` 创建独占 `DatabaseContext`，迁移、身份/战报仓储和事务显式绑定同一连接，不允许模块级数据库单例或路径覆盖；恢复令牌落盘时只存 SHA-256 摘要且成功恢复必须旋转，运行期房间禁止写穿数据库。`RunningApplication.close()` 负责关闭自身 Socket、HTTP 和数据库。
+- **本地运维指标**：服务端只在进程内按有限事件名/错误码聚合连接数、房间数、invalid push/resync、绘图预算拒绝和平均 ack 延迟，不保存 ID 列表、恢复令牌、答案、聊天正文或完整 payload。`/api/health` 默认仅返回安全摘要；详细指标必须显式开启且仅回环请求可见（见 `docs/adr/0007-local-observability-privacy.md`）。
 - **配置单一来源**：线上协议范围只写在 `packages/shared/src/protocol/constants.ts`；浏览器安全默认值写在 `packages/config/src/`；限频、数据库路径与清理策略写在 `apps/server/src/config/`；UI 文案只写在 `packages/strings/src/`；词库数据只写在 `vocabulary/`。
 
 ---
@@ -258,8 +260,8 @@ pnpm format:check  # 仅检查格式
 - **换行**：由根目录 `.gitattributes` 统一管理；默认文本文件提交为 LF，`.bat`/`.cmd` 保留 CRLF，数据库、音频等二进制文件禁止换行转换。新增文件类型时同步确认其 Git 属性，不依赖开发者本机的 `core.autocrlf` 设置。
 - **注释**：中文注释，解释「为什么」而非复述代码；关键算法 / 边界处理要求注释（参考 `GameCanvas.vue`、`pure.ts`、`snapshot.ts`、`game-service.ts` 的注释质量）。**禁止引用不可追溯的编号**（如「缺陷报告 #n」）：涉及取舍的修复要写进 `docs/adr/`，源码只留一句原因 + `docs/adr/NNNN-*.md` 链接。
 - **错误处理**：所有可观察错误码先登记到 shared 的 `ERROR_CODES` / `ErrorCode`；服务端用 `GameError` + `errors.ts` 生成统一 ack，默认中文文案必须满足 `Record<ErrorCode, string>`；客户端经 `request.ts` 统一超时与 `quiet` 静默降级，仅对需要特殊恢复的错误码穷尽分支，其余展示服务端安全文案。
-- **日志**：由 `.env` 的 `LOG_ENABLED` 控制（默认 true）：关闭时完全不创建日志记录器、不写日志文件（零内存开销）；开启时服务端用 `pino`（默认结构化 JSON，无 ANSI 色码），**每次启动写一个新的日志文件**（`apps/server/log/app-YYYY-MM-DD-HH-mm-ss.log`，精确到秒），目录最多保留最近 `LOG_MAX_FILES` 条（默认 10，超出删除最老）；控制台只保留启动横幅，不输出业务日志；级别经 `LOG_LEVEL` 控制。
-- **UI 文案**：**严禁在组件/业务代码里硬编码展示字符**；一律从 `@draw-guess/strings` 的 `strings`（客户端）或 `serverStrings`（服务端）导入。
+- **日志**：由 `.env` 的 `LOG_ENABLED` 控制（默认 true）：关闭时完全不创建日志记录器、不写日志文件（零内存开销）；开启时服务端用 `pino`（默认结构化 JSON，无 ANSI 色码）异步缓冲写入，**每次启动写一个新的日志文件**（`apps/server/log/app-YYYY-MM-DD-HH-mm-ss.log`，精确到秒），目录最多保留最近 `LOG_MAX_FILES` 条（默认 10，超出删除最老）；优雅关闭必须 flush/close，异常退出仅做尽力同步 flush。日志正文与上下文字段采用静态白名单，禁止记录恢复令牌、答案、聊天全文或 payload；控制台只保留启动横幅，不输出业务日志；`debug/info/warn/error` 级别经 `LOG_LEVEL` 控制。ESLint 默认禁止 `console`，仅进程入口、启动提示、客户端开发期资源诊断、按需构建报告与测试运行器等明确适配层放行。
+- **UI 文案**：**严禁在组件/业务代码里硬编码展示字符**；一律从 `@draw-guess/strings` 的 `strings`（客户端）或 `serverStrings`（服务端）导入。SFC ESLint 规则覆盖 template 纯文本、静态 `aria-*` / `title` / `placeholder`、字符串与模板字符串；注释、class 名、不含硬编码文案的动态绑定、测试夹具与仅供开发者定位问题的技术诊断不视为 UI 文案。
 - **样式**：组件/页面视觉一律用**行内 Tailwind 类**写在 Vue 模板；重复长串收敛到共享组件（`AppButton`/`BaseDialog`/`ConfirmDialog`/`IconButton`/`ToolButton`/`OverlayCard`/`RuleRow`/`RoundIconButton`）或 `style/` 共享模块类。不要写共享层之外的原生 CSS 类选择器。语义色用 `@theme` 令牌；容器单位 `cqh/cqw` 用任意值（内部空格用 `_`，如 `shadow-[0_1.2cqh_5cqh_#0009]`）。
 - **配色与对比度**：品牌基色固定为 `navy`/`muted`/`line`/`paper`/`blue`/`sky`/`yellow`/`green`/`red`/`purple`；为满足 WCAG AA，可使用 `success-fg`/`success-on-dark`/`warning-fg`/`danger-on-dark`/`control`/`focus` 等集中定义于 `style/tokens.css` 的无障碍语义令牌。`packages/config/src/room.ts` 的 `seatColors` 仍只取品牌基色；`#fff`/`#000`（及黑色变量 `--color-black`）与透明度衍生（如 `bg-blue/10`）不计入调色板。普通文字至少 4.5:1，大字号与非文字控件边界至少 3:1。**禁止**在组件/模板中硬编码任意 HEX（`bg-[#...]`/`text-[#...]`）或 Tailwind 默认色阶（`slate-*` 等）。`packages/config/src/drawing.ts` 的 `colors` 是**画板工具色**，属功能性工具配置，不纳入品牌调色板限制。
 - **动画一致性**：按钮/卡片交互动效统一为 160ms（复用 `.ui-feedback` / `.hover-tint` 共享类，或依赖 `@layer base` 中 `.game-stage button` 的全局过渡）；同类控件应复用同一动画，避免各自定制造成手感不一。
@@ -296,7 +298,9 @@ pnpm format:check  # 仅检查格式
   - `stores/` 提供 `index.ts` 导出所有领域 store 及组合 facade。
 - **Pinia Store 领域解耦与 Facade 架构**：
   - 状态按领域边界拆分为微 store：`useProfileStore`（资料/头像）、`useSettingsStore`（本地偏好）、`useSessionStore`（连接与会话鉴权）、`useLobbyStore`（大厅房间与玩家）、`useRoomStore`（房间生命周期与席位）、`useGameplayStore`（实时对局与消息）、`useVocabularyStore`（词库配置）；
-  - `stores/game.ts` 保留作为统一 Facade（`useGameStore()`），聚合所有子 store 的 state、getters 与 actions，提供向后兼容、无破坏性的单一入口，同时允许新代码按需细粒度注入微 store；
+  - `stores/game.ts` 保留作为统一 Facade（`useGameStore()`），聚合所有子 store 的 state、getters 与 actions，提供向后兼容、无破坏性的单一入口；
+  - **消费边界**：视图/组件统一消费 Facade；组合式函数（`useAppBootstrap`/`useRoomSync`）为精确订阅可直接注入微 store。**跨领域编排（如注销后的房间/词库清理、注册恢复后的房间落位）只允许写在 Facade 或所属领域 action 中**，组合式函数与组件不得串联多个 store 自行编排；
+  - 会话域 action 只处理会话/资料/连接，`localStorage` 读写必须收敛在 `profile`/`settings` store 内，其他模块不得直接访问；
   - 业务通信严格通过 store actions，禁止在组件中直接跨层调用底层 socket 发送未经校验的裸事件。
 - **Vue 模板原生 `:class` 对象规范**：
   - Vue SFC 模板中条件样式严格使用 Vue 原生语法（例如 `:class="{ 'text-muted': isDisabled }"` 或数组形式）；
@@ -318,8 +322,8 @@ pnpm format:check  # 仅检查格式
 - **单元测试（`pnpm test:unit`，Vitest）**：`vitest.config.ts` 通过 `resolve.alias` 复刻 `@draw-guess/*` 与 `@/` 路径。内存仓储与完整假运行时见 `test/unit/helpers/`；`fake-clock.ts` 同时控制 Clock/Scheduler/RandomSource，可同步推进完整对局。`persistence.spec.ts` 使用系统临时 SQLite 并在每例后关闭、删除；`documentation.consistency.spec.ts` 校验 AGENTS 关键路径与根质量命令存在性。单元测试已纳入 `pnpm typecheck`。
 - **组件测试（`pnpm test:component`）**：运行于 happy-dom，优先用 Testing Library 的角色/名称查询与 `userEvent.setup()` 模拟真实操作；只有需要精确校验 Vue emit / v-model 契约时使用 Vue Test Utils。音频播放与 focus-trap 已有独立测试，组件 setup 只验证调用意图。
 - **集成测试（`pnpm test:integration`）**：使用真实 Pinia 或 `createTestingPinia({ createSpy: vi.fn })`；Socket.IO 由统一替身隔离，MSW 以 `onUnhandledRequest: 'error'` 守住 HTTP 边界。禁止访问真实服务。
-- **覆盖率（`pnpm test:coverage`）**：V8 汇总全部 Vitest projects，输出 text/json-summary/html/lcov 到 `coverage/`，并执行基于当前全量源码的渐进式全局阈值；新增测试应提高而非降低阈值。
-- **端到端测试（`pnpm test:e2e`，Playwright）**：launcher 承担 webServer（构建前端 → 生成 fixture → 建库 → 监听）。默认词库 fixture 含 5,000 词，用于虚拟表格压力验收；兼容性项目覆盖 Chromium DPR 1/1.5/2、Firefox DPR 2、触屏输入和后台标签页恢复。页面封装在 `test/e2e/pages/`，fixtures 在 `test/e2e/fixtures/test-base.ts`，spec 在 `test/e2e/specs/`。
+- **覆盖率（`pnpm test:coverage`）**：V8 汇总全部 Vitest projects，统计 `apps/client/src`（`views/**` 除外，由 E2E 覆盖）、`apps/server/src`、`packages/{shared,config,strings}/src`，输出 text/json-summary/html/lcov 到 `coverage/`，并执行贴近实测的全局与关键文件阈值；分层门禁与最新结果见 `test/COVERAGE.md`，新增测试应提高而非降低阈值。
+- **端到端测试（`pnpm test:e2e`，Playwright）**：launcher 承担 webServer（构建前端 → 生成 fixture → 建库 → 监听）。默认词库 fixture 含 5,000 词，用于虚拟表格压力验收；兼容性项目覆盖 Chromium DPR 1/1.5/2、Firefox DPR 2、触屏输入和后台标签页恢复。页面封装在 `test/e2e/pages/`，fixtures 在 `test/e2e/fixtures/test-base.ts`，spec 在 `test/e2e/specs/`。CI 上 `retries=1`（本地 0 重试以暴露不稳定用例）；launcher 构建时注入 `VITE_EXPOSE_LOGICAL_CANVAS=1` 开启跨端栅格哈希探针（默认生产构建不包含该探针）。
 - 可作为将来单测目标的纯函数（注释已注明「可独立单测」）：`packages/shared/src/pure.ts`、`apps/server/src/scoring.ts`、`apps/server/src/snapshot.ts`；仓储接口（`repositories/`）可注入内存实现测试。
 - **修改代码后的最低验证要求**：依次运行
   ```bash
@@ -390,8 +394,8 @@ pnpm format:check  # 仅检查格式
 
 | 项             | 预算      | 现状     | 度量方式                                    |
 | -------------- | --------- | -------- | ------------------------------------------- |
-| 主入口 JS gzip | ≤ 165 KiB | ~155 KiB | 资源计时 `encodedBodySize`                  |
-| 首屏实际下载   | ≤ 180 KiB | ~167 KiB | 同源非 Socket.IO 资源的 `transferSize` 求和 |
+| 主入口 JS gzip | ≤ 165 KiB | ~162 KiB | 资源计时 `encodedBodySize`                  |
+| 首屏实际下载   | ≤ 180 KiB | ~173 KiB | 同源非 Socket.IO 资源的 `transferSize` 求和 |
 
 预算触顶时**先看体积报告再决定取舍**，不要靠调大阈值或把 vendor 硬拆成多个 chunk 来消除告警：
 
@@ -408,6 +412,8 @@ BUNDLE_REPORT=1 pnpm --filter @draw-guess/client build   # 产物 raw/gzip 表 +
 - 常驻渲染的弹窗（`v-model:open` 但组件始终在模板里）一挂载就会下载 chunk：需要真正延后时加 `v-if` 闸门，
   首次打开后再常驻，以保留关闭过渡动画（见 `RoomView` 的 `vocabularyMounted`）；
 - 占位组件绝对定位铺满「最近的定位祖先」，因此宿主容器需为 `relative`。
+- **独立 bundle 的轻量导入约束**：Worker、独立 HTML 入口等会被单独打成一个 chunk 的模块，只允许从 `@draw-guess/shared/protocol/constants` 子路径取协议常量，**禁止**在此基础上引入 `@draw-guess/config` / `@draw-guess/strings` barrel 或 `@draw-guess/shared` barrel——后两者会把整份配置与 zod schema 复制进独立 chunk（洪泛填充 Worker 曾因此多出 21.4 KiB gzip）。这三个 workspace 包已声明 `sideEffects: false`。
+- 预算余量由 `test/e2e/specs/08-performance-budget.spec.ts` 在通过时一并打印（含「余量 x KiB」），逼近预算时先看该输出再看体积报告。
 
 ### 静态资源缓存（服务端）
 
@@ -490,7 +496,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 
 ## 配置、安全与敏感信息
 
-- **环境变量**：仅 `.env.example` 中的 `HOST / PORT / LOG_LEVEL / LOG_ENABLED / LOG_MAX_FILES` 可覆盖部署参数；游戏规则按 shared/public/server-private 边界修改。`.env` 已被 `.gitignore` 忽略，不入库。
+- **环境变量**：仅 `.env.example` 中的 `HOST / PORT / LOG_LEVEL / LOG_ENABLED / LOG_MAX_FILES / HEALTH_METRICS_ENABLED` 可覆盖部署参数；游戏规则按 shared/public/server-private 边界修改。`.env` 已被 `.gitignore` 忽略，不入库。
 - **密钥 / 凭据**：仓库中**不包含**任何真实密钥、Token、密码或个人信息。临时身份恢复令牌由服务端生成，明文只返回客户端并在当前服务会话内短暂持有；SQLite 仅保存 `players.token_digest` 的 SHA-256 摘要。每次成功恢复必须旋转令牌并使旧摘要失效，令牌仍不是公开快照字段。
 - **本地存储**：浏览器仅保存昵称、内置头像编号、本地设置与短期恢复令牌（见 `packages/config/src/app.ts` 的存储键）。
 - **敏感信息纪律**：禁止将真实密钥、Token、密码、私有地址或任何个人信息写入仓库、提交日志或本文件。`.gitignore` 已忽略 `.env`、`*.local`、日志与数据库文件。

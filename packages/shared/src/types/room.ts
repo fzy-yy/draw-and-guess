@@ -3,6 +3,7 @@ import type {
   MemberConnectionChangeSchema,
   PresenceSnapshotSchema,
   PublicRoomSchema,
+  RoomCloseCodeSchema,
   RoomMemberSchema,
   RoomSnapshotSchema,
 } from '../protocol/push.ts'
@@ -14,3 +15,4 @@ export type PublicRoom = z.infer<typeof PublicRoomSchema>
 export type RoomSnapshot = z.infer<typeof RoomSnapshotSchema>
 export type MemberConnectionChange = z.infer<typeof MemberConnectionChangeSchema>
 export type PresenceSnapshot = z.infer<typeof PresenceSnapshotSchema>
+export type RoomCloseCode = z.infer<typeof RoomCloseCodeSchema>

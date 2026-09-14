@@ -18,6 +18,7 @@ workerScope.onmessage = (event) => {
     request.startX,
     request.startY,
     request.replacement,
+    request.tolerance,
   )
   const response: FloodFillWorkerResponse = {
     type: 'filled',

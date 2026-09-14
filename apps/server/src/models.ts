@@ -101,6 +101,8 @@ export interface GameSecret {
   lastSequence: number // 已接受的绘图序号（拒绝旧包）
   /** 当前回合已累计的绘图点数（含填充按 1 计），用于 maxPointsPerRound 预算。 */
   strokePointTotal: number
+  /** 当前回合已提交的填充命令数，用于 maxFillsPerRound 预算（限制重连全量重放成本）。 */
+  fillCount: number
   messages: ChatMessage[] // 回合聊天消息（入队裁剪）
   correctOrder: string[] // 猜中者 ID 按时间排序
   /**

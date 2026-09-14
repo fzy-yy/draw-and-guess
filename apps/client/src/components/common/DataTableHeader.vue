@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
+import { DATA_TABLE_SELECTION_COLUMN_WIDTH } from './data-table-layout'
 
 export interface DataTableHeaderColumn {
   key: string
@@ -26,7 +27,11 @@ const emit = defineEmits<{ sort: [key: string]; 'toggle-all': [] }>()
 <template>
   <thead class="sticky top-0 z-10 border-b-[0.2cqh] border-line bg-line">
     <tr>
-      <th v-if="hasSelection" class="w-[3.2em] px-[0.5em] py-[0.55cqh]">
+      <th
+        v-if="hasSelection"
+        class="px-[0.5em] py-[0.55cqh]"
+        :style="{ width: DATA_TABLE_SELECTION_COLUMN_WIDTH }"
+      >
         <!-- 表格内密集控件：视觉尺寸设 20px 下限（responsive.minDenseTargetPx），避免低高度舞台下缩到看不见 -->
         <input
           v-if="selectionMode === 'multiple'"

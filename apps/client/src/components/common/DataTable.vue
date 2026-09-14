@@ -16,7 +16,7 @@ import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
 import { useVirtualTableRows } from '@/composables/useVirtualTableRows'
 import type { DataTableColumn } from './data-table.types'
-import { getColumnWidths } from './data-table-layout'
+import { DATA_TABLE_SELECTION_COLUMN_WIDTH, getColumnWidths } from './data-table-layout'
 import DataTableHeader from './DataTableHeader.vue'
 
 const props = defineProps<{
@@ -131,7 +131,7 @@ const columnWidths = computed(() => {
     >
       <table class="w-full table-fixed border-collapse text-left text-fs-12 text-navy">
         <colgroup>
-          <col v-if="props.selectedIds" class="w-[3.2em]" />
+          <col v-if="props.selectedIds" :style="{ width: DATA_TABLE_SELECTION_COLUMN_WIDTH }" />
           <col
             v-for="column in props.columns"
             :key="column.key"

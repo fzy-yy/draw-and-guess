@@ -1,4 +1,4 @@
-import { ROOM_RULE_LIMITS } from '@draw-guess/shared'
+import { ROOM_RULE_LIMITS } from '@draw-guess/shared/protocol/constants'
 import { ROOM_PRESETS } from './room-presets.ts'
 
 /**

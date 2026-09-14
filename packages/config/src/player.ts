@@ -1,3 +1,5 @@
+import { AVATAR_IDS, PLAYER_PROTOCOL_LIMITS } from '@draw-guess/shared/protocol/constants'
+
 /**
  * 领域配置：玩家资料默认值；协议长度和头像白名单复用 shared 公开约束。
  */
@@ -30,4 +32,3 @@ export const player = {
   avatarIds: AVATAR_IDS,
   defaultAvatarId: '01',
 } as const
-import { AVATAR_IDS, PLAYER_PROTOCOL_LIMITS } from '@draw-guess/shared'

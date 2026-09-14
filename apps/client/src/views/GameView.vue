@@ -9,7 +9,13 @@ import { useFullscreen } from '@vueuse/core'
 import { Brush, LogOut, Trash2, X } from 'lucide-vue-next'
 import { APP_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
-import { EVENTS, type FillCommand, type Stroke, type StrokeAck } from '@draw-guess/shared'
+import {
+  EVENTS,
+  type ClientResponse,
+  type FillCommand,
+  type Stroke,
+  type StrokeAck,
+} from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
 import { AppButton, ConfirmDialog } from '@/components/common'
 import {
@@ -67,16 +73,22 @@ const fullscreenTarget = computed<HTMLElement | null>(() =>
 )
 const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(fullscreenTarget)
 
+/** 填充 ack 携带服务端画布修订，供画布判断本地是否已追平后解除填充锁。 */
+type FillAck = ClientResponse<typeof EVENTS.drawFillCommit>
+
 function submitStroke(stroke: Stroke, callback: (result: RequestResult<StrokeAck>) => void): void {
   void store.sendStroke(stroke).then(callback)
 }
 
 /** 乐观批次失败后统一请求权威画布；Room Store 内部负责并发合并与冷却。 */
 function recoverAuthoritativeDrawing(): void {
-  void store.requestFullSnapshot()
+  void store.requestFullSnapshot('drawing_rollback')
 }
 /** 填充点击由服务端校验并广播，所有客户端按相同历史重放封闭区域。 */
-function submitFill(command: FillCommand, callback: (result: RequestResult<void>) => void): void {
+function submitFill(
+  command: FillCommand,
+  callback: (result: RequestResult<FillAck>) => void,
+): void {
   void store.sendFill(command).then(callback)
 }
 
@@ -139,7 +151,7 @@ function handleFullscreenToggle(): void {
         :can-draw="store.isDrawer && store.room.phase === 'drawing'"
         :tool="tool"
         :color="color"
-        :revision="store.drawRevision"
+        :revision="game.drawingRevision"
         @stroke="submitStroke"
         @stroke-failure="recoverAuthoritativeDrawing"
         @fill="submitFill"

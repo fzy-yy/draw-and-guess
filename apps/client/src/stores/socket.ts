@@ -10,6 +10,7 @@ import {
   type MemberConnectionChange,
   type PresenceSnapshot,
   type PublicRoom,
+  type RoomCloseCode,
   type RoomSnapshot,
   type ServerPushData,
   type ServerPushEventName,
@@ -30,7 +31,7 @@ export interface SocketHandlers {
   onMemberConnectionChanged(change: MemberConnectionChange): void
   onInviteReceived(invite: Invite): void
   onInviteResolved(id: string): void
-  onRoomClosed(reason: string): void
+  onRoomClosed(reason: string, code: RoomCloseCode): void
   onSystemNotice(text: string): void
   onSystemError(message: string): void
   onInvalidPush(event: Parameters<typeof decodeServerPush>[0], reason: InvalidPushReason): void
@@ -88,7 +89,7 @@ export function attachSocketListeners(handlers: SocketHandlers, targetSocket: So
   }
   const onRoomClosed = (raw: unknown) => {
     const payload = decodeData(EVENTS.roomClosed, raw, handlers)
-    if (payload) handlers.onRoomClosed(payload.reason)
+    if (payload) handlers.onRoomClosed(payload.reason, payload.code)
   }
   const onSystemNotice = (raw: unknown) => {
     const payload = decodeData(EVENTS.systemNotice, raw, handlers)
@@ -125,7 +126,7 @@ export function attachSocketListeners(handlers: SocketHandlers, targetSocket: So
 
   /**
    * 返回解绑函数：开发态 HMR 或 store 销毁时调用，避免同一事件被重复注册
-   * （否则会出现 invites 双推、drawRevision 双增、多个探测定时器）。
+   * （否则会出现 invites 双推、drawingRevision 双增、多个探测定时器）。
    * 除了解绑 socket 级事件，还需解绑挂在 Manager（socket.io）上的 reconnect_attempt / error 监听——
    * 它们不在 socket 事件命名空间内，`socket.off` 对其无效；不清理会让 HMR 反复热更时在
    * Manager 上不断累积监听，导致 onReconnectAttempt/onIoError 被重复触发。

@@ -1,3 +1,5 @@
+import { PROTOCOL_VERSION } from '@draw-guess/shared/protocol/constants'
+
 /**
  * 领域配置：应用标识与浏览器连接参数；服务端监听、限频和清理策略由服务端私有配置维护。
  */
@@ -25,4 +27,3 @@ export const network = {
    */
   latencyGoodMs: 80,
 } as const
-import { PROTOCOL_VERSION } from '@draw-guess/shared'

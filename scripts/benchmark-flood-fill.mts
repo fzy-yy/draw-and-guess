@@ -1,12 +1,15 @@
 import { performance } from 'node:perf_hooks'
 import { applyFloodFillMeasured, colorToRgba } from '../apps/client/src/canvas/flood-fill.ts'
 import { FLOOD_FILL_EXECUTION_MODE } from '../apps/client/src/canvas/flood-fill-worker.ts'
+import { drawing } from '../packages/config/src/drawing.ts'
 
 const WIDTH = 1280
 const HEIGHT = 720
 const RUNS = 30
 const WARMUPS = 5
 const replacement = colorToRgba('#EF4444')
+// 容差仍是公开配置的唯一来源；基准脚本与 Worker 入口一样显式传入，避免 flood-fill 模块依赖配置包。
+const TOLERANCE = drawing.fillTolerance
 
 interface BenchmarkCase {
   name: string
@@ -86,6 +89,7 @@ const results = [blankCase(), complexCase(), antialiasCase()].map((benchmark) =>
       benchmark.seed[0],
       benchmark.seed[1],
       replacement,
+      TOLERANCE,
     )
   }
   const durations: number[] = []
@@ -101,6 +105,7 @@ const results = [blankCase(), complexCase(), antialiasCase()].map((benchmark) =>
       benchmark.seed[0],
       benchmark.seed[1],
       replacement,
+      TOLERANCE,
     )
     durations.push(performance.now() - startedAt)
     filledPixels = metrics.filledPixels

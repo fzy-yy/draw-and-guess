@@ -55,6 +55,12 @@ export const useProfileStore = defineStore('profile', () => {
     localStorage.setItem(APP_CONFIG.app.storageKey, JSON.stringify(profile.value))
   }
 
+  /** 清除本地持久化资料并立即恢复为随机资料（注销身份时调用）。 */
+  function clearStoredProfile(): void {
+    localStorage.removeItem(APP_CONFIG.app.storageKey)
+    profile.value = loadProfile()
+  }
+
   /** 重置并保存新的随机资料。 */
   function randomizeProfile(): void {
     profile.value = {
@@ -82,6 +88,7 @@ export const useProfileStore = defineStore('profile', () => {
   return {
     profile,
     saveProfile,
+    clearStoredProfile,
     randomizeProfile,
     updateProfile,
   }

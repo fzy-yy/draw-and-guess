@@ -44,6 +44,17 @@ export function useRoomSync() {
         ...snapshot,
         game: { ...snapshot.game, strokes: localGame.strokes, strokesOmitted: false },
       }
+    } else if (
+      current?.game &&
+      snapshot.game &&
+      current.game.gameId === snapshot.game.gameId &&
+      current.game.roundId === snapshot.game.roundId &&
+      current.game.drawingRevision === snapshot.game.drawingRevision &&
+      current.game.lastSequence === snapshot.game.lastSequence
+    ) {
+      // 绘图修订与序号均未前进：内容是权威相同的，复用本地数组引用，
+      // 避免聊天/成员变化等纯展示快照让画布整块重投影。
+      snapshot = { ...snapshot, game: { ...snapshot.game, strokes: current.game.strokes } }
     }
     roomStore.room = snapshot
   }

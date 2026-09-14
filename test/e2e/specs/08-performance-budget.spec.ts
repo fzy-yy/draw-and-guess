@@ -59,9 +59,14 @@ test.describe('08 - 首屏性能预算与静态资源缓存', () => {
     const entry = resources.find((item) => item.name.endsWith(entrySrc!))
     expect(entry, `首屏资源中应包含入口脚本 ${entrySrc}`).toBeTruthy()
 
+    const entryGzipKib = kib(entry!.encodedBodySize)
+    const firstScreenKib = kib(firstScreenBytes)
+    // 同时打印剩余余量，便于在逼近预算时提前预警（而不是等触线才在 CI 失败）。
     console.log(
-      `[性能预算] 入口 gzip ${kib(entry!.encodedBodySize).toFixed(1)} KiB / ` +
-        `首屏下载 ${kib(firstScreenBytes).toFixed(1)} KiB（${firstScreen.length} 个资源）`,
+      `[性能预算] 入口 gzip ${entryGzipKib.toFixed(1)} KiB（余量 ` +
+        `${(performance.mainEntryGzipKib - entryGzipKib).toFixed(1)} KiB）/ ` +
+        `首屏下载 ${firstScreenKib.toFixed(1)} KiB（余量 ` +
+        `${(performance.firstScreenTransferKib - firstScreenKib).toFixed(1)} KiB，${firstScreen.length} 个资源）`,
     )
     console.log(
       '[性能预算] 首屏资源明细',
@@ -71,12 +76,12 @@ test.describe('08 - 首屏性能预算与静态资源缓存', () => {
     )
 
     expect(
-      kib(entry!.encodedBodySize),
-      `主入口 gzip 体积应 ≤ ${performance.mainEntryGzipKib} KiB`,
+      entryGzipKib,
+      `主入口 gzip 体积应 ≤ ${performance.mainEntryGzipKib} KiB（当前 ${entryGzipKib.toFixed(1)} KiB）`,
     ).toBeLessThanOrEqual(performance.mainEntryGzipKib)
     expect(
-      kib(firstScreenBytes),
-      `首屏实际下载应 ≤ ${performance.firstScreenTransferKib} KiB`,
+      firstScreenKib,
+      `首屏实际下载应 ≤ ${performance.firstScreenTransferKib} KiB（当前 ${firstScreenKib.toFixed(1)} KiB）`,
     ).toBeLessThanOrEqual(performance.firstScreenTransferKib)
 
     // 缓存策略：哈希产物长缓存 + immutable；入口 HTML 每次校验

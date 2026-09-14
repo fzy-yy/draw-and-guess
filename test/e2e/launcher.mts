@@ -93,11 +93,12 @@ function sweepStaleRunDirs(): void {
 /** 构建前端到指定产物目录（vite build，经 CLIENT_OUT_DIR 写入临时目录）。 */
 function buildClient(distDir: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    // 用单字符串命令避免 shell:true + args 数组触发 DEP0190；CLIENT_OUT_DIR 经 env 传递，无引号问题
+    // 用单字符串命令避免 shell:true + args 数组触发 DEP0190；CLIENT_OUT_DIR 经 env 传递，无引号问题。
+    // VITE_EXPOSE_LOGICAL_CANVAS=1 开启跨端栅格哈希探针（默认生产构建不包含，见 useCanvasViewport.ts）。
     const command = 'pnpm --filter @draw-guess/client build'
     const child = spawn(command, {
       cwd: ROOT,
-      env: { ...process.env, CLIENT_OUT_DIR: distDir },
+      env: { ...process.env, CLIENT_OUT_DIR: distDir, VITE_EXPOSE_LOGICAL_CANVAS: '1' },
       stdio: 'inherit',
       // Windows 下 pnpm 是 pnpm.cmd 垫片，spawn 需经 shell 解析才能找到
       shell: true,

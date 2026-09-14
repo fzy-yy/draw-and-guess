@@ -4,7 +4,16 @@
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import type { DrawingCommand, FillCommand, Stroke, StrokeAck, ToolKind } from '@draw-guess/shared'
+import {
+  EVENTS,
+  type ClientResponse,
+  type DrawingCommand,
+  type FillCommand,
+  type Stroke,
+  type StrokeAck,
+  type ToolKind,
+} from '@draw-guess/shared'
+import { APP_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import { colorToRgba } from '@/canvas/flood-fill'
 import { FloodFillWorkerClient } from '@/canvas/flood-fill-worker'
@@ -27,10 +36,13 @@ const props = defineProps<{
   color: string
   revision?: number
 }>()
+/** 填充 ack 携带服务端画布修订，用于判断本地是否已追平并安全解除填充锁。 */
+type FillAck = ClientResponse<typeof EVENTS.drawFillCommit>
+
 const emit = defineEmits<{
   stroke: [stroke: Stroke, onResult: (result: RequestResult<StrokeAck>) => void]
   strokeFailure: [batch: PendingStrokeBatch, failure: RequestFailure]
-  fill: [fill: FillCommand, onResult: (result: RequestResult<void>) => void]
+  fill: [fill: FillCommand, onResult: (result: RequestResult<FillAck>) => void]
 }>()
 
 const canvas = ref<HTMLCanvasElement>()
@@ -46,6 +58,37 @@ let committedRoundId = props.roundId
 let renderGeneration = 0
 const fillBusy = ref(false)
 const fillWorker = new FloodFillWorkerClient()
+/** ack 已确认但尚未在本地画布应用的填充修订；追平或超时后解除填充锁。 */
+let pendingFillRevision: number | undefined
+let fillReleaseTimer: number | undefined
+
+function releaseFill(): void {
+  pendingFillRevision = undefined
+  window.clearTimeout(fillReleaseTimer)
+  fillReleaseTimer = undefined
+  fillBusy.value = false
+}
+
+/** 本地画布修订已追平 ack 修订时解锁；否则由 drawFill 完成或超时兜底调用。 */
+function releaseFillIfCaughtUp(): void {
+  if (pendingFillRevision === undefined) return
+  if ((props.revision ?? 0) >= pendingFillRevision) releaseFill()
+}
+
+function handleFillResult(result: RequestResult<FillAck>): void {
+  if (!result.ok) {
+    releaseFill()
+    return
+  }
+  pendingFillRevision = result.data.drawingRevision
+  if ((props.revision ?? 0) >= pendingFillRevision) {
+    releaseFill()
+    return
+  }
+  // 推送可能被重同步兜底延迟：超时后强制解锁，避免填充键永久禁用。
+  window.clearTimeout(fillReleaseTimer)
+  fillReleaseTimer = window.setTimeout(releaseFill, APP_CONFIG.network.requestTimeoutMs)
+}
 
 function getContext(): CanvasRenderingContext2D | null {
   return logicalCanvas.getContext('2d', { willReadFrequently: true })
@@ -80,6 +123,8 @@ async function drawFill(
       startX,
       startY,
       replacement: colorToRgba(command.color),
+      // 容差来自公开配置；Worker 只接收数值，不依赖配置包（见 flood-fill.ts 注释）。
+      tolerance: APP_CONFIG.drawing.fillTolerance,
     })
     if (generation !== renderGeneration || roundId !== props.roundId) return false
     if (result.filledPixels > 0) context.putImageData(result.image, 0, 0)
@@ -87,14 +132,14 @@ async function drawFill(
   } catch {
     return false
   } finally {
-    if (generation === renderGeneration) fillBusy.value = false
+    if (generation === renderGeneration) releaseFillIfCaughtUp()
   }
 }
 
 function redraw(): void {
   renderGeneration += 1
   fillWorker.cancel()
-  fillBusy.value = false
+  releaseFill()
   void redrawLogical(renderGeneration, props.roundId)
 }
 
@@ -136,6 +181,7 @@ async function redrawLogical(generation: number, roundId: string): Promise<void>
 }
 
 function drawIncoming(context: CanvasRenderingContext2D): void {
+  let changed = false
   for (const command of visibleCommands.value) {
     if (command.kind === 'fill') {
       if (drawnPoints.has(command.id)) continue
@@ -146,10 +192,12 @@ function drawIncoming(context: CanvasRenderingContext2D): void {
     if (command.points.length <= previousPointCount) continue
     renderStroke(context, command, previousPointCount)
     drawnPoints.set(command.id, command.points.length)
+    changed = true
   }
   committedCount = visibleCommands.value.length
   committedRoundId = props.roundId
-  present()
+  // 无新增段时跳过整块展示层重投影（聊天/成员变化也会带来同版本新数组）。
+  if (changed) present()
 }
 
 const strokeSession = useStrokeSession({
@@ -160,7 +208,6 @@ const strokeSession = useStrokeSession({
   color: () => props.color,
   roundId: () => props.roundId,
   lastSequence: () => props.lastSequence,
-  strokes: () => props.strokes,
   drawnPoints,
   getContext,
   redraw,
@@ -170,9 +217,10 @@ const strokeSession = useStrokeSession({
   onBatchFailure: (batch, failure) => emit('strokeFailure', batch, failure),
   emitFill: (fill) => {
     fillBusy.value = true
-    emit('fill', fill, (result) => {
-      if (!result.ok) fillBusy.value = false
-    })
+    pendingFillRevision = undefined
+    window.clearTimeout(fillReleaseTimer)
+    fillReleaseTimer = undefined
+    emit('fill', fill, handleFillResult)
   },
 })
 const { resizeTick } = useCanvasViewport(canvas, logicalCanvas, redraw)
@@ -224,7 +272,10 @@ function handlePointerMove(event: PointerEvent): void {
   strokeSession.pointerMove(event)
 }
 
-onBeforeUnmount(() => fillWorker.cancel())
+onBeforeUnmount(() => {
+  releaseFill()
+  fillWorker.dispose()
+})
 </script>
 
 <template>

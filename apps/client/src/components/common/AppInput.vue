@@ -2,8 +2,11 @@
   统一基础单行输入控件（AppInput）：
   封装输入框外壳、边框聚焦反馈、前后置插槽（如搜索图标/清除按钮/计数器），
   使用 Vue 3.4+ defineModel() 驱动双向绑定，彻底消除各视图分散手写的原生 input 样式。
+  size 只有两档：compact（默认，表单/短码）与 body（聊天猜词等主输入，字号 ≥ 正文阈值）。
 -->
 <script setup lang="ts">
+import { ref } from 'vue'
+
 const model = defineModel<string>({ default: '' })
 
 withDefaults(
@@ -19,6 +22,7 @@ withDefaults(
     align?: 'left' | 'center' | 'right'
     inputClass?: string
     error?: boolean
+    size?: 'compact' | 'body'
   }>(),
   {
     id: undefined,
@@ -32,6 +36,7 @@ withDefaults(
     align: 'left',
     inputClass: '',
     error: false,
+    size: 'compact',
   },
 )
 
@@ -40,6 +45,11 @@ const emit = defineEmits<{
   focus: [event: FocusEvent]
   blur: [event: FocusEvent]
 }>()
+
+const inputRef = ref<HTMLInputElement>()
+
+/** 供父组件程序化聚焦（如自动聚焦猜词框）；输入元素本身仍是组件内部实现细节。 */
+defineExpose({ focus: () => inputRef.value?.focus() })
 
 function handleKeyDown(event: KeyboardEvent): void {
   if (event.key === 'Enter') {
@@ -50,8 +60,9 @@ function handleKeyDown(event: KeyboardEvent): void {
 
 <template>
   <div
-    class="flex h-[4.8cqh] items-center gap-[0.5em] rounded-[0.7em] border-[0.18cqh] bg-white px-[0.75em] transition-colors focus-within:border-navy compact-control"
+    class="flex items-center gap-[0.5em] rounded-[0.7em] border-[0.18cqh] bg-white px-[0.75em] transition-colors focus-within:border-navy compact-control"
     :class="[
+      size === 'body' ? 'h-[5.2cqh]' : 'h-[4.8cqh]',
       error ? 'border-red' : 'border-control',
       disabled ? 'cursor-not-allowed opacity-50 bg-line/40' : '',
     ]"
@@ -62,6 +73,7 @@ function handleKeyDown(event: KeyboardEvent): void {
 
     <input
       :id="id"
+      ref="inputRef"
       v-model="model"
       :type="type"
       :placeholder="placeholder"
@@ -70,8 +82,9 @@ function handleKeyDown(event: KeyboardEvent): void {
       :maxlength="maxlength"
       :autocomplete="autocomplete"
       :aria-label="ariaLabel"
-      class="w-full min-w-0 border-0 bg-transparent text-navy outline-none placeholder:text-muted text-fs-14 disabled:cursor-not-allowed"
+      class="w-full min-w-0 border-0 bg-transparent text-navy outline-none placeholder:text-muted disabled:cursor-not-allowed"
       :class="[
+        size === 'body' ? 'text-fs-16' : 'text-fs-14',
         align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left',
         inputClass,
       ]"

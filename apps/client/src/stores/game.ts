@@ -4,11 +4,10 @@
   保持对视图层完全向后兼容的统一调用接口。
 */
 import { defineStore, storeToRefs } from 'pinia'
-import { APP_CONFIG, PUBLIC_CONFIG } from '@draw-guess/config'
+import { PUBLIC_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
-import { EVENTS } from '@draw-guess/shared'
 import { useGameTransport } from '@/application/game-transport'
-import { useProfileStore, loadProfile, type StoredProfile } from './profile.ts'
+import { useProfileStore, type StoredProfile } from './profile.ts'
 import { useSettingsStore, type LocalSettings } from './settings.ts'
 import {
   useSessionStore,
@@ -50,9 +49,6 @@ export const useGameStore = defineStore('game', () => {
   const { presence, invites } = storeToRefs(lobbyStore)
   const { room, me, isHost, isDrawer } = storeToRefs(roomStore)
   const { vocabulary } = storeToRefs(vocabularyStore)
-  const { drawRevision } = storeToRefs(gameplayStore)
-
-  const request = transport.request
 
   function notify(text: string, type: 'success' | 'warning' | 'error' = 'success'): void {
     transport.notify(text, type)
@@ -73,29 +69,15 @@ export const useGameStore = defineStore('game', () => {
     settingsStore.resetSettings(sessionStore.playerId)
   }
 
+  /**
+   * 注销身份并清空本机状态：会话域动作（会话/资料/连接）+ 各领域 store 的本地清理。
+   * 跨领域编排只允许保留在 Facade，组件不得自行串联多个 store。
+   */
   async function clearProfile(): Promise<void> {
-    if (sessionStore.playerId) {
-      try {
-        await request(EVENTS.sessionLogout, {}, { quiet: true })
-      } catch {
-        // 忽略静默错误
-      }
-    }
-    localStorage.removeItem(APP_CONFIG.app.storageKey)
-    profileStore.profile = loadProfile()
-    sessionStore.playerId = ''
-    sessionStore.incrementGeneration()
+    await sessionStore.clearProfile()
     roomStore.clearLocalRoomState()
     vocabularyStore.clear()
     lobbyStore.invites = []
-    sessionStore.kickedNotice = false
-    sessionStore.sessionState = 'idle'
-    sessionStore.clearRestoreRetry()
-    sessionStore.page = 'profile'
-    if (transport.socket.connected) {
-      transport.disconnect()
-      transport.connect()
-    }
     notify(strings.store.profileCleared, 'warning')
   }
 
@@ -124,7 +106,6 @@ export const useGameStore = defineStore('game', () => {
     invites,
     kickedNotice,
     protocolMismatch,
-    drawRevision,
     busy,
     me,
     isHost,

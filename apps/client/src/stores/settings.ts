@@ -21,50 +21,44 @@ export type LocalSettings = {
         : (typeof PUBLIC_CONFIG.localSettings)[Key]
 }
 
-/** 从 localStorage 加载本地设置；缺失字段回退默认值，非法快捷键逐项修复。 */
+/**
+ * 从 localStorage 加载本地设置。
+ * 校验规则由默认值类型推导（布尔按类型、数值限定 0~1 音量、字符串按工具快捷键），
+ * 新增设置项时无需维护第二份手写键清单；缺失或非法字段逐项回退默认值。
+ */
 export function loadSettings(): LocalSettings {
   try {
     const stored = localStorage.getItem(APP_CONFIG.app.settingsStorageKey)
     if (stored) {
-      const parsed = JSON.parse(stored) as Partial<LocalSettings>
-      const loaded = Object.fromEntries(
-        Object.entries(PUBLIC_CONFIG.localSettings).map(([key, fallback]) => [
-          key,
-          parsed[key as keyof LocalSettings] ?? fallback,
-        ]),
-      ) as LocalSettings
+      const parsed = JSON.parse(stored) as Record<string, unknown>
+      const defaults = PUBLIC_CONFIG.localSettings
+      const loaded = { ...defaults } as LocalSettings
+      const writable = loaded as Partial<Record<keyof LocalSettings, unknown>>
+      const shortcutKeys: Array<keyof LocalSettings> = []
 
-      const booleanKeys = [
-        'muted',
-        'animationsEnabled',
-        'showShortcuts',
-        'autoFocusGuess',
-        'discoverable',
-        'acceptsInvites',
-        'drawerDefaultReveal',
-      ] as const
-      for (const key of booleanKeys) {
-        if (typeof parsed[key] !== 'boolean') loaded[key] = PUBLIC_CONFIG.localSettings[key]
-      }
-
-      const volumeKeys = ['masterVolume', 'soundVolume', 'musicVolume'] as const
-      for (const key of volumeKeys) {
+      for (const key of Object.keys(defaults) as Array<keyof typeof defaults>) {
         const value = parsed[key]
-        loaded[key] =
-          typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
-            ? value
-            : PUBLIC_CONFIG.localSettings[key]
+        const fallback = defaults[key]
+        if (typeof fallback === 'boolean') {
+          writable[key] = typeof value === 'boolean' ? value : fallback
+        } else if (typeof fallback === 'number') {
+          writable[key] =
+            typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
+              ? value
+              : fallback
+        } else {
+          shortcutKeys.push(key)
+          writable[key] = typeof value === 'string' ? value : fallback
+        }
       }
 
-      const shortcutKeys = ['penShortcut', 'eraserShortcut', 'fillShortcut'] as const
-      const shortcuts = shortcutKeys.map((key) => String(loaded[key]).trim().toLocaleLowerCase())
-      const shortcutsAreValid =
+      // 字符串设置当前都是工具快捷键：统一小写后要求单字符且互不重复，任一不合法则整组回退默认。
+      const shortcuts = shortcutKeys.map((key) => String(writable[key]).trim().toLocaleLowerCase())
+      const shortcutsValid =
         shortcuts.every((shortcut) => shortcut.length === 1) &&
         new Set(shortcuts).size === shortcutKeys.length
       shortcutKeys.forEach((key, index) => {
-        loaded[key] = shortcutsAreValid
-          ? (shortcuts[index] ?? PUBLIC_CONFIG.localSettings[key])
-          : PUBLIC_CONFIG.localSettings[key]
+        writable[key] = shortcutsValid ? (shortcuts[index] ?? defaults[key]) : defaults[key]
       })
       return loaded
     }

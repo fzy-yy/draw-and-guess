@@ -68,6 +68,7 @@ export interface ManagedRequester extends Requester {
 }
 
 class RequestCancelledError extends Error {}
+class RequestTimeoutError extends Error {}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -95,6 +96,35 @@ function raceCancellation<T>(promise: Promise<T>, signal: AbortSignal): Promise<
   })
 }
 
+/**
+ * 请求超时哨兵：不依赖 socket.io 的 `timeout()` 与英文错误消息判型（那条字符串一旦变化，
+ * 超时就会被误判成普通传输错误并向用户显示原始英文）。完成/失败/取消/超时四个出口都会清理
+ * 定时器与 abort 监听，避免在途定时器悬挂到热更新或测试结束之后。
+ */
+function raceTimeout<T>(promise: Promise<T>, timeoutMs: number, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new RequestCancelledError())
+  return new Promise<T>((resolve, reject) => {
+    let settled = false
+    const cleanup = () => {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', onAbort)
+    }
+    const settle = (action: () => void) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      action()
+    }
+    const onAbort = () => settle(() => reject(new RequestCancelledError()))
+    const timer = setTimeout(() => settle(() => reject(new RequestTimeoutError())), timeoutMs)
+    signal.addEventListener('abort', onAbort, { once: true })
+    promise.then(
+      (value) => settle(() => resolve(value)),
+      (error: unknown) => settle(() => reject(error)),
+    )
+  })
+}
+
 function cancellationFailure(): RequestFailure {
   return {
     ok: false,
@@ -105,12 +135,11 @@ function cancellationFailure(): RequestFailure {
   }
 }
 
+/** 传输失败统一映射为中文安全文案；只有本模块的超时哨兵能产生 timeout 语义。 */
 function classifyTransportError(error: unknown): { message: string; timeout: boolean } {
-  const message = error instanceof Error ? error.message : strings.request.genericFailure
-  return {
-    message,
-    timeout: message.includes('operation has timed out'),
-  }
+  if (error instanceof RequestTimeoutError)
+    return { message: strings.request.timeoutMessage, timeout: true }
+  return { message: strings.request.genericFailure, timeout: false }
 }
 
 /** 创建带统一错误翻译的请求函数：不抛错，返回可判别结果对象。 */
@@ -136,10 +165,9 @@ export function createRequester(options: { socket: Socket; notify: NotifyFn }): 
     try {
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         try {
-          const ack = (await raceCancellation(
-            socket
-              .timeout(APP_CONFIG.network.requestTimeoutMs)
-              .emitWithAck(event, { ...payload, requestId }),
+          const ack = (await raceTimeout(
+            socket.emitWithAck(event, { ...payload, requestId }),
+            APP_CONFIG.network.requestTimeoutMs,
             controller.signal,
           )) as Ack<ClientResponse<E>>
           if (!ack.ok) {
@@ -166,13 +194,12 @@ export function createRequester(options: { socket: Socket; notify: NotifyFn }): 
         message: strings.request.genericFailure,
         timeout: false,
       }
-      const errorMessage = transport.timeout ? strings.request.timeoutMessage : transport.message
       // 所有自动尝试均失败后只提示一次，避免瞬时重连产生重复 Toast。
-      if (!requestOptions.quiet) notify(errorMessage, 'error')
+      if (!requestOptions.quiet) notify(transport.message, 'error')
       return {
         ok: false,
         failureKind: 'transport',
-        error: errorMessage,
+        error: transport.message,
         timeout: transport.timeout,
       }
     } catch (error) {

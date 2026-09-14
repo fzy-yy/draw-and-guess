@@ -1,5 +1,3 @@
-import { APP_CONFIG } from '@draw-guess/config'
-
 export type Rgba = readonly [number, number, number, number]
 
 export interface FloodFillMetrics {
@@ -41,6 +39,8 @@ function setPixel(data: Uint8ClampedArray, offset: number, replacement: Rgba): v
 /**
  * 对固定逻辑像素缓冲执行四方向洪泛填充。
  * 输入与结果都不依赖 DOM、CSS 尺寸或 DPR；同一历史在各浏览器使用相同 backing size 时结果一致。
+ * tolerance 由调用方显式传入（配置单一来源仍是 @draw-guess/config 的 drawing.fillTolerance）：
+ * 本模块同时被 Worker bundle 引用，不能依赖配置包 barrel，否则会把 zod 与全量 schema 拖进独立 chunk。
  */
 export function applyFloodFillMeasured(
   data: Uint8ClampedArray,
@@ -49,7 +49,7 @@ export function applyFloodFillMeasured(
   startX: number,
   startY: number,
   replacement: Rgba,
-  tolerance = APP_CONFIG.drawing.fillTolerance,
+  tolerance: number,
 ): FloodFillMetrics {
   if (width <= 0 || height <= 0 || data.length !== width * height * 4)
     return { filledPixels: 0, pushedSpans: 0, peakWorkingBytes: 0 }
@@ -148,7 +148,7 @@ export function applyFloodFillMeasured(
   return { filledPixels, pushedSpans, peakWorkingBytes }
 }
 
-/** 兼容既有调用：只返回填充像素数。 */
+/** 兼容既有调用：只返回填充像素数。tolerance 同样必须显式传入。 */
 export function applyFloodFill(
   data: Uint8ClampedArray,
   width: number,
@@ -156,7 +156,7 @@ export function applyFloodFill(
   startX: number,
   startY: number,
   replacement: Rgba,
-  tolerance = APP_CONFIG.drawing.fillTolerance,
+  tolerance: number,
 ): number {
   return applyFloodFillMeasured(data, width, height, startX, startY, replacement, tolerance)
     .filledPixels

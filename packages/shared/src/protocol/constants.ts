@@ -2,7 +2,23 @@
  * 线上协议的公开约束。前后端配置与 Zod Schema 都必须引用这里，避免边界两侧各维护一份。
  * 这里只放会影响协议兼容性或客户端可提交载荷的值；限频、持久化与清理策略属于服务端私有配置。
  */
-export const PROTOCOL_VERSION = '10' as const
+export const PROTOCOL_VERSION = '11' as const
+
+/**
+ * room:closed 推送的稳定关闭码：客户端按码分支（例如被踢弹窗），展示文案只用于提示。
+ * 禁止客户端用 reason 文案比对业务语义——文案可变，码不可变。
+ */
+export const ROOM_CLOSE_CODE = {
+  kicked: 'kicked',
+  roomEmpty: 'room_empty',
+  noPlayableHost: 'no_playable_host',
+} as const
+
+export const ROOM_CLOSE_CODES = [
+  ROOM_CLOSE_CODE.kicked,
+  ROOM_CLOSE_CODE.roomEmpty,
+  ROOM_CLOSE_CODE.noPlayableHost,
+] as const
 
 export const AVATAR_IDS = [
   '01',

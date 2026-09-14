@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { APP_CONFIG } from '@draw-guess/config'
 import { EVENTS, createServerPush, type RoomSnapshot, type RoomSettings } from '@draw-guess/shared'
 import { applyFloodFill, colorToRgba } from '../../apps/client/src/canvas/flood-fill.ts'
 import {
@@ -143,7 +144,15 @@ describe('洪泛填充固定逻辑缓冲', () => {
       const offset = (y * size + boundaryX) * 4
       data.set([31, 41, 55, 255], offset)
     }
-    const filled = applyFloodFill(data, size, size, 1, Math.floor(size / 2), colorToRgba('#EF4444'))
+    const filled = applyFloodFill(
+      data,
+      size,
+      size,
+      1,
+      Math.floor(size / 2),
+      colorToRgba('#EF4444'),
+      APP_CONFIG.drawing.fillTolerance,
+    )
     expect(filled).toBe(boundaryX * size)
     const left = (Math.floor(size / 2) * size + 1) * 4
     const boundary = (Math.floor(size / 2) * size + boundaryX) * 4

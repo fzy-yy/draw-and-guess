@@ -60,7 +60,7 @@ async function sendInvite(playerId: string): Promise<void> {
   await store.invite(playerId)
 }
 
-// 弹窗打开期间每 250ms 刷新一次剩余秒数；关闭时清理定时器并清空冷却状态。
+// 弹窗打开期间按 UI 配置的 tick 间隔刷新剩余秒数（与 HUD 倒计时口径一致）；关闭时清理定时器并清空冷却状态。
 // immediate：组件在 open=true 时才挂载，必须在初始化时也启动定时器，否则倒计时永远停在初始值。
 watch(
   open,
@@ -68,7 +68,10 @@ watch(
     if (isOpen) {
       cooldownEndsAt.value = new Map()
       window.clearInterval(tickTimer)
-      tickTimer = window.setInterval(() => (nowTick.value = Date.now()), 250)
+      tickTimer = window.setInterval(
+        () => (nowTick.value = Date.now()),
+        store.config.ui.tickIntervalMs,
+      )
     } else {
       window.clearInterval(tickTimer)
       tickTimer = undefined

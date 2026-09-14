@@ -3,7 +3,7 @@ import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { APP_CONFIG } from '@draw-guess/config'
-import { strings } from '@draw-guess/strings'
+import { strings, serverStrings } from '@draw-guess/strings'
 import { EVENTS, createServerPush, type RoomSnapshot, type Stroke } from '@draw-guess/shared'
 import { useAppBootstrap } from '@/composables/useAppBootstrap'
 import { useLobbyStore } from '@/stores/lobby'
@@ -311,5 +311,31 @@ describe('非法推送按事件恢复', () => {
     )
 
     expect(requestFullSnapshot).toHaveBeenCalledOnce()
+  })
+})
+
+describe('房间关闭按稳定关闭码分支', () => {
+  it('被踢提醒只由 kicked 码触发，展示文案如何变化都不影响业务判定', () => {
+    const bootstrap = mountBootstrap()
+    bootstrap.start()
+    const session = useSessionStore()
+
+    // 文案故意不是被踢文案：业务判定必须只认码。
+    transport.emitSocket(
+      EVENTS.roomClosed,
+      createServerPush({ reason: strings.store.memberLeftGame('某人'), code: 'kicked' }),
+    )
+    expect(session.kickedNotice).toBe(true)
+
+    session.dismissKickedNotice()
+    // 文案故意复用被踢文案：码不是 kicked 时不得误触发被踢提醒。
+    transport.emitSocket(
+      EVENTS.roomClosed,
+      createServerPush({
+        reason: serverStrings.notices.kickedReason,
+        code: 'room_empty',
+      }),
+    )
+    expect(session.kickedNotice).toBe(false)
   })
 })

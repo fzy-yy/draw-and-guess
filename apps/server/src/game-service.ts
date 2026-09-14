@@ -39,7 +39,13 @@ import { DomainContext } from './domain/domain-context.ts'
 import { DrawingService } from './domain/drawing/drawing-service.ts'
 import { InviteService } from './domain/invite/invite-service.ts'
 import { RoomVocabularyService } from './domain/vocabulary/room-vocabulary-service.ts'
-import { GameError, SILENT_LOGGER, type RuntimeLogger } from './errors.ts'
+import {
+  GameError,
+  SILENT_LOGGER,
+  type RuntimeLogContext,
+  type RuntimeLogger,
+  runtimeErrorType,
+} from './errors.ts'
 import type { GameSecret, MemberState, PlayerSecret, RoomSecret } from './models.ts'
 import { enforceEventRate } from './rate-limit.ts'
 import type { ArchiveRepository, PlayerRepository } from './repositories/index.ts'
@@ -48,6 +54,7 @@ import { RoundMachine } from './round-machine.ts'
 import { SYSTEM_RUNTIME, type RuntimeDependencies } from './runtime.ts'
 import { SnapshotBuilder } from './snapshot.ts'
 import type { VocabularyRegistry, VocabularyStore } from './vocabulary/index.ts'
+import { OperationalMetrics } from './observability/metrics.ts'
 
 /** 默认房间规则只从根级配置生成，避免处理器中出现另一套默认值。 */
 export function createDefaultRoomSettings(): RoomSettings {
@@ -89,6 +96,7 @@ export class GameService {
     },
     readonly logger: RuntimeLogger = SILENT_LOGGER,
     readonly runtime: RuntimeDependencies = SYSTEM_RUNTIME,
+    readonly metrics: OperationalMetrics = new OperationalMetrics(),
   ) {
     this.session = new SessionService({
       broadcastPresence: (...args) => this.broadcastPresence(...args),
@@ -219,12 +227,11 @@ export class GameService {
   }
 
   /** 记录未预期的服务器内部错误（脱敏到错误名），供排查 bindRequest 兜底返回的 INTERNAL_ERROR。 */
-  logUnexpectedError(error: unknown, context: Record<string, unknown> = {}): void {
+  logUnexpectedError(error: unknown, context: RuntimeLogContext = {}): void {
     this.logger.error(
       {
         ...context,
-        errorType: error instanceof Error ? error.name : typeof error,
-        message: error instanceof Error ? error.message : String(error),
+        errorType: runtimeErrorType(error),
       },
       '未预期的服务器内部错误',
     )
@@ -433,6 +440,7 @@ export class GameService {
       offeredWordIds: new Set(),
       strokes: [],
       strokePointTotal: 0,
+      fillCount: 0,
       undoneStrokeIds: [],
       lastSequence: -1,
       drawingRevision: 0,
@@ -543,8 +551,8 @@ export class GameService {
   }
 
   /** 校验并提交封闭区域填充命令；客户端只上传点击位置和颜色，不上传像素数据。 */
-  addFill(playerId: string, roundId: string, fill: FillCommand): void {
-    this.drawing.addFill(playerId, roundId, fill)
+  addFill(playerId: string, roundId: string, fill: FillCommand): { drawingRevision: number } {
+    return this.drawing.addFill(playerId, roundId, fill)
   }
 
   undo(playerId: string, roundId: string): void {

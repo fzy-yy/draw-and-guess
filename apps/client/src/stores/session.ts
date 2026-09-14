@@ -158,6 +158,26 @@ export const useSessionStore = defineStore('session', () => {
     kickedNotice.value = false
   }
 
+  /**
+   * 注销当前身份并回到资料页：只处理会话、本地资料与连接。
+   * 房间席位与词库等跨领域清理由 Facade 统一编排（见 stores/game.ts 的同名方法），
+   * 避免会话域反向依赖房间/词库域。
+   */
+  async function clearProfile(): Promise<void> {
+    if (playerId.value) await request(EVENTS.sessionLogout, {}, { quiet: true })
+    profileStore.clearStoredProfile()
+    playerId.value = ''
+    incrementGeneration()
+    kickedNotice.value = false
+    sessionState.value = 'idle'
+    clearRestoreRetry()
+    page.value = 'profile'
+    if (transport.socket.connected) {
+      transport.disconnect()
+      transport.connect()
+    }
+  }
+
   return {
     playerId,
     page,
@@ -176,5 +196,6 @@ export const useSessionStore = defineStore('session', () => {
     clearRestoreRetry,
     markProtocolMismatch,
     dismissKickedNotice,
+    clearProfile,
   }
 })

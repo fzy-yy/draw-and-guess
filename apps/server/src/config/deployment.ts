@@ -12,6 +12,8 @@ export type DeploymentConfig = {
   logEnabled: boolean
   /** 日志文件保留的最大条数（1～100）：每次启动新建一个，超出时删除最老的。 */
   logMaxFiles: number
+  /** 仅允许本机 /api/health 返回详细进程指标；默认关闭。 */
+  healthMetricsEnabled: boolean
 }
 
 /** 合并并基础校验部署覆盖；完整业务约束由服务端启动加载器继续验证。 */
@@ -23,6 +25,8 @@ export function getDeploymentConfig(env: NodeJS.ProcessEnv = process.env): Deplo
   // 日志开关：默认开启；接受 true/1/yes/on 为开，其余显式值视为关。
   const rawEnabled = env.LOG_ENABLED?.trim().toLowerCase() ?? ''
   const logEnabled = rawEnabled === '' ? true : ['1', 'true', 'yes', 'on'].includes(rawEnabled)
+  const rawHealthMetrics = env.HEALTH_METRICS_ENABLED?.trim().toLowerCase() ?? ''
+  const healthMetricsEnabled = ['1', 'true', 'yes', 'on'].includes(rawHealthMetrics)
   // 日志文件保留条数：默认 10，限定 1～100。
   const rawMaxFiles = env.LOG_MAX_FILES?.trim() || '10'
   const logMaxFiles = Number(rawMaxFiles)
@@ -42,5 +46,6 @@ export function getDeploymentConfig(env: NodeJS.ProcessEnv = process.env): Deplo
     logLevel: candidateLevel as DeploymentConfig['logLevel'],
     logEnabled,
     logMaxFiles,
+    healthMetricsEnabled,
   }
 }
