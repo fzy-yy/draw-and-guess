@@ -80,7 +80,7 @@ function submitStroke(stroke: Stroke, callback: (result: RequestResult<StrokeAck
   void store.sendStroke(stroke).then(callback)
 }
 
-/** 乐观批次失败后统一请求权威画布；Room Store 内部负责并发合并与冷却。 */
+/** 乐观批次失败或填充重放不可用时统一请求权威画布；Room Store 内部负责并发合并与冷却。 */
 function recoverAuthoritativeDrawing(): void {
   void store.requestFullSnapshot('drawing_rollback')
 }
@@ -155,6 +155,7 @@ function handleFullscreenToggle(): void {
         @stroke="submitStroke"
         @stroke-failure="recoverAuthoritativeDrawing"
         @fill="submitFill"
+        @fill-failure="recoverAuthoritativeDrawing"
       />
       <!-- 画布状态遮罩：选词/结算/暂停等非作画阶段覆盖在画布上 -->
       <div

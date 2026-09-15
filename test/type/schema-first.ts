@@ -1,7 +1,12 @@
 import { expectTypeOf } from 'vitest'
 import {
+  CLIENT_REQUEST_SCHEMAS,
+  CLIENT_RESPONSE_SCHEMAS,
   EVENTS,
   createServerPush,
+  type ClientResponse,
+  type ClientResponseAck,
+  type ErrorCode,
   type Invite,
   type PresenceSnapshot,
   type RoomSnapshot,
@@ -11,6 +16,55 @@ import {
 import { decodeServerPush } from '../../apps/client/src/stores/push-protocol.ts'
 
 declare const raw: unknown
+
+// 请求与响应 Schema 注册表必须一一对应：任一表漏登记事件都会在编译期失败。
+expectTypeOf<keyof typeof CLIENT_REQUEST_SCHEMAS>().toEqualTypeOf<
+  keyof typeof CLIENT_RESPONSE_SCHEMAS
+>()
+
+// 响应类型完全由 ack Schema 推导，不是手写接口。
+expectTypeOf<ClientResponse<typeof EVENTS.networkPing>>().toEqualTypeOf<{
+  clientTime: number
+  serverTime: number
+}>()
+expectTypeOf<ClientResponse<typeof EVENTS.gameStart>>().toEqualTypeOf<RoomSnapshot>()
+expectTypeOf<ClientResponse<typeof EVENTS.inviteRespond>>().toEqualTypeOf<
+  RoomSnapshot | undefined
+>()
+expectTypeOf<ClientResponse<typeof EVENTS.stateResync>>().toEqualTypeOf<RoomSnapshot | undefined>()
+expectTypeOf<ClientResponse<typeof EVENTS.roomLeave>>().toEqualTypeOf<void | undefined>()
+
+type PingAck = ClientResponseAck<typeof EVENTS.networkPing>
+const pingAck: PingAck = { ok: true, data: { clientTime: 1, serverTime: 2 }, requestId: 'request' }
+void pingAck
+const invalidPingAck: PingAck = {
+  ok: false,
+  error: {
+    // @ts-expect-error 未登记的错误码不能进入响应边界
+    code: 'NOT_REGISTERED',
+    message: 'invalid',
+  },
+  requestId: 'request',
+}
+void invalidPingAck
+const wrongPingAck: PingAck = {
+  ok: true,
+  // @ts-expect-error 成功 ack 的 data 必须匹配事件响应 Schema
+  data: { clientTime: 1 },
+  requestId: 'request',
+}
+void wrongPingAck
+
+type ResponseFailureCode = Extract<
+  ClientResponseAck<typeof EVENTS.roomList>,
+  { ok: false }
+>['error']['code']
+expectTypeOf<ResponseFailureCode>().toEqualTypeOf<ErrorCode>()
+
+declare const leaveData: ClientResponse<typeof EVENTS.roomLeave>
+// @ts-expect-error room:leave 是空响应，不能被当作房间快照读取
+const invalidLeave: RoomSnapshot = leaveData
+void invalidLeave
 
 const presence = decodeServerPush(EVENTS.presenceSnapshot, raw)
 if (presence.ok) expectTypeOf(presence.data).toEqualTypeOf<PresenceSnapshot>()

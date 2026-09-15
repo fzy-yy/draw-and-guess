@@ -3,10 +3,12 @@ import { ERROR_CODES, type ErrorCode } from '@draw-guess/shared'
 const SPECIAL_ERROR_CODES = [
   ERROR_CODES.PROTOCOL_MISMATCH,
   ERROR_CODES.DRAW_BUDGET_EXCEEDED,
+  ERROR_CODES.DRAW_HISTORY_LIMIT_REACHED,
 ] as const satisfies readonly ErrorCode[]
 
 type SpecialErrorCode = (typeof SPECIAL_ERROR_CODES)[number]
-export type ErrorRecoveryAction = 'require-upgrade' | 'warn-drawing-budget'
+/** warn-drawing-limit：画布容量类拒绝（点数/单笔/填充次数预算与命令数上限）只需提示一次，不重试。 */
+export type ErrorRecoveryAction = 'require-upgrade' | 'warn-drawing-limit'
 
 function isSpecialErrorCode(code: ErrorCode | undefined): code is SpecialErrorCode {
   return code !== undefined && (SPECIAL_ERROR_CODES as readonly ErrorCode[]).includes(code)
@@ -25,7 +27,8 @@ export function getErrorRecoveryAction(
     case ERROR_CODES.PROTOCOL_MISMATCH:
       return 'require-upgrade'
     case ERROR_CODES.DRAW_BUDGET_EXCEEDED:
-      return 'warn-drawing-budget'
+    case ERROR_CODES.DRAW_HISTORY_LIMIT_REACHED:
+      return 'warn-drawing-limit'
     default:
       return assertNever(code)
   }

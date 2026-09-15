@@ -12,9 +12,17 @@ import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
 import { useAudioFeedback } from '@/composables/useAudioFeedback'
 import { useAppBootstrap } from '@/composables/useAppBootstrap'
+import { useContextMenu } from '@/composables/useContextMenu'
 import { useFullscreenPrompt } from '@/composables/useFullscreenPrompt'
 import { useInviteQueue } from '@/composables/useInviteQueue'
-import { ActionBanner, AppButton, AppToaster, AvatarImage, BaseDialog } from '@/components/common'
+import {
+  ActionBanner,
+  AppButton,
+  AppToaster,
+  AvatarImage,
+  BaseDialog,
+  ContextMenu,
+} from '@/components/common'
 import { defineLazyComponent } from '@/utils/lazy-component'
 // 四个视图组件：对局、房间等待、大厅、资料确认（进入对局的关键链路，保持静态导入）
 import ProfileView from '@/views/ProfileView.vue'
@@ -33,6 +41,8 @@ bootstrap.start()
 useAudioFeedback()
 const inviteQueue = useInviteQueue()
 const fullscreenPrompt = useFullscreenPrompt()
+// 全局右键菜单：唯一实例挂在舞台根层级，任意场景调用 open(event, items) 即可弹出（见 useContextMenu）
+const contextMenu = useContextMenu()
 
 function reloadForProtocolUpdate(): void {
   window.location.reload()
@@ -212,6 +222,17 @@ function reloadForProtocolUpdate(): void {
           </AppButton>
         </template>
       </BaseDialog>
+
+      <!-- 全局右键菜单：舞台内唯一实例，由 useContextMenu 单例状态驱动；
+           放在舞台末尾以保证与同层浮层（横幅等）重叠时菜单在上 -->
+      <ContextMenu
+        v-model:open="contextMenu.state.open"
+        :items="contextMenu.state.items"
+        :x="contextMenu.state.x"
+        :y="contextMenu.state.y"
+        :aria-label="contextMenu.state.ariaLabel"
+        @select="contextMenu.activate"
+      />
 
       <!-- 竖屏警告：手机竖屏时全屏提示旋转设备（见 index.css） -->
       <div class="portrait-warning">

@@ -25,17 +25,8 @@ import {
 } from './protocol/room.ts'
 import { LogoutSchema, RegisterSchema, StateResyncSchema } from './protocol/session.ts'
 import { SelectVocabularyPackageSchema, UpdateVocabularySchema } from './protocol/vocabulary.ts'
-import type {
-  Ack,
-  Invite,
-  PresenceSnapshot,
-  PublicPlayer,
-  PublicRoom,
-  RoomSnapshot,
-  SessionRegistration,
-  StrokeAck,
-  VocabularySnapshot,
-} from './types.ts'
+import type { ClientResponseData, ClientResponseEvent } from './protocol/response.ts'
+import type { Ack } from './types.ts'
 
 /**
  * 全部 Socket.IO 事件名常量表。
@@ -143,51 +134,16 @@ export const CLIENT_REQUEST_SCHEMAS = {
   [EVENTS.networkPing]: RequestSchema.extend({ clientTime: z.number() }),
 } as const
 
-/** ack 数据仍由用例返回值定义；请求 payload 则完全由 CLIENT_REQUEST_SCHEMAS 推导。 */
-export interface ClientResponseContract {
-  [EVENTS.sessionRegister]: SessionRegistration
-  [EVENTS.sessionLogout]: { success: true }
-  [EVENTS.sessionUpdateProfile]: PublicPlayer
-  [EVENTS.presenceGet]: PresenceSnapshot
-  [EVENTS.presenceUpdatePreferences]: void
-  [EVENTS.roomList]: PublicRoom[]
-  [EVENTS.roomCreate]: RoomSnapshot
-  [EVENTS.roomJoin]: RoomSnapshot
-  [EVENTS.roomJoinPrivate]: RoomSnapshot
-  [EVENTS.roomLeave]: void
-  [EVENTS.roomUpdateSettings]: RoomSnapshot
-  [EVENTS.roomGetVocabulary]: VocabularySnapshot
-  [EVENTS.roomUpdateVocabulary]: VocabularySnapshot
-  [EVENTS.roomSelectVocabularyPackage]: VocabularySnapshot
-  [EVENTS.roomSetReady]: RoomSnapshot
-  [EVENTS.roomKick]: void
-  [EVENTS.roomTransferHost]: void
-  [EVENTS.inviteSend]: Invite
-  [EVENTS.inviteRespond]: RoomSnapshot | undefined
-  [EVENTS.gameStart]: RoomSnapshot
-  [EVENTS.gameChooseWord]: void
-  [EVENTS.gameRerollWords]: void
-  [EVENTS.gamePauseRequest]: void
-  [EVENTS.gameResume]: void
-  [EVENTS.gameEndEarly]: void
-  [EVENTS.gameLeave]: void
-  [EVENTS.gameReturnWaiting]: void
-  [EVENTS.guessSubmit]: { correct: boolean }
-  [EVENTS.chatPreset]: void
-  [EVENTS.drawStrokeBatch]: StrokeAck
-  [EVENTS.drawFillCommit]: { drawingRevision: number }
-  [EVENTS.drawUndo]: void
-  [EVENTS.drawRedo]: void
-  [EVENTS.drawClear]: void
-  [EVENTS.stateResync]: RoomSnapshot | undefined
-  [EVENTS.networkPing]: { clientTime: number; serverTime: number }
-}
-
-export type ClientRequestEvent = keyof typeof CLIENT_REQUEST_SCHEMAS & keyof ClientResponseContract
+/**
+ * 响应数据完全由 `protocol/response.ts` 的 ack Schema 推导：
+ * 请求 payload 走 `CLIENT_REQUEST_SCHEMAS`，ack 走 `CLIENT_RESPONSE_SCHEMAS`，
+ * 两者共同组成请求事件全集，避免手写响应接口与运行时线格式漂移。
+ */
+export type ClientRequestEvent = keyof typeof CLIENT_REQUEST_SCHEMAS & ClientResponseEvent
 export type ClientRequestPayload<E extends ClientRequestEvent> = z.infer<
   (typeof CLIENT_REQUEST_SCHEMAS)[E]
 >
-export type ClientResponse<E extends ClientRequestEvent> = ClientResponseContract[E]
+export type ClientResponse<E extends ClientRequestEvent> = ClientResponseData<E>
 export type ClientToServerEvents = {
   [E in ClientRequestEvent]: (
     payload: ClientRequestPayload<E>,

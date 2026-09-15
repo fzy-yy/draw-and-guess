@@ -1,6 +1,7 @@
 <!--
   高 DPI 实时画板组合层。
   视口、光标和单次笔画会话由 composable 管理；本组件只负责权威历史重放与模板事件接线。
+  填充的两把锁（渲染态 / 本地提交待确认）由 useFillSession 持有，这里只负责驱动它们。
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -15,12 +16,14 @@ import {
 } from '@draw-guess/shared'
 import { APP_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
+import { recordFillDiagnostic } from '@/canvas/fill-diagnostics'
 import { colorToRgba } from '@/canvas/flood-fill'
-import { FloodFillWorkerClient } from '@/canvas/flood-fill-worker'
+import { FloodFillError, FloodFillWorkerClient } from '@/canvas/flood-fill-worker'
 import { renderStroke } from '@/canvas/rendering'
 import { presentLogicalCanvas } from '@/canvas/viewport'
 import { useCanvasCursor } from '@/composables/useCanvasCursor'
 import { useCanvasViewport } from '@/composables/useCanvasViewport'
+import { useFillSession } from '@/composables/useFillSession'
 import { useStrokeSession } from '@/composables/useStrokeSession'
 import type { PendingStrokeBatch } from '@/composables/useStrokeSession'
 import type { RequestFailure, RequestResult } from '@/stores/request'
@@ -43,6 +46,8 @@ const emit = defineEmits<{
   stroke: [stroke: Stroke, onResult: (result: RequestResult<StrokeAck>) => void]
   strokeFailure: [batch: PendingStrokeBatch, failure: RequestFailure]
   fill: [fill: FillCommand, onResult: (result: RequestResult<FillAck>) => void]
+  /** 重放所需的填充无法在本地完成：父层据此请求权威全量快照。 */
+  fillFailure: []
 }>()
 
 const canvas = ref<HTMLCanvasElement>()
@@ -56,39 +61,11 @@ let committedCount = 0
 let committedUndoLen = props.undoneStrokeIds.length
 let committedRoundId = props.roundId
 let renderGeneration = 0
-const fillBusy = ref(false)
 const fillWorker = new FloodFillWorkerClient()
-/** ack 已确认但尚未在本地画布应用的填充修订；追平或超时后解除填充锁。 */
-let pendingFillRevision: number | undefined
-let fillReleaseTimer: number | undefined
-
-function releaseFill(): void {
-  pendingFillRevision = undefined
-  window.clearTimeout(fillReleaseTimer)
-  fillReleaseTimer = undefined
-  fillBusy.value = false
-}
-
-/** 本地画布修订已追平 ack 修订时解锁；否则由 drawFill 完成或超时兜底调用。 */
-function releaseFillIfCaughtUp(): void {
-  if (pendingFillRevision === undefined) return
-  if ((props.revision ?? 0) >= pendingFillRevision) releaseFill()
-}
-
-function handleFillResult(result: RequestResult<FillAck>): void {
-  if (!result.ok) {
-    releaseFill()
-    return
-  }
-  pendingFillRevision = result.data.drawingRevision
-  if ((props.revision ?? 0) >= pendingFillRevision) {
-    releaseFill()
-    return
-  }
-  // 推送可能被重同步兜底延迟：超时后强制解锁，避免填充键永久禁用。
-  window.clearTimeout(fillReleaseTimer)
-  fillReleaseTimer = window.setTimeout(releaseFill, APP_CONFIG.network.requestTimeoutMs)
-}
+const fillSession = useFillSession({
+  revision: () => props.revision ?? 0,
+  roundId: () => props.roundId,
+})
 
 function getContext(): CanvasRenderingContext2D | null {
   return logicalCanvas.getContext('2d', { willReadFrequently: true })
@@ -116,7 +93,7 @@ async function drawFill(
     Math.min(canvasHeight - 1, Math.round(command.point.y * (canvasHeight - 1))),
   )
   const image = context.getImageData(0, 0, canvasWidth, canvasHeight)
-  fillBusy.value = true
+  fillSession.beginRenderTask()
   try {
     const result = await fillWorker.fill(image, {
       roundId,
@@ -126,20 +103,31 @@ async function drawFill(
       // 容差来自公开配置；Worker 只接收数值，不依赖配置包（见 flood-fill.ts 注释）。
       tolerance: APP_CONFIG.drawing.fillTolerance,
     })
+    // 世代或回合已变：结果属于过期历史，丢弃（新一轮重放会重算）。
     if (generation !== renderGeneration || roundId !== props.roundId) return false
+    if (result.degraded) recordFillDiagnostic('worker_degraded')
     if (result.filledPixels > 0) context.putImageData(result.image, 0, 0)
     return true
-  } catch {
+  } catch (error) {
+    // 取消/被新一轮重放取代不是故障：本次重放就此结束，由当前世代的重放负责画面。
+    if (error instanceof FloodFillError && error.reason === 'cancelled') return false
+    // 当前世代下这次填充无法在本地完成（Worker 与主线程降级都失败，或结果无法写回）：
+    // 交回父层请求全量快照，并中止本次重放——避免在缺失填充的底色上继续叠加重放
+    //（后续填充的种子会因此失真）。
+    if (generation === renderGeneration && roundId === props.roundId) {
+      recordFillDiagnostic('fill_unavailable')
+      emit('fillFailure')
+    }
     return false
   } finally {
-    if (generation === renderGeneration) releaseFillIfCaughtUp()
+    // 成功、失败、取消一律释放渲染态：渲染锁不得跨越任务生命周期。
+    fillSession.endRenderTask()
   }
 }
 
 function redraw(): void {
   renderGeneration += 1
   fillWorker.cancel()
-  releaseFill()
   void redrawLogical(renderGeneration, props.roundId)
 }
 
@@ -212,15 +200,14 @@ const strokeSession = useStrokeSession({
   getContext,
   redraw,
   present,
-  canFill: () => !fillBusy.value,
+  canFill: () => fillSession.canSubmit.value,
   emitStroke: (stroke, onResult) => emit('stroke', stroke, onResult),
   onBatchFailure: (batch, failure) => emit('strokeFailure', batch, failure),
   emitFill: (fill) => {
-    fillBusy.value = true
-    pendingFillRevision = undefined
-    window.clearTimeout(fillReleaseTimer)
-    fillReleaseTimer = undefined
-    emit('fill', fill, handleFillResult)
+    // 提交锁绑定发起时的回合：旧回合的迟到 ack 由 settleSubmit 按回合丢弃。
+    const roundId = props.roundId
+    fillSession.beginSubmit()
+    emit('fill', fill, (result) => fillSession.settleSubmit(result, roundId))
   },
 })
 const { resizeTick } = useCanvasViewport(canvas, logicalCanvas, redraw)
@@ -244,7 +231,13 @@ watch(
   ],
   () => {
     const roundChanged = props.roundId !== committedRoundId
-    if (roundChanged) strokeSession.reset()
+    if (roundChanged) {
+      strokeSession.reset()
+      // 旧回合的在途确认与超时兜底一律作废，避免新回合被旧回合的填充门禁卡住。
+      fillSession.reset()
+    }
+    // 权威修订追平 ack 修订即解锁：与是否需要重放无关（重放由独立的渲染态负责）。
+    fillSession.syncRevision()
     const visibleIds = new Set(visibleCommands.value.map((command) => command.id))
     const hasRemovedCommand = [...drawnPoints.keys()].some(
       (id) => id !== strokeSession.activeStrokeId && !visibleIds.has(id),
@@ -273,7 +266,7 @@ function handlePointerMove(event: PointerEvent): void {
 }
 
 onBeforeUnmount(() => {
-  releaseFill()
+  fillSession.reset()
   fillWorker.dispose()
 })
 </script>

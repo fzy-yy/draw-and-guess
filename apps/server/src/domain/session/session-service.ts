@@ -254,37 +254,55 @@ export class SessionService {
     }
   }
 
+  /**
+   * 玩家主动注销会话：**先原子吊销持久化令牌，再离房与清理内存**（见 docs/adr/0011-session-logout-atomicity.md）。
+   *
+   * 顺序即原子性：持久化删除是唯一可失败的步骤，失败时立即中止并抛统一 INTERNAL_ERROR
+   * （白名单日志只记错误类型与 playerId），内存身份、令牌索引与当前连接全部保持可用——
+   * 绝不允许出现「库里旧令牌仍有效、内存身份已删除」的分裂状态（那会让注销后的令牌仍能在重启后
+   * 复活一个用户以为已删除的身份）。持久化成功之后的步骤都不再抛错：离房失败只记日志，
+   * 因为房间状态问题不能反过来让注销半途而废。
+   */
   logout(socket: Socket): void {
     const playerId = socket.data.playerId as string | undefined
-    if (playerId) {
-      const player = this.context.players.get(playerId)
-      if (player) {
-        this.context.scheduler.clear(player.disconnectTimer)
-        if (player.roomId) {
-          try {
-            this.context.leaveRoom(playerId)
-          } catch (err) {
-            this.context.logger.error(
-              { errorType: runtimeErrorType(err), playerId },
-              '玩家注销离房失败',
-            )
-          }
-        }
-        this.context.players.delete(playerId)
-        this.context.playersByTokenDigest.delete(player.tokenDigest)
-        try {
-          this.context.repositories.players.remove(playerId)
-        } catch (err) {
-          this.context.logger.error(
-            { errorType: runtimeErrorType(err), playerId },
-            '清理玩家持久化记录失败',
-          )
-        }
-      }
-      delete socket.data.playerId
-      socket.data.requestCache = new Map()
-      this.context.broadcastPresence()
+    if (!playerId) return
+    const player = this.context.players.get(playerId)
+    // 只有当前连接可以注销自己的身份：被新连接接管后的旧 socket 迟到注销只解绑自己，
+    // 否则会连带删除新会话的身份与持久化记录（与 handleDisconnect 的归属判断保持一致）。
+    if (!player || player.socketId !== socket.id) {
+      this.detachSocket(socket)
+      return
     }
+    try {
+      this.context.repositories.players.remove(playerId)
+    } catch (error) {
+      this.context.logger.error(
+        { errorType: runtimeErrorType(error), playerId },
+        '清理玩家持久化记录失败',
+      )
+      throw new GameError('INTERNAL_ERROR')
+    }
+    this.context.scheduler.clear(player.disconnectTimer)
+    if (player.roomId) {
+      try {
+        this.context.leaveRoom(playerId)
+      } catch (error) {
+        this.context.logger.error(
+          { errorType: runtimeErrorType(error), playerId },
+          '玩家注销离房失败',
+        )
+      }
+    }
+    this.context.players.delete(playerId)
+    this.context.playersByTokenDigest.delete(player.tokenDigest)
+    this.detachSocket(socket)
+  }
+
+  /** 解绑当前 Socket 的会话引用：清空玩家绑定与请求缓存，并广播一次在线状态。 */
+  private detachSocket(socket: Socket): void {
+    delete socket.data.playerId
+    socket.data.requestCache = new Map()
+    this.context.broadcastPresence()
   }
 
   updateProfile(playerId: string, profile: Profile): PublicPlayer {

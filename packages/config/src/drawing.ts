@@ -25,7 +25,10 @@ export const drawing = {
   // 服务端另有私有的事件限频；公开配置只描述客户端批处理节奏和协议载荷范围。
   // maxHistoryCommands 1500 ≈ 全回合绘制上限：90 秒 × 40 批/秒 ≈ 3600 个事件，但单笔画多批共用 ID，实际命令数通常远小于事件数；
   //   它直接决定服务端每个回合 strokes 数组的内存与“全量快照/断线重放”的序列化成本（约 1500 × 数百字节 = 数百 KB/人），
-  //   调大将按比例放大内存与重连卡顿，调小会过早丢弃早期笔画。
+  //   调大将按比例放大内存与重连卡顿。
+  //   ★ 语义是**硬上限 + 拒绝新增**（DRAW_HISTORY_LIMIT_REACHED），不是静默丢弃最旧命令：
+  //   丢弃会让早期封闭边界从权威历史里消失、后续填充重放时吞掉整张画布，并让客户端镜像与权威历史错位，
+  //   撤销或清空后即可继续绘制（取舍见 docs/adr/0010-drawing-history-cap.md）。
   batchIntervalMs: 24,
   maxPointsPerBatch: DRAWING_PROTOCOL_LIMITS.maxPointsPerBatch,
   maxHistoryCommands: 1_500,

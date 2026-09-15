@@ -1,7 +1,7 @@
 import { APP_CONFIG } from '../../../apps/server/src/config/index.ts'
 import type { RoomSettings } from '@draw-guess/shared'
 import { GameService, createDefaultRoomSettings } from '../../../apps/server/src/game-service.ts'
-import { SILENT_LOGGER } from '../../../apps/server/src/errors.ts'
+import { SILENT_LOGGER, type RuntimeLogger } from '../../../apps/server/src/errors.ts'
 import type { RuntimeDependencies } from '../../../apps/server/src/runtime.ts'
 import { createMemoryRepositories } from './in-memory-repositories.ts'
 import { createMemoryVocabularyRegistry } from './mini-vocabulary.ts'
@@ -50,6 +50,8 @@ export function createGameHarness(
   options: {
     runtime?: FakeRuntime
     repositories?: ReturnType<typeof createMemoryRepositories>
+    /** 注入记录型日志器即可断言「失败必须落白名单日志」；默认静默。 */
+    logger?: RuntimeLogger
   } = {},
 ): GameHarness {
   const runtime = options.runtime ?? createFakeRuntime()
@@ -68,7 +70,7 @@ export function createGameHarness(
     io,
     createMemoryVocabularyRegistry(),
     repositories,
-    SILENT_LOGGER,
+    options.logger ?? SILENT_LOGGER,
     runtime as RuntimeDependencies,
   )
 

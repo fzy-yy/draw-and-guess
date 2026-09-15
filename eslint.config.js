@@ -358,6 +358,7 @@ export default [
       'apps/client/vite.config.ts',
       'test/e2e/launcher.mts',
       'test/e2e/specs/08-performance-budget.spec.ts',
+      'test/e2e/specs/09-drawing-history-limit.spec.ts',
     ],
     rules: {
       'no-console': 'off',

@@ -54,6 +54,32 @@ describe('首屏体积切分与静态资源缓存（静态守卫）', () => {
     expect(performance.immutableAssetMaxAgeSeconds).toBe(31_536_000)
   })
 
+  it('独立 Worker bundle 不引入 shared barrel、配置、文案或 zod（避免重复 Zod 图）', () => {
+    // flood-fill.worker-entry.ts 由 Vite 打成独立 bundle：它的 import 图一旦引入
+    // @draw-guess/shared barrel / config / strings / zod，整份协议 Schema 会被复制进 Worker chunk。
+    // 这里只看真正的 import 说明符（注释中提及包名不算依赖）；轻量常量只允许 constants 子路径。
+    for (const path of [
+      'apps/client/src/canvas/flood-fill.worker-entry.ts',
+      'apps/client/src/canvas/flood-fill.ts',
+    ]) {
+      const specifiers = [...read(path).matchAll(/from\s+['"]([^'"]+)['"]/gu)].map(
+        (match) => match[1]!,
+      )
+      for (const specifier of specifiers) {
+        expect(specifier, `${path} 不允许依赖 ${specifier}`).not.toBe('@draw-guess/shared')
+        expect(specifier, `${path} 不允许依赖 ${specifier}`).not.toBe('zod')
+        expect(specifier, `${path} 不允许依赖 ${specifier}`).not.toMatch(
+          /^@draw-guess\/(config|strings)/u,
+        )
+        if (specifier.startsWith('@draw-guess/shared/')) {
+          expect(specifier, `${path} 的协议依赖只允许轻量常量`).toBe(
+            '@draw-guess/shared/protocol/constants',
+          )
+        }
+      }
+    }
+  })
+
   it('体积预算为正，且首屏预算大于入口预算', () => {
     expect(performance.mainEntryGzipKib).toBeGreaterThan(0)
     expect(performance.firstScreenTransferKib).toBeGreaterThan(performance.mainEntryGzipKib)

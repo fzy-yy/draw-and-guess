@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setActivePinia } from 'pinia'
-import { EVENTS, type Ack, type Stroke } from '@draw-guess/shared'
+import {
+  EVENTS,
+  type Ack,
+  type PublicPlayer,
+  type RoomMember,
+  type Stroke,
+} from '@draw-guess/shared'
 import { useRoomSync } from '@/composables/useRoomSync'
 import { useGameplayStore } from '@/stores/gameplay'
 import { useLobbyStore } from '@/stores/lobby'
@@ -8,6 +14,7 @@ import { useProfileStore } from '@/stores/profile'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
 import { useVocabularyStore } from '@/stores/vocabulary'
+import { clearResponseDiagnostics, getResponseDiagnostics } from '@/stores/response-protocol'
 import {
   GAME_ID,
   GUEST_ID,
@@ -24,6 +31,17 @@ function mockAck(
   responder: (event: string, payload: Record<string, unknown>) => Ack<unknown>,
 ): void {
   fakeTransport.setResponder(responder)
+}
+
+/** 大厅 presence 只允许公开玩家字段：成员快照里的席位等字段属于房间裁剪，不能在 presence 中出现。 */
+function toPublicPlayer(member: RoomMember): PublicPlayer {
+  return {
+    id: member.id,
+    nickname: member.nickname,
+    avatarId: member.avatarId,
+    status: member.status,
+    ...(member.roomId ? { roomId: member.roomId } : {}),
+  }
 }
 
 function stroke(sequence: number, startPointIndex = 0): Stroke {
@@ -90,14 +108,15 @@ describe('Session 权威恢复', () => {
     expect(onRoom).toHaveBeenCalledWith(restoredRoom)
   })
 
-  it('协议不匹配时锁定恢复，后续注册不再发请求', async () => {
+  it('协议版本错配是合法业务失败：锁定恢复、不写 Pinia，也不产生协议损坏诊断', async () => {
+    clearResponseDiagnostics()
     let calls = 0
     mockAck((_event, payload) => {
       calls += 1
       return {
         ok: false,
         requestId: String(payload.requestId),
-        error: { code: 'PROTOCOL_MISMATCH', message: '版本不兼容' },
+        error: { code: 'PROTOCOL_MISMATCH', message: '客户端与服务端协议版本不一致' },
       }
     })
     const session = useSessionStore()
@@ -106,7 +125,34 @@ describe('Session 权威恢复', () => {
     await session.register()
 
     expect(session.protocolMismatch).toBe(true)
+    expect(session.playerId).toBe('')
+    expect(session.page).toBe('profile')
     expect(calls).toBe(1)
+    // 版本错配由服务端以登记错误码返回，属于正常业务失败而不是响应损坏。
+    expect(getResponseDiagnostics()).toHaveLength(0)
+  })
+
+  it('损坏的成功响应不写入 Pinia：注册保持未登录，并留下脱敏协议诊断', async () => {
+    clearResponseDiagnostics()
+    mockAck((_event, payload) => ({
+      ok: true,
+      requestId: String(payload.requestId),
+      // 缺 room/recoveryToken/合法 player 的“成功”外壳属于 malformed success，必须在请求层被拒绝。
+      data: { player: { id: 'not-a-uuid' } },
+    }))
+    const session = useSessionStore()
+
+    await session.register()
+
+    expect(session.playerId).toBe('')
+    expect(session.page).toBe('profile')
+    expect(session.sessionState).toBe('idle')
+    const diagnostics = getResponseDiagnostics()
+    expect(diagnostics).toHaveLength(1)
+    expect(diagnostics[0]?.event).toBe(EVENTS.sessionRegister)
+    // 诊断只保留字段路径与 Zod 错误类别，不记录被拒绝的响应值。
+    expect(Object.keys(diagnostics[0]!).sort()).toEqual(['event', 'reason', 'receivedAt'])
+    expect(JSON.stringify(diagnostics)).not.toContain('not-a-uuid')
   })
 })
 
@@ -282,17 +328,18 @@ describe('useRoomSync 修订门禁', () => {
 describe('大厅、房间与词库权威请求', () => {
   it('presence、房间列表和邀请均可从请求 ack 刷新', async () => {
     const fixture = createRoomFixture()
+    const players = fixture.members.map(toPublicPlayer)
     const invitation = {
       id: '00000000-0000-4000-8000-000000000020',
       roomId: ROOM_ID,
       roomName: fixture.name,
-      from: fixture.members[0]!,
+      from: players[0]!,
       expiresAt: Date.now() + 10_000,
     }
     mockAck((event, payload) => {
       const data =
         event === EVENTS.presenceGet
-          ? { players: fixture.members, rooms: [] }
+          ? { players, rooms: [] }
           : event === EVENTS.roomList
             ? [
                 {
@@ -338,7 +385,14 @@ describe('大厅、房间与词库权威请求', () => {
           error: { code: 'ROOM_NOT_FOUND', message: '房间不存在' },
         }
       }
-      return { ok: true, requestId: String(payload.requestId), data: fixture }
+      // 无返回数据的房间操作必须让 data 缺省：空响应携带 data 会被协议边界判为损坏。
+      const voidResponse =
+        event === EVENTS.roomLeave || event === EVENTS.roomKick || event === EVENTS.roomTransferHost
+      return {
+        ok: true,
+        requestId: String(payload.requestId),
+        data: voidResponse ? undefined : fixture,
+      }
     })
     const room = useRoomStore()
 

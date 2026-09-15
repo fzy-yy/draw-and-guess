@@ -62,6 +62,17 @@ export class MemoryPlayerRepository implements PlayerRepository {
     }
   }
 
+  /** 测试只读探针：断言记录是否仍在「库」中（接口本身不需要读操作）。 */
+  has(id: string): boolean {
+    return this.records.has(id)
+  }
+
+  findByTokenDigest(tokenDigest: string): PlayerRecord | undefined {
+    const id = this.tokenIndex.get(tokenDigest)
+    const record = id ? this.records.get(id) : undefined
+    return record ? { ...record } : undefined
+  }
+
   markAllDisconnected(disconnectedAt: number): void {
     for (const record of this.records.values()) {
       record.connected = false

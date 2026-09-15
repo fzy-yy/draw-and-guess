@@ -32,22 +32,31 @@
 | `server/snapshot.ts`                      |        84% |      76% |      100% |   93% |
 | `shared/pure.ts`                          |        86% |      70% |      100% |   86% |
 
-## 最近一次全量结果（2026-09-14，`pnpm test:coverage`）
+## 最近一次全量结果（2026-09-15，`pnpm test:coverage`）
 
 分区数字为对应目录/文件的整体聚合（含子目录），与 `coverage/coverage-summary.json` 口径一致：
 
 | 分区                    | Statements | Branches | Functions |  Lines |
 | ----------------------- | ---------: | -------: | --------: | -----: |
-| 全局                    |     69.08% |   60.83% |    63.09% | 71.27% |
-| `apps/server/src`（全） |     67.45% |   62.86% |    67.84% | 69.19% |
-| `packages/shared/src`   |     93.48% |   63.16% |    78.57% | 93.48% |
+| 全局                    |     72.41% |   63.73% |    66.08% | 74.64% |
+| `apps/server/src`（全） |     71.46% |   65.44% |    71.78% | 73.46% |
+| `packages/shared/src`   |     94.50% |   68.42% |    80.00% | 94.50% |
 | `packages/config`       |    100.00% |  100.00% |   100.00% |   100% |
-| `packages/strings`      |     63.00% |  100.00% |    55.95% | 63.00% |
-| `GameCanvas.vue`        |     70.34% |   54.80% |    72.22% | 74.80% |
+| `packages/strings`      |     64.00% |  100.00% |    57.14% | 64.00% |
+| `drawing-service.ts`    |     85.42% |   77.19% |    92.86% | 88.24% |
+| `session-service.ts`    |     78.53% |   71.30% |    80.00% | 81.71% |
+| `GameCanvas.vue`        |     78.68% |   68.63% |    77.78% | 81.51% |
+| `useFillSession.ts`     |    100.00% |  100.00% |   100.00% |   100% |
+| `ContextMenu.vue`       |     96.19% |   89.19% |   100.00% |   100% |
 
 ## 维护约定
 
 - 提高阈值前先增加真实断言；新增测试应提高而非降低门禁，不通过排除文件美化数字。
 - 配置包与文案包已纳入统计：新增配置项或文案时，如导入路径变化导致覆盖回落，门禁会直接报警。
 - `GameCanvas.vue` 由 `test/component/GameCanvas.spec.ts` 守住重放、增量投影、批次序号、填充降级与填充解锁路径；新增画布分支时应同步补用例。
+- 填充的渲染态/提交态两把锁由 `test/component/ClientComposables.spec.ts` 直接覆盖释放规则，Worker 失败降级与终止由 `test/unit/flood-fill-worker.spec.ts` 覆盖；改这两处语义时应同步补充或调整用例（见 `docs/adr/0009-fill-degradation-and-locks.md`）。
+- 右键菜单由 `test/component/ContextMenu.spec.ts` 守住菜单语义、键盘导航、关闭时机与舞台内定位夹取，边界矩阵另由 `test/unit/context-menu-position.spec.ts` 覆盖；扩展菜单项能力（子菜单、长按等）时应同步补用例。
+- 绘图历史容量（硬上限 + 拒绝新增，不丢弃最旧命令）由四层守住：`test/unit/drawing-history-limit.spec.ts`（服务端语义与拒绝顺序）、`test/integration/drawing-history-mirror.spec.ts`（镜像与权威历史逐条一致、晚加入者重放一致、拒绝可见）、`test/component/GameCanvas.spec.ts` 的「绘图历史容量」用例（画布必须逐条重放收到的历史，自身不设上限）、`test/e2e/specs/09-drawing-history-limit.spec.ts`（真实浏览器 1500 条命令压力后的跨端逻辑栅格指纹，见 `docs/adr/0010-drawing-history-cap.md`）；改容量语义、客户端增量合并或画布重放时四处同步。
+- 会话注销的原子性（持久化优先：失败即整体不生效、抛 INTERNAL_ERROR、记白名单日志；连接归属守卫）由 `test/unit/session-service.contract.spec.ts` 守住，含重复注销、身份已不在内存、离房失败与被接管旧 socket 的迟到注销；改注销顺序或失败语义前先读 `docs/adr/0011-session-logout-atomicity.md`。
+- 请求响应 ack 边界（ack 外壳、requestId、成功 data、登记错误码；malformed success、未知错误码、requestId 不匹配、undefined 合法响应、协议版本错配）由三层守住：`test/unit/client-boundaries.spec.ts`（注册表对称性、解码分类与有界脱敏诊断）、`test/unit/game-transport.contract.spec.ts`（请求层不重试、统一文案与 pending 恢复）、`test/unit/response-contract.spec.ts`（真实服务端输出必须通过响应 Schema）；改 ack Schema、解码器或错误码时三处同步。
 - 服务端权威阶段、快照和共享纯函数继续使用贴近当前基线的关键文件门禁。

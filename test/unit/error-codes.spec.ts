@@ -48,7 +48,11 @@ describe('共享错误码注册表', () => {
 
   it('客户端只为需要改变恢复策略的错误码返回特殊动作', () => {
     expect(getErrorRecoveryAction(ERROR_CODES.PROTOCOL_MISMATCH)).toBe('require-upgrade')
-    expect(getErrorRecoveryAction(ERROR_CODES.DRAW_BUDGET_EXCEEDED)).toBe('warn-drawing-budget')
+    // 画布容量类拒绝共用同一个恢复动作：提示一次、不重试，回滚走权威快照。
+    expect(getErrorRecoveryAction(ERROR_CODES.DRAW_BUDGET_EXCEEDED)).toBe('warn-drawing-limit')
+    expect(getErrorRecoveryAction(ERROR_CODES.DRAW_HISTORY_LIMIT_REACHED)).toBe(
+      'warn-drawing-limit',
+    )
     expect(getErrorRecoveryAction(ERROR_CODES.UNAUTHORIZED)).toBeUndefined()
     expect(getErrorRecoveryAction(ERROR_CODES.INTERNAL_ERROR)).toBeUndefined()
   })

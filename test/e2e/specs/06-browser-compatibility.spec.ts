@@ -1,4 +1,5 @@
 import { test, expect, createPlayer } from '../fixtures/test-base'
+import { readLogicalRaster } from '../fixtures/canvas-probe'
 
 test.describe('06 - 跨浏览器、DPR、触屏与后台标签页', () => {
   test('固定逻辑画布在不同 DPR/尺寸下保持填充语义，触屏可落笔，后台恢复后倒计时追平', async ({
@@ -103,44 +104,14 @@ test.describe('06 - 跨浏览器、DPR、触屏与后台标签页', () => {
       expect(samples.darkPixels).toBeGreaterThan(0)
       expect(samples.right[3]).toBe(0)
 
-      const logicalHashes = await Promise.all(
-        [canvas, guestCanvas, observerCanvas].map((target) =>
-          target.evaluate((element) => {
-            const logical = (element as HTMLCanvasElement & { __logicalCanvas?: HTMLCanvasElement })
-              .__logicalCanvas
-            if (!logical) throw new Error('逻辑画布未挂载')
-            const data = logical
-              .getContext('2d', { willReadFrequently: true })!
-              .getImageData(0, 0, logical.width, logical.height).data
-            let hash = 0x811c9dc5
-            for (const byte of data) {
-              hash ^= byte
-              hash = Math.imul(hash, 0x01000193)
-            }
-            const context = logical.getContext('2d', { willReadFrequently: true })!
-            const sample = (x: number, y: number) =>
-              [
-                ...context.getImageData(
-                  Math.round((logical.width - 1) * x),
-                  Math.round((logical.height - 1) * y),
-                  1,
-                  1,
-                ).data,
-              ]
-                .map((channel) => channel.toString(16).padStart(2, '0'))
-                .join('')
-            return {
-              hash: (hash >>> 0).toString(16).padStart(8, '0'),
-              stableSampleHash: [sample(0.2, 0.5), sample(0.5, 0.5), sample(0.8, 0.5)].join('-'),
-              width: logical.width,
-              height: logical.height,
-            }
-          }),
-        ),
-      )
-      expect(logicalHashes[0]).toEqual(logicalHashes[1])
-      expect(logicalHashes[0]).toEqual(logicalHashes[2])
-      expect(logicalHashes[0]?.stableSampleHash).toBe('ef4444ff-1f2937ff-00000000')
+      const logicalRasters = await Promise.all([
+        readLogicalRaster(canvas),
+        readLogicalRaster(guestCanvas),
+        readLogicalRaster(observerCanvas),
+      ])
+      expect(logicalRasters[0]).toEqual(logicalRasters[1])
+      expect(logicalRasters[0]).toEqual(logicalRasters[2])
+      expect(logicalRasters[0]?.stableSampleHash).toBe('ef4444ff-1f2937ff-00000000')
 
       if (testInfo.project.name.includes('touch')) {
         await drawer.game.selectTool('pen')

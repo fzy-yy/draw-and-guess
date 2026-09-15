@@ -113,6 +113,21 @@
   .toast-move {
     transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
   }
+
+  /* 右键菜单过渡：从指针角落轻微放大淡入、反向缩小淡出，时长与全站 160ms 反馈统一。
+     缩放原点由 ContextMenu.vue 按翻转方向内联给出，菜单才不会像从自身中心弹出来。 */
+  .context-menu-enter-active,
+  .context-menu-leave-active {
+    transition:
+      opacity 160ms ease,
+      transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .context-menu-enter-from,
+  .context-menu-leave-to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
 }
 
 /* ===== 关键帧：当前画家角色文字沿固定席位色流动 ===== */

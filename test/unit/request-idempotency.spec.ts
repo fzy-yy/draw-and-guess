@@ -15,9 +15,10 @@ describe('幂等请求重试', () => {
     vi.useFakeTimers()
     const businessSocket = {
       timeout: () => businessSocket,
-      emitWithAck: () =>
+      emitWithAck: (_event: string, payload: Record<string, unknown>) =>
         Promise.resolve({
           ok: false,
+          requestId: String(payload.requestId),
           error: { code: 'DRAW_BUDGET_EXCEEDED', message: '绘图预算已用尽' },
         }),
     } as unknown as ClientSocket
@@ -77,15 +78,15 @@ describe('幂等请求重试', () => {
         attempt += 1
         return attempt === 1
           ? Promise.reject(new Error('xhr poll error'))
-          : Promise.resolve({ ok: true, data: { done: true }, requestId: payload.requestId })
+          : Promise.resolve({ ok: true, data: { success: true }, requestId: payload.requestId })
       },
     } as unknown as ClientSocket
     const notify = vi.fn()
     const request = createRequester({ socket: fakeSocket, notify })
-    const pending = request(EVENTS.gameStart, { expectedVersion: 1 })
+    const pending = request(EVENTS.sessionLogout, {})
     await vi.advanceTimersByTimeAsync(1_000)
 
-    await expect(pending).resolves.toEqual({ ok: true, data: { done: true } })
+    await expect(pending).resolves.toEqual({ ok: true, data: { success: true } })
     expect(payloads).toHaveLength(2)
     expect(payloads[0]?.requestId).toBe(payloads[1]?.requestId)
     expect(notify).not.toHaveBeenCalled()

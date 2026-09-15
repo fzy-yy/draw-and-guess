@@ -3,7 +3,6 @@
   管理选词、猜词、绘图笔画与填充增量、局内暂停与提前结算。
 */
 import { defineStore } from 'pinia'
-import { APP_CONFIG } from '@draw-guess/config'
 import {
   ERROR_CODES,
   EVENTS,
@@ -80,7 +79,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
       { quiet: true },
     )
     if (!result.ok) {
-      if (getErrorRecoveryAction(result.code) === 'warn-drawing-budget') {
+      if (getErrorRecoveryAction(result.code) === 'warn-drawing-limit') {
         notify(result.error ?? strings.request.genericFailure, 'warning')
       }
       return result
@@ -97,11 +96,16 @@ export const useGameplayStore = defineStore('gameplay', () => {
         code: ERROR_CODES.STALE_DRAWING_CONTEXT,
         timeout: false,
       }
-    return request(
+    const result = await request(
       EVENTS.drawFillCommit,
       { roundId: roomStore.room.game.roundId, fill },
       { quiet: true },
     )
+    // 与 sendStroke 同一口径：画布容量类拒绝（预算或命令数上限）提示一次，其余错误保持静默。
+    if (!result.ok && getErrorRecoveryAction(result.code) === 'warn-drawing-limit') {
+      notify(result.error ?? strings.request.genericFailure, 'warning')
+    }
+    return result
   }
 
   async function drawAction(
@@ -153,8 +157,10 @@ export const useGameplayStore = defineStore('gameplay', () => {
       game.undoneStrokeIds = game.undoneStrokeIds.filter((id) => id !== existing.id)
     } else {
       purgeUndone(game)
+      // 画布历史只由服务端权威裁决：达到上限时服务端会拒绝新命令（DRAW_HISTORY_LIMIT_REACHED），
+      // 客户端绝不自行裁剪——静默丢弃最旧命令会让早期封闭边界从重放历史里消失，
+      // 使本地重放与权威历史不一致（见 docs/adr/0010-drawing-history-cap.md）。
       game.strokes.push({ ...stroke, points: [...stroke.points] })
-      if (game.strokes.length > APP_CONFIG.drawing.maxHistoryCommands) game.strokes.shift()
     }
   }
 
@@ -164,7 +170,6 @@ export const useGameplayStore = defineStore('gameplay', () => {
       return
     purgeUndone(game)
     game.strokes.push(fill)
-    if (game.strokes.length > APP_CONFIG.drawing.maxHistoryCommands) game.strokes.shift()
   }
 
   return {

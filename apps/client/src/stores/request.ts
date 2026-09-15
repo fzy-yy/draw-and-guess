@@ -1,11 +1,10 @@
 /**
- * 可失败请求的统一封装（timeout + ack + 错误翻译 + 幂等 requestId）。
+ * 可失败请求的统一封装（timeout + ack 运行时校验 + 错误翻译 + 幂等 requestId）。
  * quiet 请求（绘图高频事件）失败时不弹 Toast，避免连续错误刷屏。
  */
 import { APP_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import type {
-  Ack,
   ClientRequestEvent,
   ClientRequestPayload,
   ClientResponse,
@@ -14,6 +13,7 @@ import type {
 import { createUuid } from '@/utils/create-uuid'
 import type { Socket } from 'socket.io-client'
 import { reactive, readonly } from 'vue'
+import { decodeClientResponse } from './response-protocol.ts'
 
 /** 请求选项：quiet 表示失败时静默降级（不弹错误 Toast）。 */
 export interface RequestOptions {
@@ -35,12 +35,13 @@ export type NotifyFn = (text: string, type?: 'success' | 'warning' | 'error') =>
 /**
  * 可失败请求的可判别结果：调用方用 `result.ok` 明确区分成功与失败，
  * 不再依赖“失败抛错”的隐式约定。timeout 用于标记请求是否因超时失败。
+ * `protocol` 表示 ack 未通过运行时 Schema（响应损坏/协议不匹配），既不是业务拒绝也不会重试。
  */
 export type RequestResult<T> =
   | { ok: true; data: T; timeout?: false }
   | {
       ok: false
-      failureKind: 'business' | 'transport'
+      failureKind: 'business' | 'transport' | 'protocol'
       error: string
       code?: ErrorCode
       timeout: boolean
@@ -165,23 +166,35 @@ export function createRequester(options: { socket: Socket; notify: NotifyFn }): 
     try {
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         try {
-          const ack = (await raceTimeout(
+          const rawAck = await raceTimeout(
             socket.emitWithAck(event, { ...payload, requestId }),
             APP_CONFIG.network.requestTimeoutMs,
             controller.signal,
-          )) as Ack<ClientResponse<E>>
-          if (!ack.ok) {
-            // 业务失败没有产生副作用且服务端不缓存；调用方应修正状态后发起新的逻辑请求。
-            if (!requestOptions.quiet) notify(ack.error.message, 'error')
+          )
+          // 响应必须先通过事件级 ack Schema 且回显同一 requestId：解析失败属于协议损坏，
+          // 既不重试也不回显任何原始内容，调用方得到 ok:false，绝不会把脏数据写进 Pinia。
+          const decoded = decodeClientResponse(event, rawAck, requestId)
+          if (decoded.status === 'invalid') {
+            if (!requestOptions.quiet) notify(strings.request.protocolFailure, 'error')
             return {
               ok: false,
-              failureKind: 'business',
-              error: ack.error.message,
-              code: ack.error.code,
+              failureKind: 'protocol',
+              error: strings.request.protocolFailure,
               timeout: false,
             }
           }
-          return { ok: true, data: ack.data }
+          if (!decoded.ack.ok) {
+            // 业务失败没有产生副作用且服务端不缓存；调用方应修正状态后发起新的逻辑请求。
+            if (!requestOptions.quiet) notify(decoded.ack.error.message, 'error')
+            return {
+              ok: false,
+              failureKind: 'business',
+              error: decoded.ack.error.message,
+              code: decoded.ack.error.code,
+              timeout: false,
+            }
+          }
+          return { ok: true, data: decoded.ack.data }
         } catch (error) {
           if (error instanceof RequestCancelledError) return cancellationFailure()
           lastTransportError = classifyTransportError(error)

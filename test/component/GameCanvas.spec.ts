@@ -4,17 +4,72 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { APP_CONFIG } from '@draw-guess/config'
 import type { DrawingCommand, FillCommand, Stroke, ToolKind } from '@draw-guess/shared'
 import type { RequestResult } from '@/stores/request'
+import { clearFillDiagnostics, getFillDiagnostics } from '@/canvas/fill-diagnostics'
+import type { FloodFillWorkerRequest, FloodFillWorkerResponse } from '@/canvas/flood-fill-worker'
 import GameCanvas from '@/components/game/GameCanvas.vue'
 
 /**
  * GameCanvas 组合层的组件级保障：真实挂载组件（含视口/光标/笔迹三个 composable），
  * 统一替换 Canvas 2D 与布局 API，验证权威历史重放、增量投影与指针批次上送。
- * happy-dom 不实现 Canvas 2D，因此用轻量上下文替身记录绘制调用；Worker 缺失时组件自动走
- * 主线程降级路径，与浏览器不支持 Worker 的场景同构。
+ * happy-dom 不实现 Canvas 2D，因此用轻量上下文替身记录绘制调用；默认环境没有 Worker，
+ * 组件自动走主线程降级路径（与浏览器不支持 Worker 的场景同构），需要覆盖 Worker 成功/失败
+ * 路径的用例显式 stubGlobal 一个可控 Worker 替身。
  */
 const CONTEXT_WIDTH = 320
 const CONTEXT_HEIGHT = 180
 const ROUND_ID = '00000000-0000-4000-8000-000000000001'
+const ROUND_ID_B = '00000000-0000-4000-8000-000000000002'
+
+/**
+ * 可控 Worker 替身：postMessage 只记录请求，由用例显式 complete/fail 决定结果，
+ * 从而精确复现「Worker 成功」「Worker 运行失败」两条路径与常驻 Worker 的复用/终止语义。
+ */
+class FakeWorker {
+  static instances: FakeWorker[] = []
+  onmessage: ((event: MessageEvent<FloodFillWorkerResponse>) => void) | null = null
+  onerror: (() => void) | null = null
+  request?: FloodFillWorkerRequest
+  terminated = false
+
+  constructor() {
+    FakeWorker.instances.push(this)
+  }
+
+  postMessage(request: FloodFillWorkerRequest): void {
+    this.request = request
+  }
+
+  terminate(): void {
+    this.terminated = true
+  }
+
+  /** 回传独立缓冲的填充结果（模拟真实 Worker 的内存隔离），并记录用于断言写回内容。 */
+  complete(): Uint8ClampedArray {
+    const request = this.request
+    if (!request) throw new Error('no flood-fill job posted')
+    const filled = new Uint8ClampedArray(request.buffer.slice(0))
+    filled.fill(0x11)
+    this.onmessage?.({
+      data: {
+        type: 'filled',
+        jobId: request.jobId,
+        roundId: request.roundId,
+        filledPixels: 64,
+        peakWorkingBytes: 128,
+        buffer: filled.buffer as ArrayBuffer,
+      },
+    } as MessageEvent<FloodFillWorkerResponse>)
+    return filled
+  }
+
+  /** 模拟 Worker 运行失败（脚本加载失败或计算异常触发 onerror）。 */
+  fail(): void {
+    this.onerror?.()
+  }
+}
+
+/** 逻辑层 getImageData 的默认返回：与展示层同尺寸的合法空白图像。 */
+let imageDataFactory: (() => ImageData) | undefined
 
 function createContextStub(): CanvasRenderingContext2D {
   return {
@@ -33,7 +88,7 @@ function createContextStub(): CanvasRenderingContext2D {
     stroke: vi.fn(),
     clearRect: vi.fn(),
     drawImage: vi.fn(),
-    getImageData: vi.fn(() => new ImageData(CONTEXT_WIDTH, CONTEXT_HEIGHT)),
+    getImageData: vi.fn(() => imageDataFactory?.() ?? new ImageData(CONTEXT_WIDTH, CONTEXT_HEIGHT)),
     putImageData: vi.fn(),
   } as unknown as CanvasRenderingContext2D
 }
@@ -123,9 +178,27 @@ function displayContextOf(wrapper: VueWrapper): CanvasRenderingContext2D {
   return context
 }
 
+/** 刷新微任务与 0ms 定时器：让 await 链（重放、ack 回调、锁释放）推进到稳定态。 */
+async function flush(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(0)
+}
+
+function useWorkerStub(): void {
+  vi.stubGlobal('Worker', FakeWorker)
+}
+
+function latestWorkerRequest(): FloodFillWorkerRequest {
+  const request = FakeWorker.instances.at(-1)?.request
+  if (!request) throw new Error('组件未向 Worker 提交填充任务')
+  return request
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
   contexts = new Map()
+  imageDataFactory = undefined
+  FakeWorker.instances = []
+  clearFillDiagnostics()
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (
     this: HTMLCanvasElement,
   ) {
@@ -146,6 +219,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   vi.useRealTimers()
 })
 
@@ -210,15 +284,173 @@ describe('GameCanvas 权威重放与增量投影', () => {
   })
 })
 
+describe('GameCanvas 绘图历史容量', () => {
+  /** 构造「早期封闭边界 + 后续填充 + 单点命令填满容量」的历史，与 E2E/单元场景保持同一几何。 */
+  function buildHistory(commandCount: number): DrawingCommand[] {
+    const boundary: Stroke = makeStroke({
+      id: 'boundary-line',
+      sequence: 0,
+      points: [
+        { x: 0.5, y: 0.05 },
+        { x: 0.5, y: 0.95 },
+        { x: 0.05, y: 0.95 },
+        { x: 0.05, y: 0.05 },
+        { x: 0.5, y: 0.05 },
+      ],
+    })
+    const fill = makeFill({ sequence: 1 })
+    const fillers: Stroke[] = []
+    for (let index = 0; index < commandCount - 2; index += 1) {
+      fillers.push(
+        makeStroke({
+          id: `filler-${index}`,
+          sequence: index + 2,
+          points: [{ x: 0.3, y: 0.3 }],
+        }),
+      )
+    }
+    return [boundary, fill, ...fillers]
+  }
+
+  it('命令数达到上限的历史被完整重放，最早的封闭边界不被丢弃', async () => {
+    const history = buildHistory(APP_CONFIG.drawing.maxHistoryCommands)
+    const wrapper = mountCanvas({ strokes: history, lastSequence: history.length - 1 })
+    await flush()
+
+    const logical = logicalContextOf(wrapper)
+    // 除填充外的每条命令都必须描边一次：任何本地裁剪都会让计数与首段坐标对不上。
+    expect(vi.mocked(logical.stroke).mock.calls.length).toBe(history.length - 1)
+    expect(vi.mocked(logical.putImageData).mock.calls.length).toBe(1)
+    const firstMove = vi.mocked(logical.moveTo).mock.calls[0]
+    expect(firstMove?.[0]).toBeCloseTo(0.5 * (CONTEXT_WIDTH - 1), 5)
+    expect(firstMove?.[1]).toBeCloseTo(0.05 * (CONTEXT_HEIGHT - 1), 5)
+  })
+
+  it('收到超过上限的历史时仍逐条重放：容量语义只由服务端裁决', async () => {
+    const history = buildHistory(APP_CONFIG.drawing.maxHistoryCommands + 1)
+    const wrapper = mountCanvas({ strokes: history, lastSequence: history.length - 1 })
+    await flush()
+
+    const logical = logicalContextOf(wrapper)
+    expect(vi.mocked(logical.stroke).mock.calls.length).toBe(history.length - 1)
+    expect(vi.mocked(logical.clearRect).mock.calls.length).toBe(1)
+    const firstMove = vi.mocked(logical.moveTo).mock.calls[0]
+    expect(firstMove?.[0]).toBeCloseTo(0.5 * (CONTEXT_WIDTH - 1), 5)
+  })
+})
+
 describe('GameCanvas 填充降级路径', () => {
   it('填充命令在无 Worker 环境走主线程计算并写回逻辑层', async () => {
     const wrapper = mountCanvas({ strokes: [makeFill()], lastSequence: 1 })
 
-    await vi.advanceTimersByTimeAsync(0)
+    await flush()
 
     const logical = logicalContextOf(wrapper)
     expect(logical.getImageData).toHaveBeenCalledTimes(1)
     expect(logical.putImageData).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('GameCanvas 填充重放（Worker 路径）', () => {
+  async function triggerFill(wrapper: VueWrapper): Promise<void> {
+    await wrapper
+      .find('canvas')
+      .trigger('pointerdown', { button: 0, clientX: 50, clientY: 50, pointerId: 1 })
+  }
+
+  it('初始历史含填充时交给 Worker 重放，任务期间占用渲染态、完成后写回并释放', async () => {
+    useWorkerStub()
+    const wrapper = mountCanvas({ strokes: [makeFill()], lastSequence: 1, tool: 'fill' })
+    const logical = logicalContextOf(wrapper)
+
+    expect(latestWorkerRequest()).toMatchObject({ roundId: ROUND_ID })
+    expect(logical.putImageData).not.toHaveBeenCalled()
+
+    // 渲染任务在途：填充指针请求被忽略，避免在未重放完的画布上继续提交。
+    await triggerFill(wrapper)
+    expect(wrapper.emitted('fill')).toBeUndefined()
+
+    const filled = FakeWorker.instances[0]!.complete()
+    await flush()
+
+    expect(logical.putImageData).toHaveBeenCalledTimes(1)
+    const written = vi.mocked(logical.putImageData).mock.calls[0]![0] as ImageData
+    expect(written.data.buffer).toBe(filled.buffer)
+    expect(FakeWorker.instances[0]!.terminated).toBe(false)
+    expect(getFillDiagnostics()).toHaveLength(0)
+
+    // 渲染态已在 finally 释放：同一封闭区域的填充可以继续提交。
+    await triggerFill(wrapper)
+    expect(wrapper.emitted('fill')).toHaveLength(1)
+  })
+
+  it('其他玩家的填充推送触发整块重放，重叠渲染任务不会提前释放渲染态', async () => {
+    useWorkerStub()
+    const fillA = makeFill({ id: '00000000-0000-4000-8000-0000000000c1' })
+    const fillB = makeFill({ id: '00000000-0000-4000-8000-0000000000c2', sequence: 2 })
+    const wrapper = mountCanvas({ strokes: [fillA], lastSequence: 1, tool: 'fill' })
+    const logical = logicalContextOf(wrapper)
+    expect(latestWorkerRequest()).toMatchObject({ roundId: ROUND_ID })
+
+    // 第二个填充推送到达：新一轮重放取消旧任务，并在旧任务的 finally 之前启动新任务。
+    await wrapper.setProps({
+      strokes: [fillA, fillB],
+      lastSequence: 2,
+      revision: 2,
+    })
+    await flush()
+
+    expect(vi.mocked(logical.clearRect).mock.calls.length).toBe(2)
+    // 旧任务的 finally 不得把仍在途的新任务渲染态一并清除。
+    await triggerFill(wrapper)
+    expect(wrapper.emitted('fill')).toBeUndefined()
+
+    FakeWorker.instances[0]!.complete()
+    await flush()
+    expect(vi.mocked(logical.putImageData).mock.calls.length).toBe(1)
+    await triggerFill(wrapper)
+    expect(wrapper.emitted('fill')).toBeUndefined()
+
+    FakeWorker.instances[0]!.complete()
+    await flush()
+    expect(vi.mocked(logical.putImageData).mock.calls.length).toBe(2)
+    await triggerFill(wrapper)
+    expect(wrapper.emitted('fill')).toHaveLength(1)
+  })
+
+  it('Worker 运行失败时终止旧 Worker，并对同一 ImageData 只做一次主线程降级', async () => {
+    useWorkerStub()
+    const wrapper = mountCanvas({ strokes: [makeFill()], lastSequence: 1 })
+    const logical = logicalContextOf(wrapper)
+    const worker = FakeWorker.instances[0]!
+    expect(worker.request).toBeDefined()
+
+    worker.fail()
+    await flush()
+
+    expect(worker.terminated).toBe(true)
+    expect(logical.getImageData).toHaveBeenCalledTimes(1)
+    expect(logical.putImageData).toHaveBeenCalledTimes(1)
+    expect(getFillDiagnostics().map((item) => item.reason)).toEqual(['worker_degraded'])
+    expect(wrapper.emitted('fillFailure')).toBeUndefined()
+  })
+
+  it('Worker 与主线程降级都失败时请求权威全量快照，并只记录脱敏诊断', async () => {
+    useWorkerStub()
+    // 缓冲区失效（例如被转移后作废）：主线程已无法基于同一 ImageData 完成降级。
+    imageDataFactory = () => new ImageData(new Uint8ClampedArray(0), CONTEXT_WIDTH, CONTEXT_HEIGHT)
+    const wrapper = mountCanvas({ strokes: [makeFill()], lastSequence: 1 })
+    const logical = logicalContextOf(wrapper)
+
+    FakeWorker.instances[0]!.fail()
+    await flush()
+
+    expect(FakeWorker.instances[0]!.terminated).toBe(true)
+    expect(logical.putImageData).not.toHaveBeenCalled()
+    expect(wrapper.emitted('fillFailure')).toHaveLength(1)
+    expect(getFillDiagnostics().map((item) => item.reason)).toEqual(['fill_unavailable'])
+    // 诊断不含坐标、颜色、像素或答案等可复现画面内容。
+    expect(Object.keys(getFillDiagnostics()[0]!).sort()).toEqual(['reason', 'receivedAt'])
   })
 })
 
@@ -254,6 +486,18 @@ describe('GameCanvas 填充解锁', () => {
     expect(wrapper.emitted('fill')).toHaveLength(2)
   })
 
+  it('本地填充待确认期间忽略重复填充，直到可信更新到达', async () => {
+    const wrapper = mountCanvas({ tool: 'fill', revision: 1 })
+    await triggerFill(wrapper)
+
+    await triggerFill(wrapper)
+    expect(wrapper.emitted('fill')).toHaveLength(1)
+
+    completeOf(wrapper)(fillSuccess(4))
+    await triggerFill(wrapper)
+    expect(wrapper.emitted('fill')).toHaveLength(1)
+  })
+
   it('推送延迟时保持锁定，超时兜底后解锁', async () => {
     const wrapper = mountCanvas({ tool: 'fill', revision: 1 })
     await triggerFill(wrapper)
@@ -267,6 +511,60 @@ describe('GameCanvas 填充解锁', () => {
     expect(wrapper.emitted('fill')).toHaveLength(2)
   })
 
+  it('超时兜底解锁后，迟到的推送不会重新上锁', async () => {
+    const wrapper = mountCanvas({ tool: 'fill', revision: 1 })
+    await triggerFill(wrapper)
+    completeOf(wrapper)(fillSuccess(5))
+    await vi.advanceTimersByTimeAsync(APP_CONFIG.network.requestTimeoutMs)
+
+    await wrapper.setProps({ revision: 5, strokes: [makeFill()], lastSequence: 1 })
+    await flush()
+    await triggerFill(wrapper)
+
+    expect(wrapper.emitted('fill')).toHaveLength(2)
+  })
+
+  it('ack 已到但推送延迟时，权威修订追平即解锁而不必等到超时', async () => {
+    const wrapper = mountCanvas({ tool: 'fill', revision: 1 })
+    await triggerFill(wrapper)
+    completeOf(wrapper)(fillSuccess(6))
+
+    await wrapper.setProps({ revision: 5 })
+    await flush()
+    await triggerFill(wrapper)
+    expect(wrapper.emitted('fill')).toHaveLength(1)
+
+    await wrapper.setProps({ revision: 6, strokes: [makeFill()], lastSequence: 1 })
+    await flush()
+    await triggerFill(wrapper)
+    expect(wrapper.emitted('fill')).toHaveLength(2)
+  })
+
+  it('其他玩家的填充推送（本地提交仍在途）不会释放本地提交锁', async () => {
+    const wrapper = mountCanvas({ tool: 'fill', revision: 1 })
+    await triggerFill(wrapper)
+    completeOf(wrapper)(fillSuccess(5))
+
+    // 他人填充触发整块重放，但本地提交锁只能由「自己的」修订追平或超时释放。
+    await wrapper.setProps({
+      strokes: [makeFill({ id: '00000000-0000-4000-8000-0000000000d1' })],
+      lastSequence: 2,
+      revision: 2,
+    })
+    await flush()
+    await triggerFill(wrapper)
+    expect(wrapper.emitted('fill')).toHaveLength(1)
+
+    await wrapper.setProps({
+      strokes: [makeFill({ id: '00000000-0000-4000-8000-0000000000d2' })],
+      lastSequence: 3,
+      revision: 5,
+    })
+    await flush()
+    await triggerFill(wrapper)
+    expect(wrapper.emitted('fill')).toHaveLength(2)
+  })
+
   it('填充 ack 业务失败时立即解锁', async () => {
     const wrapper = mountCanvas({ tool: 'fill', revision: 1 })
     await triggerFill(wrapper)
@@ -275,5 +573,54 @@ describe('GameCanvas 填充解锁', () => {
     await triggerFill(wrapper)
 
     expect(wrapper.emitted('fill')).toHaveLength(2)
+  })
+
+  it('回合切换作废旧回合的在途提交，新回合可立即填充', async () => {
+    const wrapper = mountCanvas({ tool: 'fill', revision: 1 })
+    await triggerFill(wrapper)
+
+    await wrapper.setProps({ roundId: ROUND_ID_B, strokes: [], lastSequence: -1, revision: 0 })
+    await flush()
+
+    // 旧回合的 ack 迟到：不得把新回合的填充门禁锁死。
+    completeOf(wrapper)(fillSuccess(9))
+    await flush()
+    await triggerFill(wrapper)
+    expect(wrapper.emitted('fill')).toHaveLength(2)
+  })
+
+  it('回合切换后旧回合的迟到 ack 不会提前解锁新回合的在途提交', async () => {
+    const wrapper = mountCanvas({ tool: 'fill', revision: 1 })
+    await triggerFill(wrapper)
+    await wrapper.setProps({ roundId: ROUND_ID_B, strokes: [], lastSequence: -1, revision: 1 })
+    await flush()
+
+    // 新回合的填充：ack 修订 5 尚未追平，提交锁必须保持。
+    await triggerFill(wrapper)
+    completeOf(wrapper, 1)(fillSuccess(5))
+    await flush()
+
+    // 旧回合的 ack 修订（1）恰好是本地已追平的修订：不得据此释放新回合的提交锁。
+    completeOf(wrapper)(fillSuccess(1))
+    await flush()
+    await triggerFill(wrapper)
+    expect(wrapper.emitted('fill')).toHaveLength(2)
+
+    await wrapper.setProps({ revision: 5, strokes: [makeFill()], lastSequence: 2 })
+    await flush()
+    await triggerFill(wrapper)
+    expect(wrapper.emitted('fill')).toHaveLength(3)
+  })
+
+  it('回合切换取消在途渲染任务并释放渲染态', async () => {
+    useWorkerStub()
+    const wrapper = mountCanvas({ strokes: [makeFill()], lastSequence: 1, tool: 'fill' })
+    expect(latestWorkerRequest()).toMatchObject({ roundId: ROUND_ID })
+
+    await wrapper.setProps({ roundId: ROUND_ID_B, strokes: [], lastSequence: -1, revision: 0 })
+    await flush()
+
+    await triggerFill(wrapper)
+    expect(wrapper.emitted('fill')).toHaveLength(1)
   })
 })

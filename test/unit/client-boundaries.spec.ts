@@ -1,12 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import { APP_CONFIG } from '@draw-guess/config'
-import { EVENTS, createServerPush, type RoomSnapshot, type RoomSettings } from '@draw-guess/shared'
+import {
+  CLIENT_REQUEST_SCHEMAS,
+  CLIENT_RESPONSE_SCHEMAS,
+  EVENTS,
+  createServerPush,
+  type RoomSnapshot,
+  type RoomSettings,
+} from '@draw-guess/shared'
 import { applyFloodFill, colorToRgba } from '../../apps/client/src/canvas/flood-fill.ts'
 import {
   clearProtocolDiagnostics,
   decodeServerPush,
   getProtocolDiagnostics,
 } from '../../apps/client/src/stores/push-protocol.ts'
+import {
+  clearResponseDiagnostics,
+  decodeClientResponse,
+  getResponseDiagnostics,
+} from '../../apps/client/src/stores/response-protocol.ts'
+import {
+  clearFillDiagnostics,
+  getFillDiagnostics,
+  recordFillDiagnostic,
+} from '../../apps/client/src/canvas/fill-diagnostics.ts'
 import {
   acceptDrawingIncrement,
   acceptRoomSnapshot,
@@ -55,21 +72,23 @@ describe('推送协议与版本门禁', () => {
     clearProtocolDiagnostics()
     expect(decodeServerPush(EVENTS.roomSnapshot, createServerPush(snapshot())).ok).toBe(true)
     expect(
-      decodeServerPush(EVENTS.roomSnapshot, createServerPush({ ...snapshot(), members: undefined }))
-        .ok,
-    ).toBe(false)
+      decodeServerPush(
+        EVENTS.roomSnapshot,
+        createServerPush({ ...snapshot(), members: undefined }),
+      ),
+    ).toEqual({ ok: false, reason: 'invalid_payload' })
     expect(
       decodeServerPush(
         EVENTS.roomSnapshot,
         createServerPush({ ...snapshot(), requestCache: { secret: true } }),
-      ).ok,
-    ).toBe(false)
+      ),
+    ).toEqual({ ok: false, reason: 'invalid_payload' })
     expect(
       decodeServerPush(EVENTS.roomSnapshot, {
         protocolVersion: 'old',
         data: snapshot(),
-      }).ok,
-    ).toBe(false)
+      }),
+    ).toEqual({ ok: false, reason: 'protocol_mismatch' })
     expect(getProtocolDiagnostics()).toHaveLength(3)
   })
 
@@ -106,6 +125,132 @@ describe('推送协议与版本门禁', () => {
         drawingRevision: 4,
       }),
     ).toBe('resync')
+  })
+})
+
+describe('请求响应注册表与 ack 边界', () => {
+  const requestId = '00000000-0000-4000-8000-0000000000aa'
+  type ResponseEvent = keyof typeof CLIENT_RESPONSE_SCHEMAS
+  const responseEvents = Object.keys(CLIENT_RESPONSE_SCHEMAS) as ResponseEvent[]
+
+  it('请求与响应 Schema 注册表一一对应，失败分支对所有事件形状一致', () => {
+    expect(Object.keys(CLIENT_RESPONSE_SCHEMAS).sort()).toEqual(
+      Object.keys(CLIENT_REQUEST_SCHEMAS).sort(),
+    )
+    for (const event of responseEvents) {
+      const schema = CLIENT_RESPONSE_SCHEMAS[event]
+      expect(
+        schema.safeParse({
+          ok: false,
+          error: { code: 'INTERNAL_ERROR', message: '服务器内部错误' },
+          requestId,
+        }).success,
+        event,
+      ).toBe(true)
+      // 未登记错误码、外壳额外字段与缺失 requestId 都必须被拒绝。
+      expect(
+        schema.safeParse({
+          ok: false,
+          error: { code: 'NOT_REGISTERED', message: 'x' },
+          requestId,
+        }).success,
+        event,
+      ).toBe(false)
+      expect(
+        schema.safeParse({
+          ok: false,
+          error: { code: 'INTERNAL_ERROR', message: 'x' },
+          requestId,
+          extra: true,
+        }).success,
+        event,
+      ).toBe(false)
+      expect(
+        schema.safeParse({ ok: false, error: { code: 'INTERNAL_ERROR', message: 'x' } }).success,
+        event,
+      ).toBe(false)
+    }
+  })
+
+  it('成功响应允许缺省 data 的事件集合与 void/undefined 语义完全一致', () => {
+    const emptyDataEvents = [
+      EVENTS.presenceUpdatePreferences,
+      EVENTS.roomLeave,
+      EVENTS.roomKick,
+      EVENTS.roomTransferHost,
+      EVENTS.gameChooseWord,
+      EVENTS.gameRerollWords,
+      EVENTS.gamePauseRequest,
+      EVENTS.gameResume,
+      EVENTS.gameEndEarly,
+      EVENTS.gameLeave,
+      EVENTS.gameReturnWaiting,
+      EVENTS.chatPreset,
+      EVENTS.drawUndo,
+      EVENTS.drawRedo,
+      EVENTS.drawClear,
+      // 成功但可能没有房间：invite:respond / state:resync 允许 data 缺省。
+      EVENTS.inviteRespond,
+      EVENTS.stateResync,
+    ].sort()
+    const accepted = responseEvents
+      .filter((event) => CLIENT_RESPONSE_SCHEMAS[event].safeParse({ ok: true, requestId }).success)
+      .sort()
+    expect(accepted).toEqual(emptyDataEvents)
+  })
+
+  it('畸形成功响应统一拒绝：缺 data、data 类型错误、缺 requestId', () => {
+    clearResponseDiagnostics()
+    expect(decodeClientResponse(EVENTS.roomCreate, { ok: true, requestId }, requestId)).toEqual({
+      status: 'invalid',
+      reason: 'invalid_payload',
+    })
+    expect(
+      decodeClientResponse(
+        EVENTS.roomCreate,
+        { ok: true, data: { id: 'not-a-room' }, requestId },
+        requestId,
+      ),
+    ).toEqual({ status: 'invalid', reason: 'invalid_payload' })
+    expect(
+      decodeClientResponse(EVENTS.roomCreate, { ok: true, data: snapshot() }, requestId),
+    ).toEqual({ status: 'invalid', reason: 'invalid_payload' })
+    // 诊断仅保留字段路径与错误类别，绝不记录被拒绝的数据内容。
+    const diagnostics = getResponseDiagnostics()
+    expect(diagnostics).toHaveLength(3)
+    expect(JSON.stringify(diagnostics)).not.toContain('not-a-room')
+  })
+
+  it('requestId 不匹配单独归类，诊断有界且导出副本不可改写', () => {
+    clearResponseDiagnostics()
+    const expectedRequestId = '00000000-0000-4000-8000-0000000000cc'
+    for (let index = 0; index < 25; index += 1) {
+      expect(
+        decodeClientResponse(
+          EVENTS.gameResume,
+          {
+            ok: false,
+            requestId: '00000000-0000-4000-8000-000000000001',
+            error: { code: 'RATE_LIMITED', message: '请求过于频繁' },
+          },
+          expectedRequestId,
+        ),
+      ).toEqual({ status: 'invalid', reason: 'request_id_mismatch' })
+    }
+    const diagnostics = getResponseDiagnostics()
+    expect(diagnostics).toHaveLength(20)
+    expect(diagnostics[0]?.reason).toBe('requestId:mismatch')
+    for (const item of diagnostics) {
+      expect(Object.keys(item).sort()).toEqual(['event', 'reason', 'receivedAt'])
+    }
+    ;(diagnostics[0] as { reason: string }).reason = 'tampered'
+    expect(getResponseDiagnostics()[0]?.reason).toBe('requestId:mismatch')
+
+    clearResponseDiagnostics()
+    expect(getResponseDiagnostics()).toHaveLength(0)
+    expect(
+      decodeClientResponse(EVENTS.roomCreate, { ok: true, data: snapshot(), requestId }, requestId),
+    ).toEqual({ status: 'valid', ack: { ok: true, data: snapshot(), requestId } })
   })
 })
 
@@ -160,6 +305,27 @@ describe('洪泛填充固定逻辑缓冲', () => {
     expect([...data.slice(left, left + 4)]).toEqual([239, 68, 68, 255])
     expect([...data.slice(boundary, boundary + 4)]).toEqual([31, 41, 55, 255])
     expect([...data.slice(right, right + 4)]).toEqual([0, 0, 0, 0])
+  })
+})
+
+describe('画布填充诊断', () => {
+  it('只保留最近的有界条数，且导出副本不可被外部改写', () => {
+    clearFillDiagnostics()
+    for (let index = 0; index < 25; index += 1) {
+      recordFillDiagnostic(index % 2 === 0 ? 'worker_degraded' : 'fill_unavailable')
+    }
+
+    const diagnostics = getFillDiagnostics()
+    expect(diagnostics).toHaveLength(20)
+    // 只保留原因与时间：不含坐标、颜色、像素或答案等可复现画面内容。
+    expect(Object.keys(diagnostics[0]!).sort()).toEqual(['reason', 'receivedAt'])
+    expect(diagnostics[0]!.reason).toBe('fill_unavailable')
+
+    ;(diagnostics[0] as { reason: string }).reason = 'tampered'
+    expect(getFillDiagnostics()[0]!.reason).toBe('fill_unavailable')
+
+    clearFillDiagnostics()
+    expect(getFillDiagnostics()).toHaveLength(0)
   })
 })
 

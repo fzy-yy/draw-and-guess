@@ -3,8 +3,11 @@ import { setActivePinia, type Pinia } from 'pinia'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EVENTS, type VocabularyPackageInfo, type VocabularyWord } from '@draw-guess/shared'
+import { APP_CONFIG } from '@draw-guess/config'
+import type { RequestResult } from '@/stores/request'
 import { useCanvasCursor } from '@/composables/useCanvasCursor'
 import { useCanvasViewport } from '@/composables/useCanvasViewport'
+import { useFillSession } from '@/composables/useFillSession'
 import { useFullscreenPrompt } from '@/composables/useFullscreenPrompt'
 import { useInviteQueue } from '@/composables/useInviteQueue'
 import { useSelectAllState } from '@/composables/useSelectAllState'
@@ -147,6 +150,96 @@ describe('画布与浏览器生命周期 composables', () => {
     expect(prompt.showFullscreenPrompt.value).toBe(false)
     prompt.dismiss()
     stage.remove()
+  })
+})
+
+describe('填充会话的两把锁', () => {
+  function createFillSession() {
+    const revision = ref(1)
+    const roundId = ref('round-a')
+    const session = mountComposable(() =>
+      useFillSession({ revision: () => revision.value, roundId: () => roundId.value }),
+    )
+    return { session, revision, roundId }
+  }
+
+  function accepted(drawingRevision: number) {
+    return { ok: true, data: { drawingRevision } } as RequestResult<{ drawingRevision: number }>
+  }
+
+  it('渲染态按任务计数释放：重叠任务全部结束后才解锁，且计数不会变负', () => {
+    const { session } = createFillSession()
+
+    session.beginRenderTask()
+    session.beginRenderTask()
+    expect(session.renderBusy.value).toBe(true)
+    expect(session.canSubmit.value).toBe(false)
+
+    session.endRenderTask()
+    expect(session.renderBusy.value).toBe(true)
+    session.endRenderTask()
+    expect(session.renderBusy.value).toBe(false)
+    expect(session.canSubmit.value).toBe(true)
+
+    // 多余释放（例如被取消的任务与正常任务重复结束）不得把计数压成负数。
+    session.endRenderTask()
+    expect(session.renderBusy.value).toBe(false)
+    expect(session.canSubmit.value).toBe(true)
+  })
+
+  it('提交锁只由对应修订追平或超时兜底释放', async () => {
+    const { session, revision } = createFillSession()
+
+    session.beginSubmit()
+    expect(session.submitPending.value).toBe(true)
+    session.settleSubmit(accepted(3), 'round-a')
+    // ack 已到但修订未追平：保持锁定。
+    expect(session.submitPending.value).toBe(true)
+    session.syncRevision()
+    expect(session.submitPending.value).toBe(true)
+
+    revision.value = 3
+    session.syncRevision()
+    expect(session.submitPending.value).toBe(false)
+
+    // 推送迟迟不追平：超时兜底释放，避免填充入口被永久禁用。
+    session.beginSubmit()
+    session.settleSubmit(accepted(9), 'round-a')
+    await vi.advanceTimersByTimeAsync(APP_CONFIG.network.requestTimeoutMs)
+    expect(session.submitPending.value).toBe(false)
+  })
+
+  it('失败 ack 立即解锁；解锁后的迟到确认不会重新上锁', () => {
+    const { session } = createFillSession()
+
+    session.beginSubmit()
+    session.settleSubmit(
+      { ok: false, failureKind: 'business', error: '服务端拒绝', timeout: false },
+      'round-a',
+    )
+    expect(session.submitPending.value).toBe(false)
+
+    session.settleSubmit(accepted(2), 'round-a')
+    expect(session.submitPending.value).toBe(false)
+  })
+
+  it('回合切换作废在途提交与旧回合迟到 ack', () => {
+    const { session, roundId } = createFillSession()
+
+    session.beginSubmit()
+    roundId.value = 'round-b'
+    session.reset()
+    expect(session.submitPending.value).toBe(false)
+
+    // 旧回合的 ack 修订恰好等于本地修订：不得据此上锁或解锁新回合。
+    session.settleSubmit(accepted(1), 'round-a')
+    expect(session.submitPending.value).toBe(false)
+
+    // 新回合的提交仍可正常确认与解锁。
+    session.beginSubmit()
+    expect(session.submitPending.value).toBe(true)
+    session.settleSubmit(accepted(1), 'round-b')
+    expect(session.submitPending.value).toBe(false)
   })
 })
 

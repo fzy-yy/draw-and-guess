@@ -1,9 +1,5 @@
-import type { PublicPlayer } from './common.ts'
-import type { RoomSnapshot } from './room.ts'
+import type { z } from 'zod'
+import type { SessionRegistrationSchema } from '../protocol/response.ts'
 
-export interface SessionRegistration {
-  player: PublicPlayer
-  recoveryToken: string
-  restored: boolean
-  room: RoomSnapshot | null
-}
+/** 注册 ack 的成功数据由响应 Schema 推导，避免手写类型与线格式漂移。 */
+export type SessionRegistration = z.infer<typeof SessionRegistrationSchema>

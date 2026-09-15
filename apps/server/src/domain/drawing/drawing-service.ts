@@ -53,10 +53,19 @@ export class DrawingService {
     game.undoneStrokeIds = []
   }
 
-  private trimHistory(game: GameSecret): void {
-    if (game.strokes.length <= APP_CONFIG.drawing.maxHistoryCommands) return
-    const dropped = game.strokes.shift()
-    if (dropped) this.releaseCommandBudget(game, dropped)
+  /**
+   * 历史容量守卫：达到上限后**拒绝**新增命令，绝不静默丢弃最旧命令。
+   *
+   * 丢弃最旧命令会让早期封闭边界从权威历史里消失，之后在边界内提交的填充重放时会吞掉整张画布，
+   * 且各客户端镜像与服务端权威历史不再逐条一致（取舍见 docs/adr/0010-drawing-history-cap.md）。
+   * 撤销或清空会释放名额：调用点必须在 discardUndone 之后、任何状态写入之前执行本检查。
+   */
+  private assertHistoryCapacity(game: GameSecret): void {
+    if (game.strokes.length >= APP_CONFIG.drawing.maxHistoryCommands)
+      throw new GameError(
+        'DRAW_HISTORY_LIMIT_REACHED',
+        serverStrings.errors.DRAW_HISTORY_LIMIT_REACHED,
+      )
   }
 
   addStroke(playerId: string, roundId: string, stroke: Stroke): StrokeAck {
@@ -89,6 +98,8 @@ export class DrawingService {
     }
 
     const nextPointTotal = game.strokePointTotal + stroke.points.length
+    // 续接批次只是给已有命令补点，不占新命令名额；新命令先判历史容量，再判点数/单笔预算。
+    if (!existing) this.assertHistoryCapacity(game)
     if (
       nextPointTotal > APP_CONFIG.drawing.maxPointsPerRound ||
       (existing?.points.length ?? 0) + stroke.points.length > APP_CONFIG.drawing.maxPointsPerStroke
@@ -102,7 +113,6 @@ export class DrawingService {
       existing.sequence = stroke.sequence
     } else {
       game.strokes.push({ ...stroke, color, points: [...stroke.points] })
-      this.trimHistory(game)
     }
     game.drawingRevision += 1
     room.members.forEach((member) => (member.lastSyncedSeq = game.lastSequence))
@@ -129,6 +139,8 @@ export class DrawingService {
     const color = normalizeHexColor(fill.color)
     if (!color) throw new GameError('INVALID_FILL', serverStrings.errors.INVALID_FILL)
     this.discardUndone(game)
+    // 填充总是新增一条命令：先判历史容量，再判点数与填充次数预算。
+    this.assertHistoryCapacity(game)
     if (
       game.strokePointTotal + 1 > APP_CONFIG.drawing.maxPointsPerRound ||
       game.fillCount + 1 > APP_CONFIG.drawing.maxFillsPerRound
@@ -138,7 +150,6 @@ export class DrawingService {
     game.strokePointTotal += 1
     game.fillCount += 1
     game.strokes.push({ ...fill, color })
-    this.trimHistory(game)
     game.drawingRevision += 1
     room.members.forEach((member) => (member.lastSyncedSeq = game.lastSequence))
     this.context.publishFill({

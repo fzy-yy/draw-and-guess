@@ -1,7 +1,15 @@
 import { z } from 'zod'
+import { ERROR_CODES, type ErrorCode } from '../error-codes.ts'
 import { AVATAR_IDS, PLAYER_PROTOCOL_LIMITS } from './constants.ts'
 
-export const RequestSchema = z.object({ requestId: z.string().uuid() }).strict()
+/** 幂等请求标识：请求与 ack 都必须回显同一 UUID，供客户端核对响应归属。 */
+export const RequestIdSchema = z.string().uuid()
+export const RequestSchema = z.object({ requestId: RequestIdSchema }).strict()
+/**
+ * 线上错误码 Schema：只接受 ERROR_CODES 注册表内的码。
+ * 未知错误码在客户端属于协议损坏（不是业务失败），必须在运行时被拒绝。
+ */
+export const ErrorCodeSchema = z.enum(Object.values(ERROR_CODES) as [ErrorCode, ...ErrorCode[]])
 export const WordIdSchema = z
   .string()
   .min(1)

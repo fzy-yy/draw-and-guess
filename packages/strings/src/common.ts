@@ -32,6 +32,8 @@ export const common = {
   drawTimeField: '作画时间',
   myAvatarAria: '我的 SVG 头像',
   playerAvatarAria: (nickname: string) => `${nickname}的 SVG 头像`,
+  // 通用右键菜单的默认无障碍名称（具体场景可用 ariaLabel 覆盖，见 ContextMenu.vue）
+  contextMenuAria: '右键菜单',
   // 低频模块懒加载的占位与失败兜底（见 utils/lazy-component.ts）
   moduleLoading: '模块加载中…',
   moduleLoadFailed: '模块加载失败，请检查网络后重试',
