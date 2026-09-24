@@ -37,6 +37,7 @@ export function validateBusinessConfig(): void {
       minWords: z.number().int().min(1),
       maxWordLength: z.number().int().min(1),
       maxAliasesPerWord: z.number().int().min(1),
+      maxHintLength: z.number().int().min(1),
       difficultyRange: z.object({ min: z.number().int().min(1), max: z.number().int().min(1) }),
     }),
   }).parse(APP_CONFIG)

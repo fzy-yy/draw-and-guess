@@ -30,7 +30,7 @@ describe('设置 Store 浏览器集成', () => {
   it('保存时同步 localStorage 与减弱动画 DOM 标记', () => {
     const store = useSettingsStore()
     store.settings.animationsEnabled = false
-    store.settings.musicVolume = 0.35
+    store.settings.soundVolume = 0.55
 
     store.saveSettings()
 
@@ -39,7 +39,7 @@ describe('设置 Store 浏览器集成', () => {
       JSON.parse(localStorage.getItem(APP_CONFIG.app.settingsStorageKey) ?? '{}'),
     ).toMatchObject({
       animationsEnabled: false,
-      musicVolume: 0.35,
+      soundVolume: 0.55,
     })
   })
 })

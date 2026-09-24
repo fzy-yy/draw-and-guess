@@ -35,10 +35,11 @@ function save(): void {
 </script>
 
 <template>
-  <!-- 命中区由滑块自身承担（min-h 44px）：不能在包着 range 的 label 上挂 .touch-target——
-       伪元素会盖住 range，range 只响应指针按下/拖拽（label 只转发 click），滑块将完全无法拖动。 -->
+  <!-- 滑块命中区由自身承担：label 上不得挂任何覆盖层类（伪元素会盖住 range，
+       range 只响应指针按下/拖拽，label 只转发 click，滑块将完全无法拖动）。
+       尺寸不设像素保底，随舞台等比缩放。 -->
   <label
-    class="compact-control grid min-h-[8cqh] grid-cols-[1.2fr_1.8fr_auto] items-center gap-[1em] border-l-[0.4cqh] border-blue bg-white px-[1.2em] py-[1cqh]"
+    class="grid min-h-[8cqh] grid-cols-[1.2fr_1.8fr_auto] items-center gap-[1em] border-l-[0.4cqh] border-blue bg-white px-[1.2em] py-[1cqh]"
   >
     <span class="flex flex-col">
       <b>{{ title }}</b>
@@ -50,7 +51,7 @@ function save(): void {
       :max="max"
       :step="step"
       :value="model"
-      class="min-h-[2.75rem] accent-blue"
+      class="h-[2.75em] accent-blue"
       @input="onInput"
       @change="save"
     />

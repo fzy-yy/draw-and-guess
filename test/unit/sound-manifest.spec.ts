@@ -21,7 +21,7 @@ function catalog(
 ): Record<string, SoundMeta> {
   const result: Record<string, SoundMeta> = {}
   for (const [key, meta] of Object.entries(keys)) {
-    result[key] = { volumeMultiplier: 1.0, cooldownMs: 100, isBgm: false, ...meta }
+    result[key] = { volumeMultiplier: 1.0, cooldownMs: 100, ...meta }
   }
   return result
 }
@@ -55,7 +55,7 @@ describe('音效资源清单机制', () => {
   it('重复扩展名：同一键同时存在 .mp3 与 .wav 时判为冲突，并按约定格式确定性地选其一', () => {
     const manifest = buildSoundManifest(
       [asset('popup', 'mp3'), asset('popup', 'wav')],
-      catalog({ popup: { isBgm: false, required: true } }),
+      catalog({ popup: { required: true } }),
     )
 
     const popup = manifest.entries.get('popup')
@@ -74,37 +74,37 @@ describe('音效资源清单机制', () => {
     const manifest = buildSoundManifest(
       [asset('click', 'wav')],
       catalog({
-        click: { isBgm: false, required: true },
-        bgm_game: { isBgm: true, required: false },
+        click: { required: true },
+        reward: { required: false },
       }),
     )
 
-    const optional = manifest.entries.get('bgm_game')
+    const optional = manifest.entries.get('reward')
     expect(optional?.availability).toBe('missing')
     expect(optional?.required).toBe(false)
     expect(countIssues(manifest, 'optional-missing')).toBe(1)
     expect(countIssues(manifest, 'required-missing')).toBe(0)
     expect(manifest.hasFatalIssues).toBe(false)
 
-    // 可选资源缺失：即使严格环境也不抛错（缺失仅降级、界面禁用试听）
+    // 可选资源缺失：即使严格环境也不抛错（缺失仅降级、播放时静默跳过）
     expect(() => assertSoundManifestIntegrity(manifest, { strict: true })).not.toThrow()
 
-    // 用于试听禁用：不可用键 isManifestEntryAvailable 为 false
-    expect(isManifestEntryAvailable(manifest, 'bgm_game')).toBe(false)
+    // 可用性查询：不可用键 isManifestEntryAvailable 为 false
+    expect(isManifestEntryAvailable(manifest, 'reward')).toBe(false)
   })
 
-  it('试听不可用：无资源键在可用性查询上返回 false，设置页将据此禁用按钮', () => {
+  it('可用性查询：无资源键返回 false，有资源键返回 true', () => {
     const manifest = buildSoundManifest(
       [asset('correct', 'mp3')],
       catalog({
-        correct: { isBgm: false, required: true },
-        reward: { isBgm: false, required: true },
+        correct: { required: true },
+        reward: { required: true },
       }),
     )
 
-    // 有资源 → 可试听
+    // 有资源 → 可播放
     expect(isManifestEntryAvailable(manifest, 'correct')).toBe(true)
-    // 无资源 → 不可试听（按钮 disabled / 给出无障碍说明）
+    // 无资源 → 不可播放（播放器据此静默跳过）
     expect(isManifestEntryAvailable(manifest, 'reward')).toBe(false)
   })
 })

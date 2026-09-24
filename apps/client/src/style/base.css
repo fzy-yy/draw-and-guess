@@ -62,10 +62,9 @@
     flex: 0 0 auto;
   }
 
-  /* 舞台基础上下文：container-type 同时支撑 cqh/cqw 整体缩放与 style/utilities.css 的 compact 容器查询。
-     基准字号随舞台高度等比缩放，但下限 12px——低高度舞台下 em 派生的文字与间距不再无限缩小，
-     配合 compact 规则（收紧留白 / 折叠辅助说明 / 局部滚动 / 控件最小尺寸）保证「可读 + 可点」，
-     而不是把整个舞台继续等比缩到不可读不可点。 */
+  /* 舞台基础上下文：container-type: size 支撑 cqh/cqw 整体缩放（紧凑布局的容器查询已移除）。
+     基准字号随舞台高度等比缩放，但下限 12px——低高度舞台下 em 派生的文字与间距不再无限缩小；
+     控件尺寸不设像素保底（触控契约已废除），一律随舞台等比缩放。 */
   .game-stage {
     container-type: size;
     font-size: clamp(12px, 2cqh, 18px);

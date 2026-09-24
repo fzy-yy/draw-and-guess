@@ -42,7 +42,7 @@ const hostTarget = computed(() =>
   <!-- 席位区：网格展示全部玩家座位与准备状态；席位网格占满剩余高度（低高度时不裁切） -->
   <section
     v-if="store.room"
-    class="flex min-h-0 min-w-0 flex-col py-[3cqh] px-[2.5cqw] border-r-[0.2cqh] border-r-line compact-tight"
+    class="flex min-h-0 min-w-0 flex-col py-[3cqh] px-[2.5cqw] border-r-[0.2cqh] border-r-line"
   >
     <div>
       <SectionHeader
@@ -115,10 +115,10 @@ const hostTarget = computed(() =>
             }}</span
           >
           <!-- 房主移除玩家按钮：只对非自己的成员显示；先弹确认再执行（破坏性操作） -->
-          <!-- 踢人/移交房主：席位角上的关键图标操作，命中区经 .touch-target 扩展到 ≥44×44 -->
+          <!-- 踢人/移交房主：席位角上的图标操作，尺寸随舞台等比缩放（触控契约已废除） -->
           <button
             v-if="store.isHost && member.id !== store.playerId"
-            class="touch-target absolute right-[0.6cqh] top-[0.6cqh] grid place-items-center h-[max(3cqh,24px)] w-[max(3cqh,24px)] text-red bg-red/10 rounded-full"
+            class="absolute right-[0.6cqh] top-[0.6cqh] grid place-items-center h-[3cqh] w-[3cqh] text-red bg-red/10 rounded-full"
             type="button"
             :aria-label="strings.room.kickAria"
             @click="pendingKickId = member.id"
@@ -127,7 +127,7 @@ const hostTarget = computed(() =>
           </button>
           <button
             v-if="store.isHost && member.id !== store.playerId"
-            class="touch-target absolute left-[0.6cqh] top-[0.6cqh] grid place-items-center h-[max(3cqh,24px)] w-[max(3cqh,24px)] text-warning-fg bg-yellow/10 rounded-full"
+            class="absolute left-[0.6cqh] top-[0.6cqh] grid place-items-center h-[3cqh] w-[3cqh] text-warning-fg bg-yellow/10 rounded-full"
             type="button"
             :aria-label="strings.room.transferHostAria"
             @click="pendingHostId = member.id"

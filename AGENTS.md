@@ -16,7 +16,7 @@
 - **日志文件化**：服务端日志**不输出到控制台**（规避 Windows 控制台 GBK 解码 UTF-8 中文乱码），通过 Pino 异步缓冲写入 `apps/server/log/app-<秒级时间戳>.log`（每次启动新建一个、最多保留 `LOG_MAX_FILES` 条），优雅关闭时 flush/close；可通过 `.env` 的 `LOG_ENABLED` 完全关闭（零内存开销）。
 - **画板**：高 DPI 实时画布，支持自由画笔、橡皮擦（`destination-out`）与封闭区域洪泛填充；画笔/橡皮擦共用连续粗细，可滚轮调整；支持预设或任意 HEX 颜色，工具可自定义单键切换。**渲染模型为「归一化点列 + 直线段描边」增量同步**（不引入轮廓填充型平滑库，曾因此导致白边/闪烁/空心缺陷）。
 - **头像**：仅允许从 40 个内置 SVG 白名单编号中选择，协议只传编号；禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像。
-- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '11'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
+- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '12'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
 
 ### 技术栈与运行环境
 
@@ -59,8 +59,7 @@ draw_and_guess/
 │       ├── launcher.mts           # 隔离 webServer：临时目录 + fixture 词库 + 前端构建 + 清理/清扫
 │       ├── pages/                 # 页面封装（profile/lobby/room/game）+ responsive.page.ts（响应式与触控验收断言辅助）
 │       ├── fixtures/test-base.ts  # 测试基类（建玩家/连接）
-│       └── specs/                 # 01-profile-session / 02-lobby-room-seats / 03-game-drawing / 04-game-guessing / 05-game-lifecycle / 06-browser-compatibility / 07-responsive-touch / 08-performance-budget
-│   └── draw_guess_words.db
+│       └── specs/                 # 01-profile-session / 02-lobby-room-seats / 03-game-drawing / 04-game-guessing / 05-game-lifecycle / 06-browser-compatibility / 07-responsive-touch / 08-performance-budget / 09-drawing-history-limit
 ├── README.md                     # 项目总览、十分钟启动（依赖/结构/样式/持久化/版本章节与代码保持一致）
 ├── docs/adr/                     # 架构决策记录：每条含背景 / 决策 / 后果，源码注释只链接此处
 ├── AGENTS.md                     # 本文件：导读、硬性限制、启动方法、编码/测试/提交流程
@@ -126,8 +125,8 @@ draw_and_guess/
 │       │   ├── index.css          # ★主入口：依次导入 tailwindcss 与各分模块样式
 │       │   ├── tokens.css         # 设计令牌：@theme（字体、10 语义色、黑色变量、阴影令牌）
 │       │   ├── base.css           # 全局 base：reset、表单控件基础状态、舞台外壳与容器单位上下文、全屏
-│       │   ├── components.css     # 共享组件类（.dialog-shell/.eyebrow/.eyebrow-light/.round-icon-btn/.touch-target 触控命中区）
-│       │   ├── utilities.css      # Tailwind 组合类（.ui-feedback/.hover-tint）与紧凑布局契约类（.compact-*）
+│       │   ├── components.css     # 共享组件类（.dialog-shell/.eyebrow/.eyebrow-light/.round-icon-btn）
+│       │   ├── utilities.css      # Tailwind 组合类（.ui-feedback/.hover-tint；紧凑布局契约类已删除）
 │       │   ├── animations.css     # 交互反馈动效、Vue 过渡钩子、关键帧与减弱动画
 │       │   └── other.css          # 设备方向（竖屏警告）等未分类规则
 │       ├── stores/
@@ -149,7 +148,7 @@ draw_and_guess/
 │       ├── composables/
 │       │   ├── useAppBootstrap.ts # Socket 监听、连接生命周期、ping 与 HMR 清理
 │       │   ├── useRoomSync.ts     # 快照门禁、画布增量合并与受限全量重同步
-│       │   ├── useAudioFeedback.ts # 全局音效反馈（HTML5 Audio 驱动阶段音效、BGM、倒计时警示）
+│       │   ├── useAudioFeedback.ts # 全局音效反馈（HTML5 Audio 驱动阶段入场音与倒计时警示）
 │       │   ├── useCanvasViewport.ts / useCanvasCursor.ts / useStrokeSession.ts / useFillSession.ts # 画布视口、光标、笔画与填充会话（填充渲染态/提交态两把锁）
 │       │   ├── useGameHud.ts      # 对局 HUD 计算（useTimestamp 驱动）：剩余时间/进度/猜词权限/阶段标签/排行
 │       │   ├── useInviteQueue.ts / useFullscreenPrompt.ts # 根 Shell 的邀请倒计时与全屏提示生命周期
@@ -331,7 +330,7 @@ pnpm format:check  # 仅检查格式
 - **组件测试（`pnpm test:component`）**：运行于 happy-dom，优先用 Testing Library 的角色/名称查询与 `userEvent.setup()` 模拟真实操作；只有需要精确校验 Vue emit / v-model 契约时使用 Vue Test Utils。音频播放与 focus-trap 已有独立测试，组件 setup 只验证调用意图。
 - **集成测试（`pnpm test:integration`）**：使用真实 Pinia 或 `createTestingPinia({ createSpy: vi.fn })`；Socket.IO 由统一替身隔离，MSW 以 `onUnhandledRequest: 'error'` 守住 HTTP 边界。禁止访问真实服务。
 - **覆盖率（`pnpm test:coverage`）**：V8 汇总全部 Vitest projects，统计 `apps/client/src`（`views/**` 除外，由 E2E 覆盖）、`apps/server/src`、`packages/{shared,config,strings}/src`，输出 text/json-summary/html/lcov 到 `coverage/`，并执行贴近实测的全局与关键文件阈值；分层门禁与最新结果见 `test/COVERAGE.md`，新增测试应提高而非降低阈值。
-- **端到端测试（`pnpm test:e2e`，Playwright）**：launcher 承担 webServer（构建前端 → 生成 fixture → 建库 → 监听）。默认词库 fixture 含 5,000 词，用于虚拟表格压力验收；兼容性项目覆盖 Chromium DPR 1/1.5/2、Firefox DPR 2、触屏输入和后台标签页恢复。页面封装在 `test/e2e/pages/`，fixtures 在 `test/e2e/fixtures/test-base.ts`，spec 在 `test/e2e/specs/`。CI 上 `retries=1`（本地 0 重试以暴露不稳定用例）；launcher 构建时注入 `VITE_EXPOSE_LOGICAL_CANVAS=1` 开启跨端栅格哈希探针（默认生产构建不包含该探针）。
+- **端到端测试（`pnpm test:e2e`，Playwright）**：launcher 承担 webServer（构建前端 → 生成 fixture → 建库 → 监听）。默认词库 fixture 含 5,000 词，用于虚拟表格压力验收；兼容性项目覆盖 Chromium DPR 1/1.5/2、Firefox DPR 2 和后台标签页恢复（设备向触屏验收已随手机/平板适配一并移除）。页面封装在 `test/e2e/pages/`，fixtures 在 `test/e2e/fixtures/test-base.ts`，spec 在 `test/e2e/specs/`。CI 上 `retries=1`（本地 0 重试以暴露不稳定用例）；launcher 构建时注入 `VITE_EXPOSE_LOGICAL_CANVAS=1` 开启跨端栅格哈希探针（默认生产构建不包含该探针）。
 - 可作为将来单测目标的纯函数（注释已注明「可独立单测」）：`packages/shared/src/pure.ts`、`apps/server/src/scoring.ts`、`apps/server/src/snapshot.ts`；仓储接口（`repositories/`）可注入内存实现测试。
 - **修改代码后的最低验证要求**：依次运行
   ```bash
@@ -349,31 +348,32 @@ pnpm format:check  # 仅检查格式
 
 ## 响应式与触控验收标准
 
-> 阈值唯一来源：`packages/config/src/settings.ts` 的 `responsive`。样式实现分落三处：`style/tokens.css`（字号像素下限）、`style/base.css`（舞台基准字号）、`style/components.css`（`.touch-target`）、`style/utilities.css`（`.compact-*`）。三者由 `test/unit/responsive-standards.spec.ts` 强制一致，改动任一处必须同步其余两处。
+> 阈值唯一来源：`packages/config/src/settings.ts` 的 `responsive`。样式实现分落两处：`style/tokens.css`（字号像素下限）、`style/base.css`（舞台基准字号）。两处与本文档由 `test/unit/responsive-standards.spec.ts` 强制一致，改动任一处必须同步其余两处。
+>
+> **核心口径（2026-09 二次修订）**：**主要适配电脑网页端浏览器**。界面 UI 一律使用相对尺寸（`cqh`/`cqw`/`em`），随舞台视口**等比缩放**；已**废除**「44px 触控命中区契约」（`.touch-target` 外扩与 `.compact-control` 视觉保底），**控件命中区即视觉尺寸**，普通控件不设像素下限；已**删除紧凑布局（compact）模式**——不再按舞台高度切换任何布局行为（收紧留白/折叠说明/局部滚动/弹性行高/换行/单列化全部不存在），所有屏幕共用同一套正常布局。手机/平板横屏不做特意适配、不排除使用（等比缩放自然覆盖），竖屏仍由 `style/other.css` 旋转提示拦截。
 
-### 三个基准视口
+### 验收基准视口
 
-| 基准     | 视口（CSS px） | 舞台尺寸 | 布局                |
-| -------- | -------------- | -------- | ------------------- |
-| 桌面     | 1280×720       | 1267×713 | 标准布局            |
-| 平板横屏 | 1024×768       | 1014×570 | 紧凑布局（compact） |
-| 手机横屏 | 844×390        | 686×386  | 紧凑布局（compact） |
+| 基准 | 视口（CSS px） | 舞台尺寸 | 布局     |
+| ---- | -------------- | -------- | -------- |
+| 桌面 | 1280×720       | 1267×713 | 唯一布局 |
 
-- 舞台固定 16:9 居中，不因视口变化破坏比例；竖屏仍由既有旋转提示接管。
-- 基准即验收基准：`test/e2e/specs/07-responsive-touch.spec.ts` 在三个基准下逐屏截图并断言。
+- 舞台固定 16:9 居中，不因视口变化破坏比例；竖屏由旋转提示接管（非验收范围）。
+- `test/e2e/specs/07-responsive-touch.spec.ts` 在桌面基准下逐屏截图并断言；
+  末尾另有用例以两个桌面窗口尺寸（1280×720 / 1024×576）对比，守卫「控件随舞台等比缩放、
+  无像素保底回潮」（cqh 定高控件与舞台高度比值恒定、绝对尺寸随窗口变小）。
 
-### 触控命中区
+### 控件尺寸与命中区
 
-- **关键交互控件**（动作按钮 `AppButton`、图标按钮 `IconButton`/`RoundIconButton`/`ToolButton`、开关行 `SettingSwitchRow`/`RuleToggleField`、弹窗按钮与关闭钮）：点击/触摸命中区 ≥ **44×44 CSS px**。标准布局下视觉尺寸可小于该值，由共享类 `.touch-target` 的 `::after` 以元素中心对齐外扩补齐；紧凑布局下大多数控件自身即 44px（`.compact-control`），席位角标等贴边按钮仍以 `.touch-target` 外扩命中区。
-- **滑块 `<input type="range">`**：命中区必须由滑块自身承担（`min-h-[2.75rem]`）。**禁止**在包裹 range 的 `label` 上挂 `.touch-target`——伪元素会盖住 range，而 range 只响应指针按下/拖拽（label 只转发 click），滑块将彻底无法拖动。同理，包在 `.touch-target` 行内的复选框需加 `relative z-[1]` 才能被直接点中。
-- **下拉框 `<select>`**：是替换元素，**不支持** `::before`/`::after`，命中区改由所属字段行（`label`）承担；文本输入框按「可读字号 + 可见性」验收，不纳入 44×44 命中区（不属于按钮/开关/图标）。
-- **密集控件**（画板色板、表情、表格复选框）：不接入 `.touch-target`，命中区即视觉盒，视觉尺寸 ≥ `minDenseTargetPx`。
-- **密集控件**（画板色板、自定义取色、表情反应、表格表头排序与行复选框、筛选复选框）：横向间距不足以容纳 44px 命中区，降级为**视觉尺寸 ≥ 20px 且相邻命中区不重叠**（`responsive.minDenseTargetPx`）。这类控件**禁止**接入 `.touch-target`——外扩命中区会相互重叠导致误点。
-- `.touch-target` 必须定义在 `@layer components`：其中 `position: relative` 只是默认定位，需让调用处的 `absolute`/`fixed` 能够覆盖。
+- **普通交互控件**（动作按钮 `AppButton`、图标按钮 `IconButton`/`RoundIconButton`/`ToolButton`、开关行、弹窗按钮与关闭钮、席位角标、搜索清除钮）：尺寸**随舞台等比缩放，不设像素下限**；命中区即视觉尺寸，不经任何覆盖层外扩。
+- **密集控件**（画板色板、自定义取色、表情反应、表格表头与行复选框、筛选弹层复选框）：仅保留 `responsive.minDenseTargetPx`（**16px**）视觉下限，防止小窗下缩到看不见；除此之外仍等比缩放。
+- **滑块 `<input type="range">`**：命中区由滑块自身承担（`h-[2.75em]`，随字号缩放）。**禁止**在包裹 range 的 `label` 上挂任何覆盖层类——伪元素会盖住 range，而 range 只响应指针按下/拖拽（label 只转发 click），滑块将彻底无法拖动。
+- **下拉框 `<select>`**：是替换元素，**禁止**在其所属 `label` 上挂覆盖层类——`::after` 会拦截指针事件导致下拉框收不到点击、彻底无法展开（曾因此产生「建房/规则弹窗下拉失效」缺陷）。字段行仅保持原生 `label` 关联。
+- **文本输入框**：按「可读字号 + 可见性」验收，不纳入固定命中区下限。
 
 ### 字号可读阈值
 
-舞台基准字号为 `clamp(12px, 2cqh, 18px)`，每档字号再用 `max()` 声明像素下限（低高度舞台下不再无限缩小）：
+**字号是唯一保留像素下限的维度**（保证小窗下仍可读）。舞台基准字号为 `clamp(12px, 2cqh, 18px)`，每档字号再用 `max()` 声明像素下限（低高度舞台下不再无限缩小）：
 
 | 档位                        | 用途           | 下限                           |
 | --------------------------- | -------------- | ------------------------------ |
@@ -381,16 +381,11 @@ pnpm format:check  # 仅检查格式
 | `text-fs-12` / `text-fs-14` | 次级与辅助说明 | ≥ 10px（`minSecondaryFontPx`） |
 | `text-fs-10`                | 徽章与微标签   | ≥ 9px（`minMicroFontPx`）      |
 
-### 紧凑布局（compact）
+### 禁止事项
 
-舞台高度 ≤ `responsive.compactStageHeightPx`（600px）时，以 `.game-stage` 为容器查询上下文启用。该阈值覆盖平板横屏（舞台高 570px）与手机横屏（舞台高 386px）：这两类基准下控件按 cqh 等比缩放只有 17～25px，已低于触控下限，必须由紧凑布局接管。
-
-- **收紧非关键留白**：`.compact-tight`；
-- **折叠辅助说明**：`.compact-hide`（只用于非关键 hint，如昵称规则说明、局域网提示、HUD 回合英文标签）；
-- **允许局部滚动**：`.compact-scroll`（房间右侧控制区、设置正文、弹窗表单），内容超高时分区内部滚动；
-- **控件保底尺寸**：`.compact-control` / `.compact-control-square`（直接达到 44×44，避免「视觉缩小 + 命中区外扩」在密集排布中互相重叠）；
-- **骨架弹性化**：`.compact-rows-2` / `.compact-rows-3` 把固定百分比行高改为「内容行自适应 + 剩余行撑满」；`.compact-wrap` 让工具栏换行；`.compact-stack` 让多列网格改单列。
-- **禁止**把整个舞台继续等比缩小到不可读/不可点，也**禁止**为塞进固定高度而裁切内容。
+- **禁止**重新引入紧凑布局（`@container` 断点、`.compact-*` 类）或任何按设备/窗口高度切换的布局模式；极小窗口下内容溢出/裁切属已接受的取舍。
+- **禁止**重新引入像素尺寸保底类（`.compact-control` / `.touch-target` 均已删除）。
+- **禁止**为手机/平板编写设备专属分支（UA 嗅探、媒体查询断点、`viewport` meta 等）；画布 `touch-none` 属 Pointer Events 通用写法，不在此列。
 
 ---
 
@@ -400,10 +395,10 @@ pnpm format:check  # 仅检查格式
 
 ### 预算门禁
 
-| 项             | 预算      | 现状     | 度量方式                                    |
-| -------------- | --------- | -------- | ------------------------------------------- |
-| 主入口 JS gzip | ≤ 165 KiB | ~162 KiB | 资源计时 `encodedBodySize`                  |
-| 首屏实际下载   | ≤ 180 KiB | ~173 KiB | 同源非 Socket.IO 资源的 `transferSize` 求和 |
+| 项             | 预算      | 现状       | 度量方式                                    |
+| -------------- | --------- | ---------- | ------------------------------------------- |
+| 主入口 JS gzip | ≤ 165 KiB | ~164.7 KiB | 资源计时 `encodedBodySize`                  |
+| 首屏实际下载   | ≤ 180 KiB | ~175.6 KiB | 同源非 Socket.IO 资源的 `transferSize` 求和 |
 
 预算触顶时**先看体积报告再决定取舍**，不要靠调大阈值或把 vendor 硬拆成多个 chunk 来消除告警：
 
@@ -478,8 +473,8 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
    - 客户端请求必须带 `requestId`（幂等）与统一 `ack`；非法阶段/角色/序号/频率由 `binder.ts` 与领域服务拒绝。
    - 头像只允许 `packages/shared/src/protocol/constants.ts` 白名单中的内置 SVG 编号；**禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像**。
 3. **词库与内容**
-   - `vocabulary/` 目录下的 SQLite 词库包是唯一词库来源（当前含 `base_words.db` 与 `test_words.db`，可并存多个，服务启动时全部加载并从中选默认包）：`metadata` 表存 version/updated_at/category_enum/difficulty_enum/time_limit_enum/score_weight_enum/default_time_limit/default_score_weight；`words` 表词条含 id/text/**category**（单词条仅一个分类）/difficulty/enabled/time_limit/score_weight/aliases（JSON）。**分类必须 ⊆ category_enum**、difficulty 必须在合法区间、enabled=0 词条不进入候选池；目录内没有任何 `.db` 时按 `apps/server/src/config/private.ts` 的 `dbPath` 兜底探测（默认文件名 `draw_guess_words.db`）。修改后需重启服务，异常数据以中文错误阻止启动。
-   - **猜词提示使用词条分类**：结构化提示揭示的是 `category` 字段（单条），而非旧版 `hint` 列表；词库已不再包含 `type/hint/tags/lang` 字段。
+   - `vocabulary/` 目录下的 SQLite 词库包是唯一词库来源（当前仅 `base_words.db`，可并存多个 `.db`，服务启动时全部加载并从中选默认包）：`metadata` 表存 name/description/version/updated_at/category_enum/difficulty_enum/drawability_enum/enabled_enum/level_config（难度 → `{time_limit, score_weight}` 映射，JSON，**库内为 snake_case 命名**）/drawability_desc；`words` 表词条含 id/text/**category**（单词条仅一个分类）/difficulty/**drawability**（可绘制性 1~5，词库作者标注）/enabled/**hint**（对局结构化提示，≤10 字，空串合法）/aliases（JSON）/updated_at（仅编辑时间，不进 DTO）。逐词 `time_limit/score_weight` 已废弃：Provider **加载期**按难度查 `level_config` 派生到词条 `timeLimit/scoreWeight`，下游（回合时限/计分/UI/哈希）语义不变（见 `docs/adr/0013-vocabulary-level-config-and-hints.md`）。校验为 fail-fast：分类 ⊆ category_enum、难度 ⊆ difficulty_enum ∩ 配置区间、可绘制性 ⊆ drawability_enum、`level_config` 与 `difficulty_enum` 严格互相覆盖、hint 长度 ≤ `maxHintLength`、enabled=0 词条不进入候选池；目录内没有任何 `.db` 时按 `apps/server/src/config/private.ts` 的 `dbPath` 兜底探测（默认文件名 `base_words.db`）。修改后需重启服务，异常数据以中文错误阻止启动。
+   - **猜词提示使用词条 hint**：结构化提示揭示的是 `hint` 字段（hint 为空回退揭示 `category`，两者皆空不开启提示）；单揭示槽位与揭示时机（`hintStartRatio`）不变；选词卡对画家**不展示** hint（`wordOptions` 只带 `text/difficulty/drawability`），避免提示泄露。
    - 猜词判定固定用 `normalizeAnswer`（NFKC + 去空白 + 折叠空白 + 忽略拉丁大小写），不要在别处另写一套比较。
 4. **配置治理**
    - 协议公开约束**只允许**写在 shared protocol constants；公开默认值与服务端私有策略按包边界分别维护，禁止复制同一协议常量。
@@ -550,7 +545,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 | 日志开关/保留条数               | `.env` → `apps/server/src/config/deployment.ts` → `apps/server/src/index.ts`                                                                                                                             |
 | 画布渲染/增量绘制               | `apps/client/src/components/game/GameCanvas.vue` + `composables/useCanvas*.ts` / `useStrokeSession.ts`（直线段描边，勿引入轮廓填充平滑库）                                                               |
 | 填充重放/降级与填充门禁         | `apps/client/src/canvas/flood-fill-worker.ts`（Worker 失败降级一次）+ `composables/useFillSession.ts`（渲染态/提交态）+ `canvas/fill-diagnostics.ts`（见 `docs/adr/0009-fill-degradation-and-locks.md`） |
-| 音效资源/播放策略               | `packages/config/src/audio.ts` → `apps/client/src/audio/` → `composables/useAudioFeedback.ts`（BGM 编码规格与体积评估见 `apps/client/src/assets/audio/README.md`）                                       |
+| 音效资源/播放策略               | `packages/config/src/audio.ts` → `apps/client/src/audio/` → `composables/useAudioFeedback.ts`（音效文件名清单与格式约定见 `apps/client/src/assets/audio/README.md`；BGM 系统已移除）                     |
 | 全局样式 / Tailwind 令牌        | `apps/client/src/style/index.css`                                                                                                                                                                        |
 | 类名合并 cn()                   | `apps/client/src/utils/cn.ts`                                                                                                                                                                            |
 

@@ -56,7 +56,7 @@ pnpm test:e2e         # Playwright 跨浏览器端到端测试
   - `LOG_ENABLED=false` 时完全不创建日志记录器、不写日志文件（零内存开销）；
   - `LOG_MAX_FILES` 控制日志文件保留条数（默认 10，每次启动新建一个 `apps/server/log/app-<秒级时间戳>.log`，超出删除最老）。
   - `/api/health` 默认只返回版本与协议安全摘要；仅当 `HEALTH_METRICS_ENABLED=true` 且请求来自本机回环地址时返回详细聚合指标。
-- **词库来源**：[`vocabulary/`](vocabulary/) 目录下可包含多个 SQLite 词库包（metadata/words 表），由 Provider 注册并在房间内选择。词条为富字段（词面/别称/唯一分类/难度/词条级时限与权重等），**词条分类同时作为作画阶段的猜词提示**；分类必须落在 `metadata.category_enum` 白名单内，`enabled=false` 的词条不参与抽选。修改后重启服务生效，异常数据会以中文错误阻止启动。
+- **词库来源**：[`vocabulary/`](vocabulary/) 目录下可包含多个 SQLite 词库包（metadata/words 表），由 Provider 注册并在房间内选择。词条为富字段（词面/别称/唯一分类/难度/可绘制性/提示，另有按难度从 `metadata.level_config` **加载期派生**的时限与权重），**作画阶段的结构化提示揭示词条 `hint`（为空回退分类）**；分类/难度/可绘制性必须分别落在 `category_enum`/`difficulty_enum`/`drawability_enum` 白名单内，`level_config` 必须覆盖全部难度级，`enabled=0` 的词条不参与抽选。修改后重启服务生效，异常数据会以中文错误阻止启动（详见 `docs/adr/0013-vocabulary-level-config-and-hints.md`）。
 - 服务启动时会按规范化词面去重并生成稳定 ID（`sqlite:主键`）；词条过少或过长会阻止启动并显示中文错误。
 
 ## 工程结构
@@ -82,7 +82,7 @@ docs/adr/          架构决策记录（背景 / 决策 / 后果），源码注�
 
 客户端样式采用**模块化分层**：`apps/client/src/style/index.css` 只做聚合导入，具体规则分散在同目录
 `tokens.css`（`@theme` 设计令牌）、`base.css`（reset 与舞台容器上下文）、`components.css`（共享组件类）、
-`utilities.css`（交互修饰类与紧凑布局契约类）、`animations.css`（过渡钩子与关键帧）、`other.css`（设备方向）。
+`utilities.css`（交互修饰类）、`animations.css`（过渡钩子与关键帧）、`other.css`（设备方向）。
 组件/页面自身视觉一律写成 Vue 模板内的行内 Tailwind 类；不在共享层之外新增原生 CSS 类选择器，也不新建分片 CSS 文件。
 
 ## 版本与发布

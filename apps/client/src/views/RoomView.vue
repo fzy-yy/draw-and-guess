@@ -89,7 +89,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
   <!-- relative：为懒加载词库弹窗的 loading/error 占位提供定位容器（见 utils/lazy-component.ts） -->
   <main
     v-if="store.room"
-    class="relative grid h-full grid-cols-[minmax(0,67%)_33%] grid-rows-[11%_89%] bg-sky compact-rows-2"
+    class="relative grid h-full grid-cols-[minmax(0,67%)_33%] grid-rows-[11%_89%] bg-sky"
   >
     <!-- 顶栏：房间名、房间可见性标识、连接状态与退出按钮（共享 StageHeader 骨架） -->
     <StageHeader>
@@ -116,7 +116,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           <button
             v-if="store.room.privateJoinCode"
             type="button"
-            class="touch-target compact-control flex items-center gap-[0.4em] py-[0.55cqh] px-[0.75em] text-navy bg-yellow rounded-[0.55em] tracking-[0.16em]"
+            class="flex items-center gap-[0.4em] py-[0.55cqh] px-[0.75em] text-navy bg-yellow rounded-[0.55em] tracking-[0.16em]"
             :aria-label="strings.room.copyPrivateCodeAria"
             @click="handleCopyPrivateCode"
           >
@@ -150,10 +150,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
     <SeatGrid />
 
     <!-- 右侧控制区：规则摘要、词库管理、邀请、准备与开始 -->
-    <!-- 右侧控制区：低高度时整列内部滚动，保证准备/开始按钮始终可达 -->
-    <aside
-      class="min-w-0 flex flex-col py-[2.5cqh] px-[1.6cqw] bg-paper compact-tight compact-scroll"
-    >
+    <aside class="min-w-0 flex flex-col py-[2.5cqh] px-[1.6cqw] bg-paper">
       <RuleSummary
         :vocabulary-loading="vocabularyLoading"
         @open-vocabulary="openVocabulary"

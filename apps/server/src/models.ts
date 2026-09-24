@@ -87,13 +87,13 @@ export interface GameSecret {
   pausedRemainingMs?: number // 暂停时冻结的剩余毫秒
   currentRound: number // 当前回合序号（从 1 开始）
   totalRounds: number // 总回合数 = 人数 × 每人轮数
-  /** 当前回合实际作画时长（毫秒）：词条级 time_limit 或房间设置，计分与提示调度统一用它 */
+  /** 当前回合实际作画时长（毫秒）：难度级派生时限（level_config）或房间设置，计分与提示调度统一用它 */
   roundDurationMs: number
   drawerOrder: string[] // 画家轮换顺序（开局时洗牌）
   drawerId: string // 当前画家
   candidates: VocabularyWord[] // 当前回合候选词（富模型，仅画家可见）
   rerollUsed?: boolean // 当前回合是否已使用“换一组”
-  answer?: VocabularyWord // 当前回合答案（选定后置位；含别称/提示/词条级时限）
+  answer?: VocabularyWord // 当前回合答案（选定后置位；含别称/提示与加载期派生的时限、权重）
   offeredWordIds: Set<string> // 本局已展示过的候选词 ID 集合（整局游戏中候选词绝不重复）
   /** 自由笔画与区域填充共用一条内存历史，支持统一撤销、重做与重连恢复。 */
   strokes: DrawingCommand[]

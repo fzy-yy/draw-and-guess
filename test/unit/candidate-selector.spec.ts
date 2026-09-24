@@ -8,6 +8,9 @@ const pool: VocabularyWord[] = Array.from({ length: 10 }, (_, index) => ({
   aliases: [],
   category: `类${index % 5}`,
   difficulty: (index % 5) + 1,
+  // 词库重建后的必填字段：可绘制性与提示（本用例不关心其值，仅满足 DTO）
+  drawability: (index % 5) + 1,
+  hint: '',
 }))
 
 describe('CandidateSelector 纯函数契约', () => {

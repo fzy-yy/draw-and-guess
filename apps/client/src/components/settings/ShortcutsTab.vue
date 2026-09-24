@@ -31,14 +31,14 @@ const store = useGameStore()
 </script>
 
 <template>
-  <section class="min-h-0 px-[5cqw] py-[3cqh] compact-tight">
+  <section class="min-h-0 px-[5cqw] py-[3cqh]">
     <SettingsSectionHeader
       :icon="Keyboard"
       :title="strings.settings.shortcutsTitle"
       :intro="strings.settings.shortcutsIntro"
     />
-    <!-- 三列卡片在紧凑模式下改单列，避免每列被压到快捷键输入框不可点 -->
-    <div class="grid grid-cols-3 gap-[1em] compact-stack">
+    <!-- 三列快捷键卡片：随舞台等比缩放（紧凑模式单列化已随布局模式移除） -->
+    <div class="grid grid-cols-3 gap-[1em]">
       <label
         v-for="row in rows"
         :key="row.setting"

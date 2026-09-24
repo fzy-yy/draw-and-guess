@@ -60,7 +60,7 @@ function handleKeyDown(event: KeyboardEvent): void {
 
 <template>
   <div
-    class="flex items-center gap-[0.5em] rounded-[0.7em] border-[0.18cqh] bg-white px-[0.75em] transition-colors focus-within:border-navy compact-control"
+    class="flex items-center gap-[0.5em] rounded-[0.7em] border-[0.18cqh] bg-white px-[0.75em] transition-colors focus-within:border-navy"
     :class="[
       size === 'body' ? 'h-[5.2cqh]' : 'h-[4.8cqh]',
       error ? 'border-red' : 'border-control',

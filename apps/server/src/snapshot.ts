@@ -77,16 +77,17 @@ export class SnapshotBuilder {
                   id: word.id,
                   text: word.text,
                   difficulty: word.difficulty,
+                  drawability: word.drawability,
                 })),
               }
             : {}),
-          // 已揭示的结构化提示：词库单分类即提示，揭示时下发词条分类；
+          // 已揭示的结构化提示：词库重建后优先揭示词条 hint（hint 为空回退分类）；
           // 客户端只渲染首值，且对全体猜词者一致。
           ...(game.answer && game.revealedHintCount > 0
             ? {
                 revealedHints: game.hintOrder
                   .slice(0, game.revealedHintCount)
-                  .map(() => game.answer!.category)
+                  .map(() => game.answer!.hint || game.answer!.category)
                   .filter((hint): hint is string => hint !== ''),
               }
             : {}),

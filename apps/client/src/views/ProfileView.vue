@@ -130,8 +130,8 @@ function randomize(): void {
           </template>
         </AppInput>
       </div>
-      <!-- 昵称规则说明属非关键辅助文案：低高度舞台下折叠，把空间留给输入与主操作。 -->
-      <p class="mt-[0.6cqh] text-muted text-fs-12 compact-hide">
+      <!-- 昵称规则说明：常驻显示（紧凑模式折叠已随布局模式移除）。 -->
+      <p class="mt-[0.6cqh] text-muted text-fs-12">
         {{
           strings.profile.nicknameHelp(
             store.config.player.nicknameMinLength,

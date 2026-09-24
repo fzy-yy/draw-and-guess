@@ -4,7 +4,6 @@
 export const localSettings = {
   masterVolume: 0.8,
   soundVolume: 0.8,
-  musicVolume: 0.35,
   muted: false,
   /** 统一控制非必要的界面过渡与反馈动画；关闭后不影响倒计时和画布逻辑。 */
   animationsEnabled: true,
@@ -21,26 +20,22 @@ export const localSettings = {
 } as const
 
 /**
- * 响应式与触控验收标准（唯一来源）。
+ * 响应式缩放与可读验收标准（唯一来源）。
+ *
+ * 核心口径：界面 UI 一律使用相对尺寸（cqh/cqw/em），随舞台视口等比缩放；
+ * 主要适配电脑网页端，不对手机/平板横屏做特殊适配（无紧凑布局、无设备基准视口），
+ * 竖屏仍由 style/other.css 的旋转提示接管；已废除旧的「44px 触控命中区契约」
+ * （.touch-target 外扩与 .compact-control 视觉保底），命中区即视觉尺寸。
  *
  * 供三处消费：
- * - 客户端样式（style/tokens.css 字号像素下限、style/utilities.css 的 compact 断点）按本表实现；
+ * - 客户端样式（style/tokens.css 字号像素下限）按本表实现；
  * - Playwright 验收用例（test/e2e/specs/07-responsive-touch.spec.ts）按本表断言；
  * - AGENTS.md「响应式与触控验收标准」章节按本表描述。
  * 改动任一处必须同步另两处（test/unit/responsive-standards.spec.ts 会校验三者一致）。
  */
 export const responsive = {
-  /** 三个验收基准视口（CSS px）：桌面 / 平板横屏 / 手机横屏。 */
-  baselines: [
-    { key: 'desktop', label: '桌面', width: 1280, height: 720 },
-    { key: 'tablet-landscape', label: '平板横屏', width: 1024, height: 768 },
-    { key: 'phone-landscape', label: '手机横屏', width: 844, height: 390 },
-  ],
-  /**
-   * 关键交互控件（动作按钮 / 图标按钮 / 开关行 / 弹窗按钮）最小命中区边长（CSS px）。
-   * 视觉尺寸可小于该值，但点击/触摸命中区必须达到（经共享类 .touch-target 扩展）。
-   */
-  minTouchTargetPx: 44,
+  /** 验收基准视口（CSS px）：桌面网页端单一基准。 */
+  baselines: [{ key: 'desktop', label: '桌面', width: 1280, height: 720 }],
   /** 正文（text-fs-16 及以上）最小可读字号（CSS px）。 */
   minBodyFontPx: 12,
   /** 次级与辅助文案（text-fs-12 / text-fs-14）最小可读字号（CSS px）。 */
@@ -48,18 +43,11 @@ export const responsive = {
   /** 微标签（text-fs-10：徽章、工具条小字）最小可读字号（CSS px）。 */
   minMicroFontPx: 9,
   /**
-   * 密集控件（画板色板、表情、表格复选框）最小视觉边长（CSS px）。
-   * 这类控件横向间距不足以容纳 44px 命中区，因此**不接入** `.touch-target`：
-   * 命中区即视觉盒，天然不会与相邻控件重叠。
+   * 密集控件（画板色板、表情、表格/表单复选框、筛选勾选）最小视觉边长（CSS px）。
+   * 密集控件之间间距小，仅保留这一条像素下限防止「缩到看不见」；
+   * 其余普通控件不设像素下限，完全随舞台等比缩放。
    */
-  minDenseTargetPx: 20,
-  /**
-   * 紧凑布局（compact）触发的舞台高度阈值（CSS px）：舞台高度不高于该值时启用。
-   * 取 600px：桌面基准（1280×720）舞台高 713px 走标准布局；平板横屏（1024×768）舞台高 570px
-   * 与手机横屏（844×390）舞台高 386px 均进入紧凑布局——两者按 cqh 等比缩放时控件只有 17～25px，
-   * 已低于触控下限，必须由紧凑布局接管而不是继续缩小。
-   */
-  compactStageHeightPx: 600,
+  minDenseTargetPx: 16,
 } as const
 
 /**
@@ -94,6 +82,8 @@ export const ui = {
   recentMessageCount: 80,
   /** 难度星级最大值（词库 difficulty 上限，选词星级与难度列共用） */
   difficultyMax: 5,
+  /** 可绘制性星级最大值（词库 drawability 上限，选词卡第二组星级与词库管理列共用） */
+  drawabilityMax: 5,
   /** 对局 HUD 时间刷新的毫秒间隔（useGameHud 的 useTimestamp interval）。 */
   tickIntervalMs: 200,
   /** 词库管理搜索框的防抖毫秒数，避免每次按键都触发过滤。 */

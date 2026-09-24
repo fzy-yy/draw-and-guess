@@ -37,11 +37,14 @@ const SettingsView = defineLazyComponent(() => import('@/views/SettingsView.vue'
 
 const store = useGameStore()
 
-// 当自己猜中且处于作画阶段时，触发全屏礼花庆祝特效
+// 当自己猜中时触发全屏礼花庆祝特效。
+// 守卫同时放行 drawing 与 round_result：最后一名猜词者猜中时，服务端在**同一份快照**里
+// 已把阶段切到回合结算，若只认 drawing 会漏掉「最后一人猜中」这一最该庆祝的时刻（缺陷回归守卫）。
 watch(
   () => store.me?.guessed,
   (guessed, prev) => {
-    if (guessed && !prev && store.room?.phase === 'drawing') {
+    const phase = store.room?.phase
+    if (guessed && !prev && (phase === 'drawing' || phase === 'round_result')) {
       if (store.settings.animationsEnabled) {
         // 礼花模块按需下载，失败静默降级（见 utils/confetti.ts）
         void fireGuessCorrectConfetti()
@@ -122,7 +125,7 @@ function handleFullscreenToggle(): void {
        画框以外区域统一使用 paper（近白）语义色，与画布白底协调 -->
   <main
     v-if="store.room && game"
-    class="grid h-full grid-cols-[17%_minmax(0,61%)_22%] grid-rows-[11%_minmax(0,76%)_13%] bg-paper compact-rows-3"
+    class="grid h-full grid-cols-[17%_minmax(0,61%)_22%] grid-rows-[11%_minmax(0,76%)_13%] bg-paper"
   >
     <!-- 顶栏 HUD：回合数、当前画家、答案、计时器、网络状态与暂停按钮 -->
     <GameHud

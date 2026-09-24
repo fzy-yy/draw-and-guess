@@ -6,15 +6,12 @@ import { cleanup } from '@testing-library/vue'
  * 音频和焦点陷阱均已有独立领域测试；组件层只验证交互意图，避免真正播放媒体或依赖布局引擎。
  */
 vi.mock('@/audio', () => ({
-  isSoundAvailable: vi.fn(() => true),
-  playBgm: vi.fn(),
   playInteractionSound: vi.fn(),
   playSound: vi.fn(),
   soundManager: {
     stopAll: vi.fn(),
     updateSettings: vi.fn(),
   },
-  stopBgm: vi.fn(),
 }))
 
 vi.mock('@vueuse/integrations/useFocusTrap', () => ({

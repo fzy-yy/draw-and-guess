@@ -2,8 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { createTestingPinia } from '@pinia/testing'
-import { strings } from '@draw-guess/strings'
-import { playSound } from '@/audio'
 import AudioTab from '@/components/settings/AudioTab.vue'
 import { useGameStore } from '@/stores/game'
 import { installFakeGameTransport } from '../client/fake-game-transport'
@@ -21,20 +19,5 @@ describe('AudioTab 与 Pinia 集成', () => {
 
     expect(store.settings.muted).toBe(true)
     await waitFor(() => expect(store.saveSettings).toHaveBeenCalledOnce())
-  })
-
-  it('试听按钮通过音效清单播放对应资源', async () => {
-    const user = userEvent.setup()
-    const pinia = createTestingPinia({ createSpy: vi.fn, stubActions: true })
-    installFakeGameTransport(pinia)
-    render(AudioTab, { global: { plugins: [pinia] } })
-
-    await user.click(
-      screen.getByRole('button', {
-        name: strings.settings.soundPreviewAria(strings.settings.soundLabels.click),
-      }),
-    )
-
-    expect(playSound).toHaveBeenCalledWith('click')
   })
 })

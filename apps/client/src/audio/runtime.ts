@@ -1,16 +1,11 @@
 import { APP_CONFIG } from '@draw-guess/config'
 import type { SoundName } from './types.ts'
 import { discoverSoundAssets } from './assets.ts'
-import {
-  buildSoundManifest,
-  isManifestEntryAvailable,
-  reportManifestIssues,
-  type SoundManifest,
-} from './manifest.ts'
+import { buildSoundManifest, reportManifestIssues, type SoundManifest } from './manifest.ts'
 
 /**
  * 音效清单运行时组装层：把「真实 assets 目录」与「配置清单」合成运行时 manifest，
- * 并提供面向播放器/设置页的可播放查询与启动校验钩子。
+ * 并提供面向播放器的资源查询与启动校验钩子。
  *
  * 这一层触及 Vite 语义（import.meta.glob / import.meta.env），与纯逻辑的 manifest.ts 分离，
  * 使后者可在 Node 下被单元测试（见 test/unit/sound-manifest.spec.ts）。
@@ -56,16 +51,6 @@ export function getSoundUrl(name: SoundName | string): string | undefined {
     )
   }
   return url
-}
-
-/** 检查指定音效键当前是否可播放（存在可用资源）；isSoundAvailable 的内部实现。 */
-function hasSound(name: SoundName | string): boolean {
-  return isManifestEntryAvailable(runtimeManifest, name)
-}
-
-/** 检查指定音效键是否可试听（供设置页预览按钮绑定禁用状态）。 */
-export function isSoundAvailable(name: SoundName | string): boolean {
-  return hasSound(name)
 }
 
 /**

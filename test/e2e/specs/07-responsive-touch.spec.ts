@@ -11,31 +11,36 @@ import {
   assertNoOverflow,
   assertNotOccluded,
   assertStageFitsViewport,
-  assertTouchTarget,
-  assertVisualSize,
   assertWithinStage,
   captureBaseline,
-  isCompact,
+  heightRatioToStage,
   type Baseline,
 } from '../pages/responsive.page'
 import { responsive } from '../../../packages/config/src/settings.ts'
 
 /**
- * 07 - 响应式与触控验收
+ * 07 - 响应式缩放与可读验收（桌面网页端）
  *
- * 覆盖 AGENTS.md「响应式与触控验收标准」定义的三个基准视口（桌面 1280×720、
- * 平板横屏 1024×768、手机横屏 844×390）下的六类界面：
+ * 覆盖 AGENTS.md「响应式与触控验收标准」定义的桌面基准视口（1280×720）下的六类界面：
  * 资料 / 大厅 / 房间 / 游戏工具栏 / 设置 / 弹窗。
+ * 本项目主要适配电脑网页端：不再对手机/平板横屏做特殊适配（紧凑布局已删除），
+ * 竖屏拦截由 style/other.css 负责、不在本用例验收范围。
  *
- * 每个基准是一条串行流程（test.describe.configure({ mode: 'serial' })）：
+ * 现行口径：控件随舞台等比缩放、不设像素下限（44px 触控契约已废除）；
+ * 密集控件仅保留 minDenseTargetPx 视觉下限；字号保留可读下限。
+ *
+ * 基准内是一条串行流程（test.describe.configure({ mode: 'serial' })）：
  * 先在 beforeAll 建好主客两端浏览器上下文，再按界面拆成独立用例，
- * 便于失败定位与 `--grep` 局部重跑；任一用例失败会跳过该基准后续界面（流程有先后依赖）。
+ * 便于失败定位与 `--grep` 局部重跑；任一用例失败会跳过后续界面（流程有先后依赖）。
  *
  * 断言四件事：
  * 1. 截图留档（随测试报告归档，便于人工复核视觉）；
- * 2. 关键分区不裁切（非滚动容器 scrollHeight ≤ clientHeight）；
- * 3. 关键控件不被遮挡且命中区 ≥ 44×44 CSS px（密集控件走 ≥20px 降级标准）；
+ * 2. 关键分区不裁切（非滚动容器 scrollHeight ≤ clientHeight）、不遮挡；
+ * 3. 密集控件视觉尺寸 ≥ minDenseTargetPx；关键交互（下拉/开关/滑块）功能可用；
  * 4. 正文 / 次级 / 微标签字号不低于可读阈值。
+ *
+ * 末尾另有一条跨窗口尺寸用例：显式 cqh 定高控件的「高度/舞台高度」比值恒定，
+ * 作为「等比缩放」的回归守卫（像素保底会让比值在小窗口下显著偏大）。
  *
  * 阈值全部取自 packages/config/src/settings.ts 的 responsive，禁止在本文件硬编码数值。
  */
@@ -67,14 +72,12 @@ for (const baseline of BASELINES) {
 
     let host: Awaited<ReturnType<typeof openClient>>
     let guest: Awaited<ReturnType<typeof openClient>>
-    let compact = false
     let roomName = ''
 
     test.beforeAll(async ({ browser }) => {
       host = await openClient(browser, baseline)
       guest = await openClient(browser, baseline)
       await host.profile.goto()
-      compact = await isCompact(host.page)
     })
 
     test.afterAll(async () => {
@@ -82,7 +85,7 @@ for (const baseline of BASELINES) {
       await guest?.context.close()
     })
 
-    test('资料页与头像弹窗无裁切且控件达标', async ({ browser: _browser }, testInfo) => {
+    test('资料页与头像弹窗无裁切且控件可见', async ({ browser: _browser }, testInfo) => {
       const page = host.page
 
       // ---------- 1. 资料页 ----------
@@ -90,18 +93,9 @@ for (const baseline of BASELINES) {
       const profilePanel = page.locator('main > section').nth(1)
       await assertNoOverflow(profilePanel, '资料页右侧资料区')
       await assertWithinStage(page, profilePanel, '资料页右侧资料区')
-      await assertTouchTarget(
-        page.getByRole('button', { name: /重新随机昵称/ }),
-        '资料页「换一组」',
-      )
-      await assertTouchTarget(
-        page.getByRole('button', { name: /进入在线大厅/ }),
-        '资料页「进入在线大厅」',
-      )
-      await assertTouchTarget(
-        page.getByRole('button', { name: /打开 SVG 头像选择/ }),
-        '资料页头像按钮',
-      )
+      await expect(page.getByRole('button', { name: /重新随机昵称/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: /进入在线大厅/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: /打开 SVG 头像选择/ })).toBeVisible()
       await assertNotOccluded(page.getByRole('button', { name: /进入在线大厅/ }), '资料页主按钮')
       await assertFontAtLeast(
         page.getByRole('heading', { name: /准备好你的角色/ }),
@@ -113,13 +107,12 @@ for (const baseline of BASELINES) {
         '资料页昵称输入框',
         responsive.minBodyFontPx,
       )
-      // 辅助说明：紧凑布局下折叠，非紧凑布局下字号达标
-      // （先断言存在再断言隐藏：否则文案被改名/删除时 toBeHidden 会「假绿」）
-      const nicknameHelp = page.getByText(/个可见字符/)
-      if (compact) {
-        await expect(nicknameHelp, '资料页辅助说明应存在').toHaveCount(1)
-        await expect(nicknameHelp, '资料页辅助说明应在紧凑布局下折叠').toBeHidden()
-      } else await assertFontAtLeast(nicknameHelp, '资料页辅助说明', responsive.minSecondaryFontPx)
+      // 辅助说明：紧凑折叠已移除，常驻显示且字号达标
+      await assertFontAtLeast(
+        page.getByText(/个可见字符/),
+        '资料页辅助说明',
+        responsive.minSecondaryFontPx,
+      )
       await captureBaseline(page, testInfo, baseline, '01-profile')
 
       // ---------- 2. 头像选择弹窗 ----------
@@ -127,17 +120,14 @@ for (const baseline of BASELINES) {
       const avatarDialog = page.getByRole('dialog')
       await assertWithinStage(page, avatarDialog, '头像弹窗')
       await assertNoOverflow(avatarDialog, '头像弹窗')
-      await assertTouchTarget(
-        avatarDialog.getByRole('button', { name: /关闭头像选择/ }),
-        '头像弹窗关闭按钮',
-      )
-      await assertTouchTarget(avatarDialog.locator('button:has(img)').first(), '头像弹窗头像按钮')
+      await expect(avatarDialog.getByRole('button', { name: /关闭头像选择/ })).toBeVisible()
+      await expect(avatarDialog.locator('button:has(img)').first()).toBeVisible()
       await captureBaseline(page, testInfo, baseline, '02-avatar-dialog')
       await page.keyboard.press('Escape')
       await expect(avatarDialog).toBeHidden()
     })
 
-    test('大厅与建房弹窗无裁切且控件达标', async ({ browser: _browser }, testInfo) => {
+    test('大厅与建房弹窗无裁切、下拉框可交互', async ({ browser: _browser }, testInfo) => {
       const page = host.page
 
       // ---------- 3. 大厅 ----------
@@ -147,22 +137,17 @@ for (const baseline of BASELINES) {
       const lobbyAside = page.locator('main > aside').first()
       await assertNoOverflow(lobbyLeft, '大厅房间区')
       await assertNoOverflow(lobbyAside, '大厅玩家区')
-      await assertTouchTarget(
-        page.getByRole('button', { name: /创建公开房间/ }),
-        '大厅「创建公开房间」',
-      )
-      await assertTouchTarget(
-        page.getByRole('button', { name: /加入私密房间/ }),
-        '大厅「加入私密房间」',
-      )
-      await assertTouchTarget(page.getByRole('button', { name: /^设置$/ }), '大厅「设置」')
-      await assertTouchTarget(page.getByRole('button', { name: /延迟/ }), '大厅网络状态按钮')
+      await expect(page.getByRole('button', { name: /创建公开房间/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: /加入私密房间/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: /^设置$/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: /延迟/ })).toBeVisible()
       await assertFontAtLeast(page.getByText(/个房间/), '大厅房间数', responsive.minSecondaryFontPx)
-      const lanTip = page.getByText(/局域网发现说明/)
-      if (compact) {
-        await expect(lanTip, '大厅局域网提示应存在').toHaveCount(1)
-        await expect(lanTip, '大厅局域网提示应在紧凑布局下折叠').toBeHidden()
-      } else await assertFontAtLeast(lanTip, '大厅局域网提示', responsive.minSecondaryFontPx)
+      // 局域网提示：常驻显示且字号达标（紧凑折叠已移除）
+      await assertFontAtLeast(
+        page.getByText(/局域网发现说明/),
+        '大厅局域网提示',
+        responsive.minSecondaryFontPx,
+      )
       await captureBaseline(page, testInfo, baseline, '03-lobby')
 
       // ---------- 4. 建房弹窗 ----------
@@ -170,43 +155,37 @@ for (const baseline of BASELINES) {
       const createDialog = page.getByRole('dialog')
       await assertWithinStage(page, createDialog, '建房弹窗')
       await assertNoOverflow(createDialog, '建房弹窗')
-      await assertTouchTarget(
-        createDialog.getByRole('button', { name: /关闭创建房间弹窗/ }),
-        '建房弹窗关闭按钮',
-      )
-      await assertTouchTarget(
-        createDialog.getByRole('button', { name: /创建并进入/ }),
-        '建房弹窗主按钮',
-      )
-      await assertTouchTarget(
-        createDialog.getByRole('button', { name: /取消/ }),
-        '建房弹窗取消按钮',
-      )
-      await assertTouchTarget(
-        createDialog.locator('label:has(input[type="radio"])').first(),
-        '建房弹窗房间类型选项',
-      )
+      await expect(createDialog.getByRole('button', { name: /关闭创建房间弹窗/ })).toBeVisible()
+      await expect(createDialog.getByRole('button', { name: /创建并进入/ })).toBeVisible()
+      await expect(createDialog.getByRole('button', { name: /取消/ })).toBeVisible()
+      // 功能回归守卫：最大人数 / 玩法预设两个下拉框必须真正可交互。
+      // 旧缺陷：字段行 label 上的覆盖层（.touch-target::after）拦截指针事件，
+      // selectOption 在命中区被遮挡时会因「不接收事件」超时报错——即本用例要抓的回归。
+      const maxPlayersSelect = createDialog.locator('select').first()
+      const maxPlayersTarget = (await maxPlayersSelect
+        .locator('option')
+        .nth(1)
+        .getAttribute('value'))!
+      await maxPlayersSelect.selectOption({ index: 1 })
+      await expect(maxPlayersSelect).toHaveValue(maxPlayersTarget)
+      const presetSelect = createDialog.locator('select').nth(1)
+      const presetTarget = (await presetSelect.locator('option').nth(1).getAttribute('value'))!
+      await presetSelect.selectOption({ index: 1 })
+      await expect(presetSelect).toHaveValue(presetTarget)
       await captureBaseline(page, testInfo, baseline, '04-create-dialog')
       await page.keyboard.press('Escape')
       await expect(createDialog).toBeHidden()
     })
 
-    test('设置页开关与滑块功能回归通过且控件达标', async ({ browser: _browser }, testInfo) => {
+    test('设置页开关与滑块功能回归通过', async ({ browser: _browser }, testInfo) => {
       const page = host.page
 
       // ---------- 5. 设置页 ----------
       await host.lobby.goToSettings()
-      await assertTouchTarget(page.getByRole('button', { name: /返回大厅/ }), '设置页返回按钮')
-      await assertTouchTarget(page.getByRole('button', { name: /^声音$/ }), '设置页侧边导航项')
-      await assertTouchTarget(
-        page.locator('label:has(input[type="checkbox"])').first(),
-        '设置页开关行',
-      )
-      await assertTouchTarget(
-        page.getByRole('button', { name: /试听音效/ }).first(),
-        '设置页音效试听按钮',
-      )
-      // 功能回归守卫：开关行整行是命中区（label + .touch-target），点击仍须正确切换
+      await expect(page.getByRole('button', { name: /返回大厅/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: /^声音$/ })).toBeVisible()
+
+      // 功能回归守卫：开关行整行是命中区（原生 label 关联），点击仍须正确切换
       const switchRow = page.locator('label:has(input[type="checkbox"])').first()
       const switchInput = switchRow.locator('input[type="checkbox"]')
       const switchBefore = await switchInput.isChecked()
@@ -215,7 +194,7 @@ for (const baseline of BASELINES) {
       await switchRow.click()
       await expect(switchInput).toBeChecked({ checked: switchBefore })
 
-      // 功能回归守卫：滑块命中区由自身承担（label 上挂 .touch-target 会挡住指针事件），点击轨道必须改值
+      // 功能回归守卫：滑块命中区由自身承担（label 上挂覆盖层会挡住指针事件），点击轨道必须改值
       const volumeSlider = page.locator('input[type="range"]').first()
       const volumeBefore = await volumeSlider.inputValue()
       const sliderBox = await volumeSlider.boundingBox()
@@ -232,11 +211,6 @@ for (const baseline of BASELINES) {
         input.dispatchEvent(new Event('input', { bubbles: true }))
       }, volumeBefore)
       await assertNoOverflow(page.locator('main > div').first(), '设置页主体')
-      // 紧凑布局下关键控件必须自身达到 44px（而非仅靠命中区外扩）
-      if (compact) {
-        await assertVisualSize(page.getByRole('button', { name: /返回大厅/ }), '紧凑模式返回按钮')
-        await assertVisualSize(switchRow, '紧凑模式开关行')
-      }
       await assertFontAtLeast(
         page.getByText(/所有音量会乘以主音量/),
         '设置页分区说明',
@@ -246,18 +220,18 @@ for (const baseline of BASELINES) {
       await page.getByRole('button', { name: /返回大厅/ }).click()
     })
 
-    test('房间页与词库/规则弹窗无裁切且控件达标', async ({ browser: _browser }, testInfo) => {
+    test('房间页与词库/规则弹窗无裁切、密集控件达标', async ({ browser: _browser }, testInfo) => {
       const page = host.page
 
       // ---------- 6. 房间页 ----------
       // 房间名受配置长度上限约束，用短名保证列表文本可被精确定位
       roomName = `验收${Date.now().toString(36)}`
       await host.lobby.createRoom({ name: roomName })
-      await assertTouchTarget(page.getByRole('button', { name: /退出/ }), '房间页退出按钮')
-      await assertTouchTarget(page.getByRole('button', { name: /编辑/ }), '房间页「编辑」规则')
-      await assertTouchTarget(page.getByRole('button', { name: /词库/ }), '房间页词库入口')
-      await assertTouchTarget(page.getByRole('button', { name: /邀请/ }), '房间页邀请按钮')
-      await assertTouchTarget(page.getByRole('button', { name: /开始游戏/ }), '房间页开始游戏')
+      await expect(page.getByRole('button', { name: /退出/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: /编辑/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: /词库/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: /邀请/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: /开始游戏/ })).toBeVisible()
       await assertNoOverflow(page.locator('main > section').first(), '房间页席位区')
       await captureBaseline(page, testInfo, baseline, '06-room')
 
@@ -268,19 +242,10 @@ for (const baseline of BASELINES) {
       await expect(vocabDialog.getByText('词面')).toBeVisible()
       await assertWithinStage(page, vocabDialog, '词库弹窗')
       await assertNoOverflow(vocabDialog, '词库弹窗')
-      await assertTouchTarget(vocabDialog.locator('header button'), '词库弹窗关闭按钮')
-      await assertTouchTarget(
-        vocabDialog.getByRole('button', { name: /切换词库选择/ }),
-        '词库弹窗视图切换按钮',
-      )
-      await assertTouchTarget(
-        vocabDialog.getByRole('button', { name: /按分类筛选/ }),
-        '词库弹窗筛选按钮',
-      )
-      await assertTouchTarget(
-        vocabDialog.getByRole('button', { name: /确认选择/ }),
-        '词库弹窗确认按钮',
-      )
+      await expect(vocabDialog.locator('header button')).toBeVisible()
+      await expect(vocabDialog.getByRole('button', { name: /切换词库选择/ })).toBeVisible()
+      await expect(vocabDialog.getByRole('button', { name: /按分类筛选/ })).toBeVisible()
+      await expect(vocabDialog.getByRole('button', { name: /确认选择/ })).toBeVisible()
       await assertDenseTarget(
         vocabDialog.locator('tbody input[type="checkbox"]').first(),
         '词库弹窗行复选框',
@@ -294,26 +259,18 @@ for (const baseline of BASELINES) {
       const rulesDialog = page.getByRole('dialog')
       await assertWithinStage(page, rulesDialog, '规则弹窗')
       await assertNoOverflow(rulesDialog, '规则弹窗')
-      await assertTouchTarget(
-        rulesDialog.getByRole('button', { name: /保存规则/ }),
-        '规则弹窗保存按钮',
-      )
-      await assertTouchTarget(
-        rulesDialog.locator('label:has(input[type="checkbox"])').first(),
-        '规则弹窗开关',
-      )
-      // select 是替换元素，不支持 ::after 外扩，命中区由其字段行（label）承担
-      await assertTouchTarget(rulesDialog.locator('label:has(select)').first(), '规则弹窗下拉字段')
-      // 滑块则必须自身 ≥44px：命中区不能挂在 label 上——伪元素会挡住 range 的指针事件（滑块将无法拖动）
-      await assertVisualSize(rulesDialog.locator('input[type="range"]').first(), '规则弹窗滑块')
+      await expect(rulesDialog.getByRole('button', { name: /保存规则/ })).toBeVisible()
+      // 功能回归守卫：规则弹窗的下拉字段同样必须可交互（与建房弹窗同一 RuleSelectField 根因）
+      const rulesSelect = rulesDialog.locator('select').first()
+      const rulesTarget = (await rulesSelect.locator('option').nth(1).getAttribute('value'))!
+      await rulesSelect.selectOption({ index: 1 })
+      await expect(rulesSelect).toHaveValue(rulesTarget)
       await captureBaseline(page, testInfo, baseline, '08-rules-dialog')
       await page.keyboard.press('Escape')
       await expect(rulesDialog).toBeHidden()
     })
 
-    test('对局工具栏无裁切、控件达标且紧凑模式尺寸正确', async ({
-      browser: _browser,
-    }, testInfo) => {
+    test('对局工具栏无裁切、控件可见且密集色板达标', async ({ browser: _browser }, testInfo) => {
       const page = host.page
 
       // ---------- 9. 对局工具栏（需要第二名玩家开局） ----------
@@ -321,7 +278,7 @@ for (const baseline of BASELINES) {
       await guest.profile.setNickname(`响应式客人-${baseline.key}`)
       await guest.profile.enterLobby()
       await guest.lobby.joinPublicRoom(roomName)
-      // 功能回归守卫：席位角上的踢人按钮（.touch-target 命中区）仍可点击并弹出确认框
+      // 功能回归守卫：席位角上的踢人按钮仍可点击并弹出确认框
       const kickButton = page.getByRole('button', { name: /移除该玩家/ })
       if (await kickButton.count()) {
         await kickButton.first().click()
@@ -329,14 +286,8 @@ for (const baseline of BASELINES) {
         await expect(kickConfirm).toBeVisible()
         await assertWithinStage(page, kickConfirm, '踢人确认弹窗')
         await assertNoOverflow(kickConfirm, '踢人确认弹窗')
-        await assertTouchTarget(
-          kickConfirm.getByRole('button', { name: /取消/ }),
-          '踢人确认弹窗取消按钮',
-        )
-        await assertTouchTarget(
-          kickConfirm.getByRole('button', { name: /确认移除/ }),
-          '踢人确认弹窗确认按钮',
-        )
+        await expect(kickConfirm.getByRole('button', { name: /取消/ })).toBeVisible()
+        await expect(kickConfirm.getByRole('button', { name: /确认移除/ })).toBeVisible()
         await kickConfirm.getByRole('button', { name: /取消/ }).click()
         await expect(kickConfirm).toBeHidden()
       }
@@ -356,6 +307,8 @@ for (const baseline of BASELINES) {
           .catch(() => true),
       ])
       const drawer = isHostDrawer ? host : guest
+      // 选词遮罩留档：验收「纯色无修饰 + 单行难度星」的选词卡形态
+      await captureBaseline(drawer.page, testInfo, baseline, '09a-word-cards')
       await drawer.game.chooseWord(0)
       // 进入作画阶段：画家工具按钮恢复可用（此时阶段遮罩已卸载，工具栏不再被遮挡）
       await expect(drawer.page.getByRole('button', { name: /画笔/ })).toBeEnabled({
@@ -370,30 +323,19 @@ for (const baseline of BASELINES) {
       await assertNoOverflow(gamePage.locator('main > aside').first(), '对局得分条')
       await assertNoOverflow(gamePage.locator('main > aside').last(), '对局聊天区')
       await assertWithinStage(gamePage, gamePage.locator('form:has(#guess-input)'), '猜词输入区')
-      await assertTouchTarget(gamePage.getByRole('button', { name: /画笔/ }), '工具栏画笔')
-      await assertTouchTarget(gamePage.getByRole('button', { name: /橡皮擦/ }), '工具栏橡皮擦')
-      await assertTouchTarget(gamePage.getByRole('button', { name: /填充/ }), '工具栏填充')
-      await assertTouchTarget(gamePage.getByRole('button', { name: /撤销/ }), '工具栏撤销')
-      await assertTouchTarget(gamePage.getByRole('button', { name: /重做/ }), '工具栏重做')
-      await assertTouchTarget(gamePage.getByRole('button', { name: /清空/ }), '工具栏清空')
-      await assertTouchTarget(gamePage.getByRole('button', { name: /暂停/ }), 'HUD 暂停按钮')
-      await assertTouchTarget(gamePage.getByRole('button', { name: /设置/ }), 'HUD 设置按钮')
-      await assertTouchTarget(gamePage.getByRole('button', { name: /全屏/ }), 'HUD 全屏按钮')
-      await assertTouchTarget(gamePage.locator('form:has(#guess-input) button'), '猜词发送按钮')
-      // 画板色板属密集控件：视觉尺寸 ≥ 20px（命中区不重叠优先于 44px）
+      await expect(gamePage.getByRole('button', { name: /画笔/ })).toBeVisible()
+      await expect(gamePage.getByRole('button', { name: /橡皮擦/ })).toBeVisible()
+      await expect(gamePage.getByRole('button', { name: /填充/ })).toBeVisible()
+      await expect(gamePage.getByRole('button', { name: /撤销/ })).toBeVisible()
+      await expect(gamePage.getByRole('button', { name: /重做/ })).toBeVisible()
+      await expect(gamePage.getByRole('button', { name: /清空/ })).toBeVisible()
+      await expect(gamePage.getByRole('button', { name: /暂停/ })).toBeVisible()
+      await expect(gamePage.getByRole('button', { name: /设置/ })).toBeVisible()
+      await expect(gamePage.getByRole('button', { name: /全屏/ })).toBeVisible()
+      await expect(gamePage.locator('form:has(#guess-input) button')).toBeVisible()
+      // 画板色板属密集控件：视觉尺寸 ≥ minDenseTargetPx（其余情况随舞台等比缩放）
       await assertDenseTarget(gamePage.locator('button[aria-label*="#"]').first(), '画板色板')
       await assertNotOccluded(gamePage.getByRole('button', { name: /画笔/ }), '工具栏画笔')
-      if (compact) {
-        await assertVisualSize(gamePage.getByRole('button', { name: /画笔/ }), '紧凑模式工具栏画笔')
-        await assertVisualSize(
-          gamePage.getByRole('button', { name: /暂停/ }),
-          '紧凑模式 HUD 暂停按钮',
-        )
-        await assertVisualSize(
-          gamePage.locator('form:has(#guess-input) button'),
-          '紧凑模式猜词发送按钮',
-        )
-      }
       await assertFontAtLeast(
         gamePage.locator('input#guess-input'),
         '猜词输入框',
@@ -408,3 +350,52 @@ for (const baseline of BASELINES) {
     })
   })
 }
+
+test.describe('控件等比缩放回归守卫', () => {
+  /**
+   * 两个纯桌面窗口尺寸（基准 1280×720 与缩小的 1024×576）下，
+   * 显式以 cqh 定高的控件（大厅网络状态按钮 h-[4.4cqh]）的
+   * 「控件高度 / 舞台高度」比值必须恒定：
+   * - 等比缩放成立时比值 ≈ 4.4%；
+   * - 若像素保底回归，小窗口下比值会显著偏大。
+   * 同时断言绝对高度随窗口变小（「界面缩小时组件必须跟着缩小」的直接验收）。
+   * 两个尺寸都只是桌面浏览器窗口，不代表任何移动设备基准。
+   */
+  const SMALL_DESKTOP_WINDOW = { width: 1024, height: 576 }
+
+  test('同一 cqh 定高控件在两个桌面窗口尺寸下与舞台的比值恒定且绝对尺寸变小', async ({
+    browser,
+  }) => {
+    const client = await openClient(browser, BASELINES[0]!)
+    try {
+      await client.profile.goto()
+      await client.profile.setNickname('等比缩放守卫')
+      await client.profile.enterLobby()
+      const networkButton = client.page.getByRole('button', { name: /延迟/ })
+      await expect(networkButton).toBeVisible()
+
+      const ratios: number[] = []
+      const heights: number[] = []
+      for (const windowSize of [BASELINES[0]!, SMALL_DESKTOP_WINDOW]) {
+        await client.page.setViewportSize({ width: windowSize.width, height: windowSize.height })
+        await expect(networkButton).toBeVisible()
+        ratios.push(await heightRatioToStage(client.page, networkButton))
+        const box = await networkButton.boundingBox()
+        if (!box) throw new Error('网络状态按钮无 boundingBox')
+        heights.push(box.height)
+      }
+
+      // 比值恒定（等比缩放）：最大最小比值偏差不超过 10%
+      const max = Math.max(...ratios)
+      const min = Math.min(...ratios)
+      expect(
+        (max - min) / min,
+        `控件/舞台高度比值应恒定（等比缩放），实际 ${ratios.map((r) => r.toFixed(4)).join(' / ')}`,
+      ).toBeLessThan(0.1)
+      // 绝对尺寸随窗口变小（像素保底会让两档钉在同一尺寸）
+      expect(heights[1]!, '小窗口绝对高度应小于大窗口').toBeLessThan(heights[0]!)
+    } finally {
+      await client.context.close()
+    }
+  })
+})

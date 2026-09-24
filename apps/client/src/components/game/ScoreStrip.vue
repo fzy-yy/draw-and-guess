@@ -18,7 +18,7 @@ const store = useGameStore()
   <!-- 左侧玩家得分条：列出全部成员、得分与画家/猜中标记；超出可视高度时内部滚动 -->
   <aside
     v-if="store.room"
-    class="flex min-w-0 flex-col gap-[0.8cqh] overflow-y-auto overscroll-contain border-r-[0.2cqh] border-line bg-paper px-[0.8cqw] py-[1.7cqh] scrollbar-gutter-stable compact-tight"
+    class="flex min-w-0 flex-col gap-[0.8cqh] overflow-y-auto overscroll-contain border-r-[0.2cqh] border-line bg-paper px-[0.8cqw] py-[1.7cqh] scrollbar-gutter-stable"
     :aria-label="strings.game.scoreStripAria"
   >
     <article

@@ -1,9 +1,10 @@
 <!--
   本局词库管理弹窗 —— 统一列表（表格）视图。
-  展示形式固定为表格：多字段陈列 + 表头排序 + 分类/难度筛选，全部字段恒显示（无列显隐）；
+  展示形式固定为表格：多字段陈列 + 表头排序 + 分类/难度/可绘制性筛选，全部字段恒显示（无列显隐）；
   - 房主：可搜索/筛选、复选框批量选择、确认保存（恢复默认全选）；
   - 非房主：可打开查看本局词库，但不可选择（只读：无复选框、无保存，仅能搜索/筛选浏览）。
-  两类筛选（分类/难度）与搜索框可叠加生效（取交集）。
+  三类筛选（分类/难度/可绘制性）与搜索框可叠加生效（取交集）。
+
   工具栏单行布局：搜索框占左半行，右半行为筛选功能按钮。
   批量选择收敛为一个「统一三态复选框」放于表格表头，作用于当前搜索+筛选结果（无筛选时即全部词条）。
   词库统计（全部/搜索结果/已选）合并到底部操作栏左侧，表格区不单独占行。
@@ -11,7 +12,7 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch, type Component } from 'vue'
-import { Library, ListFilter, Star, Tags } from 'lucide-vue-next'
+import { Brush, Library, ListFilter, Star, Tags } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { MIN_SELECTED_VOCABULARY_WORDS, type VocabularyWord } from '@draw-guess/shared'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -71,13 +72,20 @@ async function saveVocabulary(): Promise<void> {
  * weight：列宽相对权重，配合 DataTable 的权重归一化铺满整表。
  */
 const allColumns = computed<DataTableColumn<VocabularyWord>[]>(() => [
-  { key: 'text', label: strings.room.vocabColumnText, weight: 22 },
-  { key: 'category', label: strings.room.vocabColumnCategories, weight: 13 },
-  { key: 'difficulty', label: strings.room.vocabColumnDifficulty, weight: 12 },
+  { key: 'text', label: strings.room.vocabColumnText, weight: 18 },
+  { key: 'category', label: strings.room.vocabColumnCategories, weight: 11 },
+  { key: 'difficulty', label: strings.room.vocabColumnDifficulty, weight: 9 },
+  {
+    key: 'drawability',
+    label: strings.room.vocabColumnDrawability,
+    weight: 9,
+    sortValue: (word) => word.drawability,
+  },
+  { key: 'hint', label: strings.room.vocabColumnHint, weight: 14, sortValue: (word) => word.hint },
   {
     key: 'aliases',
     label: strings.room.vocabColumnAliases,
-    weight: 27,
+    weight: 20,
     sortValue: (word) => word.aliases.join(','),
   },
   {
@@ -136,11 +144,12 @@ function toggleSelectAll(): void {
   selection.toggleAll(filteredWords.value)
 }
 
-/** 字段筛选定义：分类（来自词库白名单 categoryEnum）/ 难度（1~上限）。 */
+/** 字段筛选定义：分类（来自词库白名单 categoryEnum）/ 难度（1~上限）/ 可绘制性（1~上限）。 */
 const filterDefs = computed<
   Array<{ key: string; label: string; icon: Component; options: MultiSelectOption[] }>
 >(() => {
   const difficultyMax = store.config.ui.difficultyMax
+  const drawabilityMax = store.config.ui.drawabilityMax
   return [
     {
       key: 'category',
@@ -158,6 +167,16 @@ const filterDefs = computed<
       options: Array.from({ length: difficultyMax }, (_item, index) => {
         const value = index + 1
         return { value: String(value), label: strings.room.vocabDifficultyLabel(value) }
+      }),
+    },
+    {
+      // 可绘制性用画笔图标与难度星级区分（两个星级筛选并排，纯图标需可分辨）
+      key: 'drawability',
+      label: strings.room.vocabColumnDrawability,
+      icon: Brush,
+      options: Array.from({ length: drawabilityMax }, (_item, index) => {
+        const value = index + 1
+        return { value: String(value), label: strings.room.vocabDrawabilityLabel(value) }
       }),
     },
   ]
@@ -297,7 +316,7 @@ watch(
               <ListFilter v-else class="h-[2.2cqh] w-[2.2cqh]" />
             </RoundIconButton>
           </div>
-          <!-- 字段筛选：分类 / 难度（多选，仅词条模式可用）；纯图标 + 悬浮说明 -->
+          <!-- 字段筛选：分类 / 难度 / 可绘制性（多选，仅词条模式可用）；纯图标 + 悬浮说明 -->
           <div v-if="viewMode === 'words'" class="flex w-1/2 min-w-0 items-center gap-[0.45em]">
             <MultiSelectPopover
               v-for="filter in filterDefs"
@@ -333,6 +352,7 @@ watch(
           :sort-key="sortKey"
           :sort-dir="sortDir"
           :difficulty-max="store.config.ui.difficultyMax"
+          :drawability-max="store.config.ui.drawabilityMax"
           @sort="handleSort"
           @toggle="toggleWord"
           @toggle-all="toggleSelectAll"

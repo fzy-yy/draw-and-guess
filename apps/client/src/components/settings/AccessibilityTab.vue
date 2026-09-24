@@ -13,7 +13,7 @@ const store = useGameStore()
 </script>
 
 <template>
-  <section class="min-h-0 px-[5cqw] py-[3cqh] compact-tight">
+  <section class="min-h-0 px-[5cqw] py-[3cqh]">
     <SettingsSectionHeader
       :icon="Eye"
       :title="strings.settings.accessibilityTitle"

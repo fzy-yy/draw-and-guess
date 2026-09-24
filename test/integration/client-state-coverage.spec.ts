@@ -433,7 +433,17 @@ describe('大厅、房间与词库权威请求', () => {
         data: {
           packageId,
           packages,
-          items: [{ id: 'word-1', text: '苹果', aliases: [], category: '水果', difficulty: 1 }],
+          items: [
+            {
+              id: 'word-1',
+              text: '苹果',
+              aliases: [],
+              category: '水果',
+              difficulty: 1,
+              drawability: 2,
+              hint: '红红的水果',
+            },
+          ],
           selectedIds: ['word-1'],
           version: '1',
           categories: ['水果'],

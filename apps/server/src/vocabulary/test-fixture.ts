@@ -4,7 +4,8 @@
  * 供 E2E launcher 在「唯一临时目录」内生成最小但**可开完整局**的词库 SQLite 库文件：
  * - 包 ID 取数据库文件名，名称/描述/版本等元数据可按测试场景注入；
  * - 词条数 ≥ MIN_SELECTED_VOCABULARY_WORDS(60)，否则 startGame 会因词条不足而拒绝；
- * - 字段与当前多词库格式兼容（metadata + words），通过 SqliteProvider 的严格校验。
+ * - 表结构与重建后的正式词库一致（metadata 含 level_config/difficulty_enum/drawability_enum，
+ *   words 含 drawability/hint/updated_at），通过 SqliteProvider 的严格校验。
  *
  * 只写入调用方给定的临时路径，绝不触碰仓库真实 vocabulary/*.db。
  * 放在 apps/server/src 内是让 better-sqlite3 能按 pnpm 严格 node_modules 解析到（而非 test/ 目录）。
@@ -39,21 +40,35 @@ export function createMinimalVocabularyDb(
   try {
     db.exec(`
       CREATE TABLE metadata(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        meta_data_key TEXT,
-        meta_data_value TEXT
+        meta_data_key TEXT PRIMARY KEY,
+        meta_data_value TEXT NOT NULL
       );
       CREATE TABLE words(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        text TEXT,
-        category TEXT,
-        difficulty INTEGER,
-        enabled INTEGER,
-        time_limit INTEGER,
-        score_weight INTEGER,
-        aliases TEXT
+        text TEXT NOT NULL UNIQUE,
+        category TEXT NOT NULL,
+        difficulty INTEGER NOT NULL,
+        drawability INTEGER NOT NULL DEFAULT 3,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        aliases TEXT NOT NULL DEFAULT '[]',
+        hint TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL DEFAULT ''
       );
     `)
+
+    // 难度/可绘制性白名单与 level_config：与 SqliteProvider 的完整性校验对齐
+    const { min: diffMin, max: diffMax } = APP_CONFIG.vocabulary.difficultyRange
+    const difficultyEnum = Array.from(
+      { length: diffMax - diffMin + 1 },
+      (_item, index) => diffMin + index,
+    )
+    const levelConfig: Record<string, { time_limit: number; score_weight: number }> = {}
+    for (const level of difficultyEnum) {
+      levelConfig[String(level)] = {
+        time_limit: APP_CONFIG.game.drawSeconds.default,
+        score_weight: APP_CONFIG.game.score.defaultWordWeight,
+      }
+    }
 
     const metaRows: Array<[string, string]> = [
       ['name', name],
@@ -61,8 +76,10 @@ export function createMinimalVocabularyDb(
       ['version', version],
       ['updated_at', updatedAt],
       ['category_enum', JSON.stringify(['物品', '动物', '动作'])],
-      ['default_time_limit', String(APP_CONFIG.game.drawSeconds.default)],
-      ['default_score_weight', String(APP_CONFIG.game.score.defaultWordWeight)],
+      ['difficulty_enum', JSON.stringify(difficultyEnum)],
+      ['drawability_enum', JSON.stringify([1, 2, 3, 4, 5])],
+      ['enabled_enum', JSON.stringify([0, 1])],
+      ['level_config', JSON.stringify(levelConfig)],
     ]
     const insertMeta = db.prepare(
       'INSERT INTO metadata(meta_data_key, meta_data_value) VALUES(?, ?)',
@@ -70,21 +87,22 @@ export function createMinimalVocabularyDb(
     for (const [key, value] of metaRows) insertMeta.run(key, value)
 
     const insertWord = db.prepare(
-      `INSERT INTO words(id, text, category, difficulty, enabled, time_limit, score_weight, aliases)
-       VALUES(?, ?, ?, ?, 1, ?, ?, ?)`,
+      `INSERT INTO words(id, text, category, difficulty, drawability, enabled, aliases, hint, updated_at)
+       VALUES(?, ?, ?, ?, ?, 1, ?, ?, '')`,
     )
     const categories = ['物品', '动物', '动作']
-    const diffRange = APP_CONFIG.vocabulary.difficultyRange
     for (let index = 1; index <= wordCount; index += 1) {
-      const difficulty = diffRange.min + ((index - 1) % (diffRange.max - diffRange.min + 1))
+      const difficulty = diffMin + ((index - 1) % difficultyEnum.length)
       insertWord.run(
         index,
         `测试词${String(index).padStart(3, '0')}`,
         categories[(index - 1) % categories.length],
         difficulty,
-        APP_CONFIG.game.drawSeconds.default,
-        APP_CONFIG.game.score.guessBase / 60,
+        // 可绘制性在 1~5 内轮换，覆盖星级展示的各档位
+        ((index - 1) % 5) + 1,
         '[]',
+        // 提示文案与正式词库同款形态（≤10 字），供 E2E 验证结构化提示链路
+        `提示${String(index).padStart(3, '0')}`,
       )
     }
   } finally {

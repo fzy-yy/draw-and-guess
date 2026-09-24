@@ -248,9 +248,9 @@ useEventListener(document, 'scroll', handleScroll, { capture: true, passive: tru
             tabindex="-1"
             :disabled="item.disabled"
             :class="[
-              // 菜单项纵向密排：不接 .touch-target（外扩命中区会与相邻项重叠导致误点），
-              // 触控保底高度交给紧凑布局的 .compact-control
-              'compact-control ui-feedback flex w-full items-center gap-[0.6em] rounded-[0.5em] px-[0.7em] py-[0.5cqh] text-left text-fs-14 font-bold',
+              // 菜单项纵向密排：命中区即视觉尺寸（触控契约已废除），
+              // 高度由文字行高与上下内边距（相对单位）自然撑开
+              'ui-feedback flex w-full items-center gap-[0.6em] rounded-[0.5em] px-[0.7em] py-[0.5cqh] text-left text-fs-14 font-bold',
               item.disabled
                 ? 'text-muted'
                 : item.danger

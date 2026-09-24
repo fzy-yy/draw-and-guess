@@ -17,7 +17,8 @@ export function canonicalWordId(source: string, rawId: string | number): string 
 
 /**
  * 计算词库内容哈希版本号（sha256 前 12 位 hex）。
- * 输入包含 id/text/aliases/category/difficulty/timeLimit/scoreWeight 等全部玩法相关字段，
+ * 输入包含 id/text/aliases/category/difficulty/drawability/hint 与加载期派生的
+ * timeLimit/scoreWeight 等全部玩法相关字段，
  * 任何内容变化都会得到新版本号，供客户端对比与房间词库重置判断。
  */
 export function hashWords(words: VocabularyWord[]): string {
@@ -29,6 +30,8 @@ export function hashWords(words: VocabularyWord[]): string {
         word.aliases.join(','),
         word.category,
         word.difficulty,
+        word.drawability,
+        word.hint,
         word.timeLimit ?? '',
         word.scoreWeight ?? '',
       ].join('§'),

@@ -296,8 +296,24 @@ describe('邀请与快捷键 composables', () => {
 
 describe('表格、选择与词库 composables', () => {
   const words: VocabularyWord[] = [
-    { id: 'a', text: '苹果', aliases: ['红苹果'], category: '水果', difficulty: 1 },
-    { id: 'b', text: '巴士', aliases: ['公交车'], category: '交通', difficulty: 2 },
+    {
+      id: 'a',
+      text: '苹果',
+      aliases: ['红苹果'],
+      category: '水果',
+      difficulty: 1,
+      drawability: 2,
+      hint: '红红的水果',
+    },
+    {
+      id: 'b',
+      text: '巴士',
+      aliases: ['公交车'],
+      category: '交通',
+      difficulty: 2,
+      drawability: 3,
+      hint: '马路上的交通工具',
+    },
   ]
   const packages: VocabularyPackageInfo[] = [
     { id: 'p2', name: '进阶', wordCount: 20, description: '难词', version: '2', updatedAt: '2' },

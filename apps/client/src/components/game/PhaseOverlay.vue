@@ -99,18 +99,19 @@ function chooseWord(wordId: string): void {
           v-for="option in game.wordOptions ?? []"
           :key="option.id"
           type="button"
-          class="touch-target compact-control flex min-h-[7cqh] min-w-[12cqw] flex-col items-center justify-center gap-[0.3cqh] rounded-[0.7em] border-[0.18cqh] border-navy border-b-[0.6cqh] border-b-yellow bg-yellow text-navy px-[1em] text-fs-20 font-bold cursor-pointer transition-transform active:scale-95"
+          class="flex min-h-[7cqh] min-w-[12cqw] flex-col items-center justify-center gap-[0.3cqh] rounded-[0.7em] bg-yellow text-navy px-[1em] text-fs-20 font-bold cursor-pointer transition-transform active:scale-95"
           @click="chooseWord(option.id)"
         >
           <span class="leading-[1.2]">{{ option.text }}</span>
-          <!-- 难度星级：精确星数模式（多少难度就多少颗实心星），与词面居中对齐；
-              黄色按钮上必须用 navy 配色，否则黄星叠黄底不可见 -->
+          <!-- 仅展示难度星级（精确星数）：可绘制性不再展示——玩家自行判断好不好画；
+               不显示「难度」文字标签，只留星形；黄色按钮上必须用 navy 配色，否则黄星叠黄底不可见；
+               视觉无修饰（无描边/阴影），语义通过 aria-label 保留给屏幕阅读器 -->
           <DifficultyStars
             :value="option.difficulty"
             :max="store.config.ui.difficultyMax"
             exact
             tone="navy"
-            class="text-fs-10 w-full justify-center"
+            class="text-fs-14"
           />
         </button>
       </div>

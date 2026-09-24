@@ -1,19 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { SoundManager } from '../../apps/client/src/audio/manager.ts'
-import type { AudioPlayResult } from '../../apps/client/src/audio/contracts.ts'
 import type { AudioSettingsState } from '../../apps/client/src/audio/volume.ts'
-import { FakeAudioFactory, FakeClock, FakeUnlockProvider } from './helpers/fake-audio.ts'
+import { FakeAudioFactory, FakeClock } from './helpers/fake-audio.ts'
 
 /** 非静音、全音量基准设置，让播放必然产生可听实例。 */
 const baseSettings: AudioSettingsState = {
   masterVolume: 1,
   soundVolume: 1,
-  musicVolume: 1,
   muted: false,
 }
-
-/** 让微任务（play() 的 .then）落地。 */
-const flush = (): Promise<void> => Promise.resolve()
 
 describe('SoundManager 假音频/假时钟', () => {
   it('保留的公开 API 呈契约：集中式 useAudioFeedback 依赖的方法均存在且可调用', () => {
@@ -23,19 +18,10 @@ describe('SoundManager 假音频/假时钟', () => {
       getSoundUrl: (name) => `/${name}.mp3`,
       settings: baseSettings,
     })
-    // 收敛后的唯一音效调用面：playSound→play、playBgm、stopBgm、stopAll、updateSettings
-    //（均被 useAudioFeedback/App 使用），以及作为运行依赖的查询与销毁入口。
-    for (const method of [
-      'play',
-      'playBgm',
-      'stopBgm',
-      'stopAll',
-      'updateSettings',
-      'getSettings',
-      'calculateVolume',
-      'syncBgmVolume',
-      'dispose',
-    ] as const) {
+    // 收敛后的唯一音效调用面：playSound→play、stopAll、updateSettings（均被
+    // useAudioFeedback/App 使用），以及作为运行依赖的查询与销毁入口。
+    //（playBgm/stopBgm/syncBgmVolume 已随 BGM 系统移除。）
+    for (const method of ['play', 'stopAll', 'updateSettings', 'getSettings', 'dispose'] as const) {
       expect(typeof (manager as unknown as Record<string, unknown>)[method]).toBe('function')
     }
   })
@@ -109,10 +95,9 @@ describe('SoundManager 假音频/假时钟', () => {
 
   it('零音量（音效通道为 0）不触发播放、不写冷却；调大后立即能播放', () => {
     const factory = new FakeAudioFactory()
-    const clock = new FakeClock()
     const manager = new SoundManager({
       audioFactory: factory,
-      clock,
+      clock: new FakeClock(),
       getSoundUrl: (name) => `/${name}.mp3`,
       settings: { ...baseSettings, soundVolume: 0 },
     })
@@ -152,41 +137,6 @@ describe('SoundManager 假音频/假时钟', () => {
     expect(port.volume).toBeCloseTo(0.5)
   })
 
-  it('BGM 首次 play 被 Autoplay 拦截时保留期望，解锁后仅重试当前期望 BGM', async () => {
-    const factory = new FakeAudioFactory()
-    const unlock = new FakeUnlockProvider()
-    factory.defaultPlayResult = 'blocked' // 模拟浏览器 Autoplay 拦截
-    const manager = new SoundManager({
-      audioFactory: factory,
-      clock: new FakeClock(),
-      getSoundUrl: (name) => `/${name}.mp3`,
-      settings: baseSettings,
-      unlock,
-    })
-
-    // 第一次请求 bgm_lobby 被拦截：意图保留，播放器仍处于暂停
-    manager.playBgm('bgm_lobby')
-    await flush()
-    const lobby = factory.created[0]!
-    expect(lobby.playCalls).toBe(1)
-    expect(lobby.paused).toBe(true)
-
-    // 再请求一个不同的 BGM（同样被拦截）
-    manager.playBgm('bgm_game')
-    await flush()
-    const game = factory.created[1]!
-    expect(game.playCalls).toBe(1)
-    expect(game.paused).toBe(true)
-
-    // 解锁：仅重试「当前期望 BGM」（bgm_game），不重试更早的 bgm_lobby
-    game.playResult = 'played'
-    unlock.fire()
-    await flush()
-    expect(game.playCalls).toBe(2)
-    expect(game.paused).toBe(false)
-    expect(lobby.playCalls).toBe(1) // bgm_lobby 未被重试
-  })
-
   it('静音时不触发播放、不写冷却；取消静音后立即能播放', () => {
     const factory = new FakeAudioFactory()
     const clock = new FakeClock()
@@ -206,13 +156,12 @@ describe('SoundManager 假音频/假时钟', () => {
     expect(factory.created.length).toBe(1)
   })
 
-  it('资源缺失时安全降级：SFX 不播放，BGM 缺失不打断当前音乐', () => {
+  it('资源缺失时安全降级：SFX 不播放、不抛错', () => {
     const factory = new FakeAudioFactory()
     const manager = new SoundManager({
       audioFactory: factory,
       clock: new FakeClock(),
-      getSoundUrl: (name) =>
-        name === 'click' || name === 'bgm_lobby' ? `/${name}.mp3` : undefined,
+      getSoundUrl: (name) => (name === 'click' ? `/${name}.mp3` : undefined),
       settings: baseSettings,
     })
 
@@ -220,79 +169,31 @@ describe('SoundManager 假音频/假时钟', () => {
     expect(() => manager.play('switch')).not.toThrow()
     expect(factory.created.length).toBe(0)
 
-    // 先播放一个有资源的大厅 BGM
-    manager.playBgm('bgm_lobby')
-    const lobby = factory.created[0]!
-    expect(lobby.paused).toBe(false)
-
-    // 请求缺失的 BGM：保留当前音乐，不停止、不创建
-    manager.playBgm('bgm_game')
+    // 有资源的键正常播放
+    manager.play('click')
     expect(factory.created.length).toBe(1)
-    expect(factory.created[0]).toBe(lobby)
-    expect(lobby.paused).toBe(false)
   })
 
-  it('取消过期播放请求：被取代的 BGM 异步结果不影响当前 BGM，解锁不误触已播放 BGM', async () => {
+  it('stopAll 暂停并重置全部池内实例但不销毁；dispose 彻底释放', () => {
     const factory = new FakeAudioFactory()
-    const unlock = new FakeUnlockProvider()
-    let resolveLobby: (result: AudioPlayResult) => void = () => {}
-    // 第一个创建的端口（bgm_lobby）使用「延迟完成」的委托，制造过期请求
-    factory.enqueuePlayDelegate(
-      () =>
-        new Promise<AudioPlayResult>((resolve) => {
-          resolveLobby = resolve
-        }),
-    )
     const manager = new SoundManager({
       audioFactory: factory,
       clock: new FakeClock(),
       getSoundUrl: (name) => `/${name}.mp3`,
       settings: baseSettings,
-      unlock,
     })
 
-    manager.playBgm('bgm_lobby')
-    const lobby = factory.created[0]!
-    expect(lobby.playCalls).toBe(1)
+    manager.play('click')
+    const port = factory.created[0]!
+    expect(port.paused).toBe(false)
 
-    // 切换到 bgm_game（立即成功），先前的请求被取代
-    manager.playBgm('bgm_game')
-    const game = factory.created[1]!
-    await flush()
-    expect(game.playCalls).toBe(1)
-    expect(game.paused).toBe(false)
+    // stopAll：暂停但实例保留（池可复用）
+    manager.stopAll()
+    expect(port.paused).toBe(true)
+    expect(port.disposed).toBe(false)
 
-    // 旧请求此刻才完成（blocked）：应被代数守卫忽略，不标记为「等待解锁」
-    resolveLobby('blocked')
-    await flush()
-    unlock.fire()
-    await flush()
-    // 当前期望=bgm_game 且已播放，不应被误重播；过期请求（bgm_lobby）也不被重试
-    expect(game.playCalls).toBe(1)
-    expect(lobby.playCalls).toBe(1)
-  })
-
-  it('销毁后释放所有实例、清空状态并取消解锁订阅', () => {
-    const factory = new FakeAudioFactory()
-    const unlock = new FakeUnlockProvider()
-    const manager = new SoundManager({
-      audioFactory: factory,
-      clock: new FakeClock(),
-      getSoundUrl: (name) => `/${name}.mp3`,
-      settings: baseSettings,
-      unlock,
-    })
-
-    manager.play('click') // SFX
-    manager.playBgm('bgm_lobby') // BGM
-    expect(factory.created.length).toBe(2)
-    const playCalls = factory.created.map((port) => port.playCalls)
-
+    // dispose：释放全部实例
     manager.dispose()
-    expect(factory.created.every((port) => port.disposed)).toBe(true)
-
-    // 取消解锁订阅：此后 fire 不再触发任何播放
-    unlock.fire()
-    expect(factory.created.map((port) => port.playCalls)).toEqual(playCalls)
+    expect(factory.created.every((createdPort) => createdPort.disposed)).toBe(true)
   })
 })

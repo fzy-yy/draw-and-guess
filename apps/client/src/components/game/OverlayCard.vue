@@ -9,7 +9,7 @@ const props = withDefaults(defineProps<{ wide?: boolean }>(), { wide: false })
 <template>
   <div class="absolute inset-0 z-30 grid place-items-center bg-navy/80 px-[5cqw] py-[4cqh]">
     <section
-      class="flex flex-col items-center gap-[1.2cqh] rounded-[1.2em] border-[0.35cqh] border-white bg-paper px-[4cqw] py-[4cqh] text-center compact-tight"
+      class="flex flex-col items-center gap-[1.2cqh] rounded-[1.2em] border-[0.35cqh] border-white bg-paper px-[4cqw] py-[4cqh] text-center"
       :class="props.wide ? 'min-w-[55cqw]' : 'min-w-[50cqw]'"
     >
       <slot />

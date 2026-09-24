@@ -43,7 +43,7 @@ function selectAvatar(avatarId: AvatarId): void {
         v-for="avatarId in props.avatarIds"
         :key="avatarId"
         type="button"
-        class="touch-target grid aspect-square place-items-center rounded-full border-[0.22cqh] bg-white p-[0.7cqh]"
+        class="grid aspect-square place-items-center rounded-full border-[0.22cqh] bg-white p-[0.7cqh]"
         :class="
           modelValue === avatarId
             ? 'border-navy outline-[0.45cqh] outline-focus outline-offset-[0.1cqh]'

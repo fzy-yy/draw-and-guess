@@ -26,7 +26,6 @@ export interface DiscoveredSound {
 export interface SoundMeta {
   readonly volumeMultiplier: number
   readonly cooldownMs: number
-  readonly isBgm: boolean
   readonly required: boolean
 }
 
@@ -37,7 +36,6 @@ export type SoundAvailability = 'available' | 'missing'
 export interface SoundManifestEntry {
   key: string
   required: boolean
-  isBgm: boolean
   availability: SoundAvailability
   /** 选中使用的资源 URL（available 时有值）。 */
   url: string | undefined
@@ -67,13 +65,13 @@ export interface SoundManifest {
 
 /**
  * 同一键同时存在 mp3 与 wav 时，确定性地选择其一。
- * SFX 约定优先 wav（轻量、短促），BGM 约定优先 mp3（高压缩、可循环），与 assets/audio/README.md 一致。
+ * 短音效约定优先 wav（轻量、短促），与 assets/audio/README.md 一致。
  */
-function resolveDuplicate(
-  matches: DiscoveredSound[],
-  isBgm: boolean,
-): { selected: DiscoveredSound; duplicate?: DiscoveredSound } {
-  const preferred = isBgm ? 'mp3' : 'wav'
+function resolveDuplicate(matches: DiscoveredSound[]): {
+  selected: DiscoveredSound
+  duplicate?: DiscoveredSound
+} {
+  const preferred = 'wav'
   const selected = matches.find((match) => match.ext === preferred) ?? matches[0]!
   const duplicate = matches.find((match) => match !== selected)
   return { selected, duplicate }
@@ -94,11 +92,10 @@ export function buildSoundManifest(
     const matches = discovered.filter((sound) => sound.name === key.toLowerCase())
 
     if (matches.length === 0) {
-      // 完全缺失：区分必需（会阻断）与可选（仅降级、界面禁用试听）
+      // 完全缺失：区分必需（会阻断）与可选（仅降级、播放时静默跳过）
       entries.set(key, {
         key,
         required: meta.required,
-        isBgm: meta.isBgm,
         availability: 'missing',
         url: undefined,
         ext: undefined,
@@ -114,17 +111,16 @@ export function buildSoundManifest(
           : {
               kind: 'optional-missing',
               key,
-              detail: `可选音效「${key}」暂缺资源文件（不阻断，界面将禁用试听）：${key}.mp3 / ${key}.wav`,
+              detail: `可选音效「${key}」暂缺资源文件（不阻断，播放时静默跳过）：${key}.mp3 / ${key}.wav`,
             },
       )
       continue
     }
 
-    const { selected, duplicate } = resolveDuplicate(matches, meta.isBgm)
+    const { selected, duplicate } = resolveDuplicate(matches)
     entries.set(key, {
       key,
       required: meta.required,
-      isBgm: meta.isBgm,
       availability: 'available',
       url: selected.url,
       ext: selected.ext,

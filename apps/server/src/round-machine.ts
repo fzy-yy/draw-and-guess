@@ -105,17 +105,20 @@ export class RoundMachine {
     const game = this.service.requireGame(room)
     this.service.scheduler.clear(game.timer)
     this.service.transition(room, 'drawing')
-    // 记录富答案：candidates 中的词条即含别称/分类/词条级时限，直接取用；
+    // 记录富答案：candidates 中的词条即含别称/分类/提示与加载期派生的时限权重，直接取用；
     // 兜底数据在极端情况下（候选被外部改动）保证不引用 undefined。
     const richAnswer = game.candidates.find((candidate) => candidate.id === answer.id) ?? {
       ...answer,
       aliases: [],
       category: '',
       difficulty: 0,
+      drawability: 0,
+      hint: '',
     }
     game.answer = richAnswer
     game.offeredWordIds.add(answer.id) // 记录已展示词条，避免整局后续回合重复
-    // 回合实际时长：词条级 time_limit 覆盖房间统一作画秒数（可在配置关闭；钳制到合法区间）
+    // 回合实际时长：难度级派生时限（level_config，加载期落到词条 timeLimit）覆盖房间统一作画秒数
+    //（可在配置关闭；钳制到合法区间，见 docs/adr/0013-vocabulary-level-config-and-hints.md）
     const configuredSeconds =
       APP_CONFIG.vocabulary.useWordTimeLimit && richAnswer.timeLimit
         ? richAnswer.timeLimit
@@ -128,10 +131,10 @@ export class RoundMachine {
     game.phaseStartedAt = this.service.clock.now()
     game.phaseEndsAt = this.service.clock.now() + game.roundDurationMs
     game.roundSettled = false
-    // 结构化提示：词库已改为「单分类即提示」，每个答案只有一条提示（其分类），
-    // 不再是数组下标洗牌。这里固定用一个揭示槽位（0 号）表示「将在时机揭示分类」，
-    // 首条即唯一一条，且对全体猜词者一致（随快照下发）；分类为空时不开启提示。
-    game.hintOrder = richAnswer.category ? [0] : []
+    // 结构化提示：词库重建后每个答案带一条 hint 提示文案，优先揭示它；
+    // hint 为空时回退揭示分类（旧语义保底），两者皆空则不开启提示。
+    // 仍是单一揭示槽位（0 号），对全体猜词者一致（随快照下发）。
+    game.hintOrder = richAnswer.hint || richAnswer.category ? [0] : []
     // 作画倒计时结束进入回合结算
     game.timer = this.service.scheduler.set(game.roundDurationMs, () =>
       this.service.safeRun('drawingTimeout', () => this.finishRound(room, false)),
@@ -405,7 +408,8 @@ export class RoundMachine {
   /**
    * 统一提示调度：全部延迟由 hint-scheduler.ts 的 createHintSchedule 计算（单一事实来源），
    * 避免 round-machine 内联重抄一份逐步提示数学导致两处漂移。逐步提示在作画后半程按字符
-   * 数逐步揭示；结构化提示在剩余比例降到 hintStartRatio 时揭示一次分类。剩余不足时
+   * 数逐步揭示；结构化提示在剩余比例降到 hintStartRatio 时揭示一次词条提示（hint，
+   * 空则回退分类）。剩余不足时
    * structuredDelay 以 Math.max(0, …) 归零并立即揭示（原不可达的 else 分支已合并进该值）。
    */
   public scheduleHints(room: RoomSecret): void {

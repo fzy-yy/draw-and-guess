@@ -1,8 +1,8 @@
 import { test, expect, createPlayer } from '../fixtures/test-base'
 import { readLogicalRaster } from '../fixtures/canvas-probe'
 
-test.describe('06 - 跨浏览器、DPR、触屏与后台标签页', () => {
-  test('固定逻辑画布在不同 DPR/尺寸下保持填充语义，触屏可落笔，后台恢复后倒计时追平', async ({
+test.describe('06 - 跨浏览器、DPR 与后台标签页', () => {
+  test('固定逻辑画布在不同 DPR/尺寸下保持填充语义，后台恢复后倒计时追平', async ({
     browser,
   }, testInfo) => {
     const host = await createPlayer(browser, `兼容房主-${testInfo.project.name}`)
@@ -112,21 +112,6 @@ test.describe('06 - 跨浏览器、DPR、触屏与后台标签页', () => {
       expect(logicalRasters[0]).toEqual(logicalRasters[1])
       expect(logicalRasters[0]).toEqual(logicalRasters[2])
       expect(logicalRasters[0]?.stableSampleHash).toBe('ef4444ff-1f2937ff-00000000')
-
-      if (testInfo.project.name.includes('touch')) {
-        await drawer.game.selectTool('pen')
-        const box = await canvas.boundingBox()
-        if (!box) throw new Error('画布不可见')
-        await drawer.page.touchscreen.tap(box.x + box.width * 0.75, box.y + box.height * 0.25)
-        await drawer.page.waitForTimeout(300)
-        const alpha = await canvas.evaluate((element) => {
-          const context = element.getContext('2d')!
-          return context
-            .getImageData(element.width * 0.75 - 4, element.height * 0.25 - 4, 8, 8)
-            .data.some((value, index) => index % 4 === 3 && value > 0)
-        })
-        expect(alpha).toBe(true)
-      }
 
       const timer = drawer.page.locator('span:has-text("秒")').first().locator('..').locator('b')
       const before = Number(await timer.textContent())

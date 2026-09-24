@@ -110,7 +110,7 @@ function toggleSelectAll(): void {
         class="flex items-center"
         :class="highlight && selectedCount ? 'text-blue' : 'text-muted'"
       >
-        <component :is="props.icon ?? Filter" class="h-[1.6cqh] w-[1.6cqh]" aria-hidden="true" />
+        <component :is="props.icon ?? Filter" class="h-[2.4cqh] w-[2.4cqh]" aria-hidden="true" />
       </span>
       <span v-else class="flex items-center gap-[0.3em]">
         <Filter class="h-[1.35cqh] w-[1.35cqh]" aria-hidden="true" />
@@ -144,7 +144,7 @@ function toggleSelectAll(): void {
           >
             <input
               type="checkbox"
-              class="h-[1.5cqh] w-[1.5cqh] accent-blue"
+              class="h-[max(1.5cqh,16px)] w-[max(1.5cqh,16px)] accent-blue"
               :checked="props.selected.includes(option.value)"
               @change="toggleOption(option.value)"
             />

@@ -156,7 +156,7 @@ onBeforeUnmount(releaseFocus)
           <button
             v-if="closeAria && dismissible"
             type="button"
-            class="touch-target compact-control compact-control-square grid h-[4cqh] w-[4cqh] place-items-center rounded-full bg-white/10 text-white text-fs-18"
+            class="grid h-[4cqh] w-[4cqh] place-items-center rounded-full bg-white/10 text-white text-fs-18"
             :aria-label="closeAria"
             @click="closeDialog"
           >

@@ -114,7 +114,7 @@ watch(
   <!-- 右侧聊天区：消息列表 + 猜词输入 / 安全预设短语 -->
   <aside
     v-if="store.room"
-    class="flex min-w-0 flex-col border-l-[0.2cqh] border-line bg-paper px-[0.9cqw] py-[1.5cqh] compact-tight"
+    class="flex min-w-0 flex-col border-l-[0.2cqh] border-line bg-paper px-[0.9cqw] py-[1.5cqh]"
   >
     <header class="flex items-center justify-between border-b-[0.18cqh] border-line pb-[1cqh]">
       <div>
@@ -175,7 +175,7 @@ watch(
                 v-for="reaction in store.config.presets.chatReactions"
                 :key="reaction"
                 type="button"
-                class="grid h-[max(4.2cqh,28px)] w-[max(4.2cqh,28px)] place-items-center rounded-full border-[0.18cqh] border-control bg-line text-fs-18 hover:bg-sky"
+                class="grid h-[max(4.2cqh,16px)] w-[max(4.2cqh,16px)] place-items-center rounded-full border-[0.18cqh] border-control bg-line text-fs-18 hover:bg-sky"
                 :aria-label="strings.game.sendReactionAria(reaction)"
                 @click="sendPresetAndClose(reaction, close)"
               >
@@ -198,7 +198,7 @@ watch(
                 v-for="phrase in store.config.presets.safeChat"
                 :key="phrase"
                 type="button"
-                class="min-h-[max(3.4cqh,28px)] truncate rounded-[0.5em] bg-line px-[0.6em] py-[0.35cqh] text-left text-fs-12 font-bold text-navy hover:bg-sky"
+                class="min-h-[3.4cqh] truncate rounded-[0.5em] bg-line px-[0.6em] py-[0.35cqh] text-left text-fs-12 font-bold text-navy hover:bg-sky"
                 :aria-label="strings.game.sendQuickPhraseAria(phrase)"
                 :title="phrase"
                 @click="sendPresetAndClose(phrase, close)"
@@ -223,7 +223,7 @@ watch(
         />
         <button
           type="submit"
-          class="touch-target grid h-[5.2cqh] w-[5.2cqh] shrink-0 place-items-center rounded-[0.65em] bg-blue text-white disabled:cursor-not-allowed disabled:bg-line compact-control compact-control-square"
+          class="grid h-[5.2cqh] w-[5.2cqh] shrink-0 place-items-center rounded-[0.65em] bg-blue text-white disabled:cursor-not-allowed disabled:bg-line"
           :disabled="!canGuess || !guess.trim()"
           :aria-label="strings.game.sendGuessAria"
         >

@@ -1,6 +1,8 @@
 /*
- * Tailwind 组合类（utilities.css）：通用交互反馈、修饰工具类，以及紧凑布局（compact）契约类。
- * 触控命中区契约 .touch-target 定义在 components 层（见 components.css），以便调用处的定位类可覆盖。
+ * Tailwind 组合类（utilities.css）：通用交互反馈与修饰工具类。
+ * 旧的触控命中区契约 .touch-target 与紧凑布局（compact）契约类均已废除
+ * （见 components.css 注释与 AGENTS.md「响应式与触控验收标准」）：
+ * 界面一律使用相对尺寸随舞台等比缩放，不再按舞台高度切换布局模式。
  */
 @layer utilities {
   /* 统一变色过渡：卡片/列表项 hover 的颜色过渡（160ms）；配合 .hover-tint 使用。 */
@@ -11,66 +13,5 @@
   /* 统一变色悬浮：白色/浅色表面 hover 时稍变深（只变色，不加阴影、不位移）。 */
   .hover-tint {
     @apply hover:bg-line;
-  }
-
-  /* ===== 紧凑布局（compact）=====
-     舞台高度 ≤ packages/config/src/settings.ts 的 responsive.compactStageHeightPx（600px）时启用；
-     容器查询上下文为 .game-stage（container-type: size，见 base.css）。
-     策略：收紧非关键留白、折叠辅助说明、允许局部滚动、控件保持最小可点尺寸，
-     而不是把整个舞台继续等比缩小到不可读 / 不可点。
-     这些类必须位于 utilities 层且晚于 tailwindcss 导入，才能覆盖同层的高度 / 行高工具类。 */
-  @container (max-height: 600px) {
-    /* 折叠非关键辅助说明（保留标题、关键状态与全部操作）。 */
-    .compact-hide {
-      display: none;
-    }
-
-    /* 收紧分区上下留白（左右留白通常由网格列宽决定，保持不动）。 */
-    .compact-tight {
-      padding-top: 1.2cqh;
-      padding-bottom: 1.2cqh;
-    }
-
-    /* 允许局部滚动：内容超高时在分区内部滚动，不裁切、不挤压其它分区。 */
-    .compact-scroll {
-      min-height: 0;
-      overflow-y: auto;
-      overscroll-behavior: contain;
-    }
-
-    /* 控件最小尺寸：低高度舞台下控件不再随 cqh 缩到不可点，直接达到 44px 触控标准。
-       标准布局下控件仍按 cqh 缩放（30～37px），命中区由 .touch-target 外扩到 44px；
-       紧凑布局下控件自身即 44px，避免「视觉缩小 + 命中区外扩」在密集排布中互相重叠。 */
-    .compact-control {
-      min-height: 2.75rem;
-    }
-
-    /* 方形图标控件的最小边长，配合 .compact-control 保证 44×44。 */
-    .compact-control-square {
-      min-width: 2.75rem;
-    }
-
-    /* 二维骨架改为「内容行自适应 + 剩余行撑满」，避免固定百分比行高把内容裁掉。 */
-    .compact-rows-2 {
-      grid-template-rows: auto minmax(0, 1fr);
-    }
-
-    .compact-rows-3 {
-      grid-template-rows: auto minmax(0, 1fr) auto;
-    }
-
-    /* 横向控件组宽度不足时换行，而不是把子项压缩到不可点。 */
-    .compact-wrap {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem 1rem;
-    }
-
-    /* 多列网格在紧凑模式下改为单列（如快捷键卡片）。 */
-    .compact-stack {
-      grid-template-columns: minmax(0, 1fr);
-    }
   }
 }

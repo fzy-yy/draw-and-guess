@@ -28,6 +28,8 @@ const props = defineProps<{
   /** 当前排序方向 */
   sortDir: 'asc' | 'desc'
   difficultyMax: number
+  /** 可绘制性星级上限（词库重建后与难度并列的第二组星级） */
+  drawabilityMax: number
 }>()
 
 const emit = defineEmits<{
@@ -90,6 +92,21 @@ defineExpose({
     <template #cell-difficulty="{ row }">
       <DifficultyStars :value="row.difficulty" :max="props.difficultyMax" />
     </template>
+    <!-- 可绘制性列：与难度同款星级组件（词库作者标注，上限独立配置） -->
+    <template #cell-drawability="{ row }">
+      <DifficultyStars
+        :value="row.drawability"
+        :max="props.drawabilityMax"
+        :aria-label="strings.game.wordDrawabilityAria(row.drawability)"
+      />
+    </template>
+    <!-- 提示列：对局结构化提示文案（≤10 字），灰字省略，悬停可见全称 -->
+    <template #cell-hint="{ row }">
+      <span v-if="row.hint" class="block truncate text-muted" :title="row.hint">{{
+        row.hint
+      }}</span>
+      <span v-else class="text-muted">{{ strings.room.vocabAliasEmpty }}</span>
+    </template>
     <!-- 别称列：灰字省略，悬停可见全称 -->
     <template #cell-aliases="{ row }">
       <span
@@ -100,7 +117,7 @@ defineExpose({
       >
       <span v-else class="text-muted">{{ strings.room.vocabAliasEmpty }}</span>
     </template>
-    <!-- 时限列：词条级作画秒数 -->
+    <!-- 时限列：难度级 level_config 加载期派生的作画秒数 -->
     <template #cell-timeLimit="{ row }">
       <span class="whitespace-nowrap tabular-nums">{{
         strings.common.secondsUnit(row.timeLimit ?? 0)

@@ -19,53 +19,25 @@ const PHASES: RoomPhase[] = [
 ]
 
 describe('音效路由映射完整性', () => {
-  it('每个房间阶段都有确定的期望 BGM（SoundName 或 null），绝不为 undefined', () => {
+  it('每个房间阶段都有确定决策（BGM 移除后允许空决策，但绝不抛错）', () => {
     for (const phase of PHASES) {
-      const decision = phaseToAudio(phase)
-      expect(decision.bgm, `阶段 ${phase} 必须给出 `).not.toBeUndefined()
+      expect(() => phaseToAudio(phase)).not.toThrow()
     }
   })
 
-  it('bgm_game 真实参与对局 BGM 映射：starting/drawing/round_result/game_result/choosing_word/paused', () => {
-    for (const phase of [
-      'starting',
-      'choosing_word',
-      'drawing',
-      'round_result',
-      'game_result',
-      'paused',
-    ] as const) {
-      expect(phaseToAudio(phase).bgm).toBe('bgm_game')
-    }
-  })
-
-  it('waiting → bgm_lobby；closed → 停止 BGM', () => {
-    expect(phaseToAudio('waiting').bgm).toBe('bgm_lobby')
-    expect(phaseToAudio('closed').bgm).toBeNull()
+  it('有入场音的阶段映射精确；无入场音的阶段返回空决策', () => {
+    expect(phaseToAudio('starting')).toEqual({ sfx: 'start' })
+    expect(phaseToAudio('drawing')).toEqual({ sfx: 'drawing' })
+    expect(phaseToAudio('round_result')).toEqual({ sfx: 'round_result' })
+    expect(phaseToAudio('game_result')).toEqual({ sfx: 'game_result' })
+    expect(phaseToAudio('waiting')).toEqual({})
+    expect(phaseToAudio('choosing_word')).toEqual({})
+    expect(phaseToAudio('paused')).toEqual({})
+    expect(phaseToAudio('closed')).toEqual({})
   })
 })
 
 describe('音效路由阶段切换', () => {
-  it('阶段序列触发对应入场 SFX 与 BGM 切换（waiting → starting → drawing → round_result → game_result）', () => {
-    // waiting：大厅 BGM，无入场音效
-    expect(phaseToAudio('waiting')).toEqual({ bgm: 'bgm_lobby' })
-
-    // starting：开局号角 + 切到对局 BGM
-    expect(phaseToAudio('starting')).toEqual({ sfx: 'start', bgm: 'bgm_game' })
-
-    // choosing_word：无入场音效，仍为对局 BGM
-    expect(phaseToAudio('choosing_word')).toEqual({ bgm: 'bgm_game' })
-
-    // drawing：作画提示音
-    expect(phaseToAudio('drawing')).toEqual({ sfx: 'drawing', bgm: 'bgm_game' })
-
-    // round_result：回合结算
-    expect(phaseToAudio('round_result')).toEqual({ sfx: 'round_result', bgm: 'bgm_game' })
-
-    // game_result：最终结算
-    expect(phaseToAudio('game_result')).toEqual({ sfx: 'game_result', bgm: 'bgm_game' })
-  })
-
   it('阶段切换过程是幂等的：同一阶段重复查询返回稳定决策', () => {
     for (const phase of PHASES) {
       expect(phaseToAudio(phase)).toEqual(phaseToAudio(phase))
@@ -74,18 +46,13 @@ describe('音效路由阶段切换', () => {
 })
 
 describe('音效路由领域事件', () => {
-  it('一次性事件只给出 SFX、不改变 BGM', () => {
+  it('一次性事件映射到对应短音效', () => {
     expect(eventToAudio('self-ready')).toEqual({ sfx: 'ready' })
     expect(eventToAudio('self-guessed')).toEqual({ sfx: 'correct' })
     expect(eventToAudio('invite')).toEqual({ sfx: 'invite' })
     expect(eventToAudio('countdown-tick')).toEqual({ sfx: 'tick' })
-    expect(eventToAudio('self-ready').bgm).toBeUndefined()
-  })
-
-  it('离房停止 BGM；断线恢复只提示、BGM 由阶段重设', () => {
-    expect(eventToAudio('room-leave')).toEqual({ sfx: 'close', bgm: null })
+    expect(eventToAudio('room-leave')).toEqual({ sfx: 'close' })
     expect(eventToAudio('session-restore')).toEqual({ sfx: 'switch' })
-    expect(eventToAudio('session-restore').bgm).toBeUndefined()
   })
 })
 
@@ -96,11 +63,5 @@ describe('音效路由通用交互', () => {
     expect(interactionToAudio('toggle')).toEqual({ sfx: 'switch' })
     expect(interactionToAudio('open')).toEqual({ sfx: 'popup' })
     expect(interactionToAudio('close')).toEqual({ sfx: 'close' })
-  })
-
-  it('通用交互不改变当前 BGM', () => {
-    for (const event of ['activate', 'select', 'toggle', 'open', 'close'] as const) {
-      expect(interactionToAudio(event).bgm).toBeUndefined()
-    }
   })
 })

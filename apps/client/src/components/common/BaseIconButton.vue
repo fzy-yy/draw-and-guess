@@ -30,9 +30,8 @@ const button = ref<HTMLElement>()
 
 // 底座 + 调用处透传的外部 class：只取 attrs.class，避免把 style/onClick 等键名当类名；
 // 其余 attrs（style、事件、无障碍属性等）由 Vue 单根组件的隐式透传落到 <button> 上。
-// touch-target / compact-control 在此统一注入，三个图标按钮变体（IconButton/RoundIconButton/ToolButton）
-// 与所有直接使用者自动获得「命中区 ≥44×44 + 紧凑模式下保底可点高度」的触控契约。
-const buttonClass = computed(() => cn('touch-target compact-control', props.baseClass, attrs.class))
+// 旧的 .touch-target/.compact-control 触控契约类已移除：命中区即视觉尺寸，控件随舞台等比缩放。
+const buttonClass = computed(() => cn(props.baseClass, attrs.class))
 
 /** 供带弹层的上层图标按钮在 Esc 关闭后恢复键盘焦点。 */
 function focus(): void {

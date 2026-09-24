@@ -31,7 +31,7 @@ const showClearProfileConfirm = ref(false)
 
 <template>
   <section
-    class="relative min-h-0 px-[5cqw] py-[3cqh] grid grid-cols-[1fr_1.3fr] grid-rows-[1fr_auto] gap-[2cqh_2cqw] compact-tight"
+    class="relative min-h-0 px-[5cqw] py-[3cqh] grid grid-cols-[1fr_1.3fr] grid-rows-[1fr_auto] gap-[2cqh_2cqw]"
   >
     <!-- 资料卡片 -->
     <div

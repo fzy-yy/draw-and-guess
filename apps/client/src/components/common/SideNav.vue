@@ -29,7 +29,7 @@ const active = defineModel<K>({ required: true })
 <template>
   <!-- 白底导航列：右侧 line 分隔线与各页面分区骨架保持一致 -->
   <nav
-    class="flex min-h-0 min-w-0 flex-col gap-[0.8cqh] overflow-y-auto border-r-[0.2cqh] border-r-line bg-white px-[1em] py-[2.5cqh] overscroll-contain compact-tight"
+    class="flex min-h-0 min-w-0 flex-col gap-[0.8cqh] overflow-y-auto border-r-[0.2cqh] border-r-line bg-white px-[1em] py-[2.5cqh] overscroll-contain"
     :aria-label="label"
   >
     <AppButton

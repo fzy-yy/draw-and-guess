@@ -49,16 +49,6 @@ export default defineConfig({
       },
     },
     {
-      name: 'chromium-dpr-2-touch',
-      testMatch: /06-browser-compatibility\.spec\.ts/,
-      use: {
-        ...devices['Desktop Chrome'],
-        viewport: { width: 1440, height: 900 },
-        deviceScaleFactor: 2,
-        hasTouch: true,
-      },
-    },
-    {
       name: 'firefox-dpr-2',
       testMatch: /06-browser-compatibility\.spec\.ts/,
       use: {

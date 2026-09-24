@@ -28,14 +28,16 @@ export const serverPrivateConfig = {
   },
   vocabulary: {
     provider: 'sqlite' as const,
-    dbPath: 'vocabulary/draw_guess_words.db',
+    // 目录扫描不到任何 .db 时的兜底词库文件名（与 vocabulary/ 目录现库对齐）
+    dbPath: 'vocabulary/base_words.db',
     maxWords: 10_000,
     maxAliasesPerWord: 8,
     maxAliasLength: 24,
+    /** 词条 hint 提示文案的字符数上限（词库重建后约定 ≤10 字，空串合法） */
+    maxHintLength: 10,
     difficultyRange: { min: 1, max: 5 },
     deduplicate: true,
     resetWhenExhausted: true,
     useWordTimeLimit: true,
-    useWordScoreWeight: false,
   },
 } as const

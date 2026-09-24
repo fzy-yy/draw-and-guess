@@ -234,7 +234,7 @@ function reloadForProtocolUpdate(): void {
         @select="contextMenu.activate"
       />
 
-      <!-- 竖屏警告：手机竖屏时全屏提示旋转设备（见 index.css） -->
+      <!-- 竖屏警告：手机竖屏时全屏提示旋转设备（见 style/other.css） -->
       <div class="portrait-warning">
         <RotateCw />
         <h2>{{ strings.app.portraitTitle }}</h2>

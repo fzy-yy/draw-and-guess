@@ -45,10 +45,10 @@ function clearCanvas(): void {
 
 <template>
   <!-- 底部绘图工具栏：工具 / 颜色 / 线宽 / 历史操作（非画家时整条禁用）。
-       紧凑模式（compact-wrap）下四组控件允许换行，避免把按钮压缩到不可点。 -->
+       四组控件随舞台等比缩放（紧凑布局已移除，不再按窗口高度换行）。 -->
   <footer
     v-if="store.room"
-    class="col-span-full grid grid-cols-[minmax(0,1.35fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_auto] items-center gap-[1.2em] border-t-[0.25cqh] border-navy bg-paper px-[1.4cqw] compact-wrap compact-tight"
+    class="col-span-full grid grid-cols-[minmax(0,1.35fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_auto] items-center gap-[1.2em] border-t-[0.25cqh] border-navy bg-paper px-[1.4cqw]"
     :class="{ 'text-muted': !store.isDrawer || store.room.phase !== 'drawing' }"
   >
     <!-- 工具组：画笔 / 橡皮擦 / 填充，可自定义快捷键 -->
@@ -88,13 +88,13 @@ function clearCanvas(): void {
     <!-- 颜色组：预设色块 + 任意颜色选择器 -->
     <div class="flex items-center justify-center gap-[0.45em]">
       <span class="mr-[0.3em] text-muted text-fs-10 font-bold">{{ strings.game.colorGroup }}</span>
-      <!-- 色板属密集控件（8+1 个并排，间距不足以容纳 44px 命中区）：
-           视觉尺寸设 20px 像素下限，避免低高度舞台下缩到看不清/点不中。 -->
+      <!-- 色板属密集控件（8+1 个并排）：视觉尺寸设 16px 下限（responsive.minDenseTargetPx），
+           避免小舞台下缩到看不清；其余情况随舞台等比缩放。 -->
       <button
         v-for="paint in store.config.drawing.colors"
         :key="paint"
         type="button"
-        class="h-[max(3.5cqh,20px)] w-[max(3.5cqh,20px)] shrink-0 rounded-full border-[0.2cqh] bg-(--paint)"
+        class="h-[max(3.5cqh,16px)] w-[max(3.5cqh,16px)] shrink-0 rounded-full border-[0.2cqh] bg-(--paint)"
         :class="
           color.toUpperCase() === paint
             ? 'outline-[0.3cqh] outline-focus outline-offset-[0.15cqh] border-navy'
@@ -105,13 +105,15 @@ function clearCanvas(): void {
         :disabled="!store.isDrawer"
         @click="setColor(paint)"
       ></button>
+      <!-- 自定义取色：外框与预设色块同尺寸同下限；内部原生 color input 铺满外框（inset-0 + 100%），
+           消除旧实现固定 6cqh 内芯不随外框缩放导致的小屏凸出错位。 -->
       <label
-        class="relative h-[max(3.8cqh,22px)] w-[max(3.8cqh,22px)] shrink-0 overflow-hidden rounded-full border-[0.2cqh] border-control"
+        class="relative h-[max(3.5cqh,16px)] w-[max(3.5cqh,16px)] shrink-0 overflow-hidden rounded-full border-[0.2cqh] border-control"
         :title="strings.game.customColorTitle"
       >
         <input
           type="color"
-          class="absolute inset-[-1cqh] h-[6cqh] w-[6cqh] border-0 p-0"
+          class="absolute inset-0 h-full w-full border-0 p-0"
           :value="color"
           :disabled="!store.isDrawer"
           :aria-label="strings.game.customColorAria"

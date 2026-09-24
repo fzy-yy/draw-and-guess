@@ -2,16 +2,15 @@ import type { RoomPhase } from '@draw-guess/shared'
 import type { SoundName } from './types.ts'
 
 /**
- * 音效路由：把「房间阶段 / 领域事件」映射为「一次性 SFX + 期望 BGM」的唯一来源。
+ * 音效路由：把「房间阶段 / 领域事件 / 交互语义」映射为「一次性 SFX」的唯一来源。
  *
  * 不在此处做任何游戏裁决：本模块只根据外部已裁决的 phase / 事件决定播什么音，
  * 客户端仍无法影响阶段、答案、分数等权威状态。useAudioFeedback 仅订阅领域状态，
- * 并把这里的决策交给 SoundManager 消费（BGM 的资源可用性、Autoplay 重试等由管理器负责）。
+ * 并把这里的决策交给 SoundManager 消费。
  *
- * 约定：
- * - `bgm?: SoundName | null`：SoundName=期待播放该 BGM；null=停止 BGM；缺省=不改变当前 BGM。
- * - 两个 switch 的 default 分支为 `never`，用于在类型层面保证「映射完整」——
- *   新增阶段/事件而忘记处理时会直接编译报错。
+ * 背景音乐（BGM）决策已随 BGM 系统移除：阶段切换只保留入场提示音。
+ * 约定：两个 switch 的 default 分支为 `never`，用于在类型层面保证「映射完整」——
+ * 新增阶段/事件而忘记处理时会直接编译报错。
  */
 
 /** 领域事件（非房间阶段）→ 音效。 */
@@ -24,38 +23,35 @@ export type AudioEvent =
  */
 export type InteractionAudioEvent = 'activate' | 'select' | 'toggle' | 'open' | 'close'
 
-/** 一次音频决策：进入阶段/发生事件时的一次性 SFX，以及应处的期望 BGM。 */
+/** 一次音频决策：进入阶段/发生事件时的一次性 SFX（可能无）。 */
 export interface AudioDecision {
   /** 一次性音效（可能无）。 */
   sfx?: SoundName
-  /** 期望 BGM：SoundName=期待播放；null=停止；缺省=不改变。 */
-  bgm?: SoundName | null
 }
 
 /**
- * 房间阶段 → 音频决策。
- * waiting 用大厅 BGM；starting 起切到对局 BGM（bgm_game 因此真正参与映射）；
- * drawing / round_result / game_result 分别有入场 SFX；closed 停止 BGM。
+ * 房间阶段 → 音频决策：只保留入场 SFX。
+ * starting/drawing/round_result/game_result 有入场音；
+ * waiting/choosing_word/paused/closed 无入场音（返回空决策）。
  */
 export function phaseToAudio(phase: RoomPhase): AudioDecision {
   switch (phase) {
     case 'waiting':
-      return { bgm: 'bgm_lobby' }
+      return {}
     case 'starting':
-      return { sfx: 'start', bgm: 'bgm_game' }
+      return { sfx: 'start' }
     case 'choosing_word':
-      return { bgm: 'bgm_game' }
+      return {}
     case 'drawing':
-      return { sfx: 'drawing', bgm: 'bgm_game' }
+      return { sfx: 'drawing' }
     case 'round_result':
-      return { sfx: 'round_result', bgm: 'bgm_game' }
+      return { sfx: 'round_result' }
     case 'game_result':
-      return { sfx: 'game_result', bgm: 'bgm_game' }
+      return { sfx: 'game_result' }
     case 'paused':
-      // 对局暂停仍保留对局 BGM，恢复后继续
-      return { bgm: 'bgm_game' }
+      return {}
     case 'closed':
-      return { bgm: null }
+      return {}
     default: {
       // RoomPhase 已全覆盖，此处仅为未来新增阶段提供编译期遗漏提示
       const exhaustive: never = phase
@@ -64,11 +60,7 @@ export function phaseToAudio(phase: RoomPhase): AudioDecision {
   }
 }
 
-/**
- * 领域事件 → 音频决策。
- * 房间离场（room-leave）停止 BGM；断线恢复（session-restore）只提示、BGM 由阶段重设；
- * 其余一次性事件不改变当前 BGM。
- */
+/** 领域事件 → 音频决策：全部是一次性 SFX。 */
 export function eventToAudio(event: AudioEvent): AudioDecision {
   switch (event) {
     case 'self-ready':
@@ -80,7 +72,7 @@ export function eventToAudio(event: AudioEvent): AudioDecision {
     case 'countdown-tick':
       return { sfx: 'tick' }
     case 'room-leave':
-      return { sfx: 'close', bgm: null }
+      return { sfx: 'close' }
     case 'session-restore':
       return { sfx: 'switch' }
     default: {

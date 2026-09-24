@@ -184,8 +184,8 @@ describe('PhaseOverlay 阶段分支', () => {
 
     room.room.phase = 'choosing_word'
     room.room.game!.wordOptions = [
-      { id: 'word-1', text: '苹果', difficulty: 1 },
-      { id: 'word-2', text: '香蕉', difficulty: 2 },
+      { id: 'word-1', text: '苹果', difficulty: 1, drawability: 2 },
+      { id: 'word-2', text: '香蕉', difficulty: 2, drawability: 3 },
     ]
     room.room.game!.canReroll = true
     await nextTick()

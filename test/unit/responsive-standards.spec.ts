@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { responsive } from '../../packages/config/src/settings.ts'
 
 /**
- * 响应式与触控验收标准的一致性守卫。
+ * 响应式缩放与可读验收标准的一致性守卫。
  *
  * 该标准同时落在三处（config 阈值 / style 实现 / AGENTS 文档），
  * 任何一处漂移都会让人工验收与自动化验收结论不一致，因此用单测把三者钉在一起。
  * 对应章节：AGENTS.md「响应式与触控验收标准」。
+ *
+ * 现行口径：主要适配电脑网页端；控件随舞台等比缩放、不设像素下限
+ * （44px 触控契约与紧凑布局均已废除）；仅密集控件保留 minDenseTargetPx
+ * 视觉下限，字号保留可读下限；竖屏拦截保留。
  */
-describe('响应式与触控验收标准（config ↔ style ↔ AGENTS）', () => {
+describe('响应式缩放与可读验收标准（config ↔ style ↔ AGENTS）', () => {
   const root = process.cwd()
   const read = (path: string) => readFileSync(resolve(root, path), 'utf8')
   const tokens = read('apps/client/src/style/tokens.css')
@@ -19,21 +23,43 @@ describe('响应式与触控验收标准（config ↔ style ↔ AGENTS）', () =
   const utilities = read('apps/client/src/style/utilities.css')
   const agents = read('AGENTS.md')
 
-  it('三个基准视口固定为桌面 / 平板横屏 / 手机横屏', () => {
-    expect(responsive.baselines.map((item) => [item.width, item.height])).toEqual([
-      [1280, 720],
-      [1024, 768],
-      [844, 390],
-    ])
+  it('验收基准视口只保留桌面网页端', () => {
+    expect(responsive.baselines.map((item) => [item.width, item.height])).toEqual([[1280, 720]])
   })
 
-  it('触控命中区与可读字号阈值符合验收标准', () => {
-    expect(responsive.minTouchTargetPx).toBe(44)
+  it('密集控件视觉下限与可读字号阈值符合验收标准', () => {
     expect(responsive.minBodyFontPx).toBe(12)
     expect(responsive.minSecondaryFontPx).toBeGreaterThanOrEqual(10)
     expect(responsive.minMicroFontPx).toBeGreaterThanOrEqual(9)
-    // 密集控件（色板/表情/表格复选框）间距不足以容纳 44px，降级为「视觉 ≥ 20px 且命中区不重叠」
-    expect(responsive.minDenseTargetPx).toBeGreaterThanOrEqual(20)
+    // 密集控件（色板/表情/表格与筛选复选框）保留 16px 视觉下限，防止小窗下缩到看不见
+    expect(responsive.minDenseTargetPx).toBe(16)
+  })
+
+  it('44px 触控契约与紧凑布局均已废除：样式层不再存在相关定义', () => {
+    // 触控阈值与紧凑断点配置整体移除（命中区即视觉尺寸；不再按舞台高度切换布局）
+    expect(responsive).not.toHaveProperty('minTouchTargetPx')
+    expect(responsive).not.toHaveProperty('compactStageHeightPx')
+    // .touch-target 外扩类、.compact-control 保底类与 @container 紧凑块不再「定义」
+    // （只匹配行首的类规则声明；注释里以「*」开头提及历史不算）
+    expect(components).not.toMatch(/^[ \t]*\.touch-target\s*[:{]/m)
+    expect(utilities).not.toMatch(/^[ \t]*\.compact-control(-square)?\s*[:{]/m)
+    expect(utilities).not.toMatch(
+      /^[ \t]*\.compact-(tight|hide|scroll|rows-2|rows-3|wrap|stack)\s*\{/m,
+    )
+    expect(utilities).not.toContain('@container')
+    // 组件模板的 class 绑定中不允许再出现契约/紧凑类（注释里提及历史不在此列）
+    const violations: string[] = []
+    const classPattern =
+      /class="[^"]*\b(?:touch-target|compact-control(?:-square)?|compact-(?:tight|hide|scroll|rows-2|rows-3|wrap|stack))\b/
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = resolve(dir, entry.name)
+        if (entry.isDirectory()) walk(path)
+        else if (entry.name.endsWith('.vue') && classPattern.test(read(path))) violations.push(path)
+      }
+    }
+    walk(resolve(root, 'apps/client/src'))
+    expect(violations, `组件仍在使用已废除的契约/紧凑类：${violations.join(', ')}`).toEqual([])
   })
 
   it('偶数字号标尺为每一档声明了不低于阈值的像素下限', () => {
@@ -50,31 +76,15 @@ describe('响应式与触控验收标准（config ↔ style ↔ AGENTS）', () =
     expect(base).toMatch(/\.game-stage\s*\{[^}]*font-size:\s*clamp\(12px/)
   })
 
-  it('触控命中区实现使用配置的 44px 阈值', () => {
-    expect(components).toContain('.touch-target')
-    expect(components).toContain(`max(100%, ${responsive.minTouchTargetPx}px)`)
-    // 紧凑布局下控件自身达到 44px（2.75rem = 44px @ 16px 根字号）
-    expect(utilities).toContain(`min-height: ${responsive.minTouchTargetPx / 16}rem`)
-  })
-
-  it('紧凑布局断点与共享类齐备，且断点取自配置阈值', () => {
-    expect(utilities).toContain(`@container (max-height: ${responsive.compactStageHeightPx}px)`)
-    for (const className of [
-      '.compact-hide',
-      '.compact-tight',
-      '.compact-scroll',
-      '.compact-control',
-      '.compact-control-square',
-      '.compact-rows-2',
-      '.compact-rows-3',
-      '.compact-wrap',
-      '.compact-stack',
+  it('AGENTS.md 登记了桌面基准、等比缩放口径与可读/密集阈值', () => {
+    for (const text of [
+      '1280×720',
+      '响应式与触控验收标准',
+      '等比缩放',
+      '16px',
+      '电脑网页端',
+      '竖屏',
     ])
-      expect(utilities, `缺少紧凑布局共享类：${className}`).toContain(className)
-  })
-
-  it('AGENTS.md 登记了三个基准视口与触控/可读阈值', () => {
-    for (const text of ['1280×720', '1024×768', '844×390', '44×44', '响应式与触控验收标准'])
       expect(agents, `AGENTS.md 缺少验收标准描述：${text}`).toContain(text)
   })
 })

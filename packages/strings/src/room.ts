@@ -94,6 +94,8 @@ export const room = {
   vocabColumnText: '词面',
   vocabColumnCategories: '分类',
   vocabColumnDifficulty: '难度',
+  vocabColumnDrawability: '可绘制性',
+  vocabColumnHint: '提示',
   vocabColumnAliases: '别称',
   vocabColumnTimeLimit: '时限',
   vocabColumnScoreWeight: '权重',
@@ -102,6 +104,7 @@ export const room = {
   vocabDeselectAllShort: '全不选',
   vocabNoMatch: '没有符合条件的词条。',
   vocabDifficultyLabel: (value: number) => `${value} 星`,
+  vocabDrawabilityLabel: (value: number) => `${value} 星`,
   vocabAliasEmpty: '—',
   // —— 词库包选择与切换 ——
   vocabSwitchToPackages: '切换词库选择',

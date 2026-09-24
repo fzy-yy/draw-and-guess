@@ -2,13 +2,13 @@ import { expect, type Locator, type Page, type TestInfo } from '@playwright/test
 import { responsive } from '../../../packages/config/src/settings.ts'
 
 /**
- * 响应式与触控验收断言辅助（供 specs/07-responsive-touch.spec.ts 使用）。
+ * 响应式缩放与可读验收断言辅助（供 specs/07-responsive-touch.spec.ts 使用）。
  *
  * 验收标准见 AGENTS.md「响应式与触控验收标准」章节，阈值唯一来源是 packages/config/src/settings.ts 的 responsive。
  * 这里只做「测量 + 断言」，不引入任何业务规则。
  */
 
-/** 三个验收基准视口（桌面 / 平板横屏 / 手机横屏）。 */
+/** 验收基准视口（桌面网页端单一基准）。 */
 export const BASELINES = responsive.baselines
 
 export type Baseline = (typeof BASELINES)[number]
@@ -16,16 +16,6 @@ export type Baseline = (typeof BASELINES)[number]
 /** 把视口切到某个基准。 */
 export async function applyBaseline(page: Page, baseline: Baseline): Promise<void> {
   await page.setViewportSize({ width: baseline.width, height: baseline.height })
-}
-
-/**
- * 当前是否处于紧凑布局（与 style/utilities.css 的 `@container (max-height: …)` 一致）。
- * 容器查询按容器的**内容盒**求值，因此这里用 clientHeight（内容盒高度）而非
- * getBoundingClientRect().height（含舞台边框，会多算约 2×0.28cqh）。
- */
-export async function isCompact(page: Page): Promise<boolean> {
-  const height = await page.locator('.game-stage').evaluate((element) => element.clientHeight)
-  return height <= responsive.compactStageHeightPx
 }
 
 /** 舞台（.game-stage）的位置与尺寸。 */
@@ -43,82 +33,19 @@ export async function stageRect(page: Page) {
   })
 }
 
-export interface Box {
-  left: number
-  top: number
-  right: number
-  bottom: number
-  width: number
-  height: number
-}
-
 /**
- * 生效命中区：元素自身盒 + `.touch-target::after` 扩展盒的并集。
- *
- * 触控契约允许「视觉尺寸 < 44px、命中区 ≥ 44px」，因此不能只看 boundingBox；
- * 这里读取伪元素的计算宽高（共享类固定为「以元素中心对齐」）还原命中区。
+ * 控件高度与舞台高度的比值（等比缩放验收核心）。
+ * 显式以 cqh 定高的控件（如 NetworkStatusButton 的 h-[4.4cqh]）在任意基准下比值应恒定；
+ * 若控件被像素保底钉住（旧 44px 触控契约），小基准下比值会显著偏大——该断言即回归守卫。
  */
-export async function effectiveHitBox(locator: Locator): Promise<Box> {
-  return locator.evaluate((element) => {
-    const rect = element.getBoundingClientRect()
-    let width = rect.width
-    let height = rect.height
-    if (element.classList.contains('touch-target')) {
-      const pseudo = getComputedStyle(element, '::after')
-      width = Math.max(width, Number.parseFloat(pseudo.width) || 0)
-      height = Math.max(height, Number.parseFloat(pseudo.height) || 0)
-    }
-    const centerX = rect.left + rect.width / 2
-    const centerY = rect.top + rect.height / 2
-    return {
-      left: centerX - width / 2,
-      top: centerY - height / 2,
-      right: centerX + width / 2,
-      bottom: centerY + height / 2,
-      width,
-      height,
-    }
-  })
-}
-
-/** 关键交互控件的命中区必须 ≥ minPx（默认取配置里的 44px）。 */
-export async function assertTouchTarget(
-  locator: Locator,
-  label: string,
-  minPx: number = responsive.minTouchTargetPx,
-): Promise<void> {
-  await expect(locator, `${label} 应可见`).toBeVisible()
-  const box = await effectiveHitBox(locator)
-  expect(
-    box.width,
-    `${label} 命中区宽度应 ≥ ${minPx}px（实际 ${box.width.toFixed(1)}px）`,
-  ).toBeGreaterThanOrEqual(minPx - 0.5)
-  expect(
-    box.height,
-    `${label} 命中区高度应 ≥ ${minPx}px（实际 ${box.height.toFixed(1)}px）`,
-  ).toBeGreaterThanOrEqual(minPx - 0.5)
-}
-
-/**
- * 控件自身（不含 .touch-target 外扩）的视觉尺寸必须 ≥ minPx。
- * 用于验证紧凑布局下关键控件确实由 .compact-control 保底到 44px，
- * 而不是靠命中区外扩掩盖「视觉已缩小到不可点」。
- */
-export async function assertVisualSize(
-  locator: Locator,
-  label: string,
-  minPx: number = responsive.minTouchTargetPx,
-): Promise<void> {
-  await expect(locator, `${label} 应可见`).toBeVisible()
+export async function heightRatioToStage(page: Page, locator: Locator): Promise<number> {
+  const stage = await stageRect(page)
   const box = await locator.boundingBox()
-  if (!box) throw new Error(`${label} 无 boundingBox`)
-  expect(
-    Math.min(box.width, box.height),
-    `${label} 视觉尺寸应 ≥ ${minPx}px（实际 ${Math.min(box.width, box.height).toFixed(1)}px）`,
-  ).toBeGreaterThanOrEqual(minPx - 0.5)
+  if (!box) throw new Error('控件无 boundingBox，无法测量')
+  return box.height / stage.height
 }
 
-/** 密集控件（色板/表情/表格复选框）：视觉尺寸必须 ≥ minDenseTargetPx。 */
+/** 密集控件（色板/表情/表格与筛选复选框）：视觉尺寸必须 ≥ minDenseTargetPx。 */
 export async function assertDenseTarget(locator: Locator, label: string): Promise<void> {
   await expect(locator, `${label} 应可见`).toBeVisible()
   const box = await locator.boundingBox()

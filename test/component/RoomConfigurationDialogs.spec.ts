@@ -30,6 +30,8 @@ function vocabularyFixture(packageId = 'basic'): VocabularySnapshot {
     aliases: index === 0 ? ['红苹果'] : [],
     category: index === 0 ? '水果' : '常识',
     difficulty: (index % 3) + 1,
+    drawability: (index % 5) + 1,
+    hint: index === 0 ? '红红的水果' : '',
     timeLimit: 60,
     scoreWeight: 1,
   }))
