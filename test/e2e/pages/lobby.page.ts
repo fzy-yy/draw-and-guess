@@ -1,4 +1,5 @@
 import { type Page, expect } from '@playwright/test'
+import { selectDropdownOption } from './dropdown'
 
 export class LobbyPage {
   constructor(readonly page: Page) {}
@@ -22,10 +23,12 @@ export class LobbyPage {
       await nameInput.fill(options.name)
     }
     if (options?.maxPlayers) {
-      const select = this.page.locator('div[role="dialog"] select').first()
-      if (await select.count()) {
-        await select.selectOption(String(options.maxPlayers))
-      }
+      // 手写下拉组件：按「最大人数」标签展开并点选「N 人」选项
+      await selectDropdownOption(
+        this.page.getByRole('dialog'),
+        '最大人数',
+        `${options.maxPlayers} 人`,
+      )
     }
     await this.page.getByRole('button', { name: /创建并进入/ }).click()
     // 等待进入房间页面

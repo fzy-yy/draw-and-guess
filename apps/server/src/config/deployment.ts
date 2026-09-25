@@ -21,7 +21,10 @@ export function getDeploymentConfig(env: NodeJS.ProcessEnv = process.env): Deplo
   const port = env.PORT ? Number(env.PORT) : serverPrivateConfig.network.port
   const host = env.HOST?.trim() || serverPrivateConfig.network.host
   const candidateLevel = env.LOG_LEVEL?.trim() || 'info'
-  const levels: DeploymentConfig['logLevel'][] = ['debug', 'info', 'warn', 'error']
+  // 类型谓词集中「字符串 → 合法日志级别」的收窄：调用点无需再各自 `as DeploymentConfig['logLevel']`
+  const levels: readonly string[] = ['debug', 'info', 'warn', 'error']
+  const isLogLevel = (value: string): value is DeploymentConfig['logLevel'] =>
+    levels.includes(value)
   // 日志开关：默认开启；接受 true/1/yes/on 为开，其余显式值视为关。
   const rawEnabled = env.LOG_ENABLED?.trim().toLowerCase() ?? ''
   const logEnabled = rawEnabled === '' ? true : ['1', 'true', 'yes', 'on'].includes(rawEnabled)
@@ -37,13 +40,13 @@ export function getDeploymentConfig(env: NodeJS.ProcessEnv = process.env): Deplo
     throw new Error(`PORT 必须是 1～65535 的整数，当前值：${String(env.PORT)}`)
   }
   if (!host) throw new Error('HOST 不能为空')
-  if (!levels.includes(candidateLevel as DeploymentConfig['logLevel'])) {
+  if (!isLogLevel(candidateLevel)) {
     throw new Error(`LOG_LEVEL 仅支持 ${levels.join('、')}`)
   }
   return {
     host,
     port,
-    logLevel: candidateLevel as DeploymentConfig['logLevel'],
+    logLevel: candidateLevel,
     logEnabled,
     logMaxFiles,
     healthMetricsEnabled,

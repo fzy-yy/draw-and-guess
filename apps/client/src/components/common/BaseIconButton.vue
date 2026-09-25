@@ -22,7 +22,9 @@ const props = withDefaults(
   { label: undefined, disabled: false, audioFeedback: 'activate' },
 )
 
-const emit = defineEmits<{ click: [] }>()
+// click 事件携带原生 MouseEvent：与全局组件属性扩展（vue-augmentations）签名一致，
+// 避免 strictTemplates 下「零参 emit 声明 × 透传 onClick 扩展」交叉出无法赋值的处理器类型。
+const emit = defineEmits<{ click: [event: MouseEvent] }>()
 
 // 在 setup 顶层取响应式 attrs，供下方 computed 读取外部透传的 class（调用处可用 class 追加布局类）。
 const attrs = useAttrs()
@@ -38,9 +40,9 @@ function focus(): void {
   button.value?.focus()
 }
 
-function handleClick(): void {
+function handleClick(event: MouseEvent): void {
   if (props.audioFeedback) playInteractionSound(props.audioFeedback)
-  emit('click')
+  emit('click', event)
 }
 
 defineExpose({ focus })

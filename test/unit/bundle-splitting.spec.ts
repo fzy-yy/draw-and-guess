@@ -19,7 +19,6 @@ describe('首屏体积切分与静态资源缓存（静态守卫）', () => {
   it('懒加载模块不得被组件 barrel 静态 re-export', () => {
     const barrels: Array<[string, string]> = [
       ['apps/client/src/components/room/index.ts', 'VocabularyDialog'],
-      ['apps/client/src/components/settings/index.ts', 'DiagnosticsTab'],
     ]
     for (const [path, moduleName] of barrels) {
       expect(read(path), `${path} 不应静态导出懒加载模块 ${moduleName}`).not.toMatch(
@@ -28,11 +27,8 @@ describe('首屏体积切分与静态资源缓存（静态守卫）', () => {
     }
   })
 
-  it('低频模块经 defineLazyComponent 懒加载', () => {
+  it('低频组件经 defineLazyComponent 懒加载', () => {
     const sites: Array<[string, string]> = [
-      ['apps/client/src/App.vue', 'SettingsView.vue'],
-      ['apps/client/src/views/GameView.vue', 'SettingsView.vue'],
-      ['apps/client/src/views/SettingsView.vue', 'DiagnosticsTab.vue'],
       ['apps/client/src/views/RoomView.vue', 'VocabularyDialog.vue'],
     ]
     for (const [path, moduleName] of sites) {
@@ -44,6 +40,25 @@ describe('首屏体积切分与静态资源缓存（静态守卫）', () => {
     }
     // 礼花库只在对局内猜中时按需下载
     expect(read('apps/client/src/utils/confetti.ts')).toContain("await import('canvas-confetti')")
+  })
+
+  it('设置页与诊断页必须静态导入（懒加载首开白闪的回归守卫，见 ADR-0014）', () => {
+    for (const path of ['apps/client/src/App.vue', 'apps/client/src/views/GameView.vue']) {
+      const source = read(path)
+      expect(source, `${path} 应静态导入 SettingsView`).toMatch(
+        /import\s+SettingsView\s+from\s+['"]@\/views\/SettingsView\.vue['"]/u,
+      )
+      expect(source, `${path} 不应再动态 import SettingsView（会复现首开白闪）`).not.toContain(
+        "import('@/views/SettingsView.vue')",
+      )
+    }
+    const settingsSource = read('apps/client/src/views/SettingsView.vue')
+    expect(settingsSource, 'SettingsView 应经 barrel 静态导入 DiagnosticsTab').toMatch(
+      /import\s*\{[^}]*DiagnosticsTab[^}]*\}\s*from\s*['"]@\/components\/settings['"]/u,
+    )
+    expect(settingsSource).not.toContain("import('@/components/settings/DiagnosticsTab.vue')")
+    // 入口视图文件不得残留 lazy 工厂引用（设置页场景）
+    expect(read('apps/client/src/App.vue')).not.toContain('defineLazyComponent')
   })
 
   it('服务端按哈希产物长缓存、入口与 SPA 回退不缓存，时长取自配置', () => {

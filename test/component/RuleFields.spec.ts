@@ -22,7 +22,9 @@ describe('规则字段原语', () => {
       },
     })
 
-    await user.selectOptions(screen.getByRole('combobox'), '4')
+    // 手写 SelectDropdown（替代原生 select）：点 combobox 展开 → 点 option 选中，值保持数字语义
+    await user.click(screen.getByRole('combobox', { name: '最大人数' }))
+    await user.click(await screen.findByRole('option', { name: '四人' }))
 
     expect(onUpdate).toHaveBeenLastCalledWith(4)
     expect(playInteractionSound).toHaveBeenCalledWith('select')

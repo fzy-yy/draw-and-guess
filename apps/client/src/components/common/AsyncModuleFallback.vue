@@ -13,9 +13,9 @@ import AppButton from '@/components/common/AppButton.vue'
 
 withDefaults(
   defineProps<{
-    /** defineAsyncComponent 注入的加载错误；loading 态为 undefined。 */
+    /** 加载错误（由 utils/lazy-component 包装组件转发）；loading 态为 undefined。 */
     error?: Error
-    /** defineAsyncComponent 注入的重试回调。 */
+    /** 重试回调（由 lazy-component 包装组件提供——Vue 不会向 errorComponent 注入 retry）。 */
     retry?: () => void
   }>(),
   { error: undefined, retry: undefined },

@@ -1,53 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import {
-  APP_CONFIG,
-  ROOM_PRESETS,
-  ROOM_PRESET_IDS,
-  applyRoomPreset,
-  closestRoomPreset,
-  createRoomSettings,
-  matchingRoomPreset,
-  roomPresetDifferences,
-} from '@draw-guess/config'
+import { APP_CONFIG, defaultRoomSettings, roomSettingsDefaults } from '@draw-guess/config'
 import { RoomSettingsSchema, type RoomSettings } from '@draw-guess/shared'
 import { createDefaultRoomSettings } from '../../apps/server/src/game-service.ts'
 import { validateRoomSettings } from '../../apps/server/src/room-settings.ts'
+import { createGameHarness, startTwoPlayerGame, testRoomSettings } from './helpers/game-harness.ts'
 
+/**
+ * 房间规则产品闭环（旧「玩法预设」三档映射已移除）：
+ * 唯一默认组、服务端默认工厂、协议 Schema 与服务端逐字段校验必须口径一致；
+ * 「额外猜词时间」为新增规则项，边界（0~90、整数）在此守护。
+ */
 describe('房间规则产品闭环', () => {
-  it('标准、轻松、竞速预设都生成完整合法设置，并在切换时保持容量', () => {
-    const keys = Object.keys(createDefaultRoomSettings()).sort()
-    for (const preset of ROOM_PRESET_IDS) {
-      const settings = createRoomSettings(preset, 5)
-      expect(Object.keys(settings).sort()).toEqual(keys)
-      expect(RoomSettingsSchema.safeParse(settings).success).toBe(true)
-      expect(() => validateRoomSettings(settings)).not.toThrow()
-      expect(settings.maxPlayers).toBe(5)
-    }
+  it('默认设置工厂生成完整合法对象，服务端默认与配置基线一致', () => {
+    const settings = defaultRoomSettings(5)
+    expect(Object.keys(settings).sort()).toEqual(Object.keys(createDefaultRoomSettings()).sort())
+    expect(RoomSettingsSchema.safeParse(settings).success).toBe(true)
+    expect(() => validateRoomSettings(settings)).not.toThrow()
+    expect(settings.maxPlayers).toBe(5)
     expect(createDefaultRoomSettings()).toEqual(
-      createRoomSettings('standard', APP_CONFIG.player.defaultMaxPlayers),
+      defaultRoomSettings(APP_CONFIG.player.defaultMaxPlayers),
     )
-    expect(applyRoomPreset(createRoomSettings('relaxed', 4), 'speed')).toEqual({
-      maxPlayers: 4,
-      ...ROOM_PRESETS.speed,
-    })
-  })
-
-  it('自定义规则稳定归入差异最少的预设，摘要差异只返回实际变化字段', () => {
-    const relaxed = createRoomSettings('relaxed', 6)
-    expect(closestRoomPreset(relaxed)).toBe('relaxed')
-    expect(matchingRoomPreset(relaxed)).toBe('relaxed')
-    expect(roomPresetDifferences(relaxed, 'relaxed')).toEqual([])
-    const custom = { ...relaxed, allowPause: false, guessBaseScore: 350 }
-    expect(closestRoomPreset(custom)).toBe('relaxed')
-    expect(matchingRoomPreset(custom)).toBeUndefined()
-    expect(roomPresetDifferences(custom, 'relaxed').sort()).toEqual([
-      'allowPause',
-      'guessBaseScore',
-    ])
+    // 额外猜词时间默认 0（不额外增加），且与滑块区间默认一致
+    expect(settings.extraGuessSeconds).toBe(0)
+    expect(roomSettingsDefaults.extraGuessSeconds).toBe(APP_CONFIG.game.extraGuessSeconds.default)
   })
 
   it('服务端逐字段拒绝越界、非整数、错误枚举与非布尔值', () => {
-    const valid = createRoomSettings('standard', 6)
+    const valid = defaultRoomSettings(6)
     const invalidPatches: Array<Partial<Record<keyof RoomSettings, unknown>>> = [
       { maxPlayers: 1 },
       { roundsPerPlayer: 1.5 },
@@ -59,7 +38,9 @@ describe('房间规则产品闭环', () => {
       { structuredHintsEnabled: null },
       { hintStartRatio: 0.95 },
       { guessBaseScore: 25 },
-      { scoreMode: 'bonus' },
+      { extraGuessSeconds: -5 },
+      { extraGuessSeconds: 91 },
+      { extraGuessSeconds: 7.5 },
       { allowPlayerInvite: 'yes' },
       { allowPause: 1 },
       { allowWordReroll: null },
@@ -68,5 +49,23 @@ describe('房间规则产品闭环', () => {
     for (const patch of invalidPatches) {
       expect(() => validateRoomSettings({ ...valid, ...patch } as RoomSettings)).toThrow()
     }
+    // 边界合法值：0 与 90 都必须通过
+    expect(() => validateRoomSettings({ ...valid, extraGuessSeconds: 0 })).not.toThrow()
+    expect(() => validateRoomSettings({ ...valid, extraGuessSeconds: 90 })).not.toThrow()
+  })
+
+  it('额外猜词时间叠加到回合时限（在难度派生时限之上）', () => {
+    const harness = createGameHarness()
+    // drawSeconds 取 45：开局默认时长为 (45+30)s，与「词条时限 90 + 30」可区分，
+    // 断言 beginDrawing 真正按词条时限叠加了额外时间
+    const { game } = startTwoPlayerGame(
+      harness,
+      testRoomSettings({ extraGuessSeconds: 30, drawSeconds: 45 }),
+    )
+    const answer = game.candidates[0]
+    if (!answer) throw new Error('测试词库未生成候选词')
+    harness.service.chooseWord(game.drawerId, game.roundId, answer.id)
+    // 测试词库全部词条 timeLimit=90；额外 30 秒 → 回合时长 120 秒
+    expect(game.roundDurationMs).toBe((90 + 30) * 1_000)
   })
 })

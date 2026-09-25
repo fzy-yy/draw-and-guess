@@ -28,6 +28,7 @@ export const player = {
   /**
    * 头像协议只传递内置 SVG 的稳定编号，不接收任意 URL、路径或 SVG 正文。
    * 服务端以此数组作为白名单，客户端以同一列表生成选择器并映射本地静态资源。
+   * 保持字面量元组类型（AvatarId 联合），校验任意字符串请走 shared 的 isAvatarId 守卫。
    */
   avatarIds: AVATAR_IDS,
   defaultAvatarId: '01',

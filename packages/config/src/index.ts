@@ -9,24 +9,12 @@
 import { app, network } from './app.ts'
 import { player } from './player.ts'
 import { room } from './room.ts'
-import { game } from './game.ts'
+import { defaultRoomSettings, game, roomSettingsDefaults } from './game.ts'
 import { drawing } from './drawing.ts'
 import { vocabulary } from './vocabulary.ts'
 import { audio, soundCatalog } from './audio.ts'
 import { localSettings, performance, presets, responsive, ui } from './settings.ts'
 import { PUBLIC_CONFIG, type PublicConfig } from './public.ts'
-import {
-  ROOM_PRESETS,
-  ROOM_PRESET_IDS,
-  applyRoomPreset,
-  closestRoomPreset,
-  createRoomSettings,
-  matchingRoomPreset,
-  roomPresetDifferences,
-  type RoomPresetField,
-  type RoomPresetId,
-  type RoomPresetSettings,
-} from './room-presets.ts'
 
 /** 领域配置合并为唯一业务配置对象。 */
 export const APP_CONFIG = {
@@ -51,6 +39,8 @@ export {
   player,
   room,
   game,
+  roomSettingsDefaults,
+  defaultRoomSettings,
   drawing,
   vocabulary,
   audio,
@@ -62,14 +52,4 @@ export {
   performance,
   PUBLIC_CONFIG,
   type PublicConfig,
-  ROOM_PRESETS,
-  ROOM_PRESET_IDS,
-  applyRoomPreset,
-  closestRoomPreset,
-  createRoomSettings,
-  matchingRoomPreset,
-  roomPresetDifferences,
-  type RoomPresetField,
-  type RoomPresetId,
-  type RoomPresetSettings,
 }

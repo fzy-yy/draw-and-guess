@@ -25,7 +25,7 @@ import {
 } from './protocol/room.ts'
 import { LogoutSchema, RegisterSchema, StateResyncSchema } from './protocol/session.ts'
 import { SelectVocabularyPackageSchema, UpdateVocabularySchema } from './protocol/vocabulary.ts'
-import type { ClientResponseData, ClientResponseEvent } from './protocol/response.ts'
+import type { ClientResponseData } from './protocol/response.ts'
 import type { Ack } from './types.ts'
 
 /**
@@ -138,8 +138,11 @@ export const CLIENT_REQUEST_SCHEMAS = {
  * 响应数据完全由 `protocol/response.ts` 的 ack Schema 推导：
  * 请求 payload 走 `CLIENT_REQUEST_SCHEMAS`，ack 走 `CLIENT_RESPONSE_SCHEMAS`，
  * 两者共同组成请求事件全集，避免手写响应接口与运行时线格式漂移。
+ * 两张注册表事件集必须一致——该约束由 `test/type/schema-first.ts` 的编译期
+ * `expectTypeOf<keyof ...>().toEqualTypeOf<keyof ...>()` 断言把关（不等则 CI 类型检查失败），
+ * 因此这里无需再用交集重复表达。
  */
-export type ClientRequestEvent = keyof typeof CLIENT_REQUEST_SCHEMAS & ClientResponseEvent
+export type ClientRequestEvent = keyof typeof CLIENT_REQUEST_SCHEMAS
 export type ClientRequestPayload<E extends ClientRequestEvent> = z.infer<
   (typeof CLIENT_REQUEST_SCHEMAS)[E]
 >

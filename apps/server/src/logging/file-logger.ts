@@ -38,7 +38,8 @@ export function prepareLogDir(maxFiles: number): string {
     .filter((name) => name.endsWith('.log'))
     .sort((left, right) => fileAge(left) - fileAge(right))
   const excess = logs.length + 1 - maxFiles
-  for (let index = 0; index < excess; index += 1) unlinkSync(join(LOG_DIR, logs[index]!))
+  // excess ∈ [0, logs.length]（maxFiles ≥ 1），slice 取最旧 excess 个删除，避免 `logs[index]!` 断言
+  for (const stale of logs.slice(0, Math.max(0, excess))) unlinkSync(join(LOG_DIR, stale))
   return newPath
 }
 

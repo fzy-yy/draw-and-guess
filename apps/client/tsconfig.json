@@ -4,6 +4,11 @@
     "types": ["vite/client"],
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
+  // 模板严格校验：未声明的组件 props/事件、v-model 类型、未注册组件都会编译失败；
+  // 合法透传属性经 src/vue-augmentations.d.ts 集中放行（取舍见 ADR-0014/0015 关联的类型整改）
+  "vueCompilerOptions": {
+    "strictTemplates": true
+  },
   "include": [
     "src/**/*.ts",
     "src/**/*.vue",

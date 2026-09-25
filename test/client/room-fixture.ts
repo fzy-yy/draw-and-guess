@@ -69,7 +69,7 @@ export function createRoomFixture(
       structuredHintsEnabled: true,
       hintStartRatio: 0.5,
       guessBaseScore: 100,
-      scoreMode: 'standard',
+      extraGuessSeconds: 0,
       allowPlayerInvite: true,
       allowPause: true,
       allowWordReroll: true,

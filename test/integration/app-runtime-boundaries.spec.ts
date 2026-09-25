@@ -136,7 +136,7 @@ describe('RoomSync push 门禁', () => {
 
     fakeTransport.emit(
       EVENTS.drawStrokeBatch,
-      createServerPush({
+      createServerPush(EVENTS.drawStrokeBatch, {
         roomId: ROOM_ID,
         gameId: GAME_ID,
         roundId: ROUND_ID,
@@ -149,7 +149,7 @@ describe('RoomSync push 门禁', () => {
 
     fakeTransport.emit(
       EVENTS.drawStrokeBatch,
-      createServerPush({
+      createServerPush(EVENTS.drawStrokeBatch, {
         roomId: ROOM_ID,
         gameId: GAME_ID,
         roundId: ROUND_ID,
@@ -187,8 +187,15 @@ describe('绘图失败回滚链路', () => {
         data: event === EVENTS.stateResync ? createRoomFixture() : undefined,
       }
     })
-    const redraw = vi.fn()
-    const drawnPoints = new Map<string, number>()
+    // 会话的渲染副作用全部经 preview 端口表达；本用例只验证「失败回滚走 abandonPreview」。
+    const preview = {
+      beginPreview: vi.fn(),
+      addPreviewPoint: vi.fn(),
+      rebasePreview: vi.fn(),
+      endPreview: vi.fn(),
+      abandonPreview: vi.fn(),
+      replay: vi.fn(),
+    }
     let session!: ReturnType<typeof useStrokeSession>
     const canvas = {
       getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }),
@@ -196,15 +203,6 @@ describe('绘图失败回滚链路', () => {
       hasPointerCapture: vi.fn(() => false),
       releasePointerCapture: vi.fn(),
     } as unknown as HTMLCanvasElement
-    const context = {
-      canvas: { width: 100, height: 100 },
-      save: vi.fn(),
-      restore: vi.fn(),
-      beginPath: vi.fn(),
-      moveTo: vi.fn(),
-      lineTo: vi.fn(),
-      stroke: vi.fn(),
-    } as unknown as CanvasRenderingContext2D
 
     mountHarness(() => {
       session = useStrokeSession({
@@ -215,10 +213,7 @@ describe('绘图失败回滚链路', () => {
         color: () => '#1F2937',
         roundId: () => room.room?.game?.roundId ?? '',
         lastSequence: () => room.room?.game?.lastSequence ?? -1,
-        drawnPoints,
-        getContext: () => context,
-        redraw,
-        present: vi.fn(),
+        preview,
         emitStroke: (command, onResult) => void gameplay.sendStroke(command).then(onResult),
         onBatchFailure: () => void room.requestFullSnapshot(),
         emitFill: vi.fn(),
@@ -236,7 +231,7 @@ describe('绘图失败回滚链路', () => {
       fakeTransport.requests.find(({ event }) => event === EVENTS.stateResync)?.payload.reason,
     ).toBe('state_gap')
     expect(session.pendingBatches.size).toBe(0)
-    expect(drawnPoints.size).toBe(0)
-    expect(redraw).toHaveBeenCalledOnce()
+    // 乐观痕迹清理 + 权威重放由机器的 abandonPreview 承载（机器级守卫见其 spec）。
+    expect(preview.abandonPreview).toHaveBeenCalledOnce()
   })
 })

@@ -1,6 +1,6 @@
 export { default as AccessibilityTab } from './AccessibilityTab.vue'
 export { default as AudioTab } from './AudioTab.vue'
-// 注意：DiagnosticsTab 为懒加载模块，**不要**在此静态 re-export——
-// 静态 re-export 会被入口静态图捕获，导致代码分割失效（见 utils/lazy-component.ts）。
+// DiagnosticsTab 随设置页一并静态导入（原二级懒加载的取舍见 docs/adr/0014-settings-view-static-import.md）
+export { default as DiagnosticsTab } from './DiagnosticsTab.vue'
 export { default as SettingsSectionHeader } from './SettingsSectionHeader.vue'
 export { default as ShortcutsTab } from './ShortcutsTab.vue'

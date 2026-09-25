@@ -16,6 +16,13 @@ export const WordIdSchema = z
   .max(64)
   .regex(/^[A-Za-z0-9:_-]+$/u, { message: 'invalid word id' })
 export const AvatarIdSchema = z.enum(AVATAR_IDS)
+/**
+ * 头像编号白名单守卫：把任意来源（localStorage 恢复、数据库记录）的字符串收窄为 AvatarId。
+ * 唯一权威仍是 AvatarIdSchema，本函数只是它的类型谓词包装，替代调用点的 `as readonly string[]`。
+ */
+export function isAvatarId(value: unknown): value is z.infer<typeof AvatarIdSchema> {
+  return typeof value === 'string' && AvatarIdSchema.safeParse(value).success
+}
 export const ProfileSchema = z
   .object({
     nickname: z

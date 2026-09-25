@@ -172,6 +172,20 @@ function logicalContextOf(wrapper: VueWrapper): CanvasRenderingContext2D {
   return context
 }
 
+/**
+ * 重放后备缓冲（back buffer）：与逻辑层同样是组件内离屏创建的 canvas，
+ * 用「既非展示层也非逻辑层」排除法取其上下文，验证「重放只画后备、成功才换入」。
+ */
+function scratchContextOf(wrapper: VueWrapper): CanvasRenderingContext2D {
+  const display = wrapper.find('canvas').element as HTMLCanvasElement & {
+    __logicalCanvas?: HTMLCanvasElement
+  }
+  for (const [element, context] of contexts) {
+    if (element !== display && element !== display.__logicalCanvas) return context
+  }
+  throw new Error('重放后备缓冲尚未创建')
+}
+
 function displayContextOf(wrapper: VueWrapper): CanvasRenderingContext2D {
   const context = contexts.get(wrapper.find('canvas').element as HTMLCanvasElement)
   if (!context) throw new Error('展示画布尚未获取 2D 上下文')
@@ -224,12 +238,17 @@ afterEach(() => {
 })
 
 describe('GameCanvas 权威重放与增量投影', () => {
-  it('挂载时重放权威笔画并把逻辑层投影到展示层', () => {
+  it('挂载时重放权威笔画并原子提交、投影到展示层', () => {
     const wrapper = mountCanvas({ strokes: [makeStroke()], lastSequence: 1 })
     const logical = logicalContextOf(wrapper)
+    const scratch = scratchContextOf(wrapper)
 
+    // 重放绘制全部落在后备缓冲；逻辑层只看到一次原子换入（clearRect + drawImage）
+    expect(scratch.clearRect).toHaveBeenCalledTimes(1)
+    expect(scratch.stroke).toHaveBeenCalledTimes(1)
     expect(logical.clearRect).toHaveBeenCalledTimes(1)
-    expect(logical.stroke).toHaveBeenCalledTimes(1)
+    expect(logical.drawImage).toHaveBeenCalledTimes(1)
+    // 提交后的换入与展示层投影是两次 drawImage：逻辑层一次、展示层一次
     expect(displayContextOf(wrapper).drawImage).toHaveBeenCalledTimes(1)
   })
 
@@ -284,70 +303,19 @@ describe('GameCanvas 权威重放与增量投影', () => {
   })
 })
 
-describe('GameCanvas 绘图历史容量', () => {
-  /** 构造「早期封闭边界 + 后续填充 + 单点命令填满容量」的历史，与 E2E/单元场景保持同一几何。 */
-  function buildHistory(commandCount: number): DrawingCommand[] {
-    const boundary: Stroke = makeStroke({
-      id: 'boundary-line',
-      sequence: 0,
-      points: [
-        { x: 0.5, y: 0.05 },
-        { x: 0.5, y: 0.95 },
-        { x: 0.05, y: 0.95 },
-        { x: 0.05, y: 0.05 },
-        { x: 0.5, y: 0.05 },
-      ],
-    })
-    const fill = makeFill({ sequence: 1 })
-    const fillers: Stroke[] = []
-    for (let index = 0; index < commandCount - 2; index += 1) {
-      fillers.push(
-        makeStroke({
-          id: `filler-${index}`,
-          sequence: index + 2,
-          points: [{ x: 0.3, y: 0.3 }],
-        }),
-      )
-    }
-    return [boundary, fill, ...fillers]
-  }
-
-  it('命令数达到上限的历史被完整重放，最早的封闭边界不被丢弃', async () => {
-    const history = buildHistory(APP_CONFIG.drawing.maxHistoryCommands)
-    const wrapper = mountCanvas({ strokes: history, lastSequence: history.length - 1 })
-    await flush()
-
-    const logical = logicalContextOf(wrapper)
-    // 除填充外的每条命令都必须描边一次：任何本地裁剪都会让计数与首段坐标对不上。
-    expect(vi.mocked(logical.stroke).mock.calls.length).toBe(history.length - 1)
-    expect(vi.mocked(logical.putImageData).mock.calls.length).toBe(1)
-    const firstMove = vi.mocked(logical.moveTo).mock.calls[0]
-    expect(firstMove?.[0]).toBeCloseTo(0.5 * (CONTEXT_WIDTH - 1), 5)
-    expect(firstMove?.[1]).toBeCloseTo(0.05 * (CONTEXT_HEIGHT - 1), 5)
-  })
-
-  it('收到超过上限的历史时仍逐条重放：容量语义只由服务端裁决', async () => {
-    const history = buildHistory(APP_CONFIG.drawing.maxHistoryCommands + 1)
-    const wrapper = mountCanvas({ strokes: history, lastSequence: history.length - 1 })
-    await flush()
-
-    const logical = logicalContextOf(wrapper)
-    expect(vi.mocked(logical.stroke).mock.calls.length).toBe(history.length - 1)
-    expect(vi.mocked(logical.clearRect).mock.calls.length).toBe(1)
-    const firstMove = vi.mocked(logical.moveTo).mock.calls[0]
-    expect(firstMove?.[0]).toBeCloseTo(0.5 * (CONTEXT_WIDTH - 1), 5)
-  })
-})
-
 describe('GameCanvas 填充降级路径', () => {
-  it('填充命令在无 Worker 环境走主线程计算并写回逻辑层', async () => {
+  it('填充命令在无 Worker 环境走主线程计算并经后备缓冲原子提交到逻辑层', async () => {
     const wrapper = mountCanvas({ strokes: [makeFill()], lastSequence: 1 })
 
     await flush()
 
+    const scratch = scratchContextOf(wrapper)
     const logical = logicalContextOf(wrapper)
-    expect(logical.getImageData).toHaveBeenCalledTimes(1)
-    expect(logical.putImageData).toHaveBeenCalledTimes(1)
+    expect(scratch.getImageData).toHaveBeenCalledTimes(1)
+    expect(scratch.putImageData).toHaveBeenCalledTimes(1)
+    // 逻辑层不承接任何中途绘制，只看到一次提交
+    expect(logical.putImageData).not.toHaveBeenCalled()
+    expect(logical.drawImage).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -358,13 +326,16 @@ describe('GameCanvas 填充重放（Worker 路径）', () => {
       .trigger('pointerdown', { button: 0, clientX: 50, clientY: 50, pointerId: 1 })
   }
 
-  it('初始历史含填充时交给 Worker 重放，任务期间占用渲染态、完成后写回并释放', async () => {
+  it('初始历史含填充时交给 Worker 重放，任务期间占用渲染态、完成后提交并释放', async () => {
     useWorkerStub()
     const wrapper = mountCanvas({ strokes: [makeFill()], lastSequence: 1, tool: 'fill' })
     const logical = logicalContextOf(wrapper)
+    const scratch = scratchContextOf(wrapper)
 
     expect(latestWorkerRequest()).toMatchObject({ roundId: ROUND_ID })
-    expect(logical.putImageData).not.toHaveBeenCalled()
+    // 填充在途：后备尚未着色，逻辑层更不该被触碰
+    expect(scratch.putImageData).not.toHaveBeenCalled()
+    expect(logical.drawImage).not.toHaveBeenCalled()
 
     // 渲染任务在途：填充指针请求被忽略，避免在未重放完的画布上继续提交。
     await triggerFill(wrapper)
@@ -373,9 +344,11 @@ describe('GameCanvas 填充重放（Worker 路径）', () => {
     const filled = FakeWorker.instances[0]!.complete()
     await flush()
 
-    expect(logical.putImageData).toHaveBeenCalledTimes(1)
-    const written = vi.mocked(logical.putImageData).mock.calls[0]![0] as ImageData
+    // 着色写回后备缓冲，整帧成功后一次性原子换入逻辑层
+    expect(scratch.putImageData).toHaveBeenCalledTimes(1)
+    const written = vi.mocked(scratch.putImageData).mock.calls[0]![0] as ImageData
     expect(written.data.buffer).toBe(filled.buffer)
+    expect(logical.drawImage).toHaveBeenCalledTimes(1)
     expect(FakeWorker.instances[0]!.terminated).toBe(false)
     expect(getFillDiagnostics()).toHaveLength(0)
 
@@ -390,6 +363,7 @@ describe('GameCanvas 填充重放（Worker 路径）', () => {
     const fillB = makeFill({ id: '00000000-0000-4000-8000-0000000000c2', sequence: 2 })
     const wrapper = mountCanvas({ strokes: [fillA], lastSequence: 1, tool: 'fill' })
     const logical = logicalContextOf(wrapper)
+    const scratch = scratchContextOf(wrapper)
     expect(latestWorkerRequest()).toMatchObject({ roundId: ROUND_ID })
 
     // 第二个填充推送到达：新一轮重放取消旧任务，并在旧任务的 finally 之前启动新任务。
@@ -400,28 +374,92 @@ describe('GameCanvas 填充重放（Worker 路径）', () => {
     })
     await flush()
 
-    expect(vi.mocked(logical.clearRect).mock.calls.length).toBe(2)
+    // 两代重放都只在后备缓冲上开工；旧任务被取消、新任务仍在途，逻辑层不得出现任何半成品帧
+    expect(vi.mocked(scratch.clearRect).mock.calls.length).toBe(2)
+    expect(vi.mocked(logical.clearRect).mock.calls.length).toBe(0)
+    expect(vi.mocked(logical.drawImage).mock.calls.length).toBe(0)
     // 旧任务的 finally 不得把仍在途的新任务渲染态一并清除。
     await triggerFill(wrapper)
     expect(wrapper.emitted('fill')).toBeUndefined()
 
     FakeWorker.instances[0]!.complete()
     await flush()
-    expect(vi.mocked(logical.putImageData).mock.calls.length).toBe(1)
+    // A 着色完成但 B 仍在途：整帧未完成，依旧不得提交逻辑层
+    expect(vi.mocked(scratch.putImageData).mock.calls.length).toBe(1)
+    expect(vi.mocked(logical.drawImage).mock.calls.length).toBe(0)
     await triggerFill(wrapper)
     expect(wrapper.emitted('fill')).toBeUndefined()
 
     FakeWorker.instances[0]!.complete()
     await flush()
-    expect(vi.mocked(logical.putImageData).mock.calls.length).toBe(2)
+    // 整帧完成：着色两次 + 原子换入一次
+    expect(vi.mocked(scratch.putImageData).mock.calls.length).toBe(2)
+    expect(vi.mocked(logical.drawImage).mock.calls.length).toBe(1)
     await triggerFill(wrapper)
     expect(wrapper.emitted('fill')).toHaveLength(1)
+  })
+
+  it('重放途中逻辑层保持上一完整帧：填充在途不得留空白窗口（09 flake 回归）', async () => {
+    useWorkerStub()
+    const stroke = makeStroke()
+    const fillA = makeFill({ id: '00000000-0000-4000-8000-0000000000c1', sequence: 2 })
+    const fillB = makeFill({ id: '00000000-0000-4000-8000-0000000000c2', sequence: 3 })
+    const wrapper = mountCanvas({ strokes: [stroke, fillA], lastSequence: 2, revision: 2 })
+    // 首帧重放完成并提交：此后逻辑层应始终保留一份完整帧
+    FakeWorker.instances[0]!.complete()
+    await flush()
+    const logical = logicalContextOf(wrapper)
+    expect(vi.mocked(logical.drawImage).mock.calls.length).toBe(1)
+    const clearsAtBaseline = vi.mocked(logical.clearRect).mock.calls.length
+    const strokesAtBaseline = vi.mocked(logical.stroke).mock.calls.length
+
+    // 新填充推送到达 → 触发整块重放；重放的绘制与填充计算都不得直接落在逻辑层上
+    await wrapper.setProps({ strokes: [stroke, fillA, fillB], lastSequence: 3, revision: 3 })
+    await flush()
+    expect(vi.mocked(logical.clearRect).mock.calls.length).toBe(clearsAtBaseline)
+    expect(vi.mocked(logical.stroke).mock.calls.length).toBe(strokesAtBaseline)
+
+    // 新帧就绪：逐个完成在途填充（A、B 都要重放），整帧成功后逻辑层才出现 clearRect + drawImage
+    for (let index = 0; index < 3; index += 1) {
+      FakeWorker.instances.at(-1)!.complete()
+      await flush()
+    }
+    expect(vi.mocked(logical.drawImage).mock.calls.length).toBe(2)
+    expect(vi.mocked(logical.clearRect).mock.calls.length).toBe(clearsAtBaseline + 1)
+  })
+
+  it('重放被后续更新打断时逻辑层仍是上一完整帧，无空白中间态（09 flake 回归）', async () => {
+    useWorkerStub()
+    const stroke = makeStroke()
+    const fillA = makeFill({ id: '00000000-0000-4000-8000-0000000000c1', sequence: 2 })
+    const fillB = makeFill({ id: '00000000-0000-4000-8000-0000000000c2', sequence: 3 })
+    const fillC = makeFill({ id: '00000000-0000-4000-8000-0000000000c3', sequence: 4 })
+    const wrapper = mountCanvas({ strokes: [stroke, fillA], lastSequence: 2, revision: 2 })
+    FakeWorker.instances[0]!.complete()
+    await flush()
+    const logical = logicalContextOf(wrapper)
+    expect(vi.mocked(logical.drawImage).mock.calls.length).toBe(1)
+
+    // B 帧重放途中被 C 的推送取代：B 作废不得提交；C 完成前逻辑层保持首帧
+    await wrapper.setProps({ strokes: [stroke, fillA, fillB], lastSequence: 3, revision: 3 })
+    await flush()
+    await wrapper.setProps({ strokes: [stroke, fillA, fillB, fillC], lastSequence: 4, revision: 4 })
+    await flush()
+    expect(vi.mocked(logical.drawImage).mock.calls.length).toBe(1)
+    expect(vi.mocked(logical.clearRect).mock.calls.length).toBe(1)
+
+    // C 帧整帧成功后原子提交（A、B、C 三个填充依次重放完成）
+    for (let index = 0; index < 4; index += 1) {
+      FakeWorker.instances.at(-1)!.complete()
+      await flush()
+    }
+    expect(vi.mocked(logical.drawImage).mock.calls.length).toBe(2)
   })
 
   it('Worker 运行失败时终止旧 Worker，并对同一 ImageData 只做一次主线程降级', async () => {
     useWorkerStub()
     const wrapper = mountCanvas({ strokes: [makeFill()], lastSequence: 1 })
-    const logical = logicalContextOf(wrapper)
+    const scratch = scratchContextOf(wrapper)
     const worker = FakeWorker.instances[0]!
     expect(worker.request).toBeDefined()
 
@@ -429,8 +467,10 @@ describe('GameCanvas 填充重放（Worker 路径）', () => {
     await flush()
 
     expect(worker.terminated).toBe(true)
-    expect(logical.getImageData).toHaveBeenCalledTimes(1)
-    expect(logical.putImageData).toHaveBeenCalledTimes(1)
+    expect(scratch.getImageData).toHaveBeenCalledTimes(1)
+    expect(scratch.putImageData).toHaveBeenCalledTimes(1)
+    // 降级完成后同样整帧原子换入逻辑层
+    expect(logicalContextOf(wrapper).drawImage).toHaveBeenCalledTimes(1)
     expect(getFillDiagnostics().map((item) => item.reason)).toEqual(['worker_degraded'])
     expect(wrapper.emitted('fillFailure')).toBeUndefined()
   })
@@ -440,13 +480,15 @@ describe('GameCanvas 填充重放（Worker 路径）', () => {
     // 缓冲区失效（例如被转移后作废）：主线程已无法基于同一 ImageData 完成降级。
     imageDataFactory = () => new ImageData(new Uint8ClampedArray(0), CONTEXT_WIDTH, CONTEXT_HEIGHT)
     const wrapper = mountCanvas({ strokes: [makeFill()], lastSequence: 1 })
-    const logical = logicalContextOf(wrapper)
+    const scratch = scratchContextOf(wrapper)
 
     FakeWorker.instances[0]!.fail()
     await flush()
 
     expect(FakeWorker.instances[0]!.terminated).toBe(true)
-    expect(logical.putImageData).not.toHaveBeenCalled()
+    expect(scratch.putImageData).not.toHaveBeenCalled()
+    // 重放中止于填充处：逻辑层不得接收任何换入提交（原子性保证无半成品帧）
+    expect(logicalContextOf(wrapper).drawImage).not.toHaveBeenCalled()
     expect(wrapper.emitted('fillFailure')).toHaveLength(1)
     expect(getFillDiagnostics().map((item) => item.reason)).toEqual(['fill_unavailable'])
     // 诊断不含坐标、颜色、像素或答案等可复现画面内容。

@@ -1,4 +1,5 @@
 import { type Page, expect } from '@playwright/test'
+import { joinPolicyLabels, selectDropdownOption } from './dropdown'
 
 export class RoomPage {
   constructor(readonly page: Page) {}
@@ -29,7 +30,7 @@ export class RoomPage {
   async updateMaxPlayers(maxPlayers: number) {
     await this.openRules()
     const dialog = this.page.getByRole('dialog')
-    await dialog.getByLabel('最大玩家数').selectOption(String(maxPlayers))
+    await selectDropdownOption(dialog, '最大玩家数', `${maxPlayers} 人`)
     await dialog.getByRole('button', { name: /保存规则/ }).click()
     await expect(dialog).toBeHidden({ timeout: 10_000 })
   }
@@ -45,7 +46,7 @@ export class RoomPage {
   async updateJoinPolicy(policy: 'forbid' | 'spectate' | 'next_game') {
     await this.openRules()
     const dialog = this.page.getByRole('dialog')
-    await dialog.getByLabel('中途加入').selectOption(policy)
+    await selectDropdownOption(dialog, '中途加入', joinPolicyLabels[policy])
     await dialog.getByRole('button', { name: /保存规则/ }).click()
     await expect(dialog).toBeHidden({ timeout: 10_000 })
   }

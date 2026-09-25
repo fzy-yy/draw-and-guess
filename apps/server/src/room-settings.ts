@@ -5,7 +5,7 @@ import { GameError } from './errors.ts'
 
 /** 房间规则边界的单一领域校验，供建房与修改规则共同使用。 */
 export function validateRoomSettings(settings: RoomSettings): void {
-  const { hintStartRatioRange, score } = APP_CONFIG.game
+  const { hintStartRatioRange, score, extraGuessSeconds } = APP_CONFIG.game
   const valid =
     Number.isInteger(settings.maxPlayers) &&
     settings.maxPlayers >= APP_CONFIG.player.minPlayers &&
@@ -30,10 +30,12 @@ export function validateRoomSettings(settings: RoomSettings): void {
     Number.isInteger(settings.guessBaseScore) &&
     settings.guessBaseScore >= score.guessBaseRange.min &&
     settings.guessBaseScore <= score.guessBaseRange.max &&
+    Number.isInteger(settings.extraGuessSeconds) &&
+    settings.extraGuessSeconds >= extraGuessSeconds.min &&
+    settings.extraGuessSeconds <= extraGuessSeconds.max &&
     typeof settings.allowPlayerInvite === 'boolean' &&
     typeof settings.allowPause === 'boolean' &&
     typeof settings.allowWordReroll === 'boolean' &&
-    (settings.scoreMode === 'standard' || settings.scoreMode === 'flat') &&
     ['forbid', 'spectate', 'next_game'].includes(settings.joinPolicy)
   if (!valid) throw new GameError('INVALID_SETTINGS', serverStrings.errors.INVALID_SETTINGS)
 }

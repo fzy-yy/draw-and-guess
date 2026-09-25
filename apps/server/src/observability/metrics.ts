@@ -78,7 +78,7 @@ export class OperationalMetrics {
   snapshot(roomCount: number): OperationalMetricsSnapshot {
     const errorsByEvent: OperationalMetricsSnapshot['errorsByEvent'] = {}
     for (const [event, counts] of this.errors) {
-      errorsByEvent[event] = Object.fromEntries(counts) as Partial<Record<ErrorCode, number>>
+      errorsByEvent[event] = Object.fromEntries(counts)
     }
     return {
       onlineConnections: this.onlineConnections,

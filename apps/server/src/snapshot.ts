@@ -30,11 +30,12 @@ export class SnapshotBuilder {
     if (!viewerMember) throw new GameError('NOT_IN_ROOM', serverStrings.errors.NOT_IN_ROOM)
     // 候场/观战身份永远不能获得画家答案权限；即使异常状态下 ID 碰巧与 drawerId 相同也要裁剪。
     const viewerIsDrawer = !viewerMember.spectating && game?.drawerId === viewerId
+    // game && 直接参与条件让 TS 收窄（Boolean(game) 不产生收窄，曾迫使下游写 game!）
     const canOmitStrokes =
-      Boolean(game) &&
-      game!.strokes.length > 0 &&
-      viewerMember?.lastSyncedSeq !== undefined &&
-      viewerMember.lastSyncedSeq >= game!.lastSequence &&
+      !!game &&
+      game.strokes.length > 0 &&
+      viewerMember.lastSyncedSeq !== undefined &&
+      viewerMember.lastSyncedSeq >= game.lastSequence &&
       Boolean(this.service.players.get(viewerId)?.connected)
     // 按观看者角色裁剪对局视图的敏感字段
     const gameView: GameView | undefined = game
@@ -87,7 +88,9 @@ export class SnapshotBuilder {
             ? {
                 revealedHints: game.hintOrder
                   .slice(0, game.revealedHintCount)
-                  .map(() => game.answer!.hint || game.answer!.category)
+                  // 回调边界内 game.answer 的收窄会丢失；用可选链 + 空串兜底替代 `!` 断言，
+                  // hint 为空回退 category，两者皆空得 '' 并被下方 filter 剔除。
+                  .map(() => (game.answer?.hint || game.answer?.category) ?? '')
                   .filter((hint): hint is string => hint !== ''),
               }
             : {}),
@@ -127,14 +130,18 @@ export class SnapshotBuilder {
           throw new GameError('UNAUTHORIZED', serverStrings.errors.UNAUTHORIZED)
         const profile = member.leftProfile ?? player?.profile
         if (!profile) throw new GameError('UNAUTHORIZED', serverStrings.errors.UNAUTHORIZED)
-        const publicPlayer = member.leftGame
-          ? {
-              id: member.playerId,
-              nickname: profile.nickname,
-              avatarId: profile.avatarId,
-              status: 'idle' as const,
-            }
-          : this.toPublicPlayer(player!)
+        // 「未离开对局且身份存在」才走完整公开视图；其余用席位快照字段兜底。
+        // 条件重排（!player || leftGame）把上方守卫蕴含的「!leftGame ⇒ player 存在」交给 TS 收窄，
+        // 消除对 player 的非空断言，四分支真值与原实现完全一致。
+        const publicPlayer =
+          !player || member.leftGame
+            ? {
+                id: member.playerId,
+                nickname: profile.nickname,
+                avatarId: profile.avatarId,
+                status: 'idle' as const,
+              }
+            : this.toPublicPlayer(player)
         return {
           ...publicPlayer,
           seatIndex: member.seatIndex,
@@ -149,7 +156,8 @@ export class SnapshotBuilder {
           waitingForNextGame: Boolean(member.waitingForNextGame),
           rematchReady: Boolean(member.rematchReady),
           leftGame: Boolean(member.leftGame),
-          connection: member.leftGame ? 'left' : player!.connected ? 'online' : 'reconnecting',
+          connection:
+            member.leftGame || !player ? 'left' : player.connected ? 'online' : 'reconnecting',
           stats: member.stats,
         }
       }),

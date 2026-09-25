@@ -2,7 +2,6 @@
  * 服务端内存领域模型。
  * 带 Secret 后缀的数据绝不原样发送给客户端；公开快照必须通过 GameService 的裁剪函数生成。
  */
-import type { Socket } from 'socket.io'
 import type {
   Ack,
   ChatMessage,
@@ -17,6 +16,7 @@ import type {
   ScoreDetail,
   VocabularyWord,
 } from '@draw-guess/shared'
+import type { AppSocket } from './socket-types.ts'
 import type { TimerHandle } from './runtime.ts'
 
 /**
@@ -28,7 +28,7 @@ export interface PlayerSecret {
   tokenDigest: string // 恢复令牌摘要；明文只在签发调用栈中短暂存在并返回客户端
   profile: Profile // 昵称与内置 SVG 头像编号
   preferences: PresencePreferences // 发现/邀请偏好
-  socket?: Socket // 当前活跃的 Socket 连接（断线重连时会替换）
+  socket?: AppSocket // 当前活跃的 Socket 连接（断线重连时会替换）
   socketId?: string // 当前连接 ID，用于防串号
   roomId?: string // 所在房间（不在房间则为 undefined）
   connected: boolean // 是否在线（断线宽限期内为 false）

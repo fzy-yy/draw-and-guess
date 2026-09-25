@@ -2,11 +2,14 @@ import { onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
 import { APP_CONFIG } from '@draw-guess/config'
 import { getCanvasBackingSize, getDisplayCanvasSize, presentLogicalCanvas } from '@/canvas/viewport'
 
-/** 管理固定逻辑层和 DPR 展示层；逻辑尺寸变化才重放命令，纯 DPR/展示缩放只重新投影。 */
+/**
+ * 管理固定逻辑层和 DPR 展示层；逻辑尺寸变化时把新尺寸交给重放机器（机器自行设置尺寸并整帧重放），
+ * 纯 DPR/展示缩放只重新投影。逻辑画布归 DrawingReplayMachine 所有，本 composable 只测量与投影。
+ */
 export function useCanvasViewport(
   displayCanvas: Ref<HTMLCanvasElement | undefined>,
   logicalCanvas: HTMLCanvasElement,
-  redrawLogical: () => void,
+  onLogicalResize: (width: number, height: number) => void,
 ) {
   const resizeTick = ref(0)
   let observer: ResizeObserver | undefined
@@ -28,16 +31,13 @@ export function useCanvasViewport(
     )
     const logicalChanged =
       logicalCanvas.width !== logicalSize.width || logicalCanvas.height !== logicalSize.height
-    if (logicalChanged) {
-      logicalCanvas.width = logicalSize.width
-      logicalCanvas.height = logicalSize.height
-    }
     if (element.width !== displaySize.width || element.height !== displaySize.height) {
       element.width = displaySize.width
       element.height = displaySize.height
     }
     resizeTick.value += 1
-    if (logicalChanged) redrawLogical()
+    // 逻辑尺寸的写入由机器在 resize 内完成（清空与换入同段发生，展示层无白闪窗口）。
+    if (logicalChanged) onLogicalResize(logicalSize.width, logicalSize.height)
     else presentLogicalCanvas(logicalCanvas, element)
   }
 

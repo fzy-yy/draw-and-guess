@@ -30,9 +30,12 @@ export function loadSettings(): LocalSettings {
   try {
     const stored = localStorage.getItem(APP_CONFIG.app.settingsStorageKey)
     if (stored) {
-      const parsed = JSON.parse(stored) as Record<string, unknown>
+      // localStorage 属不可信输入：先按 unknown 接收，再收窄为可索引视图逐字段校验
+      const raw: unknown = JSON.parse(stored)
+      const parsed: Record<string, unknown> =
+        typeof raw === 'object' && raw !== null ? { ...raw } : {}
       const defaults = PUBLIC_CONFIG.localSettings
-      const loaded = { ...defaults } as LocalSettings
+      const loaded: LocalSettings = { ...defaults }
       const writable = loaded as Partial<Record<keyof LocalSettings, unknown>>
       const shortcutKeys: Array<keyof LocalSettings> = []
 

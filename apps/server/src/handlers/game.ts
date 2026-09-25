@@ -4,12 +4,10 @@
 import { CLIENT_REQUEST_SCHEMAS, EVENTS } from '@draw-guess/shared'
 import { bindRequest } from '../protocol/binder.ts'
 import type { GameService } from '../game-service.ts'
+import type { AppSocket } from '../socket-types.ts'
 
 /** 注册对局控制相关请求事件（guess/chat/draw 不在此文件）。 */
-export function registerGameHandlers(
-  socket: import('socket.io').Socket,
-  service: GameService,
-): void {
+export function registerGameHandlers(socket: AppSocket, service: GameService): void {
   bindRequest(
     socket,
     EVENTS.gameStart,

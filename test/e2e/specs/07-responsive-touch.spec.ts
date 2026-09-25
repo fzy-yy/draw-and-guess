@@ -158,20 +158,14 @@ for (const baseline of BASELINES) {
       await expect(createDialog.getByRole('button', { name: /关闭创建房间弹窗/ })).toBeVisible()
       await expect(createDialog.getByRole('button', { name: /创建并进入/ })).toBeVisible()
       await expect(createDialog.getByRole('button', { name: /取消/ })).toBeVisible()
-      // 功能回归守卫：最大人数 / 玩法预设两个下拉框必须真正可交互。
-      // 旧缺陷：字段行 label 上的覆盖层（.touch-target::after）拦截指针事件，
-      // selectOption 在命中区被遮挡时会因「不接收事件」超时报错——即本用例要抓的回归。
-      const maxPlayersSelect = createDialog.locator('select').first()
-      const maxPlayersTarget = (await maxPlayersSelect
-        .locator('option')
-        .nth(1)
-        .getAttribute('value'))!
-      await maxPlayersSelect.selectOption({ index: 1 })
-      await expect(maxPlayersSelect).toHaveValue(maxPlayersTarget)
-      const presetSelect = createDialog.locator('select').nth(1)
-      const presetTarget = (await presetSelect.locator('option').nth(1).getAttribute('value'))!
-      await presetSelect.selectOption({ index: 1 })
-      await expect(presetSelect).toHaveValue(presetTarget)
+      // 功能回归守卫：最大人数手写下拉必须真正可交互（点 combobox 展开 → 点 option 选中）。
+      // 旧缺陷：字段行 label 上的覆盖层（.touch-target::after）拦截指针事件，原生 select
+      // 收不到点击无法展开；改手写组件后本守卫验证新交互链路——指针被拦截则面板不出现。
+      const maxPlayersCombo = createDialog.getByLabel('最大人数')
+      await maxPlayersCombo.click()
+      await expect(createDialog.getByRole('listbox')).toBeVisible()
+      await createDialog.getByRole('option', { name: '3 人', exact: true }).click()
+      await expect(maxPlayersCombo).toContainText('3 人')
       await captureBaseline(page, testInfo, baseline, '04-create-dialog')
       await page.keyboard.press('Escape')
       await expect(createDialog).toBeHidden()
@@ -260,11 +254,12 @@ for (const baseline of BASELINES) {
       await assertWithinStage(page, rulesDialog, '规则弹窗')
       await assertNoOverflow(rulesDialog, '规则弹窗')
       await expect(rulesDialog.getByRole('button', { name: /保存规则/ })).toBeVisible()
-      // 功能回归守卫：规则弹窗的下拉字段同样必须可交互（与建房弹窗同一 RuleSelectField 根因）
-      const rulesSelect = rulesDialog.locator('select').first()
-      const rulesTarget = (await rulesSelect.locator('option').nth(1).getAttribute('value'))!
-      await rulesSelect.selectOption({ index: 1 })
-      await expect(rulesSelect).toHaveValue(rulesTarget)
+      // 功能回归守卫：规则弹窗的下拉手写组件同样必须可交互（与建房弹窗同一 SelectDropdown 链路）
+      const rulesCombo = rulesDialog.getByLabel('最大玩家数')
+      await rulesCombo.click()
+      await expect(rulesDialog.getByRole('listbox')).toBeVisible()
+      await rulesDialog.getByRole('option', { name: '5 人', exact: true }).click()
+      await expect(rulesCombo).toContainText('5 人')
       await captureBaseline(page, testInfo, baseline, '08-rules-dialog')
       await page.keyboard.press('Escape')
       await expect(rulesDialog).toBeHidden()
@@ -278,19 +273,25 @@ for (const baseline of BASELINES) {
       await guest.profile.setNickname(`响应式客人-${baseline.key}`)
       await guest.profile.enterLobby()
       await guest.lobby.joinPublicRoom(roomName)
-      // 功能回归守卫：席位角上的踢人按钮仍可点击并弹出确认框
-      const kickButton = page.getByRole('button', { name: /移除该玩家/ })
-      if (await kickButton.count()) {
-        await kickButton.first().click()
-        const kickConfirm = page.getByRole('dialog')
-        await expect(kickConfirm).toBeVisible()
-        await assertWithinStage(page, kickConfirm, '踢人确认弹窗')
-        await assertNoOverflow(kickConfirm, '踢人确认弹窗')
-        await expect(kickConfirm.getByRole('button', { name: /取消/ })).toBeVisible()
-        await expect(kickConfirm.getByRole('button', { name: /确认移除/ })).toBeVisible()
-        await kickConfirm.getByRole('button', { name: /取消/ }).click()
-        await expect(kickConfirm).toBeHidden()
-      }
+      // 功能回归守卫：右键他人席位卡弹出席位操作菜单（角标按钮已移除），
+      // 「移除该玩家」仍可经确认弹窗流程打开并取消
+      const guestSeat = page
+        .locator('article')
+        .filter({ hasText: `响应式客人-${baseline.key}` })
+        .first()
+      await guestSeat.click({ button: 'right' })
+      const seatMenu = page.getByRole('menu', { name: /席位操作/ })
+      await expect(seatMenu).toBeVisible()
+      await expect(seatMenu.getByRole('menuitem', { name: /移交房主/ })).toBeVisible()
+      await seatMenu.getByRole('menuitem', { name: /移除该玩家/ }).click()
+      const kickConfirm = page.getByRole('dialog')
+      await expect(kickConfirm).toBeVisible()
+      await assertWithinStage(page, kickConfirm, '踢人确认弹窗')
+      await assertNoOverflow(kickConfirm, '踢人确认弹窗')
+      await expect(kickConfirm.getByRole('button', { name: /取消/ })).toBeVisible()
+      await expect(kickConfirm.getByRole('button', { name: /确认移除/ })).toBeVisible()
+      await kickConfirm.getByRole('button', { name: /取消/ }).click()
+      await expect(kickConfirm).toBeHidden()
       await guest.room.toggleReady()
       await host.room.startGame()
 

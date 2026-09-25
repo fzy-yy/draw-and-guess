@@ -205,10 +205,12 @@ describe('eslint.config.js 规则作用域', () => {
   })
 
   it('domain/application/protocol 与权威纯函数目录启用运行时禁令，runtime 适配层放行', async () => {
+    // 注意：type-checked lint 层启用 projectService 后，虚拟的不存在路径会因无法归属 tsconfig
+    // 项目而致命报错，因此作用域断言必须借用**真实存在**的文件路径（内容仍是合成的）。
     const governedFiles = [
-      'apps/server/src/domain/example.ts',
-      'apps/server/src/application/example.ts',
-      'apps/server/src/protocol/example.ts',
+      'apps/server/src/domain/session/session-service.ts',
+      'apps/server/src/application/room-publisher.ts',
+      'apps/server/src/protocol/binder.ts',
       'apps/server/src/snapshot.ts',
       'apps/server/src/scoring.ts',
       'apps/server/src/hint-scheduler.ts',

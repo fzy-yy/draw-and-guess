@@ -5,7 +5,8 @@
   历史操作（撤销/重做）直接调用 store.drawAction，清空则向上抛 clear 事件交给父组件确认。
 -->
 <script setup lang="ts">
-import { Brush, Eraser, PaintBucket, RotateCcw, RotateCw, Trash2 } from 'lucide-vue-next'
+import { computed } from 'vue'
+import { Brush, Eraser, PaintBucket, Pipette, RotateCcw, RotateCw, Trash2 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { EVENTS, type ToolKind } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
@@ -33,6 +34,10 @@ function setColor(nextColor: string): void {
 function onColorInput(event: Event): void {
   color.value = (event.target as HTMLInputElement).value
 }
+/** 当前颜色不在预设色板内 → 滴管按钮显示选中描边（提示自定义色生效中）。 */
+const isCustomColor = computed(
+  () => !store.config.drawing.colors.some((paint) => color.value.toUpperCase() === paint),
+)
 /** 线宽滑块拖拽（原生 range 事件，转回数字）。 */
 function onWidthInput(event: Event): void {
   width.value = Number((event.target as HTMLInputElement).value)
@@ -105,15 +110,23 @@ function clearCanvas(): void {
         :disabled="!store.isDrawer"
         @click="setColor(paint)"
       ></button>
-      <!-- 自定义取色：外框与预设色块同尺寸同下限；内部原生 color input 铺满外框（inset-0 + 100%），
-           消除旧实现固定 6cqh 内芯不随外框缩放导致的小屏凸出错位。 -->
+      <!-- 自定义取色：滴管图标按钮（与预设色块同尺寸同下限），点击唤起系统取色器。
+           原生 color input 以 opacity-0 铺在图标上（label 点击直接命中控件，无需 showPicker 兼容）；
+           当前颜色不在预设色板内时按钮显示选中描边。 -->
       <label
-        class="relative h-[max(3.5cqh,16px)] w-[max(3.5cqh,16px)] shrink-0 overflow-hidden rounded-full border-[0.2cqh] border-control"
+        class="relative grid h-[max(3.5cqh,16px)] w-[max(3.5cqh,16px)] shrink-0 cursor-pointer place-items-center rounded-full border-[0.2cqh]"
+        :class="[
+          isCustomColor
+            ? 'outline-[0.3cqh] outline-focus outline-offset-[0.15cqh] border-navy'
+            : 'border-control',
+          store.isDrawer ? '' : 'cursor-not-allowed opacity-50',
+        ]"
         :title="strings.game.customColorTitle"
       >
+        <Pipette class="pointer-events-none h-[62%] w-[62%] text-navy" aria-hidden="true" />
         <input
           type="color"
-          class="absolute inset-0 h-full w-full border-0 p-0"
+          class="absolute inset-0 h-full w-full cursor-pointer border-0 bg-transparent p-0 opacity-0"
           :value="color"
           :disabled="!store.isDrawer"
           :aria-label="strings.game.customColorAria"

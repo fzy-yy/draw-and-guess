@@ -242,7 +242,7 @@ export const projectConventions = {
   },
 }
 
-export default [
+export default tseslint.config([
   {
     ignores: ['**/node_modules/**', '**/dist/**'],
   },
@@ -279,9 +279,11 @@ export default [
         PointerEvent: 'readonly',
         WheelEvent: 'readonly',
         KeyboardEvent: 'readonly',
+        MouseEvent: 'readonly',
         FocusEvent: 'readonly',
         Event: 'readonly',
         EventTarget: 'readonly',
+        Node: 'readonly',
         getComputedStyle: 'readonly',
         HTMLElement: 'readonly',
         HTMLInputElement: 'readonly',
@@ -364,4 +366,40 @@ export default [
       'no-console': 'off',
     },
   },
-]
+  {
+    // ===== 类型感知（type-checked）lint 层：防类型逃逸回潮的护栏 =====
+    // 范围刻意限定为 server 与 packages（此前 30+ 处手工断言、socket.data any 袋的所在地）：
+    // typescript-eslint 的普通 TS program 无法解析跨文件 .vue 组件类型（那是 vue-tsc 的职责），
+    // 对客户端 .vue/.ts 启用会批量误报 no-unsafe-*；客户端的类型严格性由
+    // `pnpm typecheck`（vue-tsc strict + strictTemplates + vue-augmentations）把关，
+    // 覆盖面与精度均高于 type-aware lint。test/** 亦不启用（测试替身 as unknown as 属惯例，
+    // 配置块级豁免而非 inline disable，保持生产源码零 eslint-disable 的记录）。
+    files: ['apps/server/src/**/*.ts', 'packages/*/src/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        // projectService：按文件就近解析 tsconfig 获得类型信息
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    extends: [tseslint.configs.recommendedTypeChecked],
+    rules: {
+      // 非空断言：生产源码必须显式守卫或可选链（保留项须带中文理由的定点豁免注释）。
+      '@typescript-eslint/no-non-null-assertion': 'error',
+      // 异步事件回调（scheduler 回调返回 Promise 被丢弃）属设计内语义，no-misused-promises 误报源。
+      '@typescript-eslint/no-misused-promises': 'off',
+      // 模板字符串宽松化：日志/错误文案大量 `${number}`/`${boolean}` 拼接属预期用法。
+      '@typescript-eslint/restrict-template-expressions': [
+        'error',
+        { allowNumber: true, allowBoolean: true, allowNullish: false },
+      ],
+    },
+  },
+  {
+    // 客户端与共享包统一生效的「无需类型信息」断言护栏（不依赖 program）。
+    files: ['apps/client/src/**/*.{ts,vue}'],
+    rules: {
+      '@typescript-eslint/no-non-null-assertion': 'error',
+    },
+  },
+])

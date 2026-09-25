@@ -30,9 +30,10 @@ import {
   type VocabularySnapshot,
   type VocabularyWord,
 } from '@draw-guess/shared'
-import type { Server, Socket } from 'socket.io'
+import type { AppServer, AppSocket } from './socket-types.ts'
+import type { ServerPushEnvelope, ServerPushEventName } from '@draw-guess/shared'
 import { APP_CONFIG } from './config/index.ts'
-import { createRoomSettings } from '@draw-guess/config'
+import { defaultRoomSettings } from '@draw-guess/config'
 import { serverStrings } from '@draw-guess/strings'
 import { RoomPublisher } from './application/room-publisher.ts'
 import { DomainContext } from './domain/domain-context.ts'
@@ -58,7 +59,7 @@ import { OperationalMetrics } from './observability/metrics.ts'
 
 /** 默认房间规则只从根级配置生成，避免处理器中出现另一套默认值。 */
 export function createDefaultRoomSettings(): RoomSettings {
-  return createRoomSettings('standard', APP_CONFIG.player.defaultMaxPlayers)
+  return defaultRoomSettings(APP_CONFIG.player.defaultMaxPlayers)
 }
 
 /**
@@ -87,7 +88,7 @@ export class GameService {
   readonly publisher: RoomPublisher
 
   constructor(
-    readonly io: Server,
+    readonly io: AppServer,
     readonly vocabulary: VocabularyRegistry,
     /** 持久化仓储（短期身份/完成局战报），由启动器注入 SQLite 实现。 */
     readonly repositories: {
@@ -102,7 +103,7 @@ export class GameService {
       broadcastPresence: (...args) => this.broadcastPresence(...args),
       clock: this.clock,
       emitRoom: (...args) => this.emitRoom(...args),
-      emitRoomEvent: (roomId, event, payload) => this.io.to(roomId).emit(event, payload),
+      emitRoomEvent: (...args) => this.emitRoomEvent(...args),
       finishRound: (...args) => this.round.finishRound(...args),
       leaveRoom: (...args) => this.leaveRoom(...args),
       logger: this.logger,
@@ -126,7 +127,7 @@ export class GameService {
       clearHintTimers: (...args) => this.clearHintTimers(...args),
       clock: this.clock,
       emitRoom: (...args) => this.emitRoom(...args),
-      emitRoomEvent: (roomId, event, payload) => this.io.to(roomId).emit(event, payload),
+      emitRoomEvent: (...args) => this.emitRoomEvent(...args),
       emitToPlayer: (...args) => this.emitToPlayer(...args),
       evaluateRematch: (...args) => this.round.evaluateRematch(...args),
       finishRound: (...args) => this.round.finishRound(...args),
@@ -166,9 +167,13 @@ export class GameService {
       getSession: (playerId, roundId) => this.getDrawingSession(playerId, roundId),
       emitRoom: (roomId) => this.emitRoom(roomId),
       publishStroke: (payload) =>
-        this.io.to(payload.roomId).emit(EVENTS.drawStrokeBatch, createServerPush(payload)),
+        this.io
+          .to(payload.roomId)
+          .emit(EVENTS.drawStrokeBatch, createServerPush(EVENTS.drawStrokeBatch, payload)),
       publishFill: (payload) =>
-        this.io.to(payload.roomId).emit(EVENTS.drawFillCommit, createServerPush(payload)),
+        this.io
+          .to(payload.roomId)
+          .emit(EVENTS.drawFillCommit, createServerPush(EVENTS.drawFillCommit, payload)),
     })
     this.invitation = new InviteService({
       invites: this.invites,
@@ -186,9 +191,9 @@ export class GameService {
         ),
       toPublicInvite: (invite) => this.snapshotter.toPublicInvite(invite),
       emitInvite: (target, invite) =>
-        target.socket?.emit(EVENTS.inviteReceived, createServerPush(invite)),
+        target.socket?.emit(EVENTS.inviteReceived, createServerPush(EVENTS.inviteReceived, invite)),
       emitResolved: (invite, id, status) => {
-        const payload = createServerPush({ id, status })
+        const payload = createServerPush(EVENTS.inviteResolved, { id, status })
         this.emitToPlayer(invite.fromPlayerId, EVENTS.inviteResolved, payload)
         this.emitToPlayer(invite.toPlayerId, EVENTS.inviteResolved, payload)
       },
@@ -239,7 +244,7 @@ export class GameService {
 
   /** 注册新身份或使用服务端签发的临时令牌恢复原座位。 */
   register(
-    socket: Socket,
+    socket: AppSocket,
     input: {
       protocolVersion: string
       profile: Profile
@@ -275,7 +280,7 @@ export class GameService {
    * 玩家主动注销会话：解除 Socket 绑定、清理房间归属、移除内存与数据库记录。
    * 确保清除本地资料后，无需刷新页面即可在同一连接上注册为全新身份。
    */
-  logout(socket: Socket): void {
+  logout(socket: AppSocket): void {
     return this.session.logout(socket)
   }
 
@@ -433,7 +438,8 @@ export class GameService {
       phaseEndsAt: this.clock.now() + APP_CONFIG.game.startingCountdownSeconds * 1_000,
       currentRound: 0,
       totalRounds: activeMembers.length * room.settings.roundsPerPlayer,
-      roundDurationMs: room.settings.drawSeconds * 1_000, // 开局默认房间时长；每回合 beginDrawing 按词条时限刷新
+      // 开局默认房间时长（含额外猜词时间）；每回合 beginDrawing 按词条时限刷新
+      roundDurationMs: (room.settings.drawSeconds + room.settings.extraGuessSeconds) * 1_000,
       drawerOrder: this.shuffle(activeMembers.map((member) => member.playerId)),
       drawerId: '',
       candidates: [],
@@ -650,7 +656,7 @@ export class GameService {
     return this.invitation.respond(playerId, inviteId, accept)
   }
 
-  handleDisconnect(socket: Socket): void {
+  handleDisconnect(socket: AppSocket): void {
     return this.session.handleDisconnect(socket)
   }
 
@@ -733,7 +739,7 @@ export class GameService {
   public addSystemNotice(room: RoomSecret, text: string): void {
     // 系统通知同时进入消息历史和作为独立事件推送（即使尚无对局也能收到）
     if (room.game) this.addMessage(room, { type: 'system', text })
-    this.io.to(room.id).emit(EVENTS.systemNotice, createServerPush({ text }))
+    this.io.to(room.id).emit(EVENTS.systemNotice, createServerPush(EVENTS.systemNotice, { text }))
   }
 
   /** @internal 内部协作接口（RoundMachine / 模块间调用） */
@@ -863,9 +869,28 @@ export class GameService {
     return ['choosing_word', 'drawing', 'round_result'].includes(phase)
   }
 
-  /** 向指定玩家发送无 ack 的推送事件。 */
-  private emitToPlayer(playerId: string, event: string, payload: unknown): void {
-    this.players.get(playerId)?.socket?.emit(event, payload)
+  /** 向指定玩家发送无 ack 的推送事件（事件名与信封编译期配对）。 */
+  private emitToPlayer<E extends ServerPushEventName>(
+    playerId: string,
+    event: E,
+    envelope: ServerPushEnvelope<E>,
+  ): void {
+    const socket = this.players.get(playerId)?.socket
+    if (!socket) return
+    // 泛型事件名下 socket.io 的 Parameters<> 是延迟索引类型，函数体内无法证明实参匹配；
+    // 事件↔信封配对已由本签名与 createServerPush 在调用方强制，此处只做唯一 emit 边界适配
+    // （与 binder 的 on 适配同一手法）。
+    ;(socket.emit as (ev: E, payload: ServerPushEnvelope<E>) => void)(event, envelope)
+  }
+
+  /** 向房间广播推送事件（事件名与信封编译期配对；边界适配理由同 emitToPlayer）。 */
+  private emitRoomEvent<E extends ServerPushEventName>(
+    roomId: string,
+    event: E,
+    envelope: ServerPushEnvelope<E>,
+  ): void {
+    const broadcast = this.io.to(roomId)
+    ;(broadcast.emit as (ev: E, payload: ServerPushEnvelope<E>) => void)(event, envelope)
   }
 
   /** Fisher-Yates 洗牌：随机打乱数组并返回新数组（不改原数组）。 */

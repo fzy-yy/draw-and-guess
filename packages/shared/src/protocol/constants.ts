@@ -2,7 +2,7 @@
  * 线上协议的公开约束。前后端配置与 Zod Schema 都必须引用这里，避免边界两侧各维护一份。
  * 这里只放会影响协议兼容性或客户端可提交载荷的值；限频、持久化与清理策略属于服务端私有配置。
  */
-export const PROTOCOL_VERSION = '12' as const
+export const PROTOCOL_VERSION = '13' as const
 
 /**
  * room:closed 推送的稳定关闭码：客户端按码分支（例如被踢弹窗），展示文案只用于提示。
@@ -79,6 +79,8 @@ export const ROOM_RULE_LIMITS = {
   optionCount: { min: 2, max: 5 },
   hintStartRatio: { min: 0.1, max: 0.9 },
   guessBaseScore: { min: 50, max: 2_000 },
+  // 额外猜词时间：在难度派生时限之上叠加，用于降低难度；0 表示不额外增加。
+  extraGuessSeconds: { min: 0, max: 90 },
 } as const
 
 export const PRIVATE_ROOM_CODE = {

@@ -67,12 +67,14 @@ export interface SoundManifest {
  * 同一键同时存在 mp3 与 wav 时，确定性地选择其一。
  * 短音效约定优先 wav（轻量、短促），与 assets/audio/README.md 一致。
  */
-function resolveDuplicate(matches: DiscoveredSound[]): {
+function resolveDuplicate(matches: readonly DiscoveredSound[]): {
   selected: DiscoveredSound
   duplicate?: DiscoveredSound
 } {
   const preferred = 'wav'
-  const selected = matches.find((match) => match.ext === preferred) ?? matches[0]!
+  // 调用方已保证 matches.length ≥ 1（空匹配在上游走 missing 分支）；此处以显式守卫替代 `matches[0]!`
+  const selected = matches.find((match) => match.ext === preferred) ?? matches[0]
+  if (!selected) throw new Error('resolveDuplicate 需要一个非空匹配数组')
   const duplicate = matches.find((match) => match !== selected)
   return { selected, duplicate }
 }

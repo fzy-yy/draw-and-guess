@@ -5,7 +5,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { APP_CONFIG } from '@draw-guess/config'
-import { RecoveryTokenSchema, type Profile } from '@draw-guess/shared'
+import { RecoveryTokenSchema, isAvatarId, type Profile } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { useGameTransport } from '@/application/game-transport'
 import { EVENTS } from '@draw-guess/shared'
@@ -16,7 +16,10 @@ export interface StoredProfile extends Profile {
 }
 
 function randomItem<T>(items: readonly T[]): T {
-  return items[Math.floor(Math.random() * items.length)] as T
+  const picked = items[Math.floor(Math.random() * items.length)]
+  // noUncheckedIndexedAccess 下索引带 undefined；调用方全部传非空白名单，抛错仅为兜底防御
+  if (picked === undefined) throw new Error('randomItem 需要一个非空数组')
+  return picked
 }
 
 /** 从 localStorage 加载本地资料；损坏时回退到随机资料。 */
@@ -24,12 +27,13 @@ export function loadProfile(): StoredProfile {
   try {
     const stored = localStorage.getItem(APP_CONFIG.app.storageKey)
     if (stored) {
-      const parsed = JSON.parse(stored) as Partial<StoredProfile>
+      // localStorage 属不可信输入：JSON.parse 结果按 unknown 逐字段守卫，不做整体形状断言
+      const raw: unknown = JSON.parse(stored)
+      const parsed: Record<string, unknown> =
+        typeof raw === 'object' && raw !== null ? { ...raw } : {}
       // 头像只接受内置编号；旧版 avatarColor 或损坏资料会安全迁移为随机 SVG 头像。
-      const avatarId = (APP_CONFIG.player.avatarIds as readonly string[]).includes(
-        parsed.avatarId ?? '',
-      )
-        ? (parsed.avatarId ?? APP_CONFIG.player.defaultAvatarId)
+      const avatarId = isAvatarId(parsed.avatarId)
+        ? parsed.avatarId
         : randomItem(APP_CONFIG.player.avatarIds)
       if (typeof parsed.nickname === 'string') {
         const base = { nickname: parsed.nickname, avatarId }

@@ -123,10 +123,12 @@ export class RoundMachine {
       APP_CONFIG.vocabulary.useWordTimeLimit && richAnswer.timeLimit
         ? richAnswer.timeLimit
         : room.settings.drawSeconds
-    const seconds = Math.max(
+    // 基础时长先钳制到协议合法区间，再叠加房间可配的「额外猜词时间」（0~90 秒，用于降低难度）。
+    const baseSeconds = Math.max(
       APP_CONFIG.game.drawSeconds.min,
       Math.min(APP_CONFIG.game.drawSeconds.max, configuredSeconds),
     )
+    const seconds = baseSeconds + room.settings.extraGuessSeconds
     game.roundDurationMs = seconds * 1_000
     game.phaseStartedAt = this.service.clock.now()
     game.phaseEndsAt = this.service.clock.now() + game.roundDurationMs

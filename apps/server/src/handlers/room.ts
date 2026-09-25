@@ -4,12 +4,10 @@
 import { CLIENT_REQUEST_SCHEMAS, EVENTS } from '@draw-guess/shared'
 import { bindRequest } from '../protocol/binder.ts'
 import type { GameService } from '../game-service.ts'
+import type { AppSocket } from '../socket-types.ts'
 
 /** 注册房间相关的全部请求事件。 */
-export function registerRoomHandlers(
-  socket: import('socket.io').Socket,
-  service: GameService,
-): void {
+export function registerRoomHandlers(socket: AppSocket, service: GameService): void {
   // 房间生命周期：创建 / 加入 / 离开
   bindRequest(
     socket,

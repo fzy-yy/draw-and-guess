@@ -70,18 +70,22 @@ function snapshot(settings: RoomSettings = testRoomSettings()): RoomSnapshot {
 describe('推送协议与版本门禁', () => {
   it('完整信封可解码；字段缺失、Secret 注入和协议不匹配均被拒绝并记录诊断', () => {
     clearProtocolDiagnostics()
-    expect(decodeServerPush(EVENTS.roomSnapshot, createServerPush(snapshot())).ok).toBe(true)
     expect(
-      decodeServerPush(
-        EVENTS.roomSnapshot,
-        createServerPush({ ...snapshot(), members: undefined }),
-      ),
+      decodeServerPush(EVENTS.roomSnapshot, createServerPush(EVENTS.roomSnapshot, snapshot())).ok,
+    ).toBe(true)
+    // 非法 data（members 缺失 / 注入 Secret）不走 createServerPush（其签名会拒绝），
+    // 手写信封模拟「线上收到损坏/越权字节」。
+    expect(
+      decodeServerPush(EVENTS.roomSnapshot, {
+        protocolVersion: APP_CONFIG.app.protocolVersion,
+        data: { ...snapshot(), members: undefined },
+      }),
     ).toEqual({ ok: false, reason: 'invalid_payload' })
     expect(
-      decodeServerPush(
-        EVENTS.roomSnapshot,
-        createServerPush({ ...snapshot(), requestCache: { secret: true } }),
-      ),
+      decodeServerPush(EVENTS.roomSnapshot, {
+        protocolVersion: APP_CONFIG.app.protocolVersion,
+        data: { ...snapshot(), requestCache: { secret: true } },
+      }),
     ).toEqual({ ok: false, reason: 'invalid_payload' })
     expect(
       decodeServerPush(EVENTS.roomSnapshot, {

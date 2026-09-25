@@ -23,15 +23,15 @@ import {
   BaseDialog,
   ContextMenu,
 } from '@/components/common'
-import { defineLazyComponent } from '@/utils/lazy-component'
+
 // 四个视图组件：对局、房间等待、大厅、资料确认（进入对局的关键链路，保持静态导入）
 import ProfileView from '@/views/ProfileView.vue'
 import LobbyView from '@/views/LobbyView.vue'
 import RoomView from '@/views/RoomView.vue'
 import GameView from '@/views/GameView.vue'
-
-// 设置页属低频模块：懒加载，不进首屏包（加载/失败兜底见 utils/lazy-component.ts）
-const SettingsView = defineLazyComponent(() => import('@/views/SettingsView.vue'))
+// 设置页随入口静态加载：懒加载首开会产生「视图真空帧」露出舞台近白底板（白闪），
+// 且原「重试」按钮在真失败时不渲染；取舍与理由见 docs/adr/0014-settings-view-static-import.md
+import SettingsView from '@/views/SettingsView.vue'
 
 // 获取全局游戏 store（连接、身份、房间、对局状态）
 const store = useGameStore()

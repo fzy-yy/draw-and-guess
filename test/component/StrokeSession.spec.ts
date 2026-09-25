@@ -37,10 +37,17 @@ function accepted(stroke: Stroke): RequestResult<StrokeAck> {
 function createSessionHarness(options: { tool?: 'pen' | 'fill'; canFill?: () => boolean } = {}) {
   const sent: SentBatch[] = []
   const authoritativeStrokes: Stroke[] = []
-  const redraw = vi.fn()
   const onBatchFailure = vi.fn()
   const emitFill = vi.fn()
-  const drawnPoints = new Map<string, number>()
+  // 会话只描述笔画事件；预览绘制/簿记/回滚重放由端口承担（这里用可编程替身观察调用）。
+  const preview = {
+    beginPreview: vi.fn(),
+    addPreviewPoint: vi.fn(),
+    rebasePreview: vi.fn(),
+    endPreview: vi.fn(),
+    abandonPreview: vi.fn(),
+    replay: vi.fn(),
+  }
   let roundId = 'round-a'
   let session!: ReturnType<typeof useStrokeSession>
   const canvas = {
@@ -49,15 +56,6 @@ function createSessionHarness(options: { tool?: 'pen' | 'fill'; canFill?: () => 
     hasPointerCapture: vi.fn(() => false),
     releasePointerCapture: vi.fn(),
   } as unknown as HTMLCanvasElement
-  const context = {
-    canvas: { width: 100, height: 100 },
-    save: vi.fn(),
-    restore: vi.fn(),
-    beginPath: vi.fn(),
-    moveTo: vi.fn(),
-    lineTo: vi.fn(),
-    stroke: vi.fn(),
-  } as unknown as CanvasRenderingContext2D
 
   const Harness = defineComponent({
     setup() {
@@ -70,10 +68,7 @@ function createSessionHarness(options: { tool?: 'pen' | 'fill'; canFill?: () => 
         color: () => '#1F2937',
         roundId: () => roundId,
         lastSequence: () => -1,
-        drawnPoints,
-        getContext: () => context,
-        redraw,
-        present: vi.fn(),
+        preview,
         emitStroke: (stroke, complete) => sent.push({ stroke, complete }),
         onBatchFailure,
         emitFill,
@@ -94,7 +89,7 @@ function createSessionHarness(options: { tool?: 'pen' | 'fill'; canFill?: () => 
     sent,
     session,
     authoritativeStrokes,
-    redraw,
+    preview,
     onBatchFailure,
     emitFill,
     wrapper,
@@ -127,7 +122,8 @@ describe('绘图乐观批次失败回滚', () => {
     harness.sent[0]!.complete(transportFailure())
 
     expect(harness.session.pendingBatches.size).toBe(0)
-    expect(harness.redraw).toHaveBeenCalledOnce()
+    // 失败回滚经端口完成：机器抹簿记并整帧重放（abandonPreview 内含 replay）。
+    expect(harness.preview.abandonPreview).toHaveBeenCalledOnce()
     expect(harness.onBatchFailure).toHaveBeenCalledOnce()
   })
 
@@ -147,7 +143,7 @@ describe('绘图乐观批次失败回滚', () => {
 
     expect(harness.authoritativeStrokes).toEqual([confirmed])
     expect(harness.session.pendingBatches.size).toBe(0)
-    expect(harness.redraw).toHaveBeenCalledOnce()
+    expect(harness.preview.abandonPreview).toHaveBeenCalledOnce()
     expect(harness.onBatchFailure).toHaveBeenCalledOnce()
   })
 
@@ -177,7 +173,8 @@ describe('绘图乐观批次失败回滚', () => {
     harness.sent[0]!.complete(transportFailure())
 
     expect(harness.session.pendingBatches.size).toBe(0)
-    expect(harness.redraw).not.toHaveBeenCalled()
+    expect(harness.preview.abandonPreview).not.toHaveBeenCalled()
+    expect(harness.preview.replay).not.toHaveBeenCalled()
     expect(harness.onBatchFailure).not.toHaveBeenCalled()
   })
 })

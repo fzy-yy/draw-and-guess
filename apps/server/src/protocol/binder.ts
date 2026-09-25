@@ -10,11 +10,10 @@ import type {
   ClientRequestEvent,
   ClientRequestPayload,
   ClientResponse,
-  ErrorCode,
 } from '@draw-guess/shared'
 import { EVENTS } from '@draw-guess/shared'
 import { failure, GameError, success } from '../errors.ts'
-import type { OperationalMetrics } from '../observability/metrics.ts'
+import type { AppSocket } from '../socket-types.ts'
 
 export type { Ack }
 
@@ -27,16 +26,13 @@ function normalizeRequestError(error: unknown): unknown {
 
 /** 仅记录未预期异常的脱敏上下文；业务错误不污染错误日志。 */
 function logUnexpected(
-  socket: import('socket.io').Socket,
-  event: string,
+  socket: AppSocket,
+  event: ClientRequestEvent,
   original: unknown,
   normalized: unknown,
 ): void {
   if (normalized instanceof GameError || original instanceof z.ZodError) return
-  ;(
-    socket.data.service as
-      { logUnexpectedError: (error: unknown, context: Record<string, unknown>) => void } | undefined
-  )?.logUnexpectedError(original, { event })
+  socket.data.service?.logUnexpectedError(original, { event })
 }
 
 /**
@@ -44,7 +40,7 @@ function logUnexpected(
  * 幂等键由“事件名 + requestId”组成，并缓存完整 ack；并发重试共享同一个执行 Promise。
  */
 export function bindRequest<E extends ClientRequestEvent>(
-  socket: import('socket.io').Socket,
+  socket: AppSocket,
   event: E,
   schema: ZodType<ClientRequestPayload<E>>,
   handler: (
@@ -53,31 +49,31 @@ export function bindRequest<E extends ClientRequestEvent>(
   ) => ClientResponse<E> | Promise<ClientResponse<E>>,
   options: { registration?: boolean; rateLimit?: boolean } = {},
 ): void {
-  const on = socket.on.bind(socket) as unknown as (
-    eventName: string,
-    listener: (raw: unknown, callback?: (ack: Ack<ClientResponse<E>>) => void) => void,
+  // binder 的 Schema-first 设计刻意以 unknown 接收原始 payload、再交 schema.parse 校验；
+  // Socket.IO 的 EventParams 对泛型事件名是延迟条件类型，TS 无法证明监听器签名匹配，
+  // 因此在这一唯一注册边界做一次「事件名仍受 ClientRequestEvent 约束」的适配
+  // （不再是任意 string 事件名，事件↔ack 配对仍由泛型保证）。
+  const on = socket.on.bind(socket) as <Ev extends ClientRequestEvent>(
+    eventName: Ev,
+    listener: (raw: unknown, callback?: (ack: Ack<ClientResponse<Ev>>) => void) => void,
   ) => void
   on(event, async (raw: unknown, callback?: (ack: Ack<ClientResponse<E>>) => void) => {
-    const service = socket.data.service as
-      | {
-          clock?: { now: () => number }
-          metrics?: OperationalMetrics
-        }
-      | undefined
-    const startedAt = service?.clock?.now()
+    const service = socket.data.service
+    const startedAt = service?.clock.now()
     const provisionalId =
       typeof raw === 'object' && raw && 'requestId' in raw
-        ? String((raw as { requestId: unknown }).requestId)
+        ? String(raw.requestId)
         : 'invalid-request'
     let metricsRecorded = false
     const respond = (ack: Ack<ClientResponse<E>>): void => {
       if (!metricsRecorded) {
         metricsRecorded = true
-        const finishedAt = service?.clock?.now()
+        const finishedAt = service?.clock.now()
+        // 指标记录是尽力而为的观测：service/metrics 任一缺失都不应让请求处理崩溃，故用可选链。
         service?.metrics?.recordAcknowledgement(
           event,
           startedAt === undefined || finishedAt === undefined ? 0 : finishedAt - startedAt,
-          ack.ok ? undefined : (ack.error.code as ErrorCode),
+          ack.ok ? undefined : ack.error.code,
         )
       }
       if (typeof callback === 'function') callback(ack)
@@ -92,20 +88,20 @@ export function bindRequest<E extends ClientRequestEvent>(
           (input as ClientRequestPayload<typeof EVENTS.stateResync>).reason === 'invalid_push',
         )
       }
-      const playerId = socket.data.playerId as string | undefined
+      const playerId = socket.data.playerId
       if (!options.registration && !playerId)
         throw new GameError('UNAUTHORIZED', serverStrings.errors.UNAUTHORIZED_REGISTER)
 
       const cacheKey = `${event}:${input.requestId}`
-      const cache = socket.data.requestCache as Map<string, Ack<unknown>> | undefined
+      const cache = socket.data.requestCache
       const cached = cache?.get(cacheKey)
       if (cached) {
+        // 缓存只写入「已通过 ack Schema 校验」的成功结果，取回时按当前事件收窄一次类型。
         respond(cached as Ack<ClientResponse<E>>)
         return
       }
 
-      const inFlight = socket.data.inFlightRequests as
-        Map<string, Promise<Ack<unknown>>> | undefined
+      const inFlight = socket.data.inFlightRequests
       const existing = inFlight?.get(cacheKey)
       if (existing) {
         respond((await existing) as Ack<ClientResponse<E>>)
@@ -116,7 +112,7 @@ export function bindRequest<E extends ClientRequestEvent>(
         const clock = service?.clock
         if (!clock) throw new Error('binder runtime clock is not initialized')
         const now = clock.now()
-        const history = ((socket.data.eventTimes as number[] | undefined) ?? []).filter(
+        const history = (socket.data.eventTimes ?? []).filter(
           (time) => now - time < APP_CONFIG.network.requestRateWindowMs,
         )
         if (history.length >= APP_CONFIG.network.requestEventsPerSecond) {
@@ -125,7 +121,7 @@ export function bindRequest<E extends ClientRequestEvent>(
             failure(
               new GameError('RATE_LIMITED', serverStrings.errors.RATE_LIMITED),
               input.requestId,
-            ) as Ack<ClientResponse<E>>,
+            ),
           )
           return
         }
@@ -140,28 +136,30 @@ export function bindRequest<E extends ClientRequestEvent>(
         } catch (error) {
           const normalized = normalizeRequestError(error)
           logUnexpected(socket, event, error, normalized)
-          return failure(normalized, input.requestId) as Ack<ClientResponse<E>>
+          return failure(normalized, input.requestId)
         }
       })()
-      inFlight?.set(cacheKey, execution as Promise<Ack<unknown>>)
+      inFlight?.set(cacheKey, execution)
       const ack = await execution
       inFlight?.delete(cacheKey)
 
       // 注册 handler 会把 socket 缓存切换到玩家级缓存；因此执行后重新读取当前引用。
-      const liveCache = socket.data.requestCache as Map<string, Ack<unknown>> | undefined
+      const liveCache = socket.data.requestCache
       // 只缓存成功结果：失败的请求没有产生副作用，若也缓存，客户端用同一 requestId 重试
       // 会永远取回旧的 RATE_LIMITED / VERSION_CONFLICT 等瞬时错误而无法自愈。
       if (liveCache && ack.ok) {
-        liveCache.set(cacheKey, ack as Ack<unknown>)
+        liveCache.set(cacheKey, ack)
         // 简单 FIFO 上限，防止长时间连接下幂等缓存无界增长
-        if (liveCache.size > APP_CONFIG.network.idempotencyCacheMax)
-          liveCache.delete(liveCache.keys().next().value as string)
+        if (liveCache.size > APP_CONFIG.network.idempotencyCacheMax) {
+          const oldest = liveCache.keys().next().value
+          if (oldest !== undefined) liveCache.delete(oldest)
+        }
       }
       respond(ack)
     } catch (error) {
       const normalized = normalizeRequestError(error)
       logUnexpected(socket, event, error, normalized)
-      respond(failure(normalized, provisionalId) as Ack<ClientResponse<E>>)
+      respond(failure(normalized, provisionalId))
     }
   })
 }

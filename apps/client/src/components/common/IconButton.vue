@@ -21,7 +21,8 @@ const props = withDefaults(
   }>(),
   { size: 'default', disabled: false, audioFeedback: 'activate' },
 )
-const emit = defineEmits<{ click: [] }>()
+// click 携带 MouseEvent：与 BaseIconButton/全局 onClick 扩展签名一致（见 vue-augmentations.d.ts）
+const emit = defineEmits<{ click: [event: MouseEvent] }>()
 
 // 方块图标按钮：尺寸纯按 cqh 等比缩放（旧 compact-control-square 44px 保底已随触控契约移除）。
 const baseClass = computed(() =>
@@ -38,7 +39,7 @@ const baseClass = computed(() =>
     :disabled="disabled"
     :audio-feedback="audioFeedback"
     :base-class="baseClass"
-    @click="emit('click')"
+    @click="emit('click', $event)"
   >
     <slot />
   </BaseIconButton>

@@ -116,6 +116,18 @@ defineExpose({ scrollToIndex, scrollToTop })
 const columnWidths = computed(() => {
   return getColumnWidths(props.columns, Boolean(props.selectedIds))
 })
+
+/**
+ * 可视行：把虚拟滚动项映射为「已收窄到 T」的行（越界 undefined 直接过滤掉）。
+ * 模板若逐个调用 rowAt(index) 再判空，Vue 模板无法对函数返回值做类型收窄，
+ * 会逼出大量 `rowAt(...)!` 非空断言；在此集中收窄一次，模板消费 item.row 即无断言。
+ */
+const visibleRows = computed(() =>
+  rowVirtualizer.value.getVirtualItems().flatMap((virtualRow) => {
+    const row = rowAt(virtualRow.index)
+    return row ? [{ key: virtualRow.key, row }] : []
+  }),
+)
 </script>
 
 <template>
@@ -164,15 +176,10 @@ const columnWidths = computed(() => {
             ></td>
           </tr>
           <tr
-            v-for="virtualRow in rowVirtualizer.getVirtualItems()"
-            :key="String(virtualRow.key)"
-            :data-index="virtualRow.index"
+            v-for="item in visibleRows"
+            :key="String(item.key)"
             class="border-t-[0.12cqh] border-t-line ui-feedback hover:bg-sky"
-            :class="
-              rowAt(virtualRow.index) && isSelected(rowAt(virtualRow.index)!)
-                ? 'bg-sky'
-                : 'bg-white'
-            "
+            :class="isSelected(item.row) ? 'bg-sky' : 'bg-white'"
           >
             <!-- 行首选择列：多选用于词条批量管理，单选用于互斥的词库包选择。 -->
             <td v-if="props.selectedIds" class="px-[0.5em] py-[0.4cqh]">
@@ -182,17 +189,11 @@ const columnWidths = computed(() => {
                 class="h-[max(1.6cqh,16px)] w-[max(1.6cqh,16px)] accent-blue disabled:cursor-not-allowed disabled:opacity-60"
                 :class="{ 'rounded-none': activeSelectionMode === 'multiple' }"
                 :disabled="props.selectionDisabled"
-                :checked="rowAt(virtualRow.index) ? isSelected(rowAt(virtualRow.index)!) : false"
+                :checked="isSelected(item.row)"
                 :aria-label="
-                  rowAt(virtualRow.index)
-                    ? props.rowAria
-                      ? props.rowAria(rowAt(virtualRow.index)!)
-                      : String(rowAt(virtualRow.index)![props.rowKey])
-                    : undefined
+                  props.rowAria ? props.rowAria(item.row) : String(item.row[props.rowKey])
                 "
-                @change="
-                  rowAt(virtualRow.index) && toggle(String(rowAt(virtualRow.index)![props.rowKey]))
-                "
+                @change="toggle(String(item.row[props.rowKey]))"
               />
             </td>
             <td
@@ -208,17 +209,10 @@ const columnWidths = computed(() => {
               "
             >
               <!-- 富内容插槽：调用方可为任意列提供自定义渲染（如难度星级、分类徽章） -->
-              <slot
-                v-if="rowAt(virtualRow.index)"
-                :name="`cell-${column.key}`"
-                :row="rowAt(virtualRow.index)!"
-                :value="rowAt(virtualRow.index)![column.key]"
-              >
-                <span
-                  class="block truncate"
-                  :title="displayValue(rowAt(virtualRow.index)!, column)"
-                  >{{ displayValue(rowAt(virtualRow.index)!, column) }}</span
-                >
+              <slot :name="`cell-${column.key}`" :row="item.row" :value="item.row[column.key]">
+                <span class="block truncate" :title="displayValue(item.row, column)">{{
+                  displayValue(item.row, column)
+                }}</span>
               </slot>
             </td>
           </tr>

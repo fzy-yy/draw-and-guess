@@ -2,19 +2,22 @@ import {
   EVENTS,
   countGraphemes,
   createServerPush,
+  isAvatarId,
   normalizeAnswer,
   truncateGraphemes,
   type MemberConnectionChange,
   type Profile,
   type PublicPlayer,
+  type ServerPushEnvelope,
+  type ServerPushEventName,
   type SessionRegistration,
 } from '@draw-guess/shared'
-import type { Socket } from 'socket.io'
 import { APP_CONFIG } from '../../config/index.ts'
 import { serverStrings } from '@draw-guess/strings'
 import { GameError, runtimeErrorType, type RuntimeLogger } from '../../errors.ts'
 import type { PlayerSecret, RoomSecret } from '../../models.ts'
 import type { PlayerRecord, PlayerRepository } from '../../repositories/index.ts'
+import type { AppSocket } from '../../socket-types.ts'
 import { type RuntimeDependencies } from '../../runtime.ts'
 import { digestRecoveryToken } from '../../security/recovery-token.ts'
 
@@ -23,7 +26,12 @@ export interface SessionServiceContext {
   broadcastPresence(): void
   clock: RuntimeDependencies['clock']
   emitRoom(roomId?: string): void
-  emitRoomEvent(roomId: string, event: string, payload: unknown): void
+  /** 向房间广播推送事件：事件名与信封在编译期配对（信封由 createServerPush 生成）。 */
+  emitRoomEvent<E extends ServerPushEventName>(
+    roomId: string,
+    event: E,
+    envelope: ServerPushEnvelope<E>,
+  ): void
   finishRound(room: RoomSecret, drawerAbandoned: boolean): void
   leaveRoom(playerId: string, reason?: string): void
   logger: RuntimeLogger
@@ -52,7 +60,7 @@ export interface SessionServiceContext {
 export class SessionService {
   constructor(private readonly context: SessionServiceContext) {}
   register(
-    socket: Socket,
+    socket: AppSocket,
     input: {
       protocolVersion: string
       profile: Profile
@@ -65,7 +73,7 @@ export class SessionService {
       throw new GameError('PROTOCOL_MISMATCH', serverStrings.errors.PROTOCOL_MISMATCH)
     }
     // 头像编号已由共享 Zod 白名单校验；服务层再次防御性确认，拒绝任意资源路径或 URL。
-    if (!(APP_CONFIG.player.avatarIds as readonly string[]).includes(input.profile.avatarId))
+    if (!APP_CONFIG.player.avatarIds.includes(input.profile.avatarId))
       throw new GameError('INVALID_AVATAR_ID', serverStrings.errors.INVALID_AVATAR_ID)
 
     // 携带恢复令牌且仍处于宽限期内的玩家：复用原身份与座位（如仍在房间）
@@ -85,10 +93,12 @@ export class SessionService {
     // 内存索引未命中时原子消费持久化摘要：服务重启后摘要索引为空，
     // 只有一个并发请求能把旧摘要 CAS 为新摘要，成功者得到新的明文令牌。
     // （房间席位不恢复：进行中局在重启时已被作废，恢复后回到大厅。）
-    if (!recovering && input.recoveryToken) {
+    // 守卫直接判 recoveryTokenDigest：它与 input.recoveryToken 同真同假（上一段落派生），
+    // 判它即可让编译器在分支内确认摘要非空，无需 `!` 断言。
+    if (!recovering && recoveryTokenDigest) {
       const nextToken = this.context.random.token(32)
       const record = this.context.repositories.players.consumeRecoveryToken(
-        recoveryTokenDigest!,
+        recoveryTokenDigest,
         digestRecoveryToken(nextToken),
         this.context.clock.now() - APP_CONFIG.network.reconnectGraceMs,
       )
@@ -101,7 +111,7 @@ export class SessionService {
     // 必须复用现有身份：否则旧身份仍 connected:true 且 socket 指向同一存活连接，
     // 而 handleDisconnect 只按 socket.data.playerId 匹配，旧身份永不回收；
     // 并使按身份存储的限频、私密房码枚举上限与邀请冷却形同虚设。
-    const boundId = socket.data.playerId as string | undefined
+    const boundId = socket.data.playerId
     const bound = boundId ? this.context.players.get(boundId) : undefined
     if (bound && bound.socketId === socket.id) {
       bound.preferences = input.preferences
@@ -145,14 +155,14 @@ export class SessionService {
 
   private restorePlayerFromRecord(record: PlayerRecord): PlayerSecret | undefined {
     // 头像编号防御性校验：持久化值若因版本升级脱离白名单，不恢复、走全新注册。
-    if (!(APP_CONFIG.player.avatarIds as readonly string[]).includes(record.avatarId))
-      return undefined
+    if (!isAvatarId(record.avatarId)) return undefined
     const player: PlayerSecret = {
       id: record.id,
       tokenDigest: record.tokenDigest,
       profile: {
         nickname: record.nickname,
-        avatarId: record.avatarId as PlayerSecret['profile']['avatarId'],
+        // 上方 isAvatarId(record.avatarId) 守卫已把 string 收窄为 AvatarId，无需再断言
+        avatarId: record.avatarId,
       },
       preferences: {
         discoverable: record.discoverable,
@@ -176,7 +186,7 @@ export class SessionService {
   }
 
   private rotateAndReclaimPlayer(
-    socket: Socket,
+    socket: AppSocket,
     player: PlayerSecret,
   ): Omit<SessionRegistration, 'room'> {
     const previousTokenDigest = player.tokenDigest
@@ -206,7 +216,7 @@ export class SessionService {
   }
 
   private reclaimPlayer(
-    socket: Socket,
+    socket: AppSocket,
     player: PlayerSecret,
     recoveryToken: string,
   ): Omit<SessionRegistration, 'room'> {
@@ -224,7 +234,7 @@ export class SessionService {
     // Socket.IO 可能恢复了旧传输会话的业务房间；先按领域权威状态清空，再只加入当前 roomId，
     // 避免「服务端已离房，但新 socket 仍订阅旧房间广播」的跨房间信息泄露。
     for (const joinedRoomId of socket.rooms) {
-      if (joinedRoomId !== socket.id) socket.leave(joinedRoomId)
+      if (joinedRoomId !== socket.id) void socket.leave(joinedRoomId)
     }
     // 恢复连接可能丢失过增量广播，强制下次快照对画布全量下发
     const room = player.roomId ? this.context.rooms.get(player.roomId) : undefined
@@ -241,7 +251,12 @@ export class SessionService {
         nickname: player.profile.nickname,
         connection: 'online',
       }
-      socket.to(room.id).emit(EVENTS.roomMemberConnectionChanged, createServerPush(payload))
+      socket
+        .to(room.id)
+        .emit(
+          EVENTS.roomMemberConnectionChanged,
+          createServerPush(EVENTS.roomMemberConnectionChanged, payload),
+        )
     }
     delete player.drawingDisconnectRoomId
     // 重新上线：只持久化连接状态；房间归属始终由当前进程内模型维护。
@@ -263,8 +278,8 @@ export class SessionService {
    * 复活一个用户以为已删除的身份）。持久化成功之后的步骤都不再抛错：离房失败只记日志，
    * 因为房间状态问题不能反过来让注销半途而废。
    */
-  logout(socket: Socket): void {
-    const playerId = socket.data.playerId as string | undefined
+  logout(socket: AppSocket): void {
+    const playerId = socket.data.playerId
     if (!playerId) return
     const player = this.context.players.get(playerId)
     // 只有当前连接可以注销自己的身份：被新连接接管后的旧 socket 迟到注销只解绑自己，
@@ -299,7 +314,7 @@ export class SessionService {
   }
 
   /** 解绑当前 Socket 的会话引用：清空玩家绑定与请求缓存，并广播一次在线状态。 */
-  private detachSocket(socket: Socket): void {
+  private detachSocket(socket: AppSocket): void {
     delete socket.data.playerId
     socket.data.requestCache = new Map()
     this.context.broadcastPresence()
@@ -309,7 +324,7 @@ export class SessionService {
     const player = this.context.requirePlayer(playerId)
     // 房间内锁定资料，避免对局期间玩家频繁改名干扰其他成员辨识
     if (player.roomId) throw new GameError('PROFILE_LOCKED', serverStrings.errors.PROFILE_LOCKED)
-    if (!(APP_CONFIG.player.avatarIds as readonly string[]).includes(profile.avatarId))
+    if (!APP_CONFIG.player.avatarIds.includes(profile.avatarId))
       throw new GameError('INVALID_AVATAR_ID', serverStrings.errors.INVALID_AVATAR_ID)
     // 改名后需要重新做唯一性校验（排除自己当前占用）
     player.profile = {
@@ -333,8 +348,8 @@ export class SessionService {
     this.context.broadcastPresence()
   }
 
-  handleDisconnect(socket: Socket): void {
-    const playerId = socket.data.playerId as string | undefined
+  handleDisconnect(socket: AppSocket): void {
+    const playerId = socket.data.playerId
     if (!playerId) return
     // 只处理当前连接对应的身份，防止被新连接接管后的旧 socket 迟到断开误伤当前会话。
     const player = this.context.players.get(playerId)
@@ -378,7 +393,7 @@ export class SessionService {
       this.context.emitRoomEvent(
         room.id,
         EVENTS.roomMemberConnectionChanged,
-        createServerPush(payload),
+        createServerPush(EVENTS.roomMemberConnectionChanged, payload),
       )
 
       // 当前画家断线：保留短宽限；超时仍未恢复则由权威状态机废弃本回合。
@@ -492,6 +507,6 @@ export class SessionService {
   }
 
   private joinSocketRoom(player: PlayerSecret): void {
-    if (player.roomId) player.socket?.join(player.roomId)
+    if (player.roomId) void player.socket?.join(player.roomId)
   }
 }

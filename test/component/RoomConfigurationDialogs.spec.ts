@@ -3,7 +3,7 @@ import { setActivePinia, type Pinia } from 'pinia'
 import { render, screen, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createRoomSettings } from '@draw-guess/config'
+import { defaultRoomSettings } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import RulesDialog from '@/components/room/RulesDialog.vue'
 import VocabularyDialog from '@/components/room/VocabularyDialog.vue'
@@ -107,7 +107,7 @@ function renderVocabularyDialog(): ReturnType<typeof render> {
 describe('RulesDialog 完整规则字段', () => {
   it('全部字段都有可访问名称，并把用户编辑后的完整草稿提交给父组件', async () => {
     const user = userEvent.setup()
-    const draft = createRoomSettings('standard', 6)
+    const draft = defaultRoomSettings(6)
     const onSave = vi.fn()
     render(RulesDialog, {
       props: { open: true, draft, onSave },
@@ -115,7 +115,6 @@ describe('RulesDialog 完整规则字段', () => {
     })
 
     const expectedLabels = [
-      strings.room.presetField,
       strings.room.maxPlayersField,
       strings.common.roundsField,
       strings.room.chooseTimeField,
@@ -124,9 +123,9 @@ describe('RulesDialog 完整规则字段', () => {
       strings.room.togglePlayerInvite,
       strings.room.toggleAllowWordReroll,
       strings.room.drawFallbackField,
+      strings.room.extraGuessSecondsField,
       strings.room.hintStartRatioField,
       strings.room.guessBaseScoreField,
-      strings.room.scoreModeField,
       strings.room.toggleShowWordLength,
       strings.room.toggleProgressiveHints,
       strings.room.toggleStructuredHints,
@@ -135,9 +134,11 @@ describe('RulesDialog 完整规则字段', () => {
     for (const label of expectedLabels)
       expect(screen.getByLabelText(new RegExp(label))).toBeTruthy()
 
-    await user.selectOptions(screen.getByLabelText(/最大玩家数/), '4')
-    await user.selectOptions(screen.getByLabelText(/中途加入/), 'forbid')
-    await user.selectOptions(screen.getByLabelText(/计分方式/), 'flat')
+    // 手写下拉（SelectDropdown）：点 combobox 展开 → 点 option 选中
+    await user.click(screen.getByLabelText(/最大玩家数/))
+    await user.click(await screen.findByRole('option', { name: '4 人' }))
+    await user.click(screen.getByLabelText(/中途加入/))
+    await user.click(await screen.findByRole('option', { name: '禁止' }))
     await user.click(screen.getByLabelText(strings.room.togglePause))
     await user.click(screen.getByRole('button', { name: strings.room.saveRules }))
 
@@ -145,7 +146,7 @@ describe('RulesDialog 完整规则字段', () => {
       expect.objectContaining({
         maxPlayers: 4,
         joinPolicy: 'forbid',
-        scoreMode: 'flat',
+        extraGuessSeconds: 0,
         allowPause: !draft.allowPause,
       }),
     )

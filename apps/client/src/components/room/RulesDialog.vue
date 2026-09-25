@@ -2,22 +2,24 @@
   房间规则编辑弹窗（房主）——滑块与开关修改规则，保存前可取消。
   原 RoomView.vue 规则弹窗迁入本组件，基于 BaseDialog 复用外壳。
   父组件持有草稿（draft prop），本组件用本地副本编辑（避免修改 props），保存时把副本通过 save 上抛。
+
+  布局约定：
+  - 卡片固定高度（h-[82cqh]）+ 表单区 flex-1 滚动：展开/收起收纳卡时弹窗大小不变，
+    内容超高由表单区滚动条容纳（旧「展开把弹窗撑大」缺陷的修复点）；
+  - 规则分「基础设置 / 高级设置」两个可收纳 <details>，基础默认展开；
+  - 旧「玩法预设」与「计分方式」下拉已移除：预设取消（唯一默认组见 config roomSettingsDefaults），
+    计分固定为标准（基础+速度+顺序）。
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { strings } from '@draw-guess/strings'
 import type { RoomSettings } from '@draw-guess/shared'
-import {
-  applyRoomPreset,
-  createRoomSettings,
-  matchingRoomPreset,
-  type RoomPresetId,
-} from '@draw-guess/config'
+import { defaultRoomSettings } from '@draw-guess/config'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import SectionHeader from '@/components/common/SectionHeader.vue'
 import RuleSliderField from '@/components/common/RuleSliderField.vue'
-import RuleSelectField from '@/components/common/RuleSelectField.vue'
+import RuleSelectField, { type RuleSelectOption } from '@/components/common/RuleSelectField.vue'
 import RuleToggleField from '@/components/common/RuleToggleField.vue'
 import { useGameStore } from '@/stores/game'
 
@@ -41,50 +43,24 @@ const maxPlayerOptions = computed(() =>
     },
   ),
 )
-const joinPolicyOptions = [
+// 显式标注选项值类型为协议联合：不加标注时 value 会被拓宽为 string，
+// RuleSelectField 的 v-model 与 options 泛型配对即失效（strictTemplates 试点抓出的真实缺陷）。
+const joinPolicyOptions: RuleSelectOption<RoomSettings['joinPolicy']>[] = [
   { value: 'forbid', label: strings.room.joinPolicyForbid },
   { value: 'spectate', label: strings.room.joinPolicySpectate },
   { value: 'next_game', label: strings.room.joinPolicyNextGame },
 ]
-const presetOptions = [
-  { value: 'custom', label: strings.room.presetCustom },
-  { value: 'standard', label: strings.room.presetStandard },
-  { value: 'relaxed', label: strings.room.presetRelaxed },
-  { value: 'speed', label: strings.room.presetSpeed },
-] satisfies Array<{ value: RoomPresetId | 'custom'; label: string }>
-const scoreModeOptions = [
-  { value: 'standard', label: strings.room.scoreModeStandard },
-  { value: 'flat', label: strings.room.scoreModeFlat },
-] satisfies Array<{ value: RoomSettings['scoreMode']; label: string }>
 
 // 本地编辑副本：所有字段均为原始值，浅拷贝即可；每次打开（draft 变化）时重新同步。
 // 初值用配置工厂生成完整合法对象，避免用类型断言绕过 RoomSettings 的字段约束。
-const localDraft = ref<RoomSettings>(createRoomSettings('standard', store.config.player.maxPlayers))
-const selectedPreset = ref<RoomPresetId | 'custom'>('standard')
+const localDraft = ref<RoomSettings>(defaultRoomSettings(store.config.player.maxPlayers))
 watch(
   () => props.draft,
   (draft) => {
-    if (draft) {
-      localDraft.value = { ...draft }
-      selectedPreset.value = matchingRoomPreset(draft) ?? 'custom'
-    }
+    if (draft) localDraft.value = { ...draft }
   },
   { immediate: true },
 )
-
-watch(
-  localDraft,
-  (draft) => {
-    selectedPreset.value = matchingRoomPreset(draft) ?? 'custom'
-  },
-  { deep: true },
-)
-
-function selectPreset(preset: RoomPresetId | 'custom'): void {
-  if (preset === 'custom') return
-  selectedPreset.value = preset
-  localDraft.value = applyRoomPreset(localDraft.value, preset)
-}
 </script>
 
 <template>
@@ -92,6 +68,7 @@ function selectPreset(preset: RoomPresetId | 'custom'): void {
   <BaseDialog
     v-model:open="open"
     width-class="w-[68cqw]"
+    section-class="h-[82cqh]"
     labelledby="rules-title"
     :close-aria="strings.room.settingsCloseAria"
     @close="handleClose"
@@ -104,70 +81,72 @@ function selectPreset(preset: RoomPresetId | 'custom'): void {
       ></SectionHeader>
     </template>
 
-    <!-- 表单区在弹窗内自行滚动：低高度舞台下不会把底部操作按钮挤出可视区 -->
+    <!-- 表单区在弹窗内自行滚动：卡片固定高度，展开收纳卡只增滚动内容、不改弹窗尺寸 -->
     <div
-      class="grid min-h-0 grid-cols-2 gap-[1.5cqh_1.8em] overflow-y-auto py-[2.2cqh] px-[2em] overscroll-contain"
+      class="grid min-h-0 flex-1 auto-rows-min grid-cols-1 gap-[1.5cqh] overflow-y-auto py-[2.2cqh] px-[2em] overscroll-contain"
     >
-      <RuleSelectField
-        :model-value="selectedPreset"
-        class="col-span-full"
-        :label="strings.room.presetField"
-        :options="presetOptions"
-        @update:model-value="selectPreset"
-      />
-      <RuleSelectField
-        v-model="localDraft.maxPlayers"
-        :label="strings.room.maxPlayersField"
-        :options="maxPlayerOptions"
-      >
-        <small class="text-muted text-fs-12">{{ strings.room.maxPlayersNote }}</small>
-      </RuleSelectField>
+      <!-- 基础设置：常用规则，默认展开；与高级设置一样可点击标题收纳 -->
+      <details class="rounded-[0.7em] border-[0.16cqh] border-line bg-paper p-[1em]" open>
+        <summary class="cursor-pointer font-bold text-blue">
+          {{ strings.room.basicSettings }}
+        </summary>
+        <div class="mt-[1.5cqh] grid grid-cols-2 gap-[1.5cqh_1.8em]">
+          <RuleSelectField
+            v-model="localDraft.maxPlayers"
+            :label="strings.room.maxPlayersField"
+            :options="maxPlayerOptions"
+          >
+            <small class="text-muted text-fs-12">{{ strings.room.maxPlayersNote }}</small>
+          </RuleSelectField>
 
-      <RuleSliderField
-        v-model="localDraft.roundsPerPlayer"
-        :label="strings.common.roundsField"
-        :min="store.config.game.roundsPerPlayer.min"
-        :max="store.config.game.roundsPerPlayer.max"
-        :step="store.config.game.roundsPerPlayer.step"
-        :display="strings.common.roundsUnit(localDraft.roundsPerPlayer)"
-      />
+          <RuleSliderField
+            v-model="localDraft.roundsPerPlayer"
+            :label="strings.common.roundsField"
+            :min="store.config.game.roundsPerPlayer.min"
+            :max="store.config.game.roundsPerPlayer.max"
+            :step="store.config.game.roundsPerPlayer.step"
+            :display="strings.common.roundsUnit(localDraft.roundsPerPlayer)"
+          />
 
-      <RuleSliderField
-        v-model="localDraft.chooseSeconds"
-        :label="strings.room.chooseTimeField"
-        :min="store.config.game.chooseSeconds.min"
-        :max="store.config.game.chooseSeconds.max"
-        :step="store.config.game.chooseSeconds.step"
-        :display="strings.common.secondsUnit(localDraft.chooseSeconds)"
-      />
+          <RuleSliderField
+            v-model="localDraft.chooseSeconds"
+            :label="strings.room.chooseTimeField"
+            :min="store.config.game.chooseSeconds.min"
+            :max="store.config.game.chooseSeconds.max"
+            :step="store.config.game.chooseSeconds.step"
+            :display="strings.common.secondsUnit(localDraft.chooseSeconds)"
+          />
 
-      <RuleSliderField
-        v-model="localDraft.optionCount"
-        :label="strings.room.optionCountField"
-        :min="store.config.game.optionCount.min"
-        :max="store.config.game.optionCount.max"
-        :step="store.config.game.optionCount.step"
-        :display="strings.room.optionCountUnit(localDraft.optionCount)"
-      />
+          <RuleSliderField
+            v-model="localDraft.optionCount"
+            :label="strings.room.optionCountField"
+            :min="store.config.game.optionCount.min"
+            :max="store.config.game.optionCount.max"
+            :step="store.config.game.optionCount.step"
+            :display="strings.room.optionCountUnit(localDraft.optionCount)"
+          />
 
-      <RuleSelectField
-        v-model="localDraft.joinPolicy"
-        :label="strings.room.joinPolicyField"
-        :options="joinPolicyOptions"
-      />
+          <RuleSelectField
+            v-model="localDraft.joinPolicy"
+            :label="strings.room.joinPolicyField"
+            :options="joinPolicyOptions"
+          />
 
-      <div class="flex flex-col justify-center gap-[1.2cqh]">
-        <RuleToggleField
-          v-model="localDraft.allowPlayerInvite"
-          :label="strings.room.togglePlayerInvite"
-        />
-        <RuleToggleField
-          v-model="localDraft.allowWordReroll"
-          :label="strings.room.toggleAllowWordReroll"
-        />
-      </div>
+          <div class="flex flex-col justify-center gap-[1.2cqh]">
+            <RuleToggleField
+              v-model="localDraft.allowPlayerInvite"
+              :label="strings.room.togglePlayerInvite"
+            />
+            <RuleToggleField
+              v-model="localDraft.allowWordReroll"
+              :label="strings.room.toggleAllowWordReroll"
+            />
+          </div>
+        </div>
+      </details>
 
-      <details class="col-span-full rounded-[0.7em] border-[0.16cqh] border-line bg-paper p-[1em]">
+      <!-- 高级设置：时长回退、提示时机与计分基数等低频项，默认收起 -->
+      <details class="rounded-[0.7em] border-[0.16cqh] border-line bg-paper p-[1em]">
         <summary class="cursor-pointer font-bold text-blue">
           {{ strings.room.advancedSettings }}
         </summary>
@@ -180,6 +159,15 @@ function selectPreset(preset: RoomPresetId | 'custom'): void {
             :step="store.config.game.drawSeconds.step"
             :display="strings.common.secondsUnit(localDraft.drawSeconds)"
             :hint="strings.room.drawFallbackHint"
+          />
+          <RuleSliderField
+            v-model="localDraft.extraGuessSeconds"
+            :label="strings.room.extraGuessSecondsField"
+            :min="store.config.game.extraGuessSeconds.min"
+            :max="store.config.game.extraGuessSeconds.max"
+            :step="store.config.game.extraGuessSeconds.step"
+            :display="strings.common.secondsUnit(localDraft.extraGuessSeconds)"
+            :hint="strings.room.extraGuessSecondsHint"
           />
           <RuleSliderField
             v-model="localDraft.hintStartRatio"
@@ -197,11 +185,6 @@ function selectPreset(preset: RoomPresetId | 'custom'): void {
             :max="store.config.game.score.guessBaseRange.max"
             :step="store.config.game.score.guessBaseRange.step"
             :display="strings.room.guessBaseScoreUnit(localDraft.guessBaseScore)"
-          />
-          <RuleSelectField
-            v-model="localDraft.scoreMode"
-            :label="strings.room.scoreModeField"
-            :options="scoreModeOptions"
           />
           <div class="flex flex-col gap-[0.8cqh]">
             <RuleToggleField

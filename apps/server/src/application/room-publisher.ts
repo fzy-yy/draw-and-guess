@@ -4,16 +4,19 @@ import {
   type PresenceSnapshot,
   type RoomSnapshot,
 } from '@draw-guess/shared'
+import type { RuntimeLogContext } from '../errors.ts'
 import type { PlayerSecret, RoomSecret } from '../models.ts'
+import type { AppServer } from '../socket-types.ts'
 
 export interface RoomPublisherContext {
-  io: import('socket.io').Server
+  io: AppServer
   rooms: Map<string, RoomSecret>
   players: Map<string, PlayerSecret>
   snapshot(room: RoomSecret, viewerId: string): RoomSnapshot
   toPublicPlayer(player: PlayerSecret): PresenceSnapshot['players'][number]
   toPublicRoom(room: RoomSecret): PresenceSnapshot['rooms'][number]
-  logError(error: unknown, context: Record<string, unknown>): void
+  /** 日志上下文走静态白名单类型（RuntimeLogContext），拒绝任意键写入。 */
+  logError(error: unknown, context: RuntimeLogContext): void
 }
 
 /** 角色裁剪快照与大厅状态发布端口。 */
@@ -30,10 +33,12 @@ export class RoomPublisher {
         const player = this.context.players.get(member.playerId)
         player?.socket?.emit(
           EVENTS.roomSnapshot,
-          createServerPush(this.context.snapshot(room, member.playerId)),
+          createServerPush(EVENTS.roomSnapshot, this.context.snapshot(room, member.playerId)),
         )
       } catch (error) {
-        this.context.logError(error, { roomId, memberId: member.playerId, scope: 'emitRoom' })
+        // 原字段名 memberId 不在日志白名单（会被 sanitizeContext 静默丢弃），
+        // 其值本就是玩家 ID，改用 playerId 让诊断信息真正可查。
+        this.context.logError(error, { roomId, playerId: member.playerId, scope: 'emitRoom' })
       }
     }
   }
@@ -50,8 +55,14 @@ export class RoomPublisher {
 
   broadcastPresence(): void {
     const snapshot = this.presenceSnapshot()
-    this.context.io.emit(EVENTS.presenceSnapshot, createServerPush(snapshot))
-    this.context.io.emit(EVENTS.roomListChanged, createServerPush(snapshot.rooms))
+    this.context.io.emit(
+      EVENTS.presenceSnapshot,
+      createServerPush(EVENTS.presenceSnapshot, snapshot),
+    )
+    this.context.io.emit(
+      EVENTS.roomListChanged,
+      createServerPush(EVENTS.roomListChanged, snapshot.rooms),
+    )
   }
 
   snapshotForPlayer(playerId: string, forceFull = false): RoomSnapshot | undefined {

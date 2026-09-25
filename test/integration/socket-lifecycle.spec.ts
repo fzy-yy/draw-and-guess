@@ -236,9 +236,15 @@ describe('Socket 显式连接生命周期', () => {
     const detachFirst = attachSocketListeners(first, transport.socket as never)
     const detachSecond = attachSocketListeners(second, transport.socket as never)
 
-    transport.emitSocket(EVENTS.systemNotice, createServerPush({ text: '第一次通知' }))
+    transport.emitSocket(
+      EVENTS.systemNotice,
+      createServerPush(EVENTS.systemNotice, { text: '第一次通知' }),
+    )
     detachFirst()
-    transport.emitSocket(EVENTS.systemNotice, createServerPush({ text: '第二次通知' }))
+    transport.emitSocket(
+      EVENTS.systemNotice,
+      createServerPush(EVENTS.systemNotice, { text: '第二次通知' }),
+    )
 
     expect(first.onSystemNotice).toHaveBeenCalledTimes(1)
     expect(second.onSystemNotice).toHaveBeenCalledTimes(2)
@@ -256,11 +262,16 @@ describe('非法推送按事件恢复', () => {
     const bootstrap = mountBootstrap()
     bootstrap.start()
 
-    transport.emitSocket(
-      EVENTS.presenceSnapshot,
-      createServerPush({ players: 'invalid', rooms: [] }),
-    )
-    transport.emitSocket(EVENTS.roomListChanged, createServerPush({ rooms: 'invalid' }))
+    // 故意构造非法 data（players/rooms 类型错误）测解码失败：不走 createServerPush（其签名会拒绝非法 data），
+    // 直接手写信封模拟「线上收到损坏字节」的真实场景。
+    transport.emitSocket(EVENTS.presenceSnapshot, {
+      protocolVersion: APP_CONFIG.app.protocolVersion,
+      data: { players: 'invalid', rooms: [] },
+    })
+    transport.emitSocket(EVENTS.roomListChanged, {
+      protocolVersion: APP_CONFIG.app.protocolVersion,
+      data: { rooms: 'invalid' },
+    })
 
     expect(useRoomStore().room).toBeUndefined()
     expect(refreshPresence).toHaveBeenCalledOnce()
@@ -307,7 +318,13 @@ describe('非法推送按事件恢复', () => {
 
     transport.emitSocket(
       EVENTS.drawStrokeBatch,
-      createServerPush({ roomId, gameId, roundId, drawingRevision: 3, stroke }),
+      createServerPush(EVENTS.drawStrokeBatch, {
+        roomId,
+        gameId,
+        roundId,
+        drawingRevision: 3,
+        stroke,
+      }),
     )
 
     expect(requestFullSnapshot).toHaveBeenCalledOnce()
@@ -323,7 +340,10 @@ describe('房间关闭按稳定关闭码分支', () => {
     // 文案故意不是被踢文案：业务判定必须只认码。
     transport.emitSocket(
       EVENTS.roomClosed,
-      createServerPush({ reason: strings.store.memberLeftGame('某人'), code: 'kicked' }),
+      createServerPush(EVENTS.roomClosed, {
+        reason: strings.store.memberLeftGame('某人'),
+        code: 'kicked',
+      }),
     )
     expect(session.kickedNotice).toBe(true)
 
@@ -331,7 +351,7 @@ describe('房间关闭按稳定关闭码分支', () => {
     // 文案故意复用被踢文案：码不是 kicked 时不得误触发被踢提醒。
     transport.emitSocket(
       EVENTS.roomClosed,
-      createServerPush({
+      createServerPush(EVENTS.roomClosed, {
         reason: serverStrings.notices.kickedReason,
         code: 'room_empty',
       }),

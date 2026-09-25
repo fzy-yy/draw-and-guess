@@ -1,12 +1,13 @@
 <!--
   大厅建房弹窗（CreateRoomDialog）：
-  支持公开/私密房间单选、房间名称、最大玩家数、轮数与作画时间设定。
+  支持公开/私密房间单选、房间名称与最大玩家数设定；其余规则进房间后在规则弹窗细调。
+  旧「玩法预设」下拉已移除，初始设置取 @draw-guess/config 的唯一默认规则组。
 -->
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive } from 'vue'
 import { strings } from '@draw-guess/strings'
 import type { RoomSettings, RoomVisibility } from '@draw-guess/shared'
-import { createRoomSettings, type RoomPresetId } from '@draw-guess/config'
+import { defaultRoomSettings } from '@draw-guess/config'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
@@ -21,25 +22,9 @@ const createForm = reactive<{ name: string; visibility: RoomVisibility }>({
   visibility: 'public',
 })
 
-const selectedPreset = ref<RoomPresetId>('standard')
 const roomSettings = reactive<RoomSettings>(
-  createRoomSettings(selectedPreset.value, store.config.player.defaultMaxPlayers),
+  defaultRoomSettings(store.config.player.defaultMaxPlayers),
 )
-
-const presetOptions: readonly RuleSelectOption<RoomPresetId>[] = [
-  { value: 'standard', label: strings.room.presetStandard },
-  { value: 'relaxed', label: strings.room.presetRelaxed },
-  { value: 'speed', label: strings.room.presetSpeed },
-]
-const presetHints: Record<RoomPresetId, string> = {
-  standard: strings.room.presetStandardHint,
-  relaxed: strings.room.presetRelaxedHint,
-  speed: strings.room.presetSpeedHint,
-}
-
-watch(selectedPreset, (preset) => {
-  Object.assign(roomSettings, createRoomSettings(preset, roomSettings.maxPlayers))
-})
 
 const playerOptions = computed<readonly RuleSelectOption<number>[]>(() => {
   const result: RuleSelectOption<number>[] = []
@@ -127,17 +112,6 @@ async function submitCreate(): Promise<void> {
         :label="strings.lobby.maxPlayersField"
         :options="playerOptions"
       />
-
-      <RuleSelectField
-        v-model="selectedPreset"
-        class="col-span-full"
-        :label="strings.lobby.presetField"
-        :options="presetOptions"
-      >
-        <small class="text-muted text-fs-12">
-          {{ presetHints[selectedPreset] }}
-        </small>
-      </RuleSelectField>
 
       <p class="col-span-full m-0 text-muted text-fs-12 leading-[1.6]">
         {{

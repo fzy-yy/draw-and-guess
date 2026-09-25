@@ -5,6 +5,7 @@
 import type { Socket } from 'socket.io-client'
 import {
   EVENTS,
+  type ClientToServerEvents,
   type FillCommand,
   type Invite,
   type MemberConnectionChange,
@@ -14,10 +15,20 @@ import {
   type RoomSnapshot,
   type ServerPushData,
   type ServerPushEventName,
+  type ServerToClientEvents,
   type Stroke,
 } from '@draw-guess/shared'
 import { decodeServerPush, type InvalidPushReason } from './push-protocol.ts'
 import type { DrawingIncrementMeta } from './snapshot-gate.ts'
+
+/**
+ * 客户端全链路统一的游戏 Socket 别名：
+ * 监听方向（服务端推送）与发送方向（客户端请求）都接入 shared 协议泛型——
+ * 事件名拼写、payload 形状获得编译期校验；但**入站数据仍按 unknown 走 Zod 解码**
+ * （不信任线路数据、防协议版本漂移的安全姿态不变），handler 形参保持 `raw: unknown`
+ * 即可（unknown 参数可承接任意事件签名，逆变兼容）。
+ */
+export type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>
 
 /** 服务端推送事件到 store 的回调集合。 */
 export interface SocketHandlers {
@@ -52,13 +63,16 @@ function decodeData<E extends ServerPushEventName>(
   return result.data
 }
 
-const activeDetachers = new WeakMap<Socket, Set<() => void>>()
+const activeDetachers = new WeakMap<GameSocket, Set<() => void>>()
 
 /**
  * 注册全部服务端推送事件监听（全局唯一的连接生命周期）。
  * 注意：绘图增量事件按回合 ID 与序号直接合并进本地历史，无需等待下一次快照。
  */
-export function attachSocketListeners(handlers: SocketHandlers, targetSocket: Socket): () => void {
+export function attachSocketListeners(
+  handlers: SocketHandlers,
+  targetSocket: GameSocket,
+): () => void {
   const onConnect = () => handlers.onConnect()
   const onDisconnect = (reason: string) => handlers.onDisconnect(reason)
   const onReconnectAttempt = () => handlers.onReconnectAttempt()
@@ -160,7 +174,7 @@ export function attachSocketListeners(handlers: SocketHandlers, targetSocket: So
 }
 
 /** HMR 与应用销毁共用：精确移除本模块注册项，不触碰其它订阅者的同名事件。 */
-export function disposeSocketLifecycle(targetSocket: Socket): void {
+export function disposeSocketLifecycle(targetSocket: GameSocket): void {
   for (const detach of [...(activeDetachers.get(targetSocket) ?? [])]) detach()
   activeDetachers.delete(targetSocket)
   targetSocket.disconnect()

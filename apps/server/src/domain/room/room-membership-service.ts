@@ -8,6 +8,8 @@ import {
   type RoomSettings,
   type RoomSnapshot,
   type RoomVisibility,
+  type ServerPushEnvelope,
+  type ServerPushEventName,
 } from '@draw-guess/shared'
 import { APP_CONFIG } from '../../config/index.ts'
 import { serverStrings } from '@draw-guess/strings'
@@ -24,8 +26,18 @@ export interface RoomMembershipServiceContext {
   clearHintTimers(game: GameSecret): void
   clock: RuntimeDependencies['clock']
   emitRoom(roomId?: string): void
-  emitRoomEvent(roomId: string, event: string, payload: unknown): void
-  emitToPlayer(playerId: string, event: string, payload: unknown): void
+  /** 向房间广播推送事件：事件名与信封编译期配对（信封由 createServerPush 生成）。 */
+  emitRoomEvent<E extends ServerPushEventName>(
+    roomId: string,
+    event: E,
+    envelope: ServerPushEnvelope<E>,
+  ): void
+  /** 向单个玩家推送事件：事件名与信封编译期配对。 */
+  emitToPlayer<E extends ServerPushEventName>(
+    playerId: string,
+    event: E,
+    envelope: ServerPushEnvelope<E>,
+  ): void
   evaluateRematch(room: RoomSecret): void
   finishRound(room: RoomSecret, drawerAbandoned: boolean): void
   getRoomVocabularyStore(room?: RoomSecret): VocabularyStore
@@ -105,7 +117,7 @@ export class RoomMembershipService {
       { roomId: room.id, playerId, visibility: room.visibility },
       '房间已创建',
     )
-    player.socket?.join(room.id)
+    void player.socket?.join(room.id)
     this.context.emitRoom(room.id)
     this.context.broadcastPresence()
     return this.context.snapshot(room, player.id)
@@ -159,7 +171,7 @@ export class RoomMembershipService {
         waitingForNextGame ? '玩家加入房间并等待下一局' : '玩家以观战身份加入房间',
       )
       player.roomId = room.id
-      player.socket?.join(room.id)
+      void player.socket?.join(room.id)
       this.context.emitRoom(room.id)
       this.context.broadcastPresence()
       return this.context.snapshot(room, player.id)
@@ -169,7 +181,7 @@ export class RoomMembershipService {
     room.stateVersion += 1
     this.context.logger.info({ roomId: room.id, playerId: player.id, source }, '玩家已加入房间')
     player.roomId = room.id
-    player.socket?.join(room.id)
+    void player.socket?.join(room.id)
     // 成员加入只改变席位和状态版本，不取消其他玩家已经完成的准备。
     this.context.addSystemNotice(room, serverStrings.notices.playerJoined(player.profile.nickname))
     this.context.emitRoom(room.id)
@@ -187,7 +199,7 @@ export class RoomMembershipService {
       delete player.roomId // 房间已不存在，仅清理玩家引用
       return
     }
-    player.socket?.leave(room.id)
+    void player.socket?.leave(room.id)
     room.members = room.members.filter((member) => member.playerId !== playerId)
     if (room.phase === 'waiting') {
       room.members.forEach((member, index) => {
@@ -258,7 +270,7 @@ export class RoomMembershipService {
     member.leftGame = true
     member.leftProfile = { ...player.profile }
     member.ready = false
-    player.socket?.leave(room.id)
+    void player.socket?.leave(room.id)
     delete player.roomId
     room.stateVersion += 1
     this.context.logger.info({ roomId: room.id, playerId }, '玩家主动退出当前对局并保留成绩卡')
@@ -270,7 +282,7 @@ export class RoomMembershipService {
     this.context.emitRoomEvent(
       room.id,
       EVENTS.roomMemberConnectionChanged,
-      createServerPush(payload),
+      createServerPush(EVENTS.roomMemberConnectionChanged, payload),
     )
 
     if (room.hostId === playerId && !this.transferHostInternal(room)) {
@@ -328,7 +340,7 @@ export class RoomMembershipService {
     this.context.emitToPlayer(
       targetId,
       EVENTS.roomClosed,
-      createServerPush({
+      createServerPush(EVENTS.roomClosed, {
         reason: serverStrings.notices.kickedReason,
         code: ROOM_CLOSE_CODE.kicked,
       }),
@@ -364,13 +376,17 @@ export class RoomMembershipService {
     if (room.game) this.context.clearHintTimers(room.game)
     this.context.scheduler.clear(room.game?.timer)
     this.context.scheduler.clear(room.game?.rematchTimer)
-    this.context.emitRoomEvent(room.id, EVENTS.roomClosed, createServerPush({ reason, code }))
+    this.context.emitRoomEvent(
+      room.id,
+      EVENTS.roomClosed,
+      createServerPush(EVENTS.roomClosed, { reason, code }),
+    )
     // 房间即将从内存删除：必须同时解绑幸存成员（含观战者）的 roomId 与 Socket 房间，
     // 否则 requireAvailablePlayer 会永久抛 ALREADY_IN_ROOM，玩家无法再建房/加入/被邀请。
     for (const member of room.members) {
       const player = this.context.players.get(member.playerId)
       if (!player) continue
-      player.socket?.leave(room.id)
+      void player.socket?.leave(room.id)
       if (player.roomId === room.id) {
         delete player.roomId
       }

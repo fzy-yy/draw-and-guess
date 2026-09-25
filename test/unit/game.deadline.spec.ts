@@ -25,7 +25,7 @@ const settings: RoomSettings = {
   structuredHintsEnabled: true,
   hintStartRatio: 0.35,
   guessBaseScore: 300,
-  scoreMode: 'standard',
+  extraGuessSeconds: 0,
   allowPlayerInvite: true,
   allowPause: true,
   allowWordReroll: true,

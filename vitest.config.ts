@@ -99,6 +99,13 @@ export default defineConfig({
           functions: 55,
           lines: 62,
         },
+        // 画布重放状态机（ADR-0018）：提交决策/世代取代/原子换入的全行为守卫。
+        'apps/client/src/canvas/replay-machine.ts': {
+          statements: 90,
+          branches: 85,
+          functions: 100,
+          lines: 95,
+        },
         // 关键链路保留更贴近当前实际覆盖率的独立门禁，后续优先逐步上调这些值。
         'apps/client/src/composables/{useGameHud,useRoomSync}.ts': {
           statements: 75,

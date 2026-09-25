@@ -1,19 +1,24 @@
 <!--
   席位网格（3×2）：展示房间内全部玩家座位、准备状态与空位邀请提示。
-  数据来自 store 的房间快照（members/settings），房主可对非自己的成员执行踢人（带确认弹窗）。
+  数据来自 store 的房间快照（members/settings）；房主对他人席位右键弹出
+  「移交房主 / 移除玩家」菜单（useContextMenu 单例 + ContextMenu 渲染），
+  操作仍先经确认弹窗（破坏性操作需确认）。席位角标按钮已移除，菜单是唯一入口。
   原 RoomView.vue 的席位区（header + 网格）整体迁入本组件；只保留渲染逻辑，不裁决游戏。
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Crown, UserPlus, Users, X } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
+import type { RoomMember } from '@draw-guess/shared'
 import AvatarImage from '@/components/common/AvatarImage.vue'
 import SectionHeader from '@/components/common/SectionHeader.vue'
 import HostCrownBadge from '@/components/common/HostCrownBadge.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import { useContextMenu } from '@/composables/useContextMenu'
 import { useGameStore } from '@/stores/game'
 
 const store = useGameStore()
+const contextMenu = useContextMenu()
 
 // 席位展示：解耦界面槽位与底层物理 seatIndex。
 // 优先稳定呈现全部已有成员（防止历史跳号或缩容后丢失），并在不足最大人数时用空位补齐。
@@ -36,6 +41,39 @@ const pendingHostId = ref<string>()
 const hostTarget = computed(() =>
   store.room?.members.find((member) => member.id === pendingHostId.value),
 )
+
+/**
+ * 右键玩家席位：仅「房主 + 他人席位」弹出操作菜单（移交房主 / 移除玩家）。
+ * 空位、自己的席位或非房主不拦截浏览器默认菜单（无可执行操作）。
+ * 菜单项只置位待确认目标，真正的破坏性操作仍经 ConfirmDialog 二次确认后执行。
+ */
+function openSeatMenu(event: MouseEvent, member: RoomMember): void {
+  if (!store.isHost || member.id === store.playerId) return
+  contextMenu.open(
+    event,
+    [
+      {
+        id: 'transfer-host',
+        label: strings.room.transferHostAria,
+        icon: Crown,
+        action: () => {
+          pendingHostId.value = member.id
+        },
+      },
+      {
+        id: 'kick',
+        label: strings.room.kickAria,
+        icon: X,
+        danger: true,
+        separatorBefore: true,
+        action: () => {
+          pendingKickId.value = member.id
+        },
+      },
+    ],
+    { ariaLabel: strings.room.seatMenuAria },
+  )
+}
 </script>
 
 <template>
@@ -74,6 +112,7 @@ const hostTarget = computed(() =>
                 ? 'border-green border-b-green bg-white text-navy'
                 : 'border-line border-b-line bg-white text-navy'
         "
+        @contextmenu="member && openSeatMenu($event, member)"
       >
         <template v-if="member">
           <div class="relative h-[10cqh] w-[10cqh]">
@@ -114,26 +153,6 @@ const hostTarget = computed(() =>
                       : strings.status.roleNotReady
             }}</span
           >
-          <!-- 房主移除玩家按钮：只对非自己的成员显示；先弹确认再执行（破坏性操作） -->
-          <!-- 踢人/移交房主：席位角上的图标操作，尺寸随舞台等比缩放（触控契约已废除） -->
-          <button
-            v-if="store.isHost && member.id !== store.playerId"
-            class="absolute right-[0.6cqh] top-[0.6cqh] grid place-items-center h-[3cqh] w-[3cqh] text-red bg-red/10 rounded-full"
-            type="button"
-            :aria-label="strings.room.kickAria"
-            @click="pendingKickId = member.id"
-          >
-            <X />
-          </button>
-          <button
-            v-if="store.isHost && member.id !== store.playerId"
-            class="absolute left-[0.6cqh] top-[0.6cqh] grid place-items-center h-[3cqh] w-[3cqh] text-warning-fg bg-yellow/10 rounded-full"
-            type="button"
-            :aria-label="strings.room.transferHostAria"
-            @click="pendingHostId = member.id"
-          >
-            <Crown />
-          </button>
         </template>
         <!-- 空席位占位提示 -->
         <template v-else

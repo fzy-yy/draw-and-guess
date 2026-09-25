@@ -38,7 +38,6 @@ export const lobby = {
   createDialogCloseAria: '关闭创建房间弹窗',
   roomNameField: '房间名称',
   maxPlayersField: '最大人数',
-  presetField: '玩法预设',
   visibilityField: '房间类型',
   visibilityPublic: '公开房间',
   visibilityPublicHint: '出现在大厅列表，所有玩家均可自由加入',

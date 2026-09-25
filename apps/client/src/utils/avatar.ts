@@ -1,5 +1,5 @@
 import { APP_CONFIG } from '@draw-guess/config'
-import type { AvatarId } from '@draw-guess/shared'
+import { isAvatarId, type AvatarId } from '@draw-guess/shared'
 
 /**
  * 由 Vite 在构建期收集全部内置 SVG，并以静态资源 URL 的形式加载。
@@ -29,7 +29,7 @@ export function getAvatarUrl(id: AvatarId | string | undefined): string {
     avatarUrlById.get(APP_CONFIG.player.defaultAvatarId) ??
     avatarUrlById.values().next().value ??
     ''
-  if (!id || !(APP_CONFIG.player.avatarIds as readonly string[]).includes(id)) return fallback
+  if (!id || !isAvatarId(id)) return fallback
   const url = avatarUrlById.get(id)
   if (!url && import.meta.env.DEV) console.error(`缺少头像资源：${id}.svg`)
   return url ?? fallback

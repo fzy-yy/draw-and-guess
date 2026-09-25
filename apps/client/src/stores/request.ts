@@ -11,7 +11,7 @@ import type {
   ErrorCode,
 } from '@draw-guess/shared'
 import { createUuid } from '@/utils/create-uuid'
-import type { Socket } from 'socket.io-client'
+import type { GameSocket } from './socket.ts'
 import { reactive, readonly } from 'vue'
 import { decodeClientResponse } from './response-protocol.ts'
 
@@ -144,8 +144,20 @@ function classifyTransportError(error: unknown): { message: string; timeout: boo
 }
 
 /** 创建带统一错误翻译的请求函数：不抛错，返回可判别结果对象。 */
-export function createRequester(options: { socket: Socket; notify: NotifyFn }): ManagedRequester {
+export function createRequester(options: {
+  socket: GameSocket
+  notify: NotifyFn
+}): ManagedRequester {
   const { socket, notify } = options
+  // emitWithAck 的返回值刻意收窄为 unknown：客户端从不信任线路上的 ack，必须过
+  // decodeClientResponse 运行时 Schema（防协议版本漂移）；泛型事件名下 Socket.IO 的
+  // Parameters<> 是延迟索引类型，函数体内无法证明 {...payload, requestId} 与
+  // ClientRequestPayload<E> 匹配，故在这一唯一发送边界适配（事件↔payload 配对已由
+  // Requester 对外签名保证）。
+  const emitWithAck = socket.emitWithAck.bind(socket) as <E extends ClientRequestEvent>(
+    event: E,
+    payload: ClientRequestPayload<E>,
+  ) => Promise<unknown>
   const mutableState = reactive<RequestState>({ pendingCount: 0, destroyed: false })
   const controllers = new Set<AbortController>()
   async function request<E extends ClientRequestEvent>(
@@ -167,7 +179,10 @@ export function createRequester(options: { socket: Socket; notify: NotifyFn }): 
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         try {
           const rawAck = await raceTimeout(
-            socket.emitWithAck(event, { ...payload, requestId }),
+            // {...payload, requestId} 结构上等于 ClientRequestPayload<E>，但泛型 E 下
+            // Omit<ClientRequestPayload<E>,'requestId'> & {requestId} 无法被编译器折叠回原形，
+            // 在边界处收窄一次（payload 内容已由 Requester 对外签名与运行时 Schema 双重保证）。
+            emitWithAck(event, { ...payload, requestId } as ClientRequestPayload<E>),
             APP_CONFIG.network.requestTimeoutMs,
             controller.signal,
           )

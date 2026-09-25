@@ -57,6 +57,10 @@ export class SqliteProvider implements VocabularyProvider {
 
   constructor(private readonly dbPath: string) {}
 
+  // better-sqlite3 是同步 API，本方法体内没有可 await 的异步操作；保留 async 是为满足
+  // VocabularyProvider.load(): Promise 接口并把同步抛错规整为 rejection（调用方统一 await 捕获）。
+  // 属 require-await 的已知接口适配误报，定点豁免。
+  // eslint-disable-next-line @typescript-eslint/require-await
   async load(): Promise<LoadedVocabulary> {
     const resolved = this.resolveDbPath()
     // 只读打开：词库对服务端是只读资产；fileMustExist 让缺失在打开时即暴露。
@@ -82,8 +86,14 @@ export class SqliteProvider implements VocabularyProvider {
         const aliases = this.parseAliases(row)
         const hint = this.parseHint(row)
         this.assertWordShape(row, aliases, categorySet, difficultySet, drawabilitySet, usedIds)
-        // 难度级时限与权重加载期派生：readMeta 已保证 difficulty_enum 每级都有 level_config 条目
-        const level = meta.levelConfig[row.difficulty]!
+        // 难度级时限与权重加载期派生：readMeta 已保证 difficulty_enum 每级都有 level_config 条目；
+        // 仍显式守卫一次（noUncheckedIndexedAccess 下索引带 undefined），脏数据 fail-fast 而非静默崩溃。
+        const level = meta.levelConfig[row.difficulty]
+        if (!level) {
+          throw new Error(
+            `词库词条「${row.text}」难度「${row.difficulty}」缺少 level_config，请修正词库数据。`,
+          )
+        }
         parsedWords.push({
           id: canonicalWordId(this.sourceId, row.id),
           text: row.text,
@@ -217,22 +227,23 @@ export class SqliteProvider implements VocabularyProvider {
       }
       // 库内命名是 snake_case；这里做一次性形状收窄，避免脏字段流向下游
       const entry = value as { time_limit?: unknown; score_weight?: unknown } | null
+      const timeLimit = entry?.time_limit
+      const scoreWeight = entry?.score_weight
+      // typeof 守卫把 unknown 收窄为 number，无需再 `as number`；Number.isInteger/Finite 只做值域校验
       if (
         !entry ||
-        !Number.isInteger(entry.time_limit) ||
-        (entry.time_limit as number) < 1 ||
-        typeof entry.score_weight !== 'number' ||
-        !Number.isFinite(entry.score_weight) ||
-        entry.score_weight <= 0
+        typeof timeLimit !== 'number' ||
+        !Number.isInteger(timeLimit) ||
+        timeLimit < 1 ||
+        typeof scoreWeight !== 'number' ||
+        !Number.isFinite(scoreWeight) ||
+        scoreWeight <= 0
       ) {
         throw new Error(
           `词库 level_config 难度「${key}」的条目不合法（time_limit 需为正整数秒、score_weight 需为正数），请修正词库数据。`,
         )
       }
-      levelConfig[level] = {
-        timeLimit: entry.time_limit as number,
-        scoreWeight: entry.score_weight as number,
-      }
+      levelConfig[level] = { timeLimit, scoreWeight }
     }
     for (const level of difficultyEnum) {
       if (levelConfig[level] === undefined) {

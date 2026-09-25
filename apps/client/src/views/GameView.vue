@@ -26,14 +26,12 @@ import {
   PhaseOverlay,
   ScoreStrip,
 } from '@/components/game'
-import { defineLazyComponent } from '@/utils/lazy-component'
 import { useGameHud } from '@/composables/useGameHud'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { fireGuessCorrectConfetti } from '@/utils/confetti'
 import type { RequestResult } from '@/stores/request'
-
-// 对局内设置页复用同一个懒加载定义（低频模块，不进首屏包）
-const SettingsView = defineLazyComponent(() => import('@/views/SettingsView.vue'))
+// 对局内设置页复用同一个静态导入的视图组件（首开白闪取舍见 docs/adr/0014-settings-view-static-import.md）
+import SettingsView from '@/views/SettingsView.vue'
 
 const store = useGameStore()
 

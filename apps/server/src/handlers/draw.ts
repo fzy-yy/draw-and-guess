@@ -5,12 +5,10 @@
 import { CLIENT_REQUEST_SCHEMAS, EVENTS } from '@draw-guess/shared'
 import { bindRequest } from '../protocol/binder.ts'
 import type { GameService } from '../game-service.ts'
+import type { AppSocket } from '../socket-types.ts'
 
 /** 注册绘图相关请求事件。 */
-export function registerDrawHandlers(
-  socket: import('socket.io').Socket,
-  service: GameService,
-): void {
+export function registerDrawHandlers(socket: AppSocket, service: GameService): void {
   bindRequest(
     socket,
     EVENTS.drawStrokeBatch,

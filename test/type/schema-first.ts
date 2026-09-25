@@ -82,35 +82,41 @@ if (room.ok) {
 expectTypeOf<ServerPushData<typeof EVENTS.inviteReceived>>().toEqualTypeOf<Invite>()
 
 type NoticeEnvelope = Parameters<ServerToClientEvents[typeof EVENTS.systemNotice]>[0]
-const notice = createServerPush({ text: 'ok' }) satisfies NoticeEnvelope
+const notice = createServerPush(EVENTS.systemNotice, { text: 'ok' }) satisfies NoticeEnvelope
 void notice
 
 declare function emitPush<E extends keyof ServerToClientEvents>(
   event: E,
   ...args: Parameters<ServerToClientEvents[E]>
 ): void
-emitPush(EVENTS.systemNotice, createServerPush({ text: 'ok' }))
+emitPush(EVENTS.systemNotice, createServerPush(EVENTS.systemNotice, { text: 'ok' }))
 
-// @ts-expect-error system:notice 的 data 必须是 { text: string }
-const wrongNotice = createServerPush({ reason: 'wrong event payload' }) satisfies NoticeEnvelope
+const wrongNotice = createServerPush(
+  EVENTS.systemNotice,
+  // @ts-expect-error system:notice 的 data 必须是 { text: string }
+  { reason: 'wrong event payload' },
+) satisfies NoticeEnvelope
 void wrongNotice
 // @ts-expect-error event 与 envelope data 错配时必须在编译期失败
-emitPush(EVENTS.systemNotice, createServerPush({ reason: 'wrong event payload' }))
+emitPush(EVENTS.systemNotice, createServerPush(EVENTS.systemNotice, { reason: 'wrong' }))
 
 type RoomEnvelope = Parameters<ServerToClientEvents[typeof EVENTS.roomSnapshot]>[0]
-// @ts-expect-error room:snapshot 不能接受 presence:snapshot 的 data
-const wrongRoom = createServerPush({ players: [], rooms: [] }) satisfies RoomEnvelope
+const wrongRoom = createServerPush(
+  EVENTS.roomSnapshot,
+  // @ts-expect-error room:snapshot 不能接受 presence:snapshot 的 data
+  { players: [], rooms: [] },
+) satisfies RoomEnvelope
 void wrongRoom
 
 type RoomClosedEnvelope = Parameters<ServerToClientEvents[typeof EVENTS.roomClosed]>[0]
-const roomClosed = createServerPush({
+const roomClosed = createServerPush(EVENTS.roomClosed, {
   reason: '任意展示文案',
   code: 'kicked',
 }) satisfies RoomClosedEnvelope
 void roomClosed
-// @ts-expect-error room:closed 必须携带登记过的稳定关闭码，禁止用未登记的字符串
-const wrongRoomClosed: RoomClosedEnvelope = createServerPush({
+const wrongRoomClosed: RoomClosedEnvelope = createServerPush(EVENTS.roomClosed, {
   reason: '任意展示文案',
+  // @ts-expect-error room:closed 必须携带登记过的稳定关闭码，禁止用未登记的字符串
   code: 'unknown',
 })
 void wrongRoomClosed

@@ -43,7 +43,12 @@ export const RoomSettingsSchema = z
       .int()
       .min(ROOM_RULE_LIMITS.guessBaseScore.min)
       .max(ROOM_RULE_LIMITS.guessBaseScore.max),
-    scoreMode: z.enum(['standard', 'flat']),
+    // 额外猜词时间：叠加在难度派生时限之上的秒数（0~90），计分方式已固定为标准不再可配。
+    extraGuessSeconds: z
+      .number()
+      .int()
+      .min(ROOM_RULE_LIMITS.extraGuessSeconds.min)
+      .max(ROOM_RULE_LIMITS.extraGuessSeconds.max),
     allowPlayerInvite: z.boolean(),
     allowPause: z.boolean(),
     allowWordReroll: z.boolean(),

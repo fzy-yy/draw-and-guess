@@ -21,11 +21,8 @@ import {
   type ShortcutSettingKey,
 } from '@/utils/keyboard'
 import { StageHeader, SideNav, type SideNavItem } from '@/components/common'
-import { AccessibilityTab, AudioTab, ShortcutsTab } from '@/components/settings'
-import { defineLazyComponent } from '@/utils/lazy-component'
-
-// 诊断页低频（含诊断文本与恢复/清除入口）：懒加载，切到该分类时才下载
-const DiagnosticsTab = defineLazyComponent(() => import('@/components/settings/DiagnosticsTab.vue'))
+// 诊断页同样静态导入（原二级懒加载会留下分类切换的异步边界，随设置页一并进主入口，见 ADR-0014）
+import { AccessibilityTab, AudioTab, DiagnosticsTab, ShortcutsTab } from '@/components/settings'
 
 const store = useGameStore()
 const props = withDefaults(
@@ -172,8 +169,7 @@ function goBack(): void {
          导航列取「15% 与 11em 的较大值」：低高度舞台下 15% 会窄到把条目文字截断，需保底宽度。 -->
     <div class="grid min-h-0 grid-cols-[minmax(11em,15%)_minmax(0,1fr)]">
       <SideNav v-model="tab" :items="navItems" :label="strings.settings.categoryAria" />
-      <!-- 正文区：内容高度由设置项自然撑开；
-           relative：为懒加载诊断页的 loading/error 占位提供定位容器（见 utils/lazy-component.ts） -->
+      <!-- 正文区：内容高度由设置项自然撑开；relative 保留为一般定位锚点（诊断页已静态化，懒加载占位场景见 ADR-0014） -->
       <div class="relative min-h-0 min-w-0">
         <!-- 声音设置 -->
         <AudioTab v-if="tab === 'audio'" />

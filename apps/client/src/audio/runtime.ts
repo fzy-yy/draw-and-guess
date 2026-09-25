@@ -11,14 +11,14 @@ import { buildSoundManifest, reportManifestIssues, type SoundManifest } from './
  * 使后者可在 Node 下被单元测试（见 test/unit/sound-manifest.spec.ts）。
  */
 
-/** 仅读取用到的 Vite 元信息字段；用局部类型收敛，避免依赖全局 vite/client 声明（测试程序无该类型）。 */
+/** 仅读取用到的 Vite 元信息字段；用局部类型收敛返回值形状（import.meta.env 已由 vite/client 类型化，无需再断言）。 */
 interface ViteEnvShape {
   DEV?: boolean
   MODE?: string
 }
 
 function readViteEnv(): ViteEnvShape {
-  return (import.meta as unknown as { env?: ViteEnvShape }).env ?? {}
+  return import.meta.env
 }
 
 /**

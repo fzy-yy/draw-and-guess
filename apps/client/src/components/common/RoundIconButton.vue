@@ -20,7 +20,7 @@ withDefaults(
   }>(),
   { disabled: false, audioFeedback: 'activate' },
 )
-const emit = defineEmits<{ click: [] }>()
+const emit = defineEmits<{ click: [event: MouseEvent] }>()
 const button = ref<InstanceType<typeof BaseIconButton>>()
 
 /** ActionPopover 等组合组件通过此方法恢复触发按钮焦点。 */
@@ -38,7 +38,7 @@ defineExpose({ focus })
     :disabled="disabled"
     :audio-feedback="audioFeedback"
     base-class="round-icon-btn"
-    @click="emit('click')"
+    @click="emit('click', $event)"
   >
     <slot />
   </BaseIconButton>

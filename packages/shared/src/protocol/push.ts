@@ -216,9 +216,19 @@ export type ServerToClientEvents = {
   [E in ServerPushEventName]: (payload: ServerPushEnvelope<E>) => void
 }
 
-export function createServerPush<T>(data: T): {
-  protocolVersion: typeof PROTOCOL_VERSION
-  data: T
-} {
-  return { protocolVersion: PROTOCOL_VERSION, data }
+/**
+ * 包装服务端推送数据为版本化信封（protocolVersion + data）。
+ *
+ * 事件名参数只参与类型推导、不进信封内容：它把 payload 与该事件 Schema 推导出的
+ * data 类型在**编译期**绑定，事件与载荷配错（含拼错事件名）直接编译失败，
+ * 不再只靠 `SERVER_PUSH_SCHEMAS` 的运行时解码兜底。
+ * 参数名带 `_` 前缀：运行时不读取（ESLint no-unused-vars 约定）。
+ */
+export function createServerPush<E extends ServerPushEventName>(
+  _event: E,
+  data: ServerPushData<E>,
+): ServerPushEnvelope<E> {
+  // 泛型体内 z.infer<(typeof SERVER_PUSH_SCHEMAS)[E]> 是延迟索引类型，E 以约束（联合）
+  // 实例化时 data 的联合无法落入某个具体信封；调用点已按具体事件名校验 data，返回处适配一次。
+  return { protocolVersion: PROTOCOL_VERSION, data } as ServerPushEnvelope<E>
 }

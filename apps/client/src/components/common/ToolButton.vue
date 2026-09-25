@@ -29,7 +29,8 @@ const props = withDefaults(
     audioFeedback: 'activate',
   },
 )
-const emit = defineEmits<{ click: [] }>()
+// click 携带 MouseEvent：与 BaseIconButton/全局 onClick 扩展签名一致（见 vue-augmentations.d.ts）
+const emit = defineEmits<{ click: [event: MouseEvent] }>()
 
 const baseClass = computed(() =>
   cn(
@@ -45,7 +46,7 @@ const baseClass = computed(() =>
     :disabled="disabled"
     :audio-feedback="audioFeedback"
     :base-class="baseClass"
-    @click="emit('click')"
+    @click="emit('click', $event)"
   >
     <slot />
     <kbd

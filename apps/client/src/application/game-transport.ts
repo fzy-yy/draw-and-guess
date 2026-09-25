@@ -1,13 +1,13 @@
 import { reactive, readonly } from 'vue'
-import { io, type Socket } from 'socket.io-client'
 import type { Pinia } from 'pinia'
 import { getActivePinia } from 'pinia'
-import type { SocketHandlers } from '@/stores/socket'
+import { io } from 'socket.io-client'
+import type { SocketHandlers, GameSocket } from '@/stores/socket'
 import { attachSocketListeners, disposeSocketLifecycle } from '@/stores/socket'
 import { createRequester, type NotifyFn, type Requester, type RequestState } from '@/stores/request'
 
 export interface GameTransport {
-  readonly socket: Socket
+  readonly socket: GameSocket
   readonly request: Requester
   readonly notify: NotifyFn
   readonly requestState: Readonly<RequestState>
@@ -18,14 +18,19 @@ export interface GameTransport {
   destroy(): void
 }
 
-export function createGameTransport(options: { notify: NotifyFn; socket?: Socket }): GameTransport {
+export function createGameTransport(options: {
+  notify: NotifyFn
+  socket?: GameSocket
+}): GameTransport {
+  // socket.io-client 的 io() 工厂签名不带泛型（返回裸 Socket），只能在构造边界断言一次
+  // 为协议化别名；此后全链路（attach/request/emitWithAck/on）都按 GameSocket 受检。
   const socket =
     options.socket ??
-    io({
+    (io({
       autoConnect: false,
       reconnection: true,
       reconnectionAttempts: Infinity,
-    })
+    }) as GameSocket)
   const requester = createRequester({ socket, notify: options.notify })
   const lifecycle = reactive({ destroyed: false })
 

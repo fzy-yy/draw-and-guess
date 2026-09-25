@@ -46,7 +46,7 @@ export function registerShutdown(application: Application, logger: RuntimeLogger
     logger.info({ signal }, '正在优雅关闭服务')
     application.io.emit(
       EVENTS.systemError,
-      createServerPush({ text: serverStrings.notices.serverShutdown }),
+      createServerPush(EVENTS.systemError, { text: serverStrings.notices.serverShutdown }),
     )
     const forcedExit = setTimeout(() => {
       try {

@@ -87,7 +87,6 @@ describe('画布与浏览器生命周期 composables', () => {
   })
 
   it('视口挂载、显式缩放和卸载都会维护 backing size', () => {
-    const redraw = vi.fn()
     const displayContext = {
       save: vi.fn(),
       clearRect: vi.fn(),
@@ -102,14 +101,22 @@ describe('画布与浏览器生命周期 composables', () => {
       getContext: () => displayContext,
     } as unknown as HTMLCanvasElement)
     const logicalCanvas = { width: 0, height: 0 } as HTMLCanvasElement
-    const viewport = mountComposable(() => useCanvasViewport(canvas, logicalCanvas, redraw))
+    // 真实接线里尺寸由机器写回：替身模拟该职责，视口的「变化判定」才有后续参照。
+    const logicalResize = vi.fn((width: number, height: number) => {
+      logicalCanvas.width = width
+      logicalCanvas.height = height
+    })
+    const viewport = mountComposable(() => useCanvasViewport(canvas, logicalCanvas, logicalResize))
     viewport.resizeCanvas()
-    expect(logicalCanvas.width).toBe(720)
-    expect(logicalCanvas.height).toBe(1_440)
+    // 逻辑尺寸写入移交机器（resize 回调）：视口自身不写 logicalCanvas。
+    expect(logicalResize).toHaveBeenCalledWith(720, 1_440)
     expect(canvas.value.width).toBe(360 * Math.min(devicePixelRatio, 2))
     expect(canvas.value.height).toBe(720 * Math.min(devicePixelRatio, 2))
     expect(viewport.resizeTick.value).toBeGreaterThan(0)
-    expect(redraw).toHaveBeenCalled()
+
+    // 第二次尺寸未变：不再回调，直接重新投影整帧。
+    viewport.resizeCanvas()
+    expect(logicalResize).toHaveBeenCalledTimes(1)
     expect(displayContext.imageSmoothingEnabled).toBe(false)
     expect(displayContext.drawImage).toHaveBeenCalledWith(
       logicalCanvas,
@@ -153,7 +160,7 @@ describe('画布与浏览器生命周期 composables', () => {
   })
 })
 
-describe('填充会话的两把锁', () => {
+describe('填充会话的提交锁', () => {
   function createFillSession() {
     const revision = ref(1)
     const roundId = ref('round-a')
@@ -167,25 +174,8 @@ describe('填充会话的两把锁', () => {
     return { ok: true, data: { drawingRevision } } as RequestResult<{ drawingRevision: number }>
   }
 
-  it('渲染态按任务计数释放：重叠任务全部结束后才解锁，且计数不会变负', () => {
-    const { session } = createFillSession()
-
-    session.beginRenderTask()
-    session.beginRenderTask()
-    expect(session.renderBusy.value).toBe(true)
-    expect(session.canSubmit.value).toBe(false)
-
-    session.endRenderTask()
-    expect(session.renderBusy.value).toBe(true)
-    session.endRenderTask()
-    expect(session.renderBusy.value).toBe(false)
-    expect(session.canSubmit.value).toBe(true)
-
-    // 多余释放（例如被取消的任务与正常任务重复结束）不得把计数压成负数。
-    session.endRenderTask()
-    expect(session.renderBusy.value).toBe(false)
-    expect(session.canSubmit.value).toBe(true)
-  })
+  // 渲染态（重放中）的计数与释放已随 ADR-0018 收进 DrawingReplayMachine，
+  // 守卫迁移至 test/component/canvas-replay-machine.spec.ts 的渲染态用例组。
 
   it('提交锁只由对应修订追平或超时兜底释放', async () => {
     const { session, revision } = createFillSession()

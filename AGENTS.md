@@ -16,7 +16,7 @@
 - **日志文件化**：服务端日志**不输出到控制台**（规避 Windows 控制台 GBK 解码 UTF-8 中文乱码），通过 Pino 异步缓冲写入 `apps/server/log/app-<秒级时间戳>.log`（每次启动新建一个、最多保留 `LOG_MAX_FILES` 条），优雅关闭时 flush/close；可通过 `.env` 的 `LOG_ENABLED` 完全关闭（零内存开销）。
 - **画板**：高 DPI 实时画布，支持自由画笔、橡皮擦（`destination-out`）与封闭区域洪泛填充；画笔/橡皮擦共用连续粗细，可滚轮调整；支持预设或任意 HEX 颜色，工具可自定义单键切换。**渲染模型为「归一化点列 + 直线段描边」增量同步**（不引入轮廓填充型平滑库，曾因此导致白边/闪烁/空心缺陷）。
 - **头像**：仅允许从 40 个内置 SVG 白名单编号中选择，协议只传编号；禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像。
-- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '12'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
+- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '13'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
 
 ### 技术栈与运行环境
 
@@ -53,7 +53,8 @@ draw_and_guess/
 │   │   └── helpers/               # fake-clock.ts / in-memory-repositories.ts / mini-vocabulary.ts
 │   ├── client/                    # happy-dom 公共 setup（DOM 清理、媒体/焦点边界 mock）
 │   ├── component/                 # Vue Testing Library / Test Utils 组件测试
-│   ├── integration/               # Pinia + MSW 客户端集成测试与网络边界
+│   ├── integration/               # Pinia + MSW 客户端集成测试与网络边界；store-contracts.ts 为 Facade/composable 成员契约的编译期快照（非 spec，由 vue-tsc 把关）
+│   ├── type/                      # 纯编译期断言（schema-first.ts 正/负向配对，由 pnpm typecheck 把关，不运行）
 │   └── e2e/                       # Playwright 端到端（test:e2e）
 │       ├── playwright.config.ts   # 独立端口(5199)、reuseExistingServer=false、指向 launcher
 │       ├── launcher.mts           # 隔离 webServer：临时目录 + fixture 词库 + 前端构建 + 清理/清扫
@@ -92,6 +93,7 @@ draw_and_guess/
 │       ├── errors.ts              # GameError / success / failure / RuntimeLogger / SILENT_LOGGER（避免循环依赖）
 │       ├── models.ts              # 服务端内存秘密模型（PlayerSecret/RoomSecret/GameSecret/InviteSecret…）
 │       ├── runtime.ts             # 统一 Clock/Scheduler/RandomSource（生产实现与测试注入边界）
+│       ├── socket-types.ts        # AppServer/AppSocket 泛型别名 + AppSocketData（socket.data 显式契约，禁任意键）
 │       ├── application/           # 应用协作者：room-publisher 发布快照；room-persistence-coordinator 映射低频仓储记录
 │       ├── domain/                # 领域协作者：session 会话、room 成员、drawing/invite/vocabulary/game 窄接口；candidate-selector 为纯函数
 │       ├── startup/               # 启动期配置校验、环境加载、局域网地址、优雅关闭
@@ -115,8 +117,11 @@ draw_and_guess/
 │   ├── index.html                 # 入口 HTML（#app 挂载点，标题/描述由 vite.config 从 strings.ts 注入）
 │   └── src/
 │       ├── main.ts                # 客户端入口：创建 App 并挂载 #app；仅引入 ./style/index.css（Toast 为自建，无需第三方样式）
+│       ├── vite-env.d.ts          # ImportMetaEnv 扩展：自定义 Vite 旗标登记处（读取 import.meta.env 前先在此声明）
+│       ├── vue-augmentations.d.ts # strictTemplates 透传放行：aria-*/title/role/onXxx/data-*/lucide key（见 ADR-0016）
 │       ├── App.vue                # 根舞台：页面互斥渲染（对局>房间>设置>大厅>资料）、自建 `<AppToaster/>`、邀请横幅、竖屏提示、断线恢复阻断框
 │       ├── canvas/                # 双层画布：固定短边 720 的逻辑重放/填充层 + DPR 封顶的 DOM 展示层
+│       │   ├── replay-machine.ts  # 画布重放状态机：增量/整帧决策、世代取代、后备缓冲原子提交（ADR-0018）
 │       │   ├── rendering.ts
 │       │   ├── viewport.ts
 │       │   └── flood-fill.ts
@@ -149,7 +154,7 @@ draw_and_guess/
 │       │   ├── useAppBootstrap.ts # Socket 监听、连接生命周期、ping 与 HMR 清理
 │       │   ├── useRoomSync.ts     # 快照门禁、画布增量合并与受限全量重同步
 │       │   ├── useAudioFeedback.ts # 全局音效反馈（HTML5 Audio 驱动阶段入场音与倒计时警示）
-│       │   ├── useCanvasViewport.ts / useCanvasCursor.ts / useStrokeSession.ts / useFillSession.ts # 画布视口、光标、笔画与填充会话（填充渲染态/提交态两把锁）
+│       │   ├── useCanvasViewport.ts / useCanvasCursor.ts / useStrokeSession.ts / useFillSession.ts # 画布视口、光标、笔画与填充会话（提交态锁；渲染态在 replay-machine）
 │       │   ├── useGameHud.ts      # 对局 HUD 计算（useTimestamp 驱动）：剩余时间/进度/猜词权限/阶段标签/排行
 │       │   ├── useInviteQueue.ts / useFullscreenPrompt.ts # 根 Shell 的邀请倒计时与全屏提示生命周期
 │       │   ├── useVirtualTableRows.ts # 虚拟表格测量、占位与滚动归零
@@ -164,11 +169,11 @@ draw_and_guess/
 │       │   ├── AvatarPickerDialog.vue # 40 个 SVG 头像选择模态框（v-model:open）
 │       │   ├── ActionPopover.vue  # 悬浮操作面板（聊天快捷互动用）
 │       │   ├── AppToaster.vue     # 自建 Toast 堆栈渲染：画框内右上角、白色长条+橙色小条+加粗文字、样式闭环在组件内、点击消失、淡入淡出、去重左弹跳（WAAPI）
-│       │   ├── GameCanvas.vue     # 高 DPI 实时画板：组合 canvas composables，保留重放与模板渲染
+│       │   ├── GameCanvas.vue     # 高 DPI 实时画板薄装配壳：props→重放状态机快照转发、指针接线、投影 DOM
 │       │   ├── game/              # 对局组件（提供 index.ts）：GameHud / ChatPanel / DrawingToolbar / PhaseOverlay / OverlayCard / ScoreStrip
 │       │   ├── room/              # 房间组件（提供 index.ts）：SeatGrid / RuleSummary / RuleRow / RulesDialog / InviteDialog / VocabularyDialog
 │       │   ├── lobby/             # 大厅组件（提供 index.ts）：CreateRoomDialog / JoinPrivateDialog
-│       │   ├── common/            # 通用原语组件（提供 index.ts）：含 DataTable 与 DataTableHeader、AsyncModuleFallback（懒加载占位/失败重试）、ContextMenu（右键菜单，白底浮层）、各输入/按钮/规则原语
+│       │   ├── common/            # 通用原语组件（提供 index.ts）：含 DataTable 与 DataTableHeader、AsyncModuleFallback（懒加载占位/失败重试）、ContextMenu（右键菜单，白底浮层）、SelectDropdown（手写下拉，替代原生 select）、各输入/按钮/规则原语
 │       │   └── settings/          # 设置页组件（提供 index.ts）：AudioTab / ShortcutsTab / AccessibilityTab / DiagnosticsTab
 │       ├── views/
 │       │   ├── ProfileView.vue    # 资料确认页（随机昵称/内置 SVG 头像选择，无上传）
@@ -247,7 +252,7 @@ pnpm format:check  # 仅检查格式
 - **统一运行时依赖**：`GameService`、`RoundMachine`、`rate-limit.ts`、`snapshot.ts`、`scoring.ts`、`hint-scheduler.ts` 及 `apps/server/src/domain/`、`application/`、`protocol/` 全目录的领域时间、定时器与随机数统一来自 `runtime.ts` 的 `Clock` / `Scheduler` / `RandomSource`；这些作用域禁止直接调用系统时间、随机数或定时器，只有 `runtime.ts` 生产适配层放行，ESLint 会阻止回退。
 - **回合状态机**：`round-machine.ts` + `packages/shared/src/pure.ts` 的 `LEGAL_PHASES` 白名单；非法转换由服务端拒绝（`INVALID_TRANSITION`）。
 - **计分统一口径**：`scoring.ts` 与 `pure.ts` 的 `calculateGuessScore` 使用同一规则（基础 + 速度 + 顺序；两人局禁用顺序奖）。
-- **画布增量绘制**（`GameCanvas.vue`）：坐标一律**归一化 0～1**；绘图序号单调递增，服务端拒绝旧包；橡皮擦/填充只传「点击位置 + 颜色」，不传像素，客户端按同一历史重放；`lastSequence` 用于重连续接。**渲染为直线段描边（`stroke()` + `round` 线帽），增量只补画新增段（fromIndex）**。
+- **画布增量绘制**（`GameCanvas.vue` + `canvas/replay-machine.ts`）：坐标一律**归一化 0～1**；绘图序号单调递增，服务端拒绝旧包；橡皮擦/填充只传「点击位置 + 颜色」，不传像素，客户端按同一历史重放；`lastSequence` 用于重连续接。**渲染为直线段描边（`stroke()` + `round` 线帽），增量只补画新增段（fromIndex）**。**权威重放原子提交**：重放只画进后备 canvas，整帧成功后一次换入逻辑层——中止/取消的重放不得触碰逻辑层，`drawnPoints` 簿记与后备内容同口径（见 `docs/adr/0017-drawing-replay-atomic-commit.md`）。**「历史 → 栅格」的全部决策归画布重放状态机 `DrawingReplayMachine`**：唯一入口 `sync({commands, undoneIds, roundId})` + `resize/replay/预览方法`，增量 vs 整帧、undone 可见性过滤、世代取代、原子提交都是机器内政；组件与笔画会话不得直接绘制或清空逻辑层（见 `docs/adr/0018-canvas-replay-machine.md`）。
 - **持久化分层**：每个应用由 `createDatabase(filePath)` 创建独占 `DatabaseContext`，迁移、身份/战报仓储和事务显式绑定同一连接，不允许模块级数据库单例或路径覆盖；恢复令牌落盘时只存 SHA-256 摘要且成功恢复必须旋转，运行期房间禁止写穿数据库。`RunningApplication.close()` 负责关闭自身 Socket、HTTP 和数据库。
 - **注销是持久化优先的原子操作**：先原子删除持久化记录（失败即整体不生效：内存身份与当前连接保持可用，抛统一 `INTERNAL_ERROR` 并记白名单日志），再离房、最后清内存；注销只允许身份当前所属的连接执行（被接管的旧 socket 迟到注销只解绑自己）。顺序与取舍见 `docs/adr/0011-session-logout-atomicity.md`，禁止改回「先清内存、再尽力删库」。
 - **本地运维指标**：服务端只在进程内按有限事件名/错误码聚合连接数、房间数、invalid push/resync、绘图预算拒绝和平均 ack 延迟，不保存 ID 列表、恢复令牌、答案、聊天正文或完整 payload。`/api/health` 默认仅返回安全摘要；详细指标必须显式开启且仅回环请求可见（见 `docs/adr/0007-local-observability-privacy.md`）。
@@ -257,7 +262,13 @@ pnpm format:check  # 仅检查格式
 
 ## 编码规范
 
-- **类型**：`strict` + `noUncheckedIndexedAccess`（根 `tsconfig.json`）。避免 `any`（ESLint `@typescript-eslint/no-explicit-any: error`）；未使用变量加 `_` 前缀以通过 `no-unused-vars`。
+- **类型**：`strict` + `noUncheckedIndexedAccess` + `noImplicitReturns` + `noFallthroughCasesInSwitch` + `noImplicitOverride` + `noUncheckedSideEffectImports` + `verbatimModuleSyntax`（根 `tsconfig.json`），客户端 vue-tsc 另开 `strictTemplates`（模板未声明 props/事件即编译失败；合法透传统一在 `vue-augmentations.d.ts` 放行，新增旗标先登记 `vite-env.d.ts`）。避免 `any`（ESLint `no-explicit-any: error`）；未使用变量加 `_` 前缀以通过 `no-unused-vars`。
+- **类型护栏分层**（取舍见 `docs/adr/0016-type-aware-guardrails.md`）：
+  - Socket.IO 两端必须经 `socket-types.ts` 的 `AppServer`/`AppSocket`（server）与 `stores/socket.ts` 的 `GameSocket`（client）引用，**禁止**裸 `import('socket.io').Socket`；`socket.data` 只允许 `AppSocketData` 声明的字段；
+  - 服务端推送一律 `createServerPush(EVENTS.x, data)`（事件名↔载荷编译期配对）；客户端入站仍按 `unknown` 走 Zod 解码，不因类型接入而信任线路数据；
+  - type-checked ESLint 仅覆盖 `apps/server/src` 与 `packages/*/src`（typescript-eslint 无法解析跨文件 .vue 类型）；客户端类型严格性由 vue-tsc + strictTemplates 把关；`test/**` 不启用 type-checked 层（配置块级豁免，测试替身 `as unknown as` 属惯例）；
+  - 生产代码禁用非空断言（`no-non-null-assertion: error`）：以守卫重排/可选链/类型谓词消除；确需保留（热点循环、接口适配）必须带中文理由的定点 `eslint-disable-next-line`；泛型边界适配断言（binder `on`、GameService 推送、request `emitWithAck`）须注释说明「延迟条件类型不可证」的原因；
+  - `useGameStore` Facade 与 `useGameHud`/`useRoomSync`/`useToasts` 的成员名单由 `test/integration/store-contracts.ts` 编译期快照锁定：增删成员必须同步该名单（提醒机制，非阻力）。
 - **命名**：组件/视图 `PascalCase.vue`；TS 文件 **kebab-case**（`data-table-layout.ts`），例外仅三类——Vue 组合式函数 `useXxx.ts`、工具链配置 `*.config.ts`、测试 `*.spec.ts` / `*.page.ts`；事件名用 `EVENTS` 常量；领域模型用「Secret 后缀」标记服务端秘密对象。命名由 `test/unit/documentation.consistency.spec.ts` 静态校验，不要新增 camelCase 的普通模块文件。
 - **格式**：Prettier（无分号、单引号、行宽 100、尾逗号 all）。编码前先 `pnpm format`。
 - **换行**：由根目录 `.gitattributes` 统一管理；默认文本文件提交为 LF，`.bat`/`.cmd` 保留 CRLF，数据库、音频等二进制文件禁止换行转换。新增文件类型时同步确认其 Git 属性，不依赖开发者本机的 `core.autocrlf` 设置。
@@ -313,9 +324,10 @@ pnpm format:check  # 仅检查格式
   - Vue SFC 模板中条件样式严格使用 Vue 原生语法（例如 `:class="{ 'text-muted': isDisabled }"` 或数组形式）；
   - **严禁**在模板表达式中直接调用 `clsx(...)` 或 `cn(...)`；
   - `cn()`（`clsx + tailwind-merge`）仅允许在组件根节点与外部类名透传/覆盖合并时（如 `<div :class="cn('base-class', props.class)">`）在 `<script setup>` 或受限属性绑定中调用。
-- **表单输入原语规范（`AppInput` / `SearchInput`）**：
+- **表单输入原语规范（`AppInput` / `SearchInput` / `SelectDropdown`）**：
   - 全站表单输入框、房间短码、玩家昵称、搜索框一律使用 `AppInput.vue` 或 `SearchInput.vue` 原语组件；
-  - 集中管理输入框边框色、圆角、背景色、焦点发光环（focus ring）、禁用态与字号；严禁在视图或业务弹窗中裸写 `<input>` 及私有边框/焦点类。
+  - 集中管理输入框边框色、圆角、背景色、焦点发光环（focus ring）、禁用态与字号；严禁在视图或业务弹窗中裸写 `<input>` 及私有边框/焦点类；
+  - 表单下拉一律使用 `SelectDropdown.vue`（字段行经 `RuleSelectField.vue` 组合），**禁止**回退原生 `<select>`；键盘导航、Esc 仅关下拉（不连带关弹窗）与点外关闭均由该原语统一实现；展开面板为 **fixed 视口锚定**（打开时按触发按钮矩形定位、宽度与按钮等宽、空间不足向上翻转），祖先滚动/窗口 resize 即关闭，不 Teleport（取舍见 `docs/adr/0015`）。
 - **无深浅色主题切换约束**：
   - 本项目为固定纸墨手绘视觉风格（米白/纸张底色 + 深蓝/藏青字 + 粗线条边框），**不支持且未来绝不引入明暗/深浅色主题切换（No Dark Mode）**；
   - 禁止引入 `dark:` 前缀类或相关检测代码；所有颜色严格走 `@theme` 10 个语义色。
@@ -397,8 +409,8 @@ pnpm format:check  # 仅检查格式
 
 | 项             | 预算      | 现状       | 度量方式                                    |
 | -------------- | --------- | ---------- | ------------------------------------------- |
-| 主入口 JS gzip | ≤ 165 KiB | ~164.7 KiB | 资源计时 `encodedBodySize`                  |
-| 首屏实际下载   | ≤ 180 KiB | ~175.6 KiB | 同源非 Socket.IO 资源的 `transferSize` 求和 |
+| 主入口 JS gzip | ≤ 176 KiB | ~166.0 KiB | 资源计时 `encodedBodySize`                  |
+| 首屏实际下载   | ≤ 192 KiB | ~176.4 KiB | 同源非 Socket.IO 资源的 `transferSize` 求和 |
 
 预算触顶时**先看体积报告再决定取舍**，不要靠调大阈值或把 vendor 硬拆成多个 chunk 来消除告警：
 
@@ -408,8 +420,9 @@ BUNDLE_REPORT=1 pnpm --filter @draw-guess/client build   # 产物 raw/gzip 表 +
 
 ### 懒加载约定
 
-- 低频模块统一用 `utils/lazy-component.ts` 的 `defineLazyComponent()`：动态 import + `AsyncModuleFallback`（轻量占位 + 失败重试）；
-- 已懒加载：`SettingsView`、`DiagnosticsTab`、`VocabularyDialog`、`canvas-confetti`；
+- 低频模块统一用 `utils/lazy-component.ts` 的 `defineLazyComponent()`：动态 import + `AsyncModuleFallback`（轻量占位 + 失败重试）；实现为**自管理包装组件**而非 Vue `defineAsyncComponent`——后者既不向 errorComponent 注入 `retry`，`fail()` 后其 retry 也无法恢复当前实例（见 `docs/adr/0014`）；
+- **仅限组件级**：`defineLazyComponent()` 只允许用于视图内部低频组件，**禁止**用于整页视图——懒加载整页会在 `v-else-if` 视图切换时产生「视图真空帧」露出舞台近白底板（首开白闪，取舍见 `docs/adr/0014-settings-view-static-import.md`，守卫在 `test/unit/bundle-splitting.spec.ts`）；
+- 已懒加载：`VocabularyDialog`、`canvas-confetti`（礼花库）；`SettingsView`/`DiagnosticsTab` 已改为静态导入（见 ADR-0014）；
 - **核心对局链路保持静态导入**（画布 / 工具栏 / 聊天 / 阶段遮罩），避免关键路径多一次网络往返；
 - 懒加载模块**禁止**再经各 `components/*/index.ts` 静态 re-export——会被入口静态图捕获，切分随之失效；
 - 常驻渲染的弹窗（`v-model:open` 但组件始终在模板里）一挂载就会下载 chunk：需要真正延后时加 `v-if` 闸门，
@@ -488,6 +501,8 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
    - 坐标一律**归一化 0～1**；绘图序号必须单调递增，服务端拒绝旧包。
    - 橡皮擦/填充仍需保持「只传点击位置与颜色，不传像素」的约束（客户端按同一历史重放）。
    - **渲染模型固定为直线段描边增量同步**；不要引入轮廓填充型平滑库（曾导致白边/闪烁/空心缺陷，已回退）。
+   - **画布重放必须原子提交、且只经画布重放状态机**：一切历史变化只经 `DrawingReplayMachine.sync()` 单入口，重放只画进后备 canvas，整帧成功后一次性换入逻辑层；中止/取消的重放与逻辑层直接 `clearRect` 一律禁止（曾致填充空白窗口与 e2e 随机红，见 `docs/adr/0017-*.md`、`docs/adr/0018-canvas-replay-machine.md`）。
+   - **画布渲染入口唯一**：对逻辑栅格的绘制只能经 `DrawingReplayMachine` 的 `sync/resize/replay/预览方法`；任何组件或 composable 不得直接持有/绘制逻辑画布上下文与簿记 Map（决策归属见 `docs/adr/0018-canvas-replay-machine.md`）。
    - **绘图历史只增不删**：达到 `maxHistoryCommands` 后服务端**拒绝**新命令（`DRAW_HISTORY_LIMIT_REACHED`，撤销或清空释放名额），服务端与客户端都**不得**为容量压力静默丢弃最旧命令——FIFO 丢弃会让早期封闭边界消失、后续填充重放时吞掉整张画布，并使各客户端镜像与权威历史错位（见 `docs/adr/0010-drawing-history-cap.md`）。
    - 动画化/教学页不在首版范围（新增需另行评审）。
 7. **工程约束**
@@ -527,28 +542,44 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
   - 找不到依据的规范（如 PR/CI 约定、测试框架）一律标「待确认」，不要自行编造。
 - **快速定位速查**：
 
-| 想改什么                        | 去哪个文件                                                                                                                                                                                               |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 应用名/版本/公开连接参数        | `packages/config/src/app.ts`                                                                                                                                                                             |
-| 协议版本/头像/载荷范围          | `packages/shared/src/protocol/constants.ts`                                                                                                                                                              |
-| 服务端端口/限频/清理/数据库路径 | `apps/server/src/config/`                                                                                                                                                                                |
-| 对局轮数/时间/分数/提示         | `packages/config/src/game.ts`                                                                                                                                                                            |
-| 画板颜色/粗细/批次/历史上限     | `packages/config/src/drawing.ts`（历史上限语义见 `docs/adr/0010-drawing-history-cap.md`）                                                                                                                |
-| 词库内容                        | `vocabulary/` 目录下的 SQLite 词库包（改后重启服务）                                                                                                                                                     |
-| 新增词库来源                    | `apps/server/src/vocabulary/` 实现 VocabularyProvider → `apps/server/src/config/private.ts` 切 provider                                                                                                  |     |
-| 新增一个请求事件                | `packages/shared/src/events.ts` 契约 → `packages/shared/src/protocol/` Schema → `game-service.ts` 或对应领域协作者 → `handlers/*.ts` 注册 → 客户端领域 Store                                             |
-| 回合流转/阶段                   | `apps/server/src/round-machine.ts`                                                                                                                                                                       |
-| 计分规则                        | `apps/server/src/scoring.ts`                                                                                                                                                                             |
-| 快照裁剪/隐私边界               | `apps/server/src/snapshot.ts`                                                                                                                                                                            |
-| SQLite 建表/迁移                | `apps/server/src/db/migrate.ts`（新变更追加新迁移）                                                                                                                                                      |
-| 持久化仓储（玩家/战报）         | `apps/server/src/repositories/`                                                                                                                                                                          |
-| 日志开关/保留条数               | `.env` → `apps/server/src/config/deployment.ts` → `apps/server/src/index.ts`                                                                                                                             |
-| 画布渲染/增量绘制               | `apps/client/src/components/game/GameCanvas.vue` + `composables/useCanvas*.ts` / `useStrokeSession.ts`（直线段描边，勿引入轮廓填充平滑库）                                                               |
-| 填充重放/降级与填充门禁         | `apps/client/src/canvas/flood-fill-worker.ts`（Worker 失败降级一次）+ `composables/useFillSession.ts`（渲染态/提交态）+ `canvas/fill-diagnostics.ts`（见 `docs/adr/0009-fill-degradation-and-locks.md`） |
-| 音效资源/播放策略               | `packages/config/src/audio.ts` → `apps/client/src/audio/` → `composables/useAudioFeedback.ts`（音效文件名清单与格式约定见 `apps/client/src/assets/audio/README.md`；BGM 系统已移除）                     |
-| 全局样式 / Tailwind 令牌        | `apps/client/src/style/index.css`                                                                                                                                                                        |
-| 类名合并 cn()                   | `apps/client/src/utils/cn.ts`                                                                                                                                                                            |
+| 想改什么                        | 去哪个文件                                                                                                                                                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 应用名/版本/公开连接参数        | `packages/config/src/app.ts`                                                                                                                                                                                                                      |
+| 协议版本/头像/载荷范围          | `packages/shared/src/protocol/constants.ts`                                                                                                                                                                                                       |
+| 服务端端口/限频/清理/数据库路径 | `apps/server/src/config/`                                                                                                                                                                                                                         |
+| 对局轮数/时间/分数/提示         | `packages/config/src/game.ts`                                                                                                                                                                                                                     |
+| 画板颜色/粗细/批次/历史上限     | `packages/config/src/drawing.ts`（历史上限语义见 `docs/adr/0010-drawing-history-cap.md`）                                                                                                                                                         |
+| 词库内容                        | `vocabulary/` 目录下的 SQLite 词库包（改后重启服务）                                                                                                                                                                                              |
+| 新增词库来源                    | `apps/server/src/vocabulary/` 实现 VocabularyProvider → `apps/server/src/config/private.ts` 切 provider                                                                                                                                           |     |
+| 新增一个请求事件                | `packages/shared/src/events.ts` 契约 → `packages/shared/src/protocol/` Schema → `game-service.ts` 或对应领域协作者 → `handlers/*.ts` 注册 → 客户端领域 Store                                                                                      |
+| 回合流转/阶段                   | `apps/server/src/round-machine.ts`                                                                                                                                                                                                                |
+| 计分规则                        | `apps/server/src/scoring.ts`                                                                                                                                                                                                                      |
+| 快照裁剪/隐私边界               | `apps/server/src/snapshot.ts`                                                                                                                                                                                                                     |
+| SQLite 建表/迁移                | `apps/server/src/db/migrate.ts`（新变更追加新迁移）                                                                                                                                                                                               |
+| 持久化仓储（玩家/战报）         | `apps/server/src/repositories/`                                                                                                                                                                                                                   |
+| 日志开关/保留条数               | `.env` → `apps/server/src/config/deployment.ts` → `apps/server/src/index.ts`                                                                                                                                                                      |
+| 画布渲染/增量绘制               | `apps/client/src/canvas/replay-machine.ts`（重放状态机：决策/世代/簿记/原子提交）+ `components/game/GameCanvas.vue`（薄装配壳）+ `composables/useCanvas*.ts` / `useStrokeSession.ts`（直线段描边，勿引入轮廓填充平滑库）                          |
+| 填充重放/降级与填充门禁         | `apps/client/src/canvas/flood-fill-worker.ts`（Worker 失败降级一次）+ `canvas/replay-machine.ts`（渲染态）+ `composables/useFillSession.ts`（提交态）+ `canvas/fill-diagnostics.ts`（见 `docs/adr/0009-fill-degradation-and-locks.md`、ADR-0018） |
+| 音效资源/播放策略               | `packages/config/src/audio.ts` → `apps/client/src/audio/` → `composables/useAudioFeedback.ts`（音效文件名清单与格式约定见 `apps/client/src/assets/audio/README.md`；BGM 系统已移除）                                                              |
+| 全局样式 / Tailwind 令牌        | `apps/client/src/style/index.css`                                                                                                                                                                                                                 |
+| 类名合并 cn()                   | `apps/client/src/utils/cn.ts`                                                                                                                                                                                                                     |
 
 ---
 
 以「服务端权威 + 角色裁剪快照 + 幂等 ack + 增量绘图 + 低频持久化」为核心原则开发。除非需求/清单明确要求且经得起「约束与禁止事项」核对，否则不要擅自扩大持久化边界、改变画布渲染模型、引入图片头像、公网暴露或客户端裁决。
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+议题与规格以 `.scratch/` 下的本地 Markdown 文件管理（随仓库入库）。见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+分诊标签保留五个规范角色的默认字符串（needs-triage / needs-info / ready-for-agent / ready-for-human / wontfix）。见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+单上下文布局：根 `CONTEXT.md` + `docs/adr/`。见 `docs/agents/domain.md`。

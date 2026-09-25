@@ -63,7 +63,9 @@ export function applyFloodFillMeasured(
     data[startOffset + 2] ?? 0,
     data[startOffset + 3] ?? 0,
   ]
-  if (target.every((channel, index) => Math.abs(channel - replacement[index]!) <= tolerance))
+  // target 由 data 的 4 通道构造、replacement 恒为 Rgba 四元组，every 的 index ∈ [0,4) 必命中；
+  // noUncheckedIndexedAccess 下元组数字索引带 undefined，用 ?? 0 兜底（该分支运行时不可达）替代 `!`。
+  if (target.every((channel, index) => Math.abs(channel - (replacement[index] ?? 0)) <= tolerance))
     return { filledPixels: 0, pushedSpans: 0, peakWorkingBytes: 0 }
 
   // 扫描线只压入相邻行的连续 span 种子。常见空白画布的栈深接近 1；复杂图形按需扩容，
@@ -119,6 +121,9 @@ export function applyFloodFillMeasured(
   push(startIndex)
   while (stackSize > 0) {
     stackSize -= 1
+    // 热循环内 stackSize>0 已保证栈顶存在（Int32Array 定长栈，压弹严格配对）；
+    // 改可选链/守卫会在每像素内层循环引入分支，收益为零、性能回退，故定点豁免。
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const seed = stack[stackSize]!
     const seedY = Math.floor(seed / width)
     const seedX = seed % width

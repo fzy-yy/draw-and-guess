@@ -28,7 +28,7 @@ export function buildGuessDetail(input: {
       durationMs,
       correctOrder: orderIndex,
       playerCount: activePlayerCount(room),
-      // 统一猜词基础分与计分方式均为房间规则可设项（默认值取自全局配置）
+      // 统一猜词基础分为房间规则可设项（计分方式已固定为标准）；
       // 词条权重来自词库元数据；以默认权重 5 为基准缩放基础分，避免字段只在 UI 透传。
       base: Math.max(
         1,
@@ -40,7 +40,6 @@ export function buildGuessDetail(input: {
       ),
       maxSpeedBonus: APP_CONFIG.game.score.maxSpeedBonus,
       orderBonuses: APP_CONFIG.game.score.orderBonuses,
-      mode: room.settings.scoreMode,
     }),
   }
   return detail

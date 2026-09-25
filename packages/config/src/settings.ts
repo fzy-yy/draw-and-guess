@@ -68,12 +68,13 @@ export const performance = {
   immutableAssetMaxAgeSeconds: 31_536_000,
   /**
    * 首屏预算：入口 JS chunk 的 gzip 体积上限（KiB，按资源计时 encodedBodySize 计）。
-   * 现状约 155 KiB（框架 + zod 校验 + socket.io + 共享原语），留约 6% 余量；
+   * 现状约 166 KiB（框架 + zod 校验 + socket.io + 共享原语 + 静态导入的设置页，
+   * 设置页不再懒加载的取舍见 docs/adr/0014-settings-view-static-import.md），留约 6% 余量；
    * 触顶说明有新的重量级依赖进了主 chunk，应先看体积报告再决定是否懒加载，而不是调大本值。
    */
-  mainEntryGzipKib: 165,
-  /** 首屏预算：进入资料页为止实际下载的传输体积上限（KiB，按资源计时 transferSize 求和）。现状约 167 KiB。 */
-  firstScreenTransferKib: 180,
+  mainEntryGzipKib: 176,
+  /** 首屏预算：进入资料页为止实际下载的传输体积上限（KiB，按资源计时 transferSize 求和）。现状约 176 KiB。 */
+  firstScreenTransferKib: 192,
 } as const
 
 export const ui = {

@@ -30,6 +30,7 @@
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",
     "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/runtime-dom": "3.5.41",
     "typescript": "^5.9.3",
     "vite": "^7.1.9",
     "vue-tsc": "^3.1.1"

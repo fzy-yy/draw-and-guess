@@ -25,7 +25,6 @@ describe('审查缺陷回归：共享规则与限频', () => {
       base: 600,
       maxSpeedBonus: 700,
       orderBonuses: [100],
-      mode: 'standard',
     })
     expect(score).toEqual({ base: 600, speed: 630, order: 100, total: 1_330 })
   })

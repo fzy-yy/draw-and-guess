@@ -11,9 +11,11 @@ import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
 import { Server } from 'socket.io'
+import type { ClientToServerEvents, ServerToClientEvents } from '@draw-guess/shared'
 import { APP_CONFIG, PUBLIC_CONFIG } from './config/index.ts'
 import { GameService } from './game-service.ts'
 import type { RuntimeLogger } from './errors.ts'
+import type { AppServer, AppSocket, AppSocketData, InterServerEvents } from './socket-types.ts'
 import { loadVocabulary, type VocabularyRegistry } from './vocabulary/index.ts'
 import { isPrivateIpv4 } from './startup/lan-addresses.ts'
 import { registerSessionHandlers } from './handlers/session.ts'
@@ -54,7 +56,7 @@ export function isLoopbackAddress(address: string | undefined): boolean {
 
 export interface RunningApplication {
   httpServer: HttpServer
-  io: Server
+  io: AppServer
   service: GameService
   metrics: OperationalMetrics
   /** 幂等关闭本应用拥有的 Socket、HTTP 与 SQLite 资源。 */
@@ -62,7 +64,7 @@ export interface RunningApplication {
 }
 
 /** 注册一个连接的全部协议事件：按领域分组挂载，并把服务挂到 socket.data 供日志回调使用。 */
-function registerSocketHandlers(socket: import('socket.io').Socket, service: GameService): void {
+function registerSocketHandlers(socket: AppSocket, service: GameService): void {
   // 注册前即初始化幂等缓存与并发请求表，保证首次 session:register 也不会重复执行。
   socket.data.service = service
   socket.data.requestCache = new Map()
@@ -108,7 +110,12 @@ export async function createApplication(
   // Socket.IO 只负责传输重连；身份、业务房间与遗漏画布一律由秘密令牌 + 权威全量快照恢复。
   // 不启用 connectionStateRecovery：它会在应用层注册校验前恢复旧 socket.rooms 并重放消息，
   // 导致已经被领域层移出房间的身份仍短暂收到旧房间数据，形成跨房间状态与隐私风险。
-  const io = new Server(httpServer, {
+  const io: AppServer = new Server<
+    ClientToServerEvents,
+    ServerToClientEvents,
+    InterServerEvents,
+    AppSocketData
+  >(httpServer, {
     // CORS 只约束浏览器的 HTTP 响应；allowRequest 同步覆盖 polling 与 WebSocket 握手入口。
     allowRequest: (request, callback) => callback(null, isAllowedOrigin(request.headers.origin)),
     cors: {

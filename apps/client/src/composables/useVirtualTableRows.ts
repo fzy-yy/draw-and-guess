@@ -70,12 +70,12 @@ export function useVirtualTableRows<T>(
 
   const topSpacerHeight = computed(() => {
     const items = virtualizer.value.getVirtualItems()
-    return items.length ? items[0]!.start : 0
+    return items[0]?.start ?? 0
   })
   const bottomSpacerHeight = computed(() => {
     const items = virtualizer.value.getVirtualItems()
-    if (!items.length) return 0
-    const last = items.at(-1)!
+    const last = items.at(-1)
+    if (!last) return 0
     return virtualizer.value.getTotalSize() - (last.start + last.size)
   })
 

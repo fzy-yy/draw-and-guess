@@ -7,7 +7,7 @@
 import { computed } from 'vue'
 import { BookOpenCheck, Send, Settings2 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
-import { closestRoomPreset, roomPresetDifferences, type RoomPresetId } from '@draw-guess/config'
+import { roomSettingsDefaults } from '@draw-guess/config'
 import type { RoomSettings } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
 import AppButton from '@/components/common/AppButton.vue'
@@ -39,12 +39,6 @@ const hintsSummary = computed(() => {
   return strings.room.hintsOff
 })
 
-const presetNames: Record<RoomPresetId, string> = {
-  standard: strings.room.presetStandard,
-  relaxed: strings.room.presetRelaxed,
-  speed: strings.room.presetSpeed,
-}
-
 function enabled(value: boolean): string {
   return value ? strings.room.ruleEnabled : strings.room.ruleDisabled
 }
@@ -52,15 +46,13 @@ function enabled(value: boolean): string {
 const summaryRows = computed(() => {
   const settings = store.room?.settings
   if (!settings) return []
-  const preset = closestRoomPreset(settings)
-  const differences = new Set(roomPresetDifferences(settings, preset))
-  const presetName = presetNames[preset]
+  // 差异基线：旧「玩法预设」已移除，改为对照 config 的唯一默认规则组，仅展示房主真正改过的项。
+  const differences = new Set(
+    (Object.keys(roomSettingsDefaults) as Array<keyof typeof roomSettingsDefaults>).filter(
+      (field) => settings[field] !== roomSettingsDefaults[field],
+    ),
+  )
   const rows: Array<{ key: string; label: string; value: string }> = [
-    {
-      key: 'preset',
-      label: strings.room.rulePresetDt,
-      value: differences.size ? strings.room.presetCustomized(presetName) : presetName,
-    },
     {
       key: 'maxPlayers',
       label: strings.room.ruleCapacityDt,
@@ -77,6 +69,13 @@ const summaryRows = computed(() => {
       value: strings.room.ruleDrawFallback(settings.drawSeconds),
     },
   ]
+  // 额外猜词时间是「降低难度」的显式声明：只要 >0 就常驻展示，不依赖差异判定。
+  if (settings.extraGuessSeconds > 0)
+    rows.push({
+      key: 'extraGuessSeconds',
+      label: strings.room.extraGuessSecondsField,
+      value: strings.room.extraGuessSecondsValue(settings.extraGuessSeconds),
+    })
   const addDifference = (
     field: keyof Omit<RoomSettings, 'maxPlayers'>,
     label: string,
@@ -113,11 +112,6 @@ const summaryRows = computed(() => {
     strings.room.guessBaseScoreUnit(settings.guessBaseScore),
   )
   addDifference(
-    'scoreMode',
-    strings.room.scoreModeField,
-    settings.scoreMode === 'standard' ? strings.room.scoreModeStandard : strings.room.scoreModeFlat,
-  )
-  addDifference(
     'allowPlayerInvite',
     strings.room.togglePlayerInvite,
     enabled(settings.allowPlayerInvite),
@@ -142,7 +136,7 @@ const summaryRows = computed(() => {
 </script>
 
 <template>
-  <!-- 规则摘要：始终展示关键项，其余只展示相对当前预设的差异。 -->
+  <!-- 规则摘要：始终展示关键项，其余只展示相对默认规则组的差异。 -->
   <template v-if="store.room">
     <div>
       <div class="grid grid-cols-[1fr_auto] items-center">

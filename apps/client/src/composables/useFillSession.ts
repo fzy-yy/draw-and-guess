@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useTimeoutFn } from '@vueuse/core'
 import { APP_CONFIG } from '@draw-guess/config'
 import { EVENTS, type ClientResponse } from '@draw-guess/shared'
@@ -7,28 +7,25 @@ import type { RequestResult } from '@/stores/request'
 /** 填充 ack 携带服务端画布修订，用于判断本地是否已追平并安全解除提交锁。 */
 type FillAck = ClientResponse<typeof EVENTS.drawFillCommit>
 
-export interface FillSessionOptions {
+/**
+ * 洪泛填充的**提交态锁**（本地填充已发出、等权威修订追平）。
+ *
+ * ADR-0009 定义的两把锁中，渲染态（有填充任务在重放计算）已随 ADR-0018 收进
+ * DrawingReplayMachine（`onRenderingChange` 回调）；本 composable 只保留提交锁——
+ * 它裁决的是「与服务器之间是否还有一笔未确认的填充」，属交互会话概念，
+ * 与画布如何重放无关。组件层把两者合成 canFill 门禁：
+ * 画布仍在整帧重放、或上一笔填充尚未被权威确认时，不接受新的填充点击。
+ *
+ * 解锁路径只有三条：权威修订追平 ack 修订、ack 业务/传输失败、超时兜底；
+ * 任何重放、推送或回合内的其它画布事件都不得提前解锁。
+ */
+export function useFillSession(options: {
   /** 权威画布修订（对应 ack 的 drawingRevision）。 */
   revision: () => number
   /** 当前回合：回合切换会作废旧回合的提交锁与迟到 ack。 */
   roundId: () => string
-}
-
-/**
- * 洪泛填充的两把锁（会话级状态机，见 docs/adr/0009-fill-degradation-and-locks.md）：
- *
- * - **渲染态** `renderBusy`：有填充任务在算（重放历史里的 fill）。由任务 `finally` 无条件释放，
- *   与世代、回合都无关；重叠重放（新一轮重放在旧任务 finally 之前启动）用计数保证不误放。
- * - **提交态** `submitPending`：本地填充已发出、等权威修订追平。只由对应 `drawingRevision`
- *   追平或超时兜底释放——任何重放、推送或回合内的其它画布事件都不得提前解锁。
- *
- * 两者合并为 `canSubmit` 门禁：画布仍在中途重放、或上一笔填充尚未被权威确认时，不接受新的填充点击。
- */
-export function useFillSession(options: FillSessionOptions) {
-  const renderBusy = ref(false)
+}) {
   const submitPending = ref(false)
-  const canSubmit = computed(() => !renderBusy.value && !submitPending.value)
-  let renderTasks = 0
   let pendingRevision: number | undefined
 
   const { start: startReleaseTimer, stop: stopReleaseTimer } = useTimeoutFn(
@@ -36,17 +33,6 @@ export function useFillSession(options: FillSessionOptions) {
     APP_CONFIG.network.requestTimeoutMs,
     { immediate: false },
   )
-
-  function beginRenderTask(): void {
-    renderTasks += 1
-    renderBusy.value = true
-  }
-
-  /** 任务的成功、失败与取消出口都必须调用一次，避免渲染态把填充门禁永久锁死。 */
-  function endRenderTask(): void {
-    renderTasks = Math.max(0, renderTasks - 1)
-    renderBusy.value = renderTasks > 0
-  }
 
   function releaseSubmit(): void {
     submitPending.value = false
@@ -86,17 +72,13 @@ export function useFillSession(options: FillSessionOptions) {
     if (options.revision() >= pendingRevision) releaseSubmit()
   }
 
-  /** 回合切换或卸载：作废提交锁与超时兜底（渲染态由任务自身 finally 释放）。 */
+  /** 回合切换或卸载：作废提交锁与超时兜底。 */
   function reset(): void {
     releaseSubmit()
   }
 
   return {
-    renderBusy,
     submitPending,
-    canSubmit,
-    beginRenderTask,
-    endRenderTask,
     beginSubmit,
     settleSubmit,
     syncRevision,

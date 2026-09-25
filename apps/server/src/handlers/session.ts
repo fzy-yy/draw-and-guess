@@ -9,12 +9,10 @@ import {
 } from '@draw-guess/shared'
 import { bindRequest } from '../protocol/binder.ts'
 import type { GameService } from '../game-service.ts'
+import type { AppSocket } from '../socket-types.ts'
 
 /** 注册会话、修改资料/偏好、读取大厅、ping 与断线兜底。 */
-export function registerSessionHandlers(
-  socket: import('socket.io').Socket,
-  service: GameService,
-): void {
+export function registerSessionHandlers(socket: AppSocket, service: GameService): void {
   bindRequest(
     socket,
     EVENTS.sessionRegister,
@@ -27,8 +25,11 @@ export function registerSessionHandlers(
       // 避免页面刷新后的空本地历史收到 strokesOmitted 快照而显示空画布。
       const room = service.snapshotForPlayer(identity.player.id, true) ?? null
       const result: SessionRegistration = { ...identity, room }
-      socket.emit(EVENTS.presenceSnapshot, createServerPush(service.presenceSnapshot()))
-      if (room) socket.emit(EVENTS.roomSnapshot, createServerPush(room))
+      socket.emit(
+        EVENTS.presenceSnapshot,
+        createServerPush(EVENTS.presenceSnapshot, service.presenceSnapshot()),
+      )
+      if (room) socket.emit(EVENTS.roomSnapshot, createServerPush(EVENTS.roomSnapshot, room))
       return result
     },
     { registration: true },
