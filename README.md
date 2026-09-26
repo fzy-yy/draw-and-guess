@@ -1,6 +1,6 @@
 # 你画我猜（局域网联机版）
 
-基于 Vue 3、TypeScript、Socket.IO 与 Express 的 2～6 人局域网实时派对游戏。支持大厅公开房间和短码私密房间；服务端权威维护身份、访问控制、答案、计时、绘图资格和分数。
+基于 Vue 3、TypeScript、Socket.IO 与 Express 的 2～6 人局域网实时派对游戏。支持大厅公开房间和短码私密房间；服务端权威维护身份、访问控制、答案、计时、绘图资格和分数。除源码运行外，还可打成 **Windows 分发包**（服务端单 JS + 前端产物）：`slim` 包需系统 Node，`full` 包自带 Node 运行时，解压双击 `start.cmd` 即可用。
 
 ## 运行环境
 
@@ -28,6 +28,28 @@ pnpm start
 
 终端会醒目输出主机地址、端口和一个或多个局域网 IPv4 URL。其他玩家连接同一局域网后，在浏览器输入其中可用的 `http://局域网IP:5174`。若无法连接，请依次确认：IP/端口与终端输出一致、设备处于同一网段、防火墙放行 Node.js 专用网络通信，并避免将服务开放到公网。
 
+## Windows 分发包（slim / full 双包）
+
+```bash
+pnpm package:dist   # 构建前端 + 服务端单文件，产出 slim 与 full 两个可运行目录与 zip
+```
+
+| 包       | zip                                         | 体积    | 运行要求                                     |
+| -------- | ------------------------------------------- | ------- | -------------------------------------------- |
+| **slim** | `draw-and-guess-<version>-win-x64-slim.zip` | 约 2MB  | 本机需 Node.js 22+                           |
+| **full** | `draw-and-guess-<version>-win-x64-full.zip` | 约 37MB | **无需安装 Node**（自带 Node 24 LTS 运行时） |
+
+两包内容相同（`server.mjs` 依赖已内联、`client/` 前端、`vocabulary/` 内置词库、
+`node_modules/better-sqlite3/` Node-API 预编译模块、`start.cmd`、`使用说明.txt`），
+仅 full 额外带 `runtime/node.exe`。解压后双击 `start.cmd` 即启动服务并自动打开浏览器，
+其他玩家用浏览器访问窗口里列出的局域网地址即可。运行数据写在 `data/`（`game.db`、`logs/`、
+`vocabulary/custom/`、可选 `.env`）；默认端口被占用会自动顺延。内置 Node 从镜像下载
+（默认国内镜像，可用 `NODE_DIST_MIRROR` 覆盖、`NODE_VERSION` 钉死版本），下载经同源
+SHASUMS256.txt 的 sha256 校验，缓存损坏会自动重下一次；产物启动后自动打开浏览器，
+`DRAW_GUESS_OPEN_BROWSER=false` 可关闭。
+分发包仅面向 Windows x64 与可信局域网，详见
+[`docs/adr/0034-node-single-file-distribution.md`](docs/adr/0034-node-single-file-distribution.md)。
+
 ## 可用命令
 
 ```bash
@@ -43,6 +65,7 @@ pnpm test:component   # happy-dom 中的 Vue 组件测试
 pnpm test:integration # Pinia + MSW 客户端集成测试
 pnpm test:coverage    # 全部 Vitest 项目 + V8 覆盖率阈值
 pnpm test:e2e         # Playwright 跨浏览器端到端测试
+pnpm package:dist     # 构建 Windows 分发包（slim/full 两个可运行目录 + zip）
 ```
 
 > 测试分为 Vitest 单元、组件、集成三层及 Playwright E2E；CI 会执行 V8 覆盖率门禁并上传 HTML/LCOV 报告。
@@ -52,7 +75,7 @@ pnpm test:e2e         # Playwright 跨浏览器端到端测试
 ## 配置与词库
 
 - **配置边界**：协议版本、头像白名单和载荷范围以 [`packages/shared/src/protocol/constants.ts`](packages/shared/src/protocol/constants.ts) 为唯一来源；浏览器安全默认值由 [`@draw-guess/config`](packages/config/src/index.ts) 导出；限频、数据库路径和清理策略位于 [`apps/server/src/config/`](apps/server/src/config/)；禁止跨边界复制协议常量。
-- **部署覆盖**：复制 [`.env.example`](.env.example) 为根目录 `.env`，可配置 `HOST`、`PORT`、`LOG_LEVEL`、`LOG_ENABLED`、`LOG_MAX_FILES`、`HEALTH_METRICS_ENABLED`；服务启动时会自动加载 `.env`（进程已有环境变量优先级更高）。环境变量不会覆盖游戏规则。
+- **部署覆盖**：复制 [`.env.example`](.env.example) 为根目录 `.env`，可配置 `HOST`、`PORT`、`LOG_LEVEL`、`LOG_ENABLED`、`LOG_MAX_FILES`、`HEALTH_METRICS_ENABLED`、`DRAW_GUESS_OPEN_BROWSER`（浏览器开关仅分发产物模式生效）；服务启动时会自动加载 `.env`（进程已有环境变量优先级更高）。环境变量不会覆盖游戏规则。
   - `LOG_ENABLED=false` 时完全不创建日志记录器、不写日志文件（零内存开销）；
   - `LOG_MAX_FILES` 控制日志文件保留条数（默认 10，每次启动新建一个 `apps/server/log/app-<秒级时间戳>.log`，超出删除最老）。
   - `/api/health` 默认只返回版本与协议安全摘要；仅当 `HEALTH_METRICS_ENABLED=true` 且请求来自本机回环地址时返回详细聚合指标。
@@ -73,6 +96,10 @@ apps/client/       Vue 3 游戏舞台、内置 SVG 头像、Pinia 状态与 Canv
 apps/server/       Express、Socket.IO、权威领域状态与 SQLite 本地持久化
   └─ src/config/                # 服务端私有限频、清理、数据库路径与部署参数
   └─ src/db/ 与 src/repositories/   # 数据库连接/迁移与仓储（player/archive）
+  └─ src/runtime-layout.ts      # 源码 / 分发产物两种运行布局（data、client、vocabulary、.env）
+  └─ src/build/node-dist.ts     # 分发内置 Node 版本解析与 SHASUMS 校验条目提取（纯函数，可单测）
+  └─ src/build/dist-templates.ts # 分发文本模板：start.cmd / 使用说明（纯函数，两包启动差异有单测锁定）
+  └─ scripts/package-dist.ts    # 构建 slim/full Windows 分发包（esbuild 单文件 + 资源 + Node + zip）
 packages/shared/   DTO、Zod schema、协议常量、事件名和领域纯函数（完全自包含）
 packages/config/   浏览器安全的公开应用配置 workspace 包
 packages/strings/  客户端与服务端展示文案 workspace 包
@@ -100,7 +127,7 @@ docs/adr/          架构决策记录（背景 / 决策 / 后果），源码注�
 
 **浏览器边界**：HTTP API、Socket.IO polling 与 WebSocket 握手共用本机/私网 Origin 白名单。响应启用仅覆盖同源生产脚本、Socket.IO、音频、SVG/data/blob 资源与 Vue 行内 style 属性的 CSP；为保证纯 HTTP 局域网访问，不启用 `upgrade-insecure-requests` 或 HSTS。本项目仍仅面向可信局域网，不应通过端口转发、反向代理或公网 IP 暴露到互联网。
 
-**状态持久化边界**：服务端为「内存权威 + 低频落盘」——房间、成员席位、画布笔画、聊天消息、计时器和对局实时状态均不落盘，重启即清空；仅玩家身份摘要/资料/偏好与完成局战报经 SQLite 落盘（`apps/server/data/game.db`）。重启后身份可凭客户端持有的令牌在宽限内恢复到大厅，历史战报可查。业务日志写入 `apps/server/log/` 文件（不输出到控制台，避免 Windows 控制台 GBK 解码 UTF-8 中文乱码）。浏览器本地只保存三个键：`draw-and-guess-profile-v1`（昵称 / 内置头像编号 / 短期恢复令牌）、`draw-and-guess-settings-v1`（本地设置），以及 `sessionStorage` 的 `draw-and-guess-fullscreen-prompt-v1`（全屏提示已读标记）。
+**状态持久化边界**：服务端为「内存权威 + 低频落盘」——房间、成员席位、画布笔画、聊天消息、计时器和对局实时状态均不落盘，重启即清空；仅玩家身份摘要/资料/偏好与完成局战报经 SQLite 落盘（`apps/server/data/game.db`）。重启后身份可凭客户端持有的令牌在宽限内恢复到大厅，历史战报可查。业务日志写入 `apps/server/log/` 文件（不输出到控制台，避免 Windows 控制台 GBK 解码 UTF-8 中文乱码）。分发包则把同样的数据写到 `server.mjs` 旁的 `data/`（`game.db`、`logs/`、用户自定义词库 `vocabulary/custom/`、可选 `.env`）。浏览器本地只保存三个键：`draw-and-guess-profile-v1`（昵称 / 内置头像编号 / 短期恢复令牌）、`draw-and-guess-settings-v1`（本地设置），以及 `sessionStorage` 的 `draw-and-guess-fullscreen-prompt-v1`（全屏提示已读标记）。
 
 ## 新版交互说明
 

@@ -20,26 +20,26 @@ export function logFileName(date: Date = new Date()): string {
   return `app-${stamp}.log`
 }
 
-export function prepareLogDir(maxFiles: number): string {
-  mkdirSync(LOG_DIR, { recursive: true })
-  const existing = new Set(readdirSync(LOG_DIR))
+export function prepareLogDir(maxFiles: number, logDir: string = LOG_DIR): string {
+  mkdirSync(logDir, { recursive: true })
+  const existing = new Set(readdirSync(logDir))
   const base = logFileName()
-  let newPath = join(LOG_DIR, base)
+  let newPath = join(logDir, base)
   for (let suffix = 2; existing.has(basename(newPath)); suffix += 1)
-    newPath = join(LOG_DIR, base.replace(/\.log$/u, `-${suffix}.log`))
+    newPath = join(logDir, base.replace(/\.log$/u, `-${suffix}.log`))
   // 按文件创建时间升序删最旧：绝对不能按文件名排序，因为同秒文件名 `-10.log < -2.log`，
   // 会让字典序把后创建的文件当作更旧删除（见 docs/adr/0005-log-retention-order.md）。
   const fileAge = (name: string): number => {
-    const stat = statSync(join(LOG_DIR, name))
+    const stat = statSync(join(logDir, name))
     // birthtime 为创建时间；极少数不支持的文件系统回退 mtime。
     return stat.birthtimeMs || stat.mtimeMs || 0
   }
-  const logs = readdirSync(LOG_DIR)
+  const logs = readdirSync(logDir)
     .filter((name) => name.endsWith('.log'))
     .sort((left, right) => fileAge(left) - fileAge(right))
   const excess = logs.length + 1 - maxFiles
   // excess ∈ [0, logs.length]（maxFiles ≥ 1），slice 取最旧 excess 个删除，避免 `logs[index]!` 断言
-  for (const stale of logs.slice(0, Math.max(0, excess))) unlinkSync(join(LOG_DIR, stale))
+  for (const stale of logs.slice(0, Math.max(0, excess))) unlinkSync(join(logDir, stale))
   return newPath
 }
 
@@ -87,13 +87,13 @@ function sanitizeContext(context: RuntimeLogContext): RuntimeLogContext {
   return safe
 }
 
-/** 创建异步文件日志器；logPath 注入仅供隔离测试，不改变生产日志保留策略。 */
+/** 创建异步文件日志器；logPath / logDir 注入仅供隔离测试与分发产物数据目录使用，不改变生产日志保留策略。 */
 export function makeLogger(
   deployment: DeploymentConfig,
-  options: { logPath?: string } = {},
+  options: { logPath?: string; logDir?: string } = {},
 ): RuntimeLogger {
   if (!deployment.logEnabled) return SILENT_LOGGER
-  const logPath = options.logPath ?? prepareLogDir(deployment.logMaxFiles)
+  const logPath = options.logPath ?? prepareLogDir(deployment.logMaxFiles, options.logDir)
   const destination = pino.destination({
     dest: logPath,
     sync: false,

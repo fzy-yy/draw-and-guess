@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
+    "package:dist": "tsx scripts/package-dist.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
@@ -27,6 +28,7 @@
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
+    "esbuild": "^0.28.2",
     "typescript": "^5.9.3"
   }
 }

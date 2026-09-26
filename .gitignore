@@ -51,3 +51,6 @@ test/playwright-report/
 coverage/
 *.tsbuildinfo
 .turbo/
+
+# 分发产物（pnpm package:dist 生成：可运行目录与 zip）
+release/

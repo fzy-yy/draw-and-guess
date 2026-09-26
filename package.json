@@ -9,6 +9,7 @@
     "build": "pnpm typecheck && pnpm --filter @draw-guess/client build && node scripts/check-client-bundle-boundary.mjs",
     "check:client-bundle-boundary": "node scripts/check-client-bundle-boundary.mjs",
     "start": "pnpm --filter @draw-guess/server start",
+    "package:dist": "pnpm --filter @draw-guess/server package:dist",
     "typecheck": "pnpm -r typecheck && pnpm exec tsc -p tsconfig.test.json",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",

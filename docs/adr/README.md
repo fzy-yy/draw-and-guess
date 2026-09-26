@@ -55,6 +55,7 @@
 | [0031](0031-guess-confetti-strict-transition.md)           | 猜中礼花触发：严格跃迁、不枚举阶段             | 2026-09-26 缺陷修复        | 已采纳 |
 | [0032](0032-drawer-hint-full-and-progressive.md)           | 画家模式完整提示、猜词者逐渐披露（wordHint）   | 2026-09-26 提示一致性      | 已采纳 |
 | [0033](0033-confetti-main-thread-rendering.md)             | 礼花改主线程渲染（CSP 拦截 blob Worker）       | 2026-09-26 缺陷修复        | 已采纳 |
+| [0034](0034-node-single-file-distribution.md)              | Node 单文件分发与 Windows slim/full 双包交付   | 便捷分发需求               | 已采纳 |
 
 > 原始审查报告保留在仓库根级 [`bug-审查报告.md`](../../bug-审查报告.md)，作为一次性记录；
 > **决策与后果以本目录为准**，源码注释只链接本目录。

@@ -1,12 +1,25 @@
 /** 局域网生产入口：组合环境、日志、应用、监听与关闭生命周期。 */
+import { mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { APP_CONFIG, getDeploymentConfig } from './config/index.ts'
 import { createApplication } from './app.ts'
 import { makeLogger } from './logging/file-logger.ts'
+import { loadVocabulary } from './vocabulary/index.ts'
 import { loadProjectEnv } from './startup/environment.ts'
 import { findLanAddresses, warnIfWindowsConsoleNotUtf8 } from './startup/lan-addresses.ts'
+import { openBrowser } from './startup/open-browser.ts'
+import { pickAvailablePort } from './startup/port.ts'
 import { registerShutdown } from './startup/shutdown.ts'
 import { validateBusinessConfig } from './startup/validate-config.ts'
+import { resolveRuntimeLayout, type RuntimeLayout, type RuntimeMode } from './runtime-layout.ts'
 import { runtimeErrorType, SILENT_LOGGER } from './errors.ts'
+
+/**
+ * 运行模式：构建产物由 esbuild 注入 `DRAW_GUESS_RUNTIME_MODE=dist`，
+ * 源码运行时读不到该变量，按 source 处理（保持既有仓库相对路径不变）。
+ */
+const RUNTIME_MODE: RuntimeMode = process.env.DRAW_GUESS_RUNTIME_MODE === 'dist' ? 'dist' : 'source'
 
 let activeLogger = SILENT_LOGGER
 
@@ -17,6 +30,13 @@ function flushBeforeExit(logger: typeof SILENT_LOGGER): void {
   } catch {
     // 控制台已给出安全错误摘要，日志介质不可用时继续按原退出码终止。
   }
+}
+
+/** 预先创建数据库、日志与词库目录，保证用户可直接放入自定义词库文件。 */
+function ensureLayoutDirectories(layout: RuntimeLayout): void {
+  mkdirSync(dirname(layout.databaseFile), { recursive: true })
+  mkdirSync(layout.logDir, { recursive: true })
+  for (const dir of layout.vocabularyDirs) mkdirSync(dir, { recursive: true })
 }
 
 function printStartupBanner(port: number, addresses: readonly string[]): void {
@@ -39,25 +59,38 @@ function printStartupBanner(port: number, addresses: readonly string[]): void {
 }
 
 async function main(): Promise<void> {
-  loadProjectEnv()
+  const layout = resolveRuntimeLayout({
+    mode: RUNTIME_MODE,
+    entryDir: dirname(fileURLToPath(import.meta.url)),
+  })
+  ensureLayoutDirectories(layout)
+  loadProjectEnv(layout.envFile)
   warnIfWindowsConsoleNotUtf8()
   validateBusinessConfig()
   const deployment = getDeploymentConfig()
-  const logger = makeLogger(deployment)
+  // 产物模式默认端口被占用时自动顺延；源码模式固定端口以配合 Vite 代理。
+  const port = layout.portFallback
+    ? await pickAvailablePort(deployment.port, deployment.host)
+    : deployment.port
+  const logger = makeLogger(deployment, { logDir: layout.logDir })
   activeLogger = logger
+  const vocabulary = await loadVocabulary(layout.vocabularyDirs)
   const addresses = findLanAddresses()
   const preferredAddress = addresses[0] ?? 'localhost'
   const application = await createApplication({
-    publicBaseUrl: () => `http://${preferredAddress}:${deployment.port}`,
+    vocabulary,
+    publicBaseUrl: () => `http://${preferredAddress}:${port}`,
     logger,
+    dbFile: layout.databaseFile,
+    clientDist: layout.clientDist,
     healthMetricsEnabled: deployment.healthMetricsEnabled,
   })
   application.service.recoverOnStartup()
 
   application.httpServer.on('error', (error: NodeJS.ErrnoException) => {
     if (error.code === 'EADDRINUSE') {
-      console.error(`端口 ${deployment.port} 已被占用。请通过 PORT 环境变量更换端口。`)
-      logger.error({ port: deployment.port }, '端口已被占用')
+      console.error(`端口 ${port} 已被占用。请通过 PORT 环境变量更换端口。`)
+      logger.error({ port }, '端口已被占用')
     } else {
       console.error('服务器启动失败:', runtimeErrorType(error))
       logger.error({ errorType: runtimeErrorType(error) }, '服务器启动失败')
@@ -66,12 +99,15 @@ async function main(): Promise<void> {
     process.exit(1)
   })
 
-  application.httpServer.listen(deployment.port, deployment.host, () => {
-    printStartupBanner(deployment.port, addresses)
+  application.httpServer.listen(port, deployment.host, () => {
+    printStartupBanner(port, addresses)
     logger.info(
-      { host: deployment.host, port: deployment.port, lanAddressCount: addresses.length },
+      { host: deployment.host, port, lanAddressCount: addresses.length },
       '局域网服务监听成功',
     )
+    // 分发产物自动打开浏览器，省去用户手动输入地址；开关经部署配置收口
+    // （源码模式布局本身不要求开浏览器，`DRAW_GUESS_OPEN_BROWSER=0/false` 可关闭）。
+    if (layout.openBrowser && deployment.openBrowserEnabled) openBrowser(`http://localhost:${port}`)
   })
   registerShutdown(application, logger)
 }

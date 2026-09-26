@@ -1,6 +1,7 @@
 /// <reference types="node" />
 /**
- * 部署环境配置与校验：仅允许覆盖网络绑定、端口、日志级别、日志开关与日志保留条数。
+ * 部署环境配置与校验：仅允许覆盖网络绑定、端口、日志级别、日志开关、日志保留条数、
+ * 健康指标开关与分发产物浏览器自动打开开关。
  */
 import { serverPrivateConfig } from './private.ts'
 
@@ -14,6 +15,18 @@ export type DeploymentConfig = {
   logMaxFiles: number
   /** 仅允许本机 /api/health 返回详细进程指标；默认关闭。 */
   healthMetricsEnabled: boolean
+  /** 分发产物启动后是否自动打开浏览器；默认开启，`0`/`false` 等显式关闭值均不打开（仅产物模式生效）。 */
+  openBrowserEnabled: boolean
+}
+
+/**
+ * 布尔型部署变量的统一解析口径：接受 true/1/yes/on 为开，其余显式值为关；
+ * 未设置（空）时取默认值。`DRAW_GUESS_OPEN_BROWSER=0` 的历史用法由此保持兼容。
+ */
+function parseBooleanEnv(raw: string | undefined, fallback: boolean): boolean {
+  const value = raw?.trim().toLowerCase() ?? ''
+  if (value === '') return fallback
+  return ['1', 'true', 'yes', 'on'].includes(value)
 }
 
 /** 合并并基础校验部署覆盖；完整业务约束由服务端启动加载器继续验证。 */
@@ -25,11 +38,9 @@ export function getDeploymentConfig(env: NodeJS.ProcessEnv = process.env): Deplo
   const levels: readonly string[] = ['debug', 'info', 'warn', 'error']
   const isLogLevel = (value: string): value is DeploymentConfig['logLevel'] =>
     levels.includes(value)
-  // 日志开关：默认开启；接受 true/1/yes/on 为开，其余显式值视为关。
-  const rawEnabled = env.LOG_ENABLED?.trim().toLowerCase() ?? ''
-  const logEnabled = rawEnabled === '' ? true : ['1', 'true', 'yes', 'on'].includes(rawEnabled)
-  const rawHealthMetrics = env.HEALTH_METRICS_ENABLED?.trim().toLowerCase() ?? ''
-  const healthMetricsEnabled = ['1', 'true', 'yes', 'on'].includes(rawHealthMetrics)
+  const logEnabled = parseBooleanEnv(env.LOG_ENABLED, true)
+  const healthMetricsEnabled = parseBooleanEnv(env.HEALTH_METRICS_ENABLED, false)
+  const openBrowserEnabled = parseBooleanEnv(env.DRAW_GUESS_OPEN_BROWSER, true)
   // 日志文件保留条数：默认 10，限定 1～100。
   const rawMaxFiles = env.LOG_MAX_FILES?.trim() || '10'
   const logMaxFiles = Number(rawMaxFiles)
@@ -50,5 +61,6 @@ export function getDeploymentConfig(env: NodeJS.ProcessEnv = process.env): Deplo
     logEnabled,
     logMaxFiles,
     healthMetricsEnabled,
+    openBrowserEnabled,
   }
 }

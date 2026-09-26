@@ -16,13 +16,14 @@
 - **日志文件化**：服务端日志**不输出到控制台**（规避 Windows 控制台 GBK 解码 UTF-8 中文乱码），通过 Pino 异步缓冲写入 `apps/server/log/app-<秒级时间戳>.log`（每次启动新建一个、最多保留 `LOG_MAX_FILES` 条），优雅关闭时 flush/close；可通过 `.env` 的 `LOG_ENABLED` 完全关闭（零内存开销）。
 - **画板**：高 DPI 实时画布，支持自由画笔、橡皮擦（`destination-out`）与封闭区域洪泛填充；画笔/橡皮擦共用连续粗细，可滚轮调整；支持预设或任意 HEX 颜色，工具可自定义单键切换。**渲染模型为「归一化点列 + 直线段描边」增量同步**（不引入轮廓填充型平滑库，曾因此导致白边/闪烁/空心缺陷）。
 - **头像**：仅允许从 40 个内置 SVG 白名单编号中选择，协议只传编号；禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像。
-- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '14'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
+- **应用标识**：名称「你画我猜」、版本 `2.5.0`、协议版本 `protocolVersion: '14'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
+- **Windows 分发包**：`pnpm package:dist` 把服务端打成 **ESM 单文件 `server.mjs`**（依赖内联、`better-sqlite3` 外置），产出 **slim / full 两个包**——slim 需系统 Node 22+（约 2MB），full 额外内置 **Node 24 LTS** 运行时 `runtime/node.exe`（约 37MB，零依赖）。两者均附 `client/`、`vocabulary/`、`better-sqlite3` Node-API 预编译与 `start.cmd`（full 直用内置运行时，slim 检测系统 Node）。数据（`game.db`/`logs/`/`vocabulary/custom/`/可选 `.env`）写在产物旁 `data/`；内置 Node 默认从国内镜像下载（`NODE_DIST_MIRROR` 可切官网、`NODE_VERSION` 可钉版本），**下载经同源 SHASUMS256 sha256 校验、缓存损坏自动重下一次**。产物模式自动顺延端口并打开默认浏览器（`DRAW_GUESS_OPEN_BROWSER=false` 关闭后者）。仅 Windows x64，详见 `docs/adr/0034-node-single-file-distribution.md`。
 
 ### 技术栈与运行环境
 
 - Node.js 当前维护中的 LTS（建议 22 或 24）、pnpm 10+、pnpm workspace 单仓库。
 - 现代 Chromium / Edge / Firefox（支持 CSS `container queries`，因为整屏缩放依赖 `cqh/cqw`）。
-- 后端子包依赖（`apps/server/package.json`）：`express@5`、`socket.io`、`zod`、`pino`、`tsx`、`helmet`、`cors`、**`better-sqlite3`（本地持久化，WAL）**、**`compression`（静态 gzip）**；开发依赖 `@types/better-sqlite3`、`@types/compression` 等。
+- 后端子包依赖（`apps/server/package.json`）：`express@5`、`socket.io`、`zod`、`pino`、`tsx`、`helmet`、`cors`、**`better-sqlite3`（本地持久化，WAL）**、**`compression`（静态 gzip）**；开发依赖 `@types/better-sqlite3`、`@types/compression`、**`esbuild`（`pnpm package:dist` 打服务端单文件）** 等。
 - 前端子包依赖（`apps/client/package.json`）：`vue@3`、`pinia`、`socket.io-client`、`tailwindcss@4`（`@tailwindcss/vite`）、`lucide-vue-next`、`@tanstack/vue-virtual`（虚拟列表）、`@vueuse/core` + `@vueuse/integrations`（组合式工具，含 `useFocusTrap`）、`nanoid`、`clsx` + `tailwind-merge`（类名合并 `cn()`）、`focus-trap`（弹窗焦点陷阱 peer）。**Toast 为自建组件（`components/common/AppToaster.vue` + `composables/useToasts.ts`）**，不依赖第三方通知库。
 - 共享包子包：`zod`（唯一运行时依赖）。
 - 已移除依赖（勿回引入）：`perfect-freehand`（轮廓填充渲染与增量同步架构冲突）、`pino-pretty`（改为文件 JSON 日志后不再使用）、`vue-sonner`（Toast 已由自建 AppToaster/useToasts 替换，未来统一走自建方案）。
@@ -40,7 +41,7 @@ draw_and_guess/
 ├── eslint.config.js              # ESLint 扁平配置（Vue/TS/Node，console/运行时依赖/SFC 文案等工程规则）
 ├── .prettierrc.json              # Prettier 格式（无分号/单引号/行宽 100/尾逗号 all）
 ├── .prettierignore               # 忽略 node_modules/dist/.pi
-├── .env.example                  # 部署变量：HOST/PORT/日志开关与 HEALTH_METRICS_ENABLED（复制为 .env 使用）
+├── .env.example                  # 部署变量：HOST/PORT/日志开关、HEALTH_METRICS_ENABLED 与浏览器开关（复制为 .env 使用）
 ├── .env                          # 本地部署覆盖（已被 .gitignore 忽略，不入库）
 ├── .gitignore                    # 忽略 node_modules/dist/日志/数据库/.env/.pi/.playwright-mcp 等
 ├── packages/config/              # @draw-guess/config：仅浏览器安全的应用默认值与 UI/音频配置
@@ -79,10 +80,14 @@ draw_and_guess/
 ├── apps/server/                   # 服务端（Express 5 + Socket.IO + Zod + SQLite，权威领域）
 │   ├── package.json               # 依赖见「技术栈与运行环境」
 │   ├── tsconfig.json              # 继承根配置 + Node 类型
+│   ├── scripts/                   # package-dist.ts：构建 slim/full Windows 分发包（esbuild 单文件 + 资源 + 内置 Node + zip）
 │   ├── data/                      # 运行期生成：SQLite 数据库文件（game.db，已忽略入库，仅保留 .gitkeep）
 │   ├── log/                       # 运行期生成：日志文件（app-<秒级时间戳>.log，已忽略入库，仅保留 .gitkeep）
 │   └── src/
-│       ├── index.ts               # 生产入口：加载 .env（loadEnvFile）、配置校验、日志初始化（LOG_ENABLED/LOG_MAX_FILES）、局域网 IPv4 探测、监听、优雅关闭
+│       ├── index.ts               # 生产入口：加载 .env（loadEnvFile）、配置校验、日志初始化（LOG_ENABLED/LOG_MAX_FILES）、运行时布局、局域网 IPv4 探测、监听、优雅关闭
+│       ├── runtime-layout.ts      # 源码 / 分发产物两种资源布局（data、client、vocabulary、.env；产物模式端口顺延+开浏览器）
+│       ├── build/node-dist.ts     # 分发内置 Node 版本解析与下载校验（纯函数：挑最新稳定 v24、拼地址、提 SHASUMS 条目，可单测）
+│       ├── build/dist-templates.ts # 分发文本模板（start.cmd / 使用说明纯函数，两包启动差异由单测锁定）
 │       ├── config/                 # ★服务端私有配置：限频、断线清理、数据库路径、资源预算与部署覆盖
 │       ├── app.ts                 # HTTP/Socket.IO/DatabaseContext 装配；RunningApplication.close() 幂等关闭自身全部资源
 │       ├── game-service.ts        # handlers 兼容 Facade：子服务装配、对局操作与跨用例编排
@@ -96,7 +101,7 @@ draw_and_guess/
 │       ├── socket-types.ts        # AppServer/AppSocket 泛型别名 + AppSocketData（socket.data 显式契约，禁任意键）
 │       ├── application/           # 应用协作者：room-publisher 发布快照；room-persistence-coordinator 映射低频仓储记录
 │       ├── domain/                # 领域协作者：session 会话、room 成员、drawing/invite/vocabulary/game 窄接口；candidate-selector 为纯函数
-│       ├── startup/               # 启动期配置校验、环境加载、局域网地址、优雅关闭
+│       ├── startup/               # 启动期配置校验、环境加载、局域网地址、端口顺延（产物）、自动开浏览器、优雅关闭
 │       ├── logging/               # 文件日志初始化与保留策略
 │       ├── observability/         # 有界进程指标：连接/房间/ack/错误/重同步（仅安全聚合）
 │       ├── vocabulary/            # 词库 Provider 架构：contract（接口）/normalize（共享纯函数）/sqlite-provider（SQLite 实现）/index（分发入口，loadVocabulary 可传目录）；test-fixture.ts 生成隔离测试词库
@@ -231,7 +236,26 @@ pnpm start      # 单一 Express + Socket.IO 生产服务（tsx src/index.ts）
 - 终端会醒目输出主机访问地址、一个或多个 `http://局域网IP:5174` 候选地址、端口与加入说明（横幅保留在控制台；业务日志只在日志文件）。
 - 其它玩家连接**同一局域网**后在浏览器输入上述地址即可。
 - 常见问题：IP/端口与终端输出不一致、设备不在同一网段、防火墙未放行 Node.js 专用网络、版本不兼容（刷新/清缓存）。
-- 部署参数可覆盖：`PORT=5180 pnpm start`、`HOST=0.0.0.0`、`LOG_LEVEL=debug`、`LOG_ENABLED=false`（关闭则完全不创建日志记录器、不写日志文件）、`LOG_MAX_FILES=3`（日志文件保留上限）、`HEALTH_METRICS_ENABLED=true`（仅允许本机查看详细健康指标）。服务启动时会自动加载项目根目录 `.env`（复制 `.env.example` 即可）；进程已有环境变量优先级高于 `.env`。环境变量**不会**覆盖游戏规则。
+- 部署参数可覆盖：`PORT=5180 pnpm start`、`HOST=0.0.0.0`、`LOG_LEVEL=debug`、`LOG_ENABLED=false`（关闭则完全不创建日志记录器、不写日志文件）、`LOG_MAX_FILES=3`（日志文件保留上限）、`HEALTH_METRICS_ENABLED=true`（仅允许本机查看详细健康指标）、`DRAW_GUESS_OPEN_BROWSER=false`（仅分发产物模式：关闭启动后自动打开浏览器）。服务启动时会自动加载项目根目录 `.env`（复制 `.env.example` 即可）；进程已有环境变量优先级高于 `.env`。环境变量**不会**覆盖游戏规则。
+
+### Windows 分发包（slim / full）
+
+```bash
+pnpm package:dist   # 构建前端 + 服务端单文件，产出 slim 与 full 两个可运行目录与 zip
+```
+
+- **slim**：`release/slim/draw-and-guess/` → `release/draw-and-guess-<version>-win-x64-slim.zip`（约 2MB，需系统 Node 22+）。
+- **full**：`release/full/draw-and-guess/` → `release/draw-and-guess-<version>-win-x64-full.zip`（约 37MB，内置 Node 24 LTS，零依赖）。
+- **共有内容**：`server.mjs`（依赖内联，`better-sqlite3` 外置）+ `client/` 前端 + `vocabulary/` 内置词库 +
+  `node_modules/better-sqlite3/`（Node-API 预编译，仅 win32-x64）+ `start.cmd` + `使用说明.txt`。
+- **启动**：slim 的 `start.cmd` 检测系统 Node 22+；full 的 `start.cmd` 直接用 `runtime\node.exe`。产物启动后自动打开浏览器，`DRAW_GUESS_OPEN_BROWSER=false` 可关闭。
+- **数据目录**：产物旁 `data/`（`game.db`、`logs/`、用户自定义词库 `vocabulary/custom/`、可选 `.env`）。
+- **端口**：默认 5174，被占用时产物模式自动顺延（源码模式固定端口以配合 Vite 代理；探测与监听间存在已接受的微秒级 TOCTOU 竞态，见 ADR-0034）。
+- **内置 Node 下载**：默认国内镜像 `https://npmmirror.com/mirrors/node/`，可用 `NODE_DIST_MIRROR` 切官网、
+  `NODE_VERSION` 钉死版本；缓存于 `release/.cache/`，**写入与命中都经同源 SHASUMS256.txt 做 sha256 比对**，
+  不符自动删缓存重下一次（二次仍不符报错；校验文件缺失按 fail-fast 中止）。CI（`windows-latest`）显式设
+  `NODE_DIST_MIRROR=https://nodejs.org/dist/`，避免境外 runner 走国内镜像不稳定。
+- **发布**：`.github/workflows/windows-release.yml` 打 `v*` tag 触发 Windows 构建并发布两个 Release 资产；手动触发只出 artifact。
 
 ### 其它命令（全部通过根 `package.json` scripts）
 
@@ -495,7 +519,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
    - 客户端请求必须带 `requestId`（幂等）与统一 `ack`；非法阶段/角色/序号/频率由 `binder.ts` 与领域服务拒绝。
    - 头像只允许 `packages/shared/src/protocol/constants.ts` 白名单中的内置 SVG 编号；**禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像**。
 3. **词库与内容**
-   - `vocabulary/` 目录下的 SQLite 词库包是唯一词库来源（当前仅 `base_words.db`，可并存多个 `.db`，服务启动时全部加载并从中选默认包）：`metadata` 表存 name/description/version/updated_at/category_enum/difficulty_enum/drawability_enum/enabled_enum/level_config（难度 → `{time_limit, score_weight}` 映射，JSON，**库内为 snake_case 命名**）/drawability_desc；`words` 表词条含 id/text/**category**（单词条仅一个分类）/difficulty/**drawability**（可绘制性 1~5，词库作者标注）/enabled/**hint**（对局结构化提示，≤10 字，空串合法）/aliases（JSON）/updated_at（仅编辑时间，不进 DTO）。逐词 `time_limit/score_weight` 已废弃：Provider **加载期**按难度查 `level_config` 派生到词条 `timeLimit/scoreWeight`，下游（回合时限/计分/UI/哈希）语义不变（见 `docs/adr/0013-vocabulary-level-config-and-hints.md`）。校验为 fail-fast：分类 ⊆ category_enum、难度 ⊆ difficulty_enum ∩ 配置区间、可绘制性 ⊆ drawability_enum、`level_config` 与 `difficulty_enum` 严格互相覆盖、hint 长度 ≤ `maxHintLength`、enabled=0 词条不进入候选池；目录内没有任何 `.db` 时按 `apps/server/src/config/private.ts` 的 `dbPath` 兜底探测（默认文件名 `base_words.db`）。修改后需重启服务，异常数据以中文错误阻止启动。
+   - `vocabulary/` 目录下的 SQLite 词库包是仓库的权威词库来源（当前仅 `base_words.db`，可并存多个 `.db`，服务启动时全部加载并从中选默认包；分发产物模式另有产物 `data/vocabulary/custom/` 自定义目录与内置目录合并加载，同名包 ID 追加序号唯一化，见 `docs/adr/0034-node-single-file-distribution.md` 决策四）：`metadata` 表存 name/description/version/updated_at/category_enum/difficulty_enum/drawability_enum/enabled_enum/level_config（难度 → `{time_limit, score_weight}` 映射，JSON，**库内为 snake_case 命名**）/drawability_desc；`words` 表词条含 id/text/**category**（单词条仅一个分类）/difficulty/**drawability**（可绘制性 1~5，词库作者标注）/enabled/**hint**（对局结构化提示，≤10 字，空串合法）/aliases（JSON）/updated_at（仅编辑时间，不进 DTO）。逐词 `time_limit/score_weight` 已废弃：Provider **加载期**按难度查 `level_config` 派生到词条 `timeLimit/scoreWeight`，下游（回合时限/计分/UI/哈希）语义不变（见 `docs/adr/0013-vocabulary-level-config-and-hints.md`）。校验为 fail-fast：分类 ⊆ category_enum、难度 ⊆ difficulty_enum ∩ 配置区间、可绘制性 ⊆ drawability_enum、`level_config` 与 `difficulty_enum` 严格互相覆盖、hint 长度 ≤ `maxHintLength`、enabled=0 词条不进入候选池；目录内没有任何 `.db` 时按 `apps/server/src/config/private.ts` 的 `dbPath` 兜底探测（默认文件名 `base_words.db`）。修改后需重启服务，异常数据以中文错误阻止启动。
    - **猜词提示使用词条 hint**：结构化提示揭示的是 `hint` 字段（hint 为空回退揭示 `category`，两者皆空不开启提示）；单揭示槽位与揭示时机（`hintStartRatio`）不变；选词卡对画家**不展示** hint（`wordOptions` 只带 `text/difficulty/drawability`），避免提示泄露。**提示同源、按角色区分完整度**：来源统一为词条 hint（空回退 category）——画家在「画家模式」完整显示提示（服务端画家专属 `wordHint`）与答案，画家切到「猜词者模式」或猜词者本人只看按时间逐渐披露的 `revealedHints[0]`；不再向画家下发独立的 `wordCategory`。
    - 猜词判定固定用 `normalizeAnswer`（NFKC + 去空白 + 折叠空白 + 忽略拉丁大小写），不要在别处另写一套比较。
 4. **配置治理**
@@ -524,7 +548,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 
 ## 配置、安全与敏感信息
 
-- **环境变量**：仅 `.env.example` 中的 `HOST / PORT / LOG_LEVEL / LOG_ENABLED / LOG_MAX_FILES / HEALTH_METRICS_ENABLED` 可覆盖部署参数；游戏规则按 shared/public/server-private 边界修改。`.env` 已被 `.gitignore` 忽略，不入库。
+- **环境变量**：仅 `.env.example` 中的 `HOST / PORT / LOG_LEVEL / LOG_ENABLED / LOG_MAX_FILES / HEALTH_METRICS_ENABLED / DRAW_GUESS_OPEN_BROWSER` 可覆盖部署参数（浏览器开关仅产物模式生效）；游戏规则按 shared/public/server-private 边界修改。`.env` 已被 `.gitignore` 忽略，不入库。
 - **密钥 / 凭据**：仓库中**不包含**任何真实密钥、Token、密码或个人信息。临时身份恢复令牌由服务端生成，明文只返回客户端并在当前服务会话内短暂持有；SQLite 仅保存 `players.token_digest` 的 SHA-256 摘要。每次成功恢复必须旋转令牌并使旧摘要失效，令牌仍不是公开快照字段。
 - **本地存储**：浏览器仅保存昵称、内置头像编号、本地设置与短期恢复令牌（见 `packages/config/src/app.ts` 的存储键）。
 - **敏感信息纪律**：禁止将真实密钥、Token、密码、私有地址或任何个人信息写入仓库、提交日志或本文件。`.gitignore` 已忽略 `.env`、`*.local`、日志与数据库文件。
@@ -551,29 +575,30 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
   - 找不到依据的规范（如 PR/CI 约定、测试框架）一律标「待确认」，不要自行编造。
 - **快速定位速查**：
 
-| 想改什么                                 | 去哪个文件                                                                                                                                                                                                                                        |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 应用名/版本/公开连接参数                 | `packages/config/src/app.ts`                                                                                                                                                                                                                      |
-| 协议版本/头像/载荷范围                   | `packages/shared/src/protocol/constants.ts`                                                                                                                                                                                                       |
-| 服务端端口/限频/清理/数据库路径          | `apps/server/src/config/`                                                                                                                                                                                                                         |
-| 对局轮数/时间/分数/提示                  | `packages/config/src/game.ts`                                                                                                                                                                                                                     |
-| 画板颜色/粗细/批次/历史上限              | `packages/config/src/drawing.ts`（历史上限语义见 `docs/adr/0010-drawing-history-cap.md`）                                                                                                                                                         |
-| 词库内容                                 | `vocabulary/` 目录下的 SQLite 词库包（改后重启服务）                                                                                                                                                                                              |
-| 新增词库来源                             | `apps/server/src/vocabulary/` 实现 VocabularyProvider → `apps/server/src/config/private.ts` 切 provider                                                                                                                                           |     |
-| 新增一个请求事件                         | `packages/shared/src/events.ts` 契约 → `packages/shared/src/protocol/` Schema → `game-service.ts` 或对应领域协作者 → `handlers/*.ts` 注册 → 客户端领域 Store                                                                                      |
-| 回合流转/阶段                            | `apps/server/src/round-machine.ts`                                                                                                                                                                                                                |
-| 计分规则                                 | `apps/server/src/scoring.ts`                                                                                                                                                                                                                      |
-| 成员状态判定（占席/可玩/在线/候场/进榜） | `apps/server/src/domain/room/member-facts.ts`（ADR-0023）                                                                                                                                                                                         |
-| 重连/重同步与自愈                        | `apps/client/src/stores/resync.ts`（冷却/在途/世代校验与会话失效重置，ADR-0025）                                                                                                                                                                  |
-| 快照裁剪/隐私边界                        | `apps/server/src/snapshot.ts`（端口与裁剪）+ `test/unit/snapshot.matrix.spec.ts`（角色×阶段穷举矩阵）                                                                                                                                             |
-| SQLite 建表/迁移                         | `apps/server/src/db/migrate.ts`（新变更追加新迁移）                                                                                                                                                                                               |
-| 持久化仓储（玩家/战报）                  | `apps/server/src/repositories/`                                                                                                                                                                                                                   |
-| 日志开关/保留条数                        | `.env` → `apps/server/src/config/deployment.ts` → `apps/server/src/index.ts`                                                                                                                                                                      |
-| 画布渲染/增量绘制                        | `apps/client/src/canvas/replay-machine.ts`（重放状态机：决策/世代/簿记/原子提交）+ `components/game/GameCanvas.vue`（薄装配壳）+ `composables/useCanvas*.ts` / `useStrokeSession.ts`（直线段描边，勿引入轮廓填充平滑库）                          |
-| 填充重放/降级与填充门禁                  | `apps/client/src/canvas/flood-fill-worker.ts`（Worker 失败降级一次）+ `canvas/replay-machine.ts`（渲染态）+ `composables/useFillSession.ts`（提交态）+ `canvas/fill-diagnostics.ts`（见 `docs/adr/0009-fill-degradation-and-locks.md`、ADR-0018） |
-| 音效资源/播放策略                        | `packages/config/src/audio.ts` → `apps/client/src/audio/` → `composables/useAudioFeedback.ts`（音效文件名清单与格式约定见 `apps/client/src/assets/audio/README.md`；BGM 系统已移除）                                                              |
-| 全局样式 / Tailwind 令牌                 | `apps/client/src/style/index.css`                                                                                                                                                                                                                 |
-| 类名合并 cn()                            | `apps/client/src/utils/cn.ts`                                                                                                                                                                                                                     |
+| 想改什么                                 | 去哪个文件                                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 应用名/版本/公开连接参数                 | `packages/config/src/app.ts`                                                                                                                                                                                                                                                                                                                                        |
+| 协议版本/头像/载荷范围                   | `packages/shared/src/protocol/constants.ts`                                                                                                                                                                                                                                                                                                                         |
+| 服务端端口/限频/清理/数据库路径          | `apps/server/src/config/`                                                                                                                                                                                                                                                                                                                                           |
+| 对局轮数/时间/分数/提示                  | `packages/config/src/game.ts`                                                                                                                                                                                                                                                                                                                                       |
+| 画板颜色/粗细/批次/历史上限              | `packages/config/src/drawing.ts`（历史上限语义见 `docs/adr/0010-drawing-history-cap.md`）                                                                                                                                                                                                                                                                           |
+| 词库内容                                 | `vocabulary/` 目录下的 SQLite 词库包（改后重启服务）                                                                                                                                                                                                                                                                                                                |
+| 新增词库来源                             | `apps/server/src/vocabulary/` 实现 VocabularyProvider → `apps/server/src/config/private.ts` 切 provider                                                                                                                                                                                                                                                             |     |
+| 新增一个请求事件                         | `packages/shared/src/events.ts` 契约 → `packages/shared/src/protocol/` Schema → `game-service.ts` 或对应领域协作者 → `handlers/*.ts` 注册 → 客户端领域 Store                                                                                                                                                                                                        |
+| 回合流转/阶段                            | `apps/server/src/round-machine.ts`                                                                                                                                                                                                                                                                                                                                  |
+| 计分规则                                 | `apps/server/src/scoring.ts`                                                                                                                                                                                                                                                                                                                                        |
+| 成员状态判定（占席/可玩/在线/候场/进榜） | `apps/server/src/domain/room/member-facts.ts`（ADR-0023）                                                                                                                                                                                                                                                                                                           |
+| 重连/重同步与自愈                        | `apps/client/src/stores/resync.ts`（冷却/在途/世代校验与会话失效重置，ADR-0025）                                                                                                                                                                                                                                                                                    |
+| 快照裁剪/隐私边界                        | `apps/server/src/snapshot.ts`（端口与裁剪）+ `test/unit/snapshot.matrix.spec.ts`（角色×阶段穷举矩阵）                                                                                                                                                                                                                                                               |
+| SQLite 建表/迁移                         | `apps/server/src/db/migrate.ts`（新变更追加新迁移）                                                                                                                                                                                                                                                                                                                 |
+| 持久化仓储（玩家/战报）                  | `apps/server/src/repositories/`                                                                                                                                                                                                                                                                                                                                     |
+| 日志开关/保留条数                        | `.env` → `apps/server/src/config/deployment.ts` → `apps/server/src/index.ts`                                                                                                                                                                                                                                                                                        |
+| 画布渲染/增量绘制                        | `apps/client/src/canvas/replay-machine.ts`（重放状态机：决策/世代/簿记/原子提交）+ `components/game/GameCanvas.vue`（薄装配壳）+ `composables/useCanvas*.ts` / `useStrokeSession.ts`（直线段描边，勿引入轮廓填充平滑库）                                                                                                                                            |
+| 填充重放/降级与填充门禁                  | `apps/client/src/canvas/flood-fill-worker.ts`（Worker 失败降级一次）+ `canvas/replay-machine.ts`（渲染态）+ `composables/useFillSession.ts`（提交态）+ `canvas/fill-diagnostics.ts`（见 `docs/adr/0009-fill-degradation-and-locks.md`、ADR-0018）                                                                                                                   |
+| 音效资源/播放策略                        | `packages/config/src/audio.ts` → `apps/client/src/audio/` → `composables/useAudioFeedback.ts`（音效文件名清单与格式约定见 `apps/client/src/assets/audio/README.md`；BGM 系统已移除）                                                                                                                                                                                |
+| Windows 分发包构建/发布                  | `apps/server/scripts/package-dist.ts`（esbuild 单文件 + 资源 + slim/full + 内置 Node 校验下载 + zip）+ `apps/server/src/runtime-layout.ts`（源码/产物布局）+ `apps/server/src/build/node-dist.ts`（内置 Node 版本解析与 SHASUMS 校验）+ `apps/server/src/build/dist-templates.ts`（start.cmd/使用说明模板）+ `.github/workflows/windows-release.yml`（见 ADR-0034） |
+| 全局样式 / Tailwind 令牌                 | `apps/client/src/style/index.css`                                                                                                                                                                                                                                                                                                                                   |
+| 类名合并 cn()                            | `apps/client/src/utils/cn.ts`                                                                                                                                                                                                                                                                                                                                       |
 
 ---
 

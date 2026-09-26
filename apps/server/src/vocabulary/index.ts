@@ -40,50 +40,73 @@ export interface VocabularyRegistry extends VocabularyStore {
   getDefault(): VocabularyStore
 }
 
-/** 解析 vocabulary 目录绝对路径。可传入显式目录（测试隔离用），否则按默认候选路径探测。 */
-function resolveVocabularyDir(overrideDir?: string): string {
-  if (overrideDir) return overrideDir
+/** 判断目录项是否为可加载的词库文件（排除 SQLite 运行期附属文件）。 */
+function isVocabularyFile(file: string): boolean {
+  return (
+    file.endsWith('.db') &&
+    !file.endsWith('-journal') &&
+    !file.endsWith('-wal') &&
+    !file.endsWith('-shm')
+  )
+}
+
+/**
+ * 解析词库目录绝对路径列表。
+ * 可传入单个或多个显式目录（测试隔离、分发产物「内置 + 用户自定义」双目录），
+ * 否则按默认候选路径探测（仓库根 vocabulary 优先）。
+ */
+function resolveVocabularyDirs(override?: string | readonly string[]): string[] {
+  if (override !== undefined) {
+    const dirs = typeof override === 'string' ? [override] : [...override]
+    return dirs.length > 0 ? dirs : [path.resolve(PROJECT_ROOT, 'vocabulary')]
+  }
   const candidates = [
     path.resolve(PROJECT_ROOT, 'vocabulary'),
     path.resolve(process.cwd(), 'vocabulary'),
     path.resolve(process.cwd(), '../../vocabulary'),
   ]
   const found = candidates.find((c) => existsSync(c))
-  if (found) return found
-  return path.resolve(PROJECT_ROOT, 'vocabulary')
+  return [found ?? path.resolve(PROJECT_ROOT, 'vocabulary')]
 }
 
 /**
  * 加载所有词库并构建多词库注册表（VocabularyRegistry）。
- * 自动扫描 vocabulary/*.db，预先校验并统计词数，默认选择词数最多者。
- * @param dir 显式词库目录（测试隔离用：指向临时 fixture 目录）；缺省按默认候选路径探测。
+ * 逐目录扫描 *.db，预先校验并统计词数，默认选择词数最多者。
+ * @param dirs 显式词库目录（单个、多个）；缺省按默认候选路径探测。分发产物传入「内置目录 + 数据目录 custom 目录」。
  */
-export async function loadVocabulary(dir?: string): Promise<VocabularyRegistry> {
-  const vocabDir = resolveVocabularyDir(dir)
-  let dbFiles: string[] = []
-  if (existsSync(vocabDir)) {
-    dbFiles = readdirSync(vocabDir).filter(
-      (file) =>
-        file.endsWith('.db') &&
-        !file.endsWith('-journal') &&
-        !file.endsWith('-wal') &&
-        !file.endsWith('-shm'),
-    )
+export async function loadVocabulary(
+  dirs?: string | readonly string[],
+): Promise<VocabularyRegistry> {
+  const vocabDirs = resolveVocabularyDirs(dirs)
+  const dbFiles: Array<{ dir: string; file: string }> = []
+  for (const dir of vocabDirs) {
+    if (!existsSync(dir)) continue
+    for (const file of readdirSync(dir)) {
+      if (isVocabularyFile(file)) dbFiles.push({ dir, file })
+    }
   }
 
-  // 兜底：若目录未扫描到任何 db，则沿用配置指定的默认路径
+  // 兜底：所有目录都未扫描到任何 db 时，在首个目录沿用配置指定的默认词库文件名。
   if (dbFiles.length === 0) {
-    dbFiles = [path.basename(APP_CONFIG.vocabulary.dbPath)]
+    dbFiles.push({
+      dir: vocabDirs[0] ?? path.resolve(PROJECT_ROOT, 'vocabulary'),
+      file: path.basename(APP_CONFIG.vocabulary.dbPath),
+    })
   }
 
   const stores = new Map<string, VocabularyStore>()
   const packages: VocabularyPackageInfo[] = []
 
-  for (const file of dbFiles) {
-    const filePath = path.join(vocabDir, file)
+  for (const { dir, file } of dbFiles) {
+    const filePath = path.join(dir, file)
     const provider = new SqliteProvider(filePath)
     const loaded = await provider.load()
-    const pkgId = loaded.meta.id || path.basename(file, '.db')
+    const baseId = loaded.meta.id || path.basename(file, '.db')
+    // 内置与用户自定义目录可能出现同名词库：追加数字后缀保证 ID 唯一、互不覆盖。
+    // 跨目录归属是确定的（内置目录先扫描）；若同一目录内两个包的 meta.id 相同，
+    // 后缀归谁取决于文件系统枚举顺序——那属异常配置，这里只兜底保证不互相吞掉。
+    let pkgId = baseId
+    for (let suffix = 2; stores.has(pkgId); suffix += 1) pkgId = `${baseId}-${suffix}`
     const store: VocabularyStore = {
       items: loaded.words,
       byId: new Map(loaded.words.map((word) => [word.id, word])),
@@ -93,7 +116,7 @@ export async function loadVocabulary(dir?: string): Promise<VocabularyRegistry> 
     stores.set(pkgId, store)
     packages.push({
       id: pkgId,
-      name: loaded.meta.name || pkgId,
+      name: loaded.meta.name || baseId,
       wordCount: loaded.words.length,
       description: loaded.meta.description || '',
       version: loaded.meta.fileVersion || '1.0.0',
