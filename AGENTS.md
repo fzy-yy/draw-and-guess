@@ -88,7 +88,7 @@ draw_and_guess/
 │       ├── game-service.ts        # handlers 兼容 Facade：子服务装配、对局操作与跨用例编排
 │       ├── round-machine.ts       # 回合流转状态机：仅依赖最小 RoundContext，不反向依赖整个 GameService
 │       ├── scoring.ts             # 计分纯函数：猜中明细、画家得分（可独立单测）
-│       ├── snapshot.ts            # 角色裁剪快照构建：画家/观众视角差异化、strokesOmitted 差分（客户端落后自检后 stateResync 拉全量兜底）
+│       ├── snapshot.ts            # 角色裁剪快照构建（SnapshotViewPort 窄端口）：画家/观众视角差异化、strokesOmitted 差分（矩阵回归见 test/unit/snapshot.matrix.spec.ts）
 │       ├── rate-limit.ts          # 猜词/绘图滑动窗口限频
 │       ├── errors.ts              # GameError / success / failure / RuntimeLogger / SILENT_LOGGER（避免循环依赖）
 │       ├── models.ts              # 服务端内存秘密模型（PlayerSecret/RoomSecret/GameSecret/InviteSecret…）
@@ -123,6 +123,7 @@ draw_and_guess/
 │       ├── canvas/                # 双层画布：固定短边 720 的逻辑重放/填充层 + DPR 封顶的 DOM 展示层
 │       │   ├── replay-machine.ts  # 画布重放状态机：增量/整帧决策、世代取代、后备缓冲原子提交（ADR-0018）
 │       │   ├── rendering.ts
+│       │   ├── geometry.ts        # 坐标几何单口径：(size-1) 映射/clamp/线宽恒等式/单点补偿（ADR-0022，零 import 供 Worker 与探针共用）
 │       │   ├── viewport.ts
 │       │   └── flood-fill.ts
 │       ├── audio/                 # HTML5 Audio 音效层：资源发现、清单校验、端口契约、运行时组装、音效路由、管理器与浏览器适配器
@@ -144,7 +145,7 @@ draw_and_guess/
 │       │   ├── room.ts            # 房间内生命周期 Store（成员席位、准备、房主权限与规则变动）
 │       │   ├── gameplay.ts        # 实时对局业务 Store（回合状态、词语选项、实时猜词流）
 │       │   ├── vocabulary.ts      # 词库选择与配置 Store
-│       │   ├── socket.ts          # Socket 单例 + 推送事件桥接（HMR dispose）
+│       │   ├── socket.ts          # Socket 单例 + 事件绑定循环（注册/解绑由推送清单派生；HMR dispose）
 │       │   ├── request.ts         # 请求封装：timeout+同 requestId 自动重试+ack 运行时校验+错误翻译
 │       │   ├── response-protocol.ts # 请求响应 ack 的统一解码与脱敏诊断（非法响应不重试、不写入 Pinia）
 │       │   ├── push-protocol.ts   # 主动推送 Zod 解码与脱敏诊断记录
@@ -243,15 +244,16 @@ pnpm format:check  # 仅检查格式
 
 - **依赖方向单向**：`client → shared/config`、`server → shared/config`、`shared → 无运行时依赖`。客户端与服务端都通过 `@draw-guess/shared` 引用协议层；不改动这一分层。
 - **服务端权威裁决**：答案、计分、阶段、计时、绘画资格只能由服务端判定；客户端永远不能上传「裁决结果」。客户端只发带 `requestId` 的幂等请求经统一 `ack` 返回。
-- **角色裁剪快照**（`snapshot.ts`）：所有公开数据结构按观看者角色生成；服务端秘密字段（答案、恢复令牌、候选词、内部计时器、请求缓存）绝不进快照/事件。私密房短码仅裁剪给当前房主；大厅玩家资料不回显私密房 UUID。
+- **角色裁剪快照**（`snapshot.ts`）：所有公开数据结构按观看者角色生成；服务端秘密字段（答案、恢复令牌、候选词、内部计时器、请求缓存）绝不进快照/事件。私密房短码仅裁剪给当前房主；大厅玩家资料不回显私密房 UUID。`SnapshotBuilder` 依赖收窄为 `SnapshotViewPort` 六成员窄端口（GS 结构满足、类型环断开）；隐私回归由 `test/unit/snapshot.matrix.spec.ts` 的角色×阶段穷举矩阵保证（strict schema 闸门 + 秘密键清单 + 可见性真值表三重守卫，见 `docs/adr/0021-snapshot-view-port-and-matrix.md`）。新增 Secret 字段必须同步登记矩阵的 FORBIDDEN_KEYS。
 - **统一请求绑定**（`protocol/binder.ts`）：schema 校验、会话限频、幂等缓存、统一 `ack`。非法阶段/角色/序号/频率由 `binder.ts` 与领域服务拒绝。
 - **Schema-first 线协议**：`packages/shared/src/protocol/` 的 Zod Schema 是公开 DTO 与请求 payload 的权威来源；`PublicPlayer`、`RoomSnapshot`、`GameView`、`Invite` 等通过 `z.infer` 导出，推送事件类型由 `SERVER_PUSH_SCHEMAS` 自动映射。服务端 Secret 与仓储记录继续独立手写，禁止依赖 Zod 推导。
-- **幂等传输重试**：普通客户端请求发生超时/断线等传输故障时，以同一 `requestId` 自动重试；服务端只缓存成功 ack，并让并发重复请求共享同一个执行 Promise。高频 `quiet` 绘图请求默认不重试。
+- **幂等传输重试**：普通客户端请求发生超时/断线等传输故障时，以同一 `requestId` 自动重试；服务端只缓存成功 ack，并让并发重复请求共享同一个执行 Promise。传输重试（`retry`，默认开）与失败 Toast（`notify: 'silent'` 抑制）是两个正交开关——高频绘图与画布控制请求显式 `retry: false`（旧 `quiet` 一符双义已拆分，见 `docs/adr/0022-geometry-single-source-and-request-flags.md`）。
 - **请求响应运行时边界**：`CLIENT_RESPONSE_SCHEMAS` 为每个请求事件声明完整 ack Schema（成功 data、`requestId`、已登记 `ErrorCode` 的失败外壳，均为 strict），响应类型由 Schema 推导。`createRequester` 对每次 `emitWithAck` 结果先经 `response-protocol.ts` 解码并核对 `requestId`：解析失败或不匹配返回 `failureKind: 'protocol'`（不重试、不写入 Pinia、只显示统一安全文案并记录脱敏诊断），只有传输故障才自动重试。
-- **版本化主动推送**：服务端主动事件一律使用 `createServerPush()` 包装；客户端先经 `SERVER_PUSH_SCHEMAS` 完整 Zod 解码，再通过 `snapshot-gate.ts` 校验房间、对局、回合、`stateVersion` 与 `drawingRevision`。非法推送只记录脱敏诊断，并以冷却窗口触发一次全量重同步。
+- **版本化主动推送**：服务端主动事件一律使用 `createServerPush()` 包装；客户端先经 `SERVER_PUSH_SCHEMAS` 完整 Zod 解码，再通过 `snapshot-gate.ts` 校验房间、对局、回合、`stateVersion` 与 `drawingRevision`。非法推送只记录脱敏诊断，并以冷却窗口触发一次全量重同步。**推送事件在客户端只有唯一登记处**：`useAppBootstrap` 的 `push: PushHandlerMap` 注册表按协议事件逐条登记 `{ on, recovery }`（载荷整体透传、解码层零字段知识；非法载荷恢复策略即原「门禁域」与 handler 同条目共存）；注册/解绑清单由 `SERVER_PUSH_EVENT_NAMES`（schema 键派生）循环生成，`stores/socket.ts` 内不再有事件名单（见 `docs/adr/0020-push-registry.md`）。
 - **统一运行时依赖**：`GameService`、`RoundMachine`、`rate-limit.ts`、`snapshot.ts`、`scoring.ts`、`hint-scheduler.ts` 及 `apps/server/src/domain/`、`application/`、`protocol/` 全目录的领域时间、定时器与随机数统一来自 `runtime.ts` 的 `Clock` / `Scheduler` / `RandomSource`；这些作用域禁止直接调用系统时间、随机数或定时器，只有 `runtime.ts` 生产适配层放行，ESLint 会阻止回退。
 - **回合状态机**：`round-machine.ts` + `packages/shared/src/pure.ts` 的 `LEGAL_PHASES` 白名单；非法转换由服务端拒绝（`INVALID_TRANSITION`）。
 - **计分统一口径**：`scoring.ts` 与 `pure.ts` 的 `calculateGuessScore` 使用同一规则（基础 + 速度 + 顺序；两人局禁用顺序奖）。
+- **成员事实单一口径**：房间内「占席 / 可玩 / 在线可玩 / 候场可玩 / 进榜」与连接三态、阶段标称时长只写在 `apps/server/src/domain/room/member-facts.ts`（纯函数，连通性经显式 `isOnline` 入参注入），其他模块经具名谓词 / 选择器调用；禁止在别处重新内联 `spectating`×`leftGame` 复合判定（防回潮见 `test/unit/member-facts-boundaries.spec.ts`，取舍见 `docs/adr/0023-member-facts-single-source.md`）。
 - **画布增量绘制**（`GameCanvas.vue` + `canvas/replay-machine.ts`）：坐标一律**归一化 0～1**；绘图序号单调递增，服务端拒绝旧包；橡皮擦/填充只传「点击位置 + 颜色」，不传像素，客户端按同一历史重放；`lastSequence` 用于重连续接。**渲染为直线段描边（`stroke()` + `round` 线帽），增量只补画新增段（fromIndex）**。**权威重放原子提交**：重放只画进后备 canvas，整帧成功后一次换入逻辑层——中止/取消的重放不得触碰逻辑层，`drawnPoints` 簿记与后备内容同口径（见 `docs/adr/0017-drawing-replay-atomic-commit.md`）。**「历史 → 栅格」的全部决策归画布重放状态机 `DrawingReplayMachine`**：唯一入口 `sync({commands, undoneIds, roundId})` + `resize/replay/预览方法`，增量 vs 整帧、undone 可见性过滤、世代取代、原子提交都是机器内政；组件与笔画会话不得直接绘制或清空逻辑层（见 `docs/adr/0018-canvas-replay-machine.md`）。
 - **持久化分层**：每个应用由 `createDatabase(filePath)` 创建独占 `DatabaseContext`，迁移、身份/战报仓储和事务显式绑定同一连接，不允许模块级数据库单例或路径覆盖；恢复令牌落盘时只存 SHA-256 摘要且成功恢复必须旋转，运行期房间禁止写穿数据库。`RunningApplication.close()` 负责关闭自身 Socket、HTTP 和数据库。
 - **注销是持久化优先的原子操作**：先原子删除持久化记录（失败即整体不生效：内存身份与当前连接保持可用，抛统一 `INTERNAL_ERROR` 并记白名单日志），再离房、最后清内存；注销只允许身份当前所属的连接执行（被接管的旧 socket 迟到注销只解绑自己）。顺序与取舍见 `docs/adr/0011-session-logout-atomicity.md`，禁止改回「先清内存、再尽力删库」。
@@ -264,16 +266,16 @@ pnpm format:check  # 仅检查格式
 
 - **类型**：`strict` + `noUncheckedIndexedAccess` + `noImplicitReturns` + `noFallthroughCasesInSwitch` + `noImplicitOverride` + `noUncheckedSideEffectImports` + `verbatimModuleSyntax`（根 `tsconfig.json`），客户端 vue-tsc 另开 `strictTemplates`（模板未声明 props/事件即编译失败；合法透传统一在 `vue-augmentations.d.ts` 放行，新增旗标先登记 `vite-env.d.ts`）。避免 `any`（ESLint `no-explicit-any: error`）；未使用变量加 `_` 前缀以通过 `no-unused-vars`。
 - **类型护栏分层**（取舍见 `docs/adr/0016-type-aware-guardrails.md`）：
-  - Socket.IO 两端必须经 `socket-types.ts` 的 `AppServer`/`AppSocket`（server）与 `stores/socket.ts` 的 `GameSocket`（client）引用，**禁止**裸 `import('socket.io').Socket`；`socket.data` 只允许 `AppSocketData` 声明的字段；
+  - Socket.IO 两端必须经 `socket-types.ts` 的 `AppServer`/`AppSocket`（server）与 `stores/socket.ts` 的窄端口（client：`PushBindingTarget` 监听绑定 / `GameTransportSocket` transport 视图 / `request.ts` 的 `RequestAckTransport`）引用，**禁止**裸 `import('socket.io').Socket`，消费者与测试替身都不得依赖全量 Socket 类型（`GameSocket` 仅用于 io() 构造边界断言，见 `docs/adr/0019-socket-narrow-ports.md`）；`socket.data` 只允许 `AppSocketData` 声明的字段；
   - 服务端推送一律 `createServerPush(EVENTS.x, data)`（事件名↔载荷编译期配对）；客户端入站仍按 `unknown` 走 Zod 解码，不因类型接入而信任线路数据；
   - type-checked ESLint 仅覆盖 `apps/server/src` 与 `packages/*/src`（typescript-eslint 无法解析跨文件 .vue 类型）；客户端类型严格性由 vue-tsc + strictTemplates 把关；`test/**` 不启用 type-checked 层（配置块级豁免，测试替身 `as unknown as` 属惯例）；
-  - 生产代码禁用非空断言（`no-non-null-assertion: error`）：以守卫重排/可选链/类型谓词消除；确需保留（热点循环、接口适配）必须带中文理由的定点 `eslint-disable-next-line`；泛型边界适配断言（binder `on`、GameService 推送、request `emitWithAck`）须注释说明「延迟条件类型不可证」的原因；
+  - 生产代码禁用非空断言（`no-non-null-assertion: error`）：以守卫重排/可选链/类型谓词消除；确需保留（热点循环、接口适配）必须带中文理由的定点 `eslint-disable-next-line`；泛型边界适配断言（binder `on`、GameService 推送、game-transport `io()` 构造、request payload 展开 cast）须注释说明「延迟条件类型不可证」的原因；
   - `useGameStore` Facade 与 `useGameHud`/`useRoomSync`/`useToasts` 的成员名单由 `test/integration/store-contracts.ts` 编译期快照锁定：增删成员必须同步该名单（提醒机制，非阻力）。
 - **命名**：组件/视图 `PascalCase.vue`；TS 文件 **kebab-case**（`data-table-layout.ts`），例外仅三类——Vue 组合式函数 `useXxx.ts`、工具链配置 `*.config.ts`、测试 `*.spec.ts` / `*.page.ts`；事件名用 `EVENTS` 常量；领域模型用「Secret 后缀」标记服务端秘密对象。命名由 `test/unit/documentation.consistency.spec.ts` 静态校验，不要新增 camelCase 的普通模块文件。
 - **格式**：Prettier（无分号、单引号、行宽 100、尾逗号 all）。编码前先 `pnpm format`。
 - **换行**：由根目录 `.gitattributes` 统一管理；默认文本文件提交为 LF，`.bat`/`.cmd` 保留 CRLF，数据库、音频等二进制文件禁止换行转换。新增文件类型时同步确认其 Git 属性，不依赖开发者本机的 `core.autocrlf` 设置。
 - **注释**：中文注释，解释「为什么」而非复述代码；关键算法 / 边界处理要求注释（参考 `GameCanvas.vue`、`pure.ts`、`snapshot.ts`、`game-service.ts` 的注释质量）。**禁止引用不可追溯的编号**（如「缺陷报告 #n」）：涉及取舍的修复要写进 `docs/adr/`，源码只留一句原因 + `docs/adr/NNNN-*.md` 链接。
-- **错误处理**：所有可观察错误码先登记到 shared 的 `ERROR_CODES` / `ErrorCode`；服务端用 `GameError` + `errors.ts` 生成统一 ack，默认中文文案必须满足 `Record<ErrorCode, string>`；客户端经 `request.ts` 统一超时与 `quiet` 静默降级，仅对需要特殊恢复的错误码穷尽分支，其余展示服务端安全文案。
+- **错误处理**：所有可观察错误码先登记到 shared 的 `ERROR_CODES` / `ErrorCode`；服务端用 `GameError` + `errors.ts` 生成统一 ack，默认中文文案必须满足 `Record<ErrorCode, string>`；客户端经 `request.ts` 统一超时，失败 Toast 归属由 `notify: 'always' | 'silent'` 显式声明（静默请求的选择性补弹走调用方对 `ok:false` 结果的错误码分支），其余展示服务端安全文案。
 - **日志**：由 `.env` 的 `LOG_ENABLED` 控制（默认 true）：关闭时完全不创建日志记录器、不写日志文件（零内存开销）；开启时服务端用 `pino`（默认结构化 JSON，无 ANSI 色码）异步缓冲写入，**每次启动写一个新的日志文件**（`apps/server/log/app-YYYY-MM-DD-HH-mm-ss.log`，精确到秒），目录最多保留最近 `LOG_MAX_FILES` 条（默认 10，超出删除最老）；优雅关闭必须 flush/close，异常退出仅做尽力同步 flush。日志正文与上下文字段采用静态白名单，禁止记录恢复令牌、答案、聊天全文或 payload；控制台只保留启动横幅，不输出业务日志；`debug/info/warn/error` 级别经 `LOG_LEVEL` 控制。ESLint 默认禁止 `console`，仅进程入口、启动提示、客户端开发期资源诊断、按需构建报告与测试运行器等明确适配层放行。
 - **UI 文案**：**严禁在组件/业务代码里硬编码展示字符**；一律从 `@draw-guess/strings` 的 `strings`（客户端）或 `serverStrings`（服务端）导入。SFC ESLint 规则覆盖 template 纯文本、静态 `aria-*` / `title` / `placeholder`、字符串与模板字符串；注释、class 名、不含硬编码文案的动态绑定、测试夹具与仅供开发者定位问题的技术诊断不视为 UI 文案。
 - **样式**：组件/页面视觉一律用**行内 Tailwind 类**写在 Vue 模板；重复长串收敛到共享组件（`AppButton`/`BaseDialog`/`ConfirmDialog`/`IconButton`/`ToolButton`/`OverlayCard`/`RuleRow`/`RoundIconButton`）或 `style/` 共享模块类。不要写共享层之外的原生 CSS 类选择器。语义色用 `@theme` 令牌；容器单位 `cqh/cqw` 用任意值（内部空格用 `_`，如 `shadow-[0_1.2cqh_5cqh_#0009]`）。
@@ -453,9 +455,10 @@ BUNDLE_REPORT=1 pnpm --filter @draw-guess/client build   # 产物 raw/gzip 表 +
 
 - **新增功能**：
   1. 新增请求事件：`packages/shared/src/events.ts`（事件名）→ `schemas.ts`（校验）→ `game-service.ts` 或对应 handler → `handlers/*.ts` 注册 → `stores/game.ts` 客户端方法。
-  2. 协议范围加入 shared constants；公开默认值加入 `packages/config/`，服务端私有策略加入 `apps/server/src/config/`。
-  3. UI 文案加入 `packages/strings/src/`。
-  4. 完成后跑「最低验证命令」。
+  2. 新增推送事件：`packages/shared/src/protocol/push.ts` 的 `SERVER_PUSH_SCHEMAS` +1（事件清单 `SERVER_PUSH_EVENT_NAMES` 自动派生）→ 客户端 `useAppBootstrap` 的 `push` 注册表补一条 `{ on, recovery }`——监听注册、解绑与非法载荷恢复自动生效，`stores/socket.ts` 零改动；漏登记（载荷处理或恢复策略任一缺项）编译失败。
+  3. 协议范围加入 shared constants；公开默认值加入 `packages/config/`，服务端私有策略加入 `apps/server/src/config/`。
+  4. UI 文案加入 `packages/strings/src/`。
+  5. 完成后跑「最低验证命令」。
 - **修复缺陷**：先复现、明确根因（多在状态机 / 快照裁剪 / 同步兜底 / 画布渲染），改最小范围，再验证相关模块与相邻功能。
 - **调整接口 / DTO**：同步 `packages/shared` 的 `types.ts` + `schemas.ts`，并检查 `snapshot.ts` 是否需按新字段裁剪；协议版本不兼容时 `protocolVersion +1`。
 - **修改依赖**：只在对应子包 `package.json` 添加，**不要**用 `-g` 全局安装；改后运行 `pnpm install` 更新锁文件并跑类型检查。移除依赖时同步清理 `package.json`/`pnpm-lock.yaml` 并检查引用。
@@ -542,27 +545,28 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
   - 找不到依据的规范（如 PR/CI 约定、测试框架）一律标「待确认」，不要自行编造。
 - **快速定位速查**：
 
-| 想改什么                        | 去哪个文件                                                                                                                                                                                                                                        |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 应用名/版本/公开连接参数        | `packages/config/src/app.ts`                                                                                                                                                                                                                      |
-| 协议版本/头像/载荷范围          | `packages/shared/src/protocol/constants.ts`                                                                                                                                                                                                       |
-| 服务端端口/限频/清理/数据库路径 | `apps/server/src/config/`                                                                                                                                                                                                                         |
-| 对局轮数/时间/分数/提示         | `packages/config/src/game.ts`                                                                                                                                                                                                                     |
-| 画板颜色/粗细/批次/历史上限     | `packages/config/src/drawing.ts`（历史上限语义见 `docs/adr/0010-drawing-history-cap.md`）                                                                                                                                                         |
-| 词库内容                        | `vocabulary/` 目录下的 SQLite 词库包（改后重启服务）                                                                                                                                                                                              |
-| 新增词库来源                    | `apps/server/src/vocabulary/` 实现 VocabularyProvider → `apps/server/src/config/private.ts` 切 provider                                                                                                                                           |     |
-| 新增一个请求事件                | `packages/shared/src/events.ts` 契约 → `packages/shared/src/protocol/` Schema → `game-service.ts` 或对应领域协作者 → `handlers/*.ts` 注册 → 客户端领域 Store                                                                                      |
-| 回合流转/阶段                   | `apps/server/src/round-machine.ts`                                                                                                                                                                                                                |
-| 计分规则                        | `apps/server/src/scoring.ts`                                                                                                                                                                                                                      |
-| 快照裁剪/隐私边界               | `apps/server/src/snapshot.ts`                                                                                                                                                                                                                     |
-| SQLite 建表/迁移                | `apps/server/src/db/migrate.ts`（新变更追加新迁移）                                                                                                                                                                                               |
-| 持久化仓储（玩家/战报）         | `apps/server/src/repositories/`                                                                                                                                                                                                                   |
-| 日志开关/保留条数               | `.env` → `apps/server/src/config/deployment.ts` → `apps/server/src/index.ts`                                                                                                                                                                      |
-| 画布渲染/增量绘制               | `apps/client/src/canvas/replay-machine.ts`（重放状态机：决策/世代/簿记/原子提交）+ `components/game/GameCanvas.vue`（薄装配壳）+ `composables/useCanvas*.ts` / `useStrokeSession.ts`（直线段描边，勿引入轮廓填充平滑库）                          |
-| 填充重放/降级与填充门禁         | `apps/client/src/canvas/flood-fill-worker.ts`（Worker 失败降级一次）+ `canvas/replay-machine.ts`（渲染态）+ `composables/useFillSession.ts`（提交态）+ `canvas/fill-diagnostics.ts`（见 `docs/adr/0009-fill-degradation-and-locks.md`、ADR-0018） |
-| 音效资源/播放策略               | `packages/config/src/audio.ts` → `apps/client/src/audio/` → `composables/useAudioFeedback.ts`（音效文件名清单与格式约定见 `apps/client/src/assets/audio/README.md`；BGM 系统已移除）                                                              |
-| 全局样式 / Tailwind 令牌        | `apps/client/src/style/index.css`                                                                                                                                                                                                                 |
-| 类名合并 cn()                   | `apps/client/src/utils/cn.ts`                                                                                                                                                                                                                     |
+| 想改什么                                 | 去哪个文件                                                                                                                                                                                                                                        |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 应用名/版本/公开连接参数                 | `packages/config/src/app.ts`                                                                                                                                                                                                                      |
+| 协议版本/头像/载荷范围                   | `packages/shared/src/protocol/constants.ts`                                                                                                                                                                                                       |
+| 服务端端口/限频/清理/数据库路径          | `apps/server/src/config/`                                                                                                                                                                                                                         |
+| 对局轮数/时间/分数/提示                  | `packages/config/src/game.ts`                                                                                                                                                                                                                     |
+| 画板颜色/粗细/批次/历史上限              | `packages/config/src/drawing.ts`（历史上限语义见 `docs/adr/0010-drawing-history-cap.md`）                                                                                                                                                         |
+| 词库内容                                 | `vocabulary/` 目录下的 SQLite 词库包（改后重启服务）                                                                                                                                                                                              |
+| 新增词库来源                             | `apps/server/src/vocabulary/` 实现 VocabularyProvider → `apps/server/src/config/private.ts` 切 provider                                                                                                                                           |     |
+| 新增一个请求事件                         | `packages/shared/src/events.ts` 契约 → `packages/shared/src/protocol/` Schema → `game-service.ts` 或对应领域协作者 → `handlers/*.ts` 注册 → 客户端领域 Store                                                                                      |
+| 回合流转/阶段                            | `apps/server/src/round-machine.ts`                                                                                                                                                                                                                |
+| 计分规则                                 | `apps/server/src/scoring.ts`                                                                                                                                                                                                                      |
+| 成员状态判定（占席/可玩/在线/候场/进榜） | `apps/server/src/domain/room/member-facts.ts`（ADR-0023）                                                                                                                                                                                         |
+| 快照裁剪/隐私边界                        | `apps/server/src/snapshot.ts`（端口与裁剪）+ `test/unit/snapshot.matrix.spec.ts`（角色×阶段穷举矩阵）                                                                                                                                             |
+| SQLite 建表/迁移                         | `apps/server/src/db/migrate.ts`（新变更追加新迁移）                                                                                                                                                                                               |
+| 持久化仓储（玩家/战报）                  | `apps/server/src/repositories/`                                                                                                                                                                                                                   |
+| 日志开关/保留条数                        | `.env` → `apps/server/src/config/deployment.ts` → `apps/server/src/index.ts`                                                                                                                                                                      |
+| 画布渲染/增量绘制                        | `apps/client/src/canvas/replay-machine.ts`（重放状态机：决策/世代/簿记/原子提交）+ `components/game/GameCanvas.vue`（薄装配壳）+ `composables/useCanvas*.ts` / `useStrokeSession.ts`（直线段描边，勿引入轮廓填充平滑库）                          |
+| 填充重放/降级与填充门禁                  | `apps/client/src/canvas/flood-fill-worker.ts`（Worker 失败降级一次）+ `canvas/replay-machine.ts`（渲染态）+ `composables/useFillSession.ts`（提交态）+ `canvas/fill-diagnostics.ts`（见 `docs/adr/0009-fill-degradation-and-locks.md`、ADR-0018） |
+| 音效资源/播放策略                        | `packages/config/src/audio.ts` → `apps/client/src/audio/` → `composables/useAudioFeedback.ts`（音效文件名清单与格式约定见 `apps/client/src/assets/audio/README.md`；BGM 系统已移除）                                                              |
+| 全局样式 / Tailwind 令牌                 | `apps/client/src/style/index.css`                                                                                                                                                                                                                 |
+| 类名合并 cn()                            | `apps/client/src/utils/cn.ts`                                                                                                                                                                                                                     |
 
 ---
 

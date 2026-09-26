@@ -9,7 +9,12 @@ import { useAppBootstrap } from '@/composables/useAppBootstrap'
 import { useLobbyStore } from '@/stores/lobby'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
-import { attachSocketListeners, disposeSocketLifecycle, type SocketHandlers } from '@/stores/socket'
+import {
+  attachSocketListeners,
+  disposeSocketLifecycle,
+  type GameTransportSocket,
+  type SocketHandlers,
+} from '@/stores/socket'
 import {
   createGameTransport,
   installGameTransport,
@@ -17,7 +22,8 @@ import {
 } from '@/application/game-transport'
 
 const transport = vi.hoisted(() => {
-  type Listener = (...args: unknown[]) => void
+  // 与端口监听器协变兼容的 never 形参（重载端口的逆变双兼容解，见 fake-game-transport 注释）
+  type Listener = (...args: never[]) => void
   const socketListeners = new Map<string, Set<Listener>>()
   const managerListeners = new Map<string, Set<Listener>>()
   const offCalls: Array<{ scope: 'socket' | 'manager'; event: string; handler?: Listener }> = []
@@ -25,6 +31,7 @@ const transport = vi.hoisted(() => {
   let connectCalls = 0
   let disconnectCalls = 0
   let connectListenerCount = 0
+  let connected = false
   let response: (event: string) => unknown = () => ({ ok: true, data: undefined })
 
   function add(map: Map<string, Set<Listener>>, event: string, handler: Listener): void {
@@ -39,46 +46,44 @@ const transport = vi.hoisted(() => {
   }
 
   function emit(map: Map<string, Set<Listener>>, event: string, ...args: unknown[]): void {
-    for (const handler of [...(map.get(event) ?? [])]) handler(...args)
+    for (const handler of [...(map.get(event) ?? [])]) {
+      // 假替身唯一 cast：用测试构造的载荷驱动 never 形参监听器（运行时即业务 handler）。
+      ;(handler as (...args: unknown[]) => void)(...args)
+    }
   }
 
-  const manager = {
-    on(event: string, handler: Listener) {
+  const manager: GameTransportSocket['io'] = {
+    on(event: 'reconnect_attempt' | 'error', handler: Listener) {
       add(managerListeners, event, handler)
-      return manager
     },
-    off(event: string, handler?: Listener) {
+    off(event: 'reconnect_attempt' | 'error', handler?: Listener) {
       offCalls.push({ scope: 'manager', event, handler })
       remove(managerListeners, event, handler)
-      return manager
     },
   }
-  const socket = {
-    connected: false,
+  // 显式标注 GameTransportSocket（C3 窄视图）：timeout() 等端口外化石成员会编译报错；
+  // connected 用闭包 getter 满足端口 readonly 同时保留内部可写。
+  const socket: GameTransportSocket = {
+    get connected() {
+      return connected
+    },
     io: manager,
     on(event: string, handler: Listener) {
       add(socketListeners, event, handler)
-      return socket
     },
     off(event: string, handler?: Listener) {
       offCalls.push({ scope: 'socket', event, handler })
       remove(socketListeners, event, handler)
-      return socket
     },
     connect() {
       connectCalls += 1
       connectListenerCount = socketListeners.get('connect')?.size ?? 0
-      socket.connected = true
+      connected = true
       emit(socketListeners, 'connect')
-      return socket
     },
     disconnect() {
       disconnectCalls += 1
-      socket.connected = false
-      return socket
-    },
-    timeout() {
-      return socket
+      connected = false
     },
     emitWithAck(event: string) {
       requests.push(event)
@@ -107,7 +112,10 @@ const transport = vi.hoisted(() => {
       disconnectCalls = 0
       connectListenerCount = 0
       response = () => ({ ok: true, data: undefined })
-      socket.connected = false
+      connected = false
+    },
+    setConnected: (value: boolean) => {
+      connected = value
     },
   }
 })
@@ -122,18 +130,21 @@ function handlers(): SocketHandlers {
     onDisconnect: vi.fn(),
     onReconnectAttempt: vi.fn(),
     onIoError: vi.fn(),
-    onPresence: vi.fn(),
-    onRooms: vi.fn(),
-    onRoomSnapshot: vi.fn(),
-    onMemberConnectionChanged: vi.fn(),
-    onInviteReceived: vi.fn(),
-    onInviteResolved: vi.fn(),
-    onRoomClosed: vi.fn(),
-    onSystemNotice: vi.fn(),
-    onSystemError: vi.fn(),
     onInvalidPush: vi.fn(),
-    onDrawStrokeBatch: vi.fn(),
-    onDrawFillCommit: vi.fn(),
+    // 推送注册表（ADR-0020）：与真实装配层同构，每个协议事件穷尽登记 on + recovery。
+    push: {
+      [EVENTS.presenceSnapshot]: { on: vi.fn(), recovery: 'presence-refresh' },
+      [EVENTS.roomListChanged]: { on: vi.fn(), recovery: 'room-list-refresh' },
+      [EVENTS.roomSnapshot]: { on: vi.fn(), recovery: 'room-snapshot' },
+      [EVENTS.roomMemberConnectionChanged]: { on: vi.fn(), recovery: 'room-snapshot' },
+      [EVENTS.inviteReceived]: { on: vi.fn(), recovery: 'generic-resync' },
+      [EVENTS.inviteResolved]: { on: vi.fn(), recovery: 'generic-resync' },
+      [EVENTS.roomClosed]: { on: vi.fn(), recovery: 'room-snapshot' },
+      [EVENTS.systemNotice]: { on: vi.fn(), recovery: 'generic-resync' },
+      [EVENTS.systemError]: { on: vi.fn(), recovery: 'generic-resync' },
+      [EVENTS.drawStrokeBatch]: { on: vi.fn(), recovery: 'room-snapshot' },
+      [EVENTS.drawFillCommit]: { on: vi.fn(), recovery: 'room-snapshot' },
+    },
   }
 }
 
@@ -155,7 +166,7 @@ function mountBootstrap() {
 beforeEach(() => {
   transport.reset()
   pinia = createPinia()
-  gameTransport = createGameTransport({ socket: transport.socket as never, notify: vi.fn() })
+  gameTransport = createGameTransport({ socket: transport.socket, notify: vi.fn() })
   installGameTransport(pinia, gameTransport)
   setActivePinia(pinia)
 })
@@ -206,7 +217,7 @@ describe('Socket 显式连接生命周期', () => {
     expect(session.connectionLabel).toBe(strings.connection.reconnecting)
     expect(transport.managerListenerCount('reconnect_attempt')).toBe(1)
 
-    transport.socket.connected = false
+    transport.setConnected(false)
     transport.emitManager('error')
     expect(session.connectionLabel).toBe(strings.connection.unstable)
 
@@ -216,11 +227,11 @@ describe('Socket 显式连接生命周期', () => {
   })
 
   it('HMR dispose 精确解绑模块订阅并断开旧连接', () => {
-    attachSocketListeners(handlers(), transport.socket as never)
-    attachSocketListeners(handlers(), transport.socket as never)
+    attachSocketListeners(handlers(), transport.socket)
+    attachSocketListeners(handlers(), transport.socket)
     expect(transport.listenerCount(EVENTS.systemNotice)).toBe(2)
 
-    disposeSocketLifecycle(transport.socket as never)
+    disposeSocketLifecycle(transport.socket)
 
     expect(transport.listenerCount(EVENTS.systemNotice)).toBe(0)
     expect(transport.managerListenerCount('reconnect_attempt')).toBe(0)
@@ -233,8 +244,8 @@ describe('Socket 显式连接生命周期', () => {
     const second = handlers()
     const external = vi.fn()
     transport.socket.on(EVENTS.systemNotice, external)
-    const detachFirst = attachSocketListeners(first, transport.socket as never)
-    const detachSecond = attachSocketListeners(second, transport.socket as never)
+    const detachFirst = attachSocketListeners(first, transport.socket)
+    const detachSecond = attachSocketListeners(second, transport.socket)
 
     transport.emitSocket(
       EVENTS.systemNotice,
@@ -246,8 +257,8 @@ describe('Socket 显式连接生命周期', () => {
       createServerPush(EVENTS.systemNotice, { text: '第二次通知' }),
     )
 
-    expect(first.onSystemNotice).toHaveBeenCalledTimes(1)
-    expect(second.onSystemNotice).toHaveBeenCalledTimes(2)
+    expect(first.push[EVENTS.systemNotice].on).toHaveBeenCalledTimes(1)
+    expect(second.push[EVENTS.systemNotice].on).toHaveBeenCalledTimes(2)
     expect(external).toHaveBeenCalledTimes(2)
     detachSecond()
     expect(transport.listenerCount(EVENTS.systemNotice)).toBe(1)

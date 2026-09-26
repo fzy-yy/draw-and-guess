@@ -1,3 +1,5 @@
+import { clampPixelAxis } from './geometry'
+
 export type Rgba = readonly [number, number, number, number]
 
 export interface FloodFillMetrics {
@@ -53,8 +55,9 @@ export function applyFloodFillMeasured(
 ): FloodFillMetrics {
   if (width <= 0 || height <= 0 || data.length !== width * height * 4)
     return { filledPixels: 0, pushedSpans: 0, peakWorkingBytes: 0 }
-  const x = Math.max(0, Math.min(width - 1, Math.round(startX)))
-  const y = Math.max(0, Math.min(height - 1, Math.round(startY)))
+  // 像素种子 clamp 到合法栅格索引（口径单源，geometry/ADR-0022）。
+  const x = clampPixelAxis(startX, width)
+  const y = clampPixelAxis(startY, height)
   const startIndex = y * width + x
   const startOffset = startIndex * 4
   const target: Rgba = [

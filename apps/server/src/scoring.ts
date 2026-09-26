@@ -5,11 +5,7 @@
 import { APP_CONFIG } from './config/index.ts'
 import { calculateGuessScore, type ScoreDetail } from '@draw-guess/shared'
 import type { GameSecret, MemberState, RoomSecret } from './models.ts'
-
-/** 房间可玩成员数（排除观战者），计分与满员判定统一使用它。 */
-export function activePlayerCount(room: RoomSecret): number {
-  return room.members.filter((member) => !member.spectating && !member.leftGame).length
-}
+import { activeGuessers, countActivePlayers } from './domain/room/member-facts.ts'
 
 /** 为单个猜中者构造得分明细（与猜中时同规则、同口径）。 */
 export function buildGuessDetail(input: {
@@ -27,7 +23,7 @@ export function buildGuessDetail(input: {
       elapsedMs: guessedAt - game.phaseStartedAt,
       durationMs,
       correctOrder: orderIndex,
-      playerCount: activePlayerCount(room),
+      playerCount: countActivePlayers(room),
       // 统一猜词基础分为房间规则可设项（计分方式已固定为标准）；
       // 词条权重来自词库元数据；以默认权重 5 为基准缩放基础分，避免字段只在 UI 透传。
       base: Math.max(
@@ -55,9 +51,7 @@ export function buildDrawerScore(input: {
   // 参与本回合的可玩成员全集（含已掉线者）：满员奖励按「每个人都确实猜中」判定。
   // 只认 guessedAt（猜中瞬间必然在线才置位）：猜中后掉线/离场不取消奖励，
   // 掉线但未猜中的成员仍会使奖励不成立；同一时刻离场成员（leftGame）不参与判定。
-  const roundGuessers = room.members.filter(
-    (member) => member.playerId !== game.drawerId && !member.spectating && !member.leftGame,
-  )
+  const roundGuessers = activeGuessers(room, game.drawerId)
   const allCorrect = roundGuessers.length > 0 && roundGuessers.every((member) => member.guessedAt)
   const score = drawerAbandoned
     ? 0

@@ -13,19 +13,18 @@ afterEach(() => vi.useRealTimers())
 describe('幂等请求重试', () => {
   it('请求结果明确区分业务拒绝与传输失败', async () => {
     vi.useFakeTimers()
-    const businessSocket = {
-      timeout: () => businessSocket,
+    // 显式标注 RequestAckTransport（C3）：timeout() 等端口外成员由编译器当场拒绝。
+    const businessSocket: ClientSocket = {
       emitWithAck: (_event: string, payload: Record<string, unknown>) =>
         Promise.resolve({
           ok: false,
           requestId: String(payload.requestId),
           error: { code: 'DRAW_BUDGET_EXCEEDED', message: '绘图预算已用尽' },
         }),
-    } as unknown as ClientSocket
-    const transportSocket = {
-      timeout: () => transportSocket,
+    }
+    const transportSocket: ClientSocket = {
       emitWithAck: () => new Promise(() => undefined),
-    } as unknown as ClientSocket
+    }
 
     await expect(
       createRequester({ socket: businessSocket, notify: vi.fn() })(
@@ -43,7 +42,7 @@ describe('幂等请求重试', () => {
             startPointIndex: 0,
           },
         },
-        { quiet: true },
+        { retry: false, notify: 'silent' },
       ),
     ).resolves.toMatchObject({
       ok: false,
@@ -55,8 +54,8 @@ describe('幂等请求重试', () => {
       EVENTS.networkPing,
       { clientTime: 1 },
       {
-        quiet: true,
         retry: false,
+        notify: 'silent',
       },
     )
     await vi.advanceTimersByTimeAsync(APP_CONFIG.network.requestTimeoutMs)
@@ -71,8 +70,7 @@ describe('幂等请求重试', () => {
     vi.useFakeTimers()
     const payloads: Array<Record<string, unknown>> = []
     let attempt = 0
-    const fakeSocket = {
-      timeout: () => fakeSocket,
+    const fakeSocket: ClientSocket = {
       emitWithAck: (_event: string, payload: Record<string, unknown>) => {
         payloads.push(payload)
         attempt += 1
@@ -80,7 +78,7 @@ describe('幂等请求重试', () => {
           ? Promise.reject(new Error('xhr poll error'))
           : Promise.resolve({ ok: true, data: { success: true }, requestId: payload.requestId })
       },
-    } as unknown as ClientSocket
+    }
     const notify = vi.fn()
     const request = createRequester({ socket: fakeSocket, notify })
     const pending = request(EVENTS.sessionLogout, {})

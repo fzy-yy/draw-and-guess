@@ -76,7 +76,8 @@ export const useGameplayStore = defineStore('gameplay', () => {
     const result = await request(
       EVENTS.drawStrokeBatch,
       { roundId: roomStore.room.game.roundId, stroke },
-      { quiet: true },
+      // 高频绘图：不弹 Toast、不盲目重发（收敛靠权威快照与增量推送；ADR-0022）。
+      { retry: false, notify: 'silent' },
     )
     if (!result.ok) {
       if (getErrorRecoveryAction(result.code) === 'warn-drawing-limit') {
@@ -99,7 +100,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
     const result = await request(
       EVENTS.drawFillCommit,
       { roundId: roomStore.room.game.roundId, fill },
-      { quiet: true },
+      { retry: false, notify: 'silent' },
     )
     // 与 sendStroke 同一口径：画布容量类拒绝（预算或命令数上限）提示一次，其余错误保持静默。
     if (!result.ok && getErrorRecoveryAction(result.code) === 'warn-drawing-limit') {
@@ -112,7 +113,11 @@ export const useGameplayStore = defineStore('gameplay', () => {
     event: typeof EVENTS.drawUndo | typeof EVENTS.drawRedo | typeof EVENTS.drawClear,
   ): Promise<void> {
     if (!roomStore.room?.game) return
-    await request(event, { roundId: roomStore.room.game.roundId }, { quiet: true })
+    await request(
+      event,
+      { roundId: roomStore.room.game.roundId },
+      { retry: false, notify: 'silent' },
+    )
   }
 
   async function pause(reason: string = strings.store.pauseReasonHost): Promise<void> {

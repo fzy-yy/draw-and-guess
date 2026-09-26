@@ -137,7 +137,7 @@ describe('房间阶段转换边界', () => {
 })
 
 describe('房间阶段写入静态约束', () => {
-  it('服务端只有 GameService.transition 可以直接赋值 phase', () => {
+  it('服务端只有 RoundMachine.transition 可以直接赋值 phase', () => {
     const sourceRoot = fileURLToPath(new URL('../../apps/server/src/', import.meta.url))
     const assignments = collectTypeScriptFiles(sourceRoot).flatMap((path) => {
       const source = readFileSync(path, 'utf8')
@@ -151,6 +151,6 @@ describe('房间阶段写入静态约束', () => {
       }))
     })
 
-    expect(assignments).toEqual([{ file: 'game-service.ts', statement: 'room.phase = next' }])
+    expect(assignments).toEqual([{ file: 'round-machine.ts', statement: 'room.phase = next' }])
   })
 })

@@ -106,6 +106,13 @@ export default defineConfig({
           functions: 100,
           lines: 95,
         },
+        // 坐标几何单口径（ADR-0022）：纯函数，行为与跨端像素一致性直接相关，必须全覆盖。
+        'apps/client/src/canvas/geometry.ts': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
         // 关键链路保留更贴近当前实际覆盖率的独立门禁，后续优先逐步上调这些值。
         'apps/client/src/composables/{useGameHud,useRoomSync}.ts': {
           statements: 75,

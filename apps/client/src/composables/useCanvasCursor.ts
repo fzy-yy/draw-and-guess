@@ -1,6 +1,7 @@
 import { computed, ref, type Ref } from 'vue'
 import { APP_CONFIG } from '@draw-guess/config'
 import type { ToolKind } from '@draw-guess/shared'
+import { strokeWidthAt } from '@/canvas/geometry'
 
 export function useCanvasCursor(options: {
   canvas: Ref<HTMLCanvasElement | undefined>
@@ -18,7 +19,8 @@ export function useCanvasCursor(options: {
     if (!element) return options.width.value
     const rect = element.getBoundingClientRect()
     const scale = Math.min(rect.width, rect.height) / APP_CONFIG.drawing.referenceResolution
-    return options.width.value * Math.max(APP_CONFIG.drawing.minLineScale, scale)
+    // 直径 ≡ 落笔线宽：与 rendering.renderStroke 共用 geometry 同一公式（ADR-0022）。
+    return strokeWidthAt(options.width.value, scale, APP_CONFIG.drawing.minLineScale)
   })
   const cursorColor = computed(() =>
     options.tool() === 'eraser' ? 'var(--color-line)' : options.color(),

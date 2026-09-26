@@ -104,43 +104,8 @@ describe('私密房与邀请竞态', () => {
 })
 
 describe('快照隐私与绘图边界', () => {
-  it('角色快照不泄露令牌、Secret 字段、候选词与私密码', () => {
-    const harness = createGameHarness()
-    const host = harness.register('房主')
-    const guest = harness.register('客人')
-    const created = harness.service.createRoom(host.playerId, {
-      name: '私密对局',
-      visibility: 'private',
-      settings: testRoomSettings(),
-    })
-    const code = created.privateJoinCode
-    if (!code) throw new Error('未生成私密码')
-    harness.service.joinPrivateRoom(guest.playerId, code)
-    const ready = harness.service.setReady(guest.playerId, true)
-    harness.service.startGame(host.playerId, ready.stateVersion)
-    harness.runtime.advance(APP_CONFIG.game.startingCountdownSeconds * 1_000)
-    const room = harness.service.rooms.get(created.id)!
-    const game = room.game!
-
-    const hostChoosing = harness.service.snapshotForPlayer(host.playerId, true)!
-    const guestChoosing = harness.service.snapshotForPlayer(guest.playerId, true)!
-    expect(hostChoosing.privateJoinCode).toBe(code)
-    expect(guestChoosing.privateJoinCode).toBeUndefined()
-    const drawerSnapshot = game.drawerId === host.playerId ? hostChoosing : guestChoosing
-    const guesserSnapshot = game.drawerId === host.playerId ? guestChoosing : hostChoosing
-    expect(drawerSnapshot.game?.wordOptions?.length).toBeGreaterThan(0)
-    expect(guesserSnapshot.game?.wordOptions).toBeUndefined()
-
-    harness.service.chooseWord(game.drawerId, game.roundId, game.candidates[0]!.id)
-    const drawerDrawing = harness.service.snapshotForPlayer(game.drawerId, true)!
-    const guesserId = game.drawerId === host.playerId ? guest.playerId : host.playerId
-    const guesserDrawing = harness.service.snapshotForPlayer(guesserId, true)!
-    expect(drawerDrawing.game?.answer).toBe(game.answer?.text)
-    expect(guesserDrawing.game?.answer).toBeUndefined()
-    const serialized = JSON.stringify(guesserDrawing)
-    for (const forbidden of ['token', 'requestCache', 'candidates', 'privateJoinCode', 'timer'])
-      expect(serialized).not.toContain(forbidden)
-  })
+  // 角色快照的隐私守卫（Secret 字段/令牌/候选词/私密码/可见性真值）已由
+  // test/unit/snapshot.matrix.spec.ts 的 54 格穷举矩阵接管（ADR-0021，严格超集）。
 
   it('拒绝乱序/重复/续接样式变化并执行点数预算，全量重同步包含完整历史', () => {
     const { harness, guest, room, game } = enterDrawing()

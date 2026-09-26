@@ -86,7 +86,8 @@ export const useSettingsStore = defineStore('settings', () => {
           discoverable: settings.value.discoverable,
           acceptsInvites: settings.value.acceptsInvites,
         },
-        { quiet: true },
+        // 偏好同步是后台操作：失败静默（下次变更自然带上），不重试避免堆积。
+        { retry: false, notify: 'silent' },
       )
     }
   }

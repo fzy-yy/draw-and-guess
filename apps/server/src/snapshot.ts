@@ -1,7 +1,8 @@
 /**
  * 房间/玩家视图裁剪（快照组装）。
- * 所有公开数据结构都由此模块按观看者角色生成，服务端秘密字段（答案、令牌、计时、候选）绝不外泄；
- * 与 GameService 组合使用，方便对“角色裁剪规则”独立测试。
+ * 所有公开数据结构都由此模块按观看者角色生成，服务端秘密字段（答案、令牌、计时、候选）绝不外泄。
+ * 依赖收窄为 `SnapshotViewPort`（ADR-0021）：消费者声明自己需要的读取面，GameService 结构上
+ * 满足并整实例传入；测试可直接实例化本构建器做角色×阶段穷举矩阵，无需拉起全图。
  */
 import { APP_CONFIG } from './config/index.ts'
 import { serverStrings } from '@draw-guess/strings'
@@ -11,15 +12,37 @@ import {
   type Invite,
   type PublicPlayer,
   type PublicRoom,
+  type RoomPhase,
   type RoomSnapshot,
 } from '@draw-guess/shared'
 import { GameError } from './errors.ts'
 import type { InviteSecret, PlayerSecret, RoomSecret } from './models.ts'
-import type { GameService } from './game-service.ts'
+import type { Clock } from './runtime.ts'
+import type { VocabularyStore } from './vocabulary/index.ts'
+import {
+  connectionStatus,
+  nominalPhaseDurationMs,
+  occupiesSeat,
+} from './domain/room/member-facts.ts'
+
+/**
+ * 快照构建所需的最小读取端口（消费者声明，同 ADR-0019 的窄端口哲学）。
+ * 只暴露「裁剪视图需要的只读状态 + 三个跨用例判定」；GameService 的全量能力
+ * （写路径、计时器、仓储）对本模块不可见——SnapshotBuilder 不可能改动权威状态，
+ * 这一约束由类型而非纪律保证。
+ */
+export interface SnapshotViewPort {
+  readonly players: ReadonlyMap<string, PlayerSecret>
+  readonly rooms: ReadonlyMap<string, RoomSecret>
+  readonly clock: Clock
+  isPlaying(phase: RoomPhase): boolean
+  getRoomVocabularyStore(room?: RoomSecret): VocabularyStore
+  requirePlayer(playerId: string): PlayerSecret
+}
 
 /** 按观看者角色裁剪房间/玩家视图的构建器。 */
 export class SnapshotBuilder {
-  constructor(private readonly service: GameService) {}
+  constructor(private readonly port: SnapshotViewPort) {}
 
   /** 为指定观看者生成裁剪后的房间快照（画家可见答案与候选词，结算阶段全员可见答案）。 */
   snapshot(room: RoomSecret, viewerId: string): RoomSnapshot {
@@ -36,7 +59,7 @@ export class SnapshotBuilder {
       game.strokes.length > 0 &&
       viewerMember.lastSyncedSeq !== undefined &&
       viewerMember.lastSyncedSeq >= game.lastSequence &&
-      Boolean(this.service.players.get(viewerId)?.connected)
+      Boolean(this.port.players.get(viewerId)?.connected)
     // 按观看者角色裁剪对局视图的敏感字段
     const gameView: GameView | undefined = game
       ? {
@@ -49,14 +72,13 @@ export class SnapshotBuilder {
           phaseStartedAt: game.phaseStartedAt,
           // 暂停阶段：下发冻结的剩余毫秒 pausedRemainingMs，并换算阶段总时长维持稳定的截止时间，
           // 供客户端将倒计时与进度条准确冻结在暂停时刻的数值上（而非扣减至 0）。
+          // 标称总时长只由 member-facts 单一口径给出；无标称值的阶段退回冻结剩余量。
           phaseEndsAt:
             room.phase === 'paused'
               ? game.phaseStartedAt +
-                (game.phaseBeforePause === 'drawing'
-                  ? game.roundDurationMs
-                  : game.phaseBeforePause === 'choosing_word'
-                    ? room.settings.chooseSeconds * 1_000
-                    : (game.pausedRemainingMs ?? 0))
+                (nominalPhaseDurationMs(game.phaseBeforePause, game, room.settings) ??
+                  game.pausedRemainingMs ??
+                  0)
               : game.phaseEndsAt,
           ...(room.phase === 'paused' ? { pausedRemainingMs: game.pausedRemainingMs ?? 0 } : {}),
           // 答案展示规则：结算阶段公开全文；否则按设置显示遮罩或隐藏字数
@@ -106,11 +128,13 @@ export class SnapshotBuilder {
             ? {
                 gameResultMinEndsAt: game.gameResultMinEndsAt,
                 canReturnWaiting:
-                  room.hostId === viewerId && this.service.clock.now() >= game.gameResultMinEndsAt,
+                  room.hostId === viewerId && this.port.clock.now() >= game.gameResultMinEndsAt,
               }
             : {}),
         }
       : undefined
+    // 词库元信息在同一快照里被三个字段引用：取一次端口结果即可（原实现连调 4 次）。
+    const vocabulary = this.port.getRoomVocabularyStore(room)
     return {
       id: room.id,
       name: room.name,
@@ -125,7 +149,7 @@ export class SnapshotBuilder {
       settings: room.settings,
       // 成员视图：公开身份 + 局内状态，注意不包含服务端秘密字段
       members: room.members.map((member) => {
-        const player = this.service.players.get(member.playerId)
+        const player = this.port.players.get(member.playerId)
         if (!member.leftGame && !player)
           throw new GameError('UNAUTHORIZED', serverStrings.errors.UNAUTHORIZED)
         const profile = member.leftProfile ?? player?.profile
@@ -156,29 +180,26 @@ export class SnapshotBuilder {
           waitingForNextGame: Boolean(member.waitingForNextGame),
           rematchReady: Boolean(member.rematchReady),
           leftGame: Boolean(member.leftGame),
-          connection:
-            member.leftGame || !player ? 'left' : player.connected ? 'online' : 'reconnecting',
+          connection: connectionStatus(member, player),
           stats: member.stats,
         }
       }),
       selectedWordCount: room.selectedWordIds.size,
-      totalWordCount: this.service.getRoomVocabularyStore(room).items.length,
-      vocabularyPackageId:
-        room.vocabularyPackageId || this.service.getRoomVocabularyStore(room).meta.id,
-      vocabularyPackageName:
-        this.service.getRoomVocabularyStore(room).meta.name ||
-        this.service.getRoomVocabularyStore(room).meta.id,
+      // 同一次快照对词库 store 只取一份（旧实现连调 4 次，均为同参数重复）。
+      totalWordCount: vocabulary.items.length,
+      vocabularyPackageId: room.vocabularyPackageId || vocabulary.meta.id,
+      vocabularyPackageName: vocabulary.meta.name || vocabulary.meta.id,
       ...(gameView ? { game: gameView } : {}),
     }
   }
 
   /** 公开玩家视图：根据连接状态与所在房间计算在场状态。 */
   toPublicPlayer(player: PlayerSecret): PublicPlayer {
-    const room = player.roomId ? this.service.rooms.get(player.roomId) : undefined
+    const room = player.roomId ? this.port.rooms.get(player.roomId) : undefined
     const status = !player.connected
       ? 'reconnecting'
       : room
-        ? this.service.isPlaying(room.phase)
+        ? this.port.isPlaying(room.phase)
           ? 'playing'
           : 'in_room'
         : 'idle'
@@ -202,9 +223,8 @@ export class SnapshotBuilder {
       id: room.id,
       name: room.name,
       hostName:
-        this.service.players.get(room.hostId)?.profile.nickname ??
-        serverStrings.notices.hostUnknown,
-      playerCount: room.members.filter((member) => !member.leftGame).length,
+        this.port.players.get(room.hostId)?.profile.nickname ?? serverStrings.notices.hostUnknown,
+      playerCount: room.members.filter(occupiesSeat).length,
       maxPlayers: room.settings.maxPlayers,
       phase: room.phase,
       roundsPerPlayer: room.settings.roundsPerPlayer,
@@ -215,8 +235,8 @@ export class SnapshotBuilder {
 
   /** 公开邀请视图（不含计时器等秘密字段）与邀请者公开资料。 */
   toPublicInvite(invite: InviteSecret): Invite {
-    const room = this.service.rooms.get(invite.roomId)
-    const sender = this.service.requirePlayer(invite.fromPlayerId)
+    const room = this.port.rooms.get(invite.roomId)
+    const sender = this.port.requirePlayer(invite.fromPlayerId)
     if (!room) throw new GameError('ROOM_NOT_FOUND', serverStrings.errors.INVITE_ROOM_CLOSED)
     return {
       id: invite.id,

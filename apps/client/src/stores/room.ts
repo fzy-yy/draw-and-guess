@@ -59,7 +59,8 @@ export const useRoomStore = defineStore('room', () => {
           ...(context.roundId ? { roundId: context.roundId } : {}),
           reason,
         },
-        { quiet: true, retry: true },
+        // 静默但仍重试：重同步是自愈路径，弹 Toast 只会与恢复遮罩重复（ADR-0022）。
+        { notify: 'silent' },
       )
       if (!result.ok) return
       if (sessionStore.generation !== context.generation || room.value?.id !== context.roomId)

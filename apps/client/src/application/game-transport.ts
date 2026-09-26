@@ -2,12 +2,13 @@ import { reactive, readonly } from 'vue'
 import type { Pinia } from 'pinia'
 import { getActivePinia } from 'pinia'
 import { io } from 'socket.io-client'
-import type { SocketHandlers, GameSocket } from '@/stores/socket'
+import type { SocketHandlers, GameSocket, GameTransportSocket } from '@/stores/socket'
 import { attachSocketListeners, disposeSocketLifecycle } from '@/stores/socket'
 import { createRequester, type NotifyFn, type Requester, type RequestState } from '@/stores/request'
 
 export interface GameTransport {
-  readonly socket: GameSocket
+  /** 对外只暴露窄视图（绑定/请求端口 + 连接状态与控制）；消费者与替身都不触整个 Socket。 */
+  readonly socket: GameTransportSocket
   readonly request: Requester
   readonly notify: NotifyFn
   readonly requestState: Readonly<RequestState>
@@ -20,11 +21,12 @@ export interface GameTransport {
 
 export function createGameTransport(options: {
   notify: NotifyFn
-  socket?: GameSocket
+  socket?: GameTransportSocket
 }): GameTransport {
   // socket.io-client 的 io() 工厂签名不带泛型（返回裸 Socket），只能在构造边界断言一次
-  // 为协议化别名；此后全链路（attach/request/emitWithAck/on）都按 GameSocket 受检。
-  const socket =
+  // 为协议化别名；GameSocket → GameTransportSocket 由编译器逐方法验证通过（重载式窄端口
+  // 被真实实例结构满足），视图之后全链路无断言。消费方与测试替身都只见窄端口。
+  const socket: GameTransportSocket =
     options.socket ??
     (io({
       autoConnect: false,

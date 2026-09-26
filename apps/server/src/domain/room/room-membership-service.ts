@@ -17,6 +17,7 @@ import { GameError, type RuntimeLogger } from '../../errors.ts'
 import type { GameSecret, MemberState, PlayerSecret, RoomSecret } from '../../models.ts'
 import { type RuntimeDependencies } from '../../runtime.ts'
 import type { VocabularyRegistry, VocabularyStore } from '../../vocabulary/index.ts'
+import { countOnlinePlayers, isActivePlayer, isOnlinePlayer, occupiesSeat } from './member-facts.ts'
 
 /** 仅暴露本用例需要的数据与副作用端口；由应用层连接跨用例动作。 */
 export interface RoomMembershipServiceContext {
@@ -59,14 +60,14 @@ export interface RoomMembershipServiceContext {
 
 export class RoomMembershipService {
   constructor(private readonly context: RoomMembershipServiceContext) {}
+
+  /** 连通性查询：注入成员事实模块的显式 isOnline 入参（箭头字段保证回调时 this 绑定）。 */
+  private readonly isOnline = (playerId: string): boolean =>
+    this.context.players.get(playerId)?.connected === true
   /** 断线代次与宽限期由会话用例校验；房主迁移只改变进程内房间状态。 */
   transferDisconnectedHost(room: RoomSecret, playerId: string): void {
     const candidate = room.members.find(
-      (member) =>
-        member.playerId !== playerId &&
-        !member.spectating &&
-        !member.leftGame &&
-        this.context.players.get(member.playerId)?.connected,
+      (member) => member.playerId !== playerId && isOnlinePlayer(member, this.isOnline),
     )
     if (!candidate) return
     room.hostId = candidate.playerId
@@ -155,8 +156,9 @@ export class RoomMembershipService {
   ): RoomSnapshot {
     if (room.members.some((member) => member.playerId === player.id && member.leftGame))
       throw new GameError('GAME_ALREADY_LEFT', serverStrings.errors.GAME_ALREADY_LEFT)
-    const activeMembers = room.members.filter((member) => !member.leftGame)
-    if (activeMembers.length >= room.settings.maxPlayers)
+    // 容量按占席口径：仍保留的离局占位同样占席，故用 occupiesSeat 而非可玩口径。
+    const occupyingMembers = room.members.filter(occupiesSeat)
+    if (occupyingMembers.length >= room.settings.maxPlayers)
       throw new GameError('ROOM_FULL', serverStrings.errors.ROOM_FULL)
     const joiningInProgress = room.phase !== 'waiting'
     if (joiningInProgress) {
@@ -247,7 +249,7 @@ export class RoomMembershipService {
 
     // 在线人数不足 2 人时自动暂停比赛
     if (
-      this.onlineMemberCount(room) < APP_CONFIG.player.minPlayers &&
+      countOnlinePlayers(room, this.isOnline) < APP_CONFIG.player.minPlayers &&
       this.context.isPlaying(room.phase)
     ) {
       this.context.pauseRoomInternal(room, serverStrings.notices.autoPaused)
@@ -319,7 +321,7 @@ export class RoomMembershipService {
       this.context.finishRound(room, true)
 
     if (
-      this.onlineMemberCount(room) < APP_CONFIG.player.minPlayers &&
+      countOnlinePlayers(room, this.isOnline) < APP_CONFIG.player.minPlayers &&
       this.context.isPlaying(room.phase)
     )
       this.context.pauseRoomInternal(room, serverStrings.notices.autoPaused)
@@ -399,13 +401,10 @@ export class RoomMembershipService {
   private transferHostInternal(room: RoomSecret): boolean {
     // 房主离开/超时后把控制权迁移给第一个在线的可玩成员（观战者不能任房主），
     // 没有在线成员则取第一个非观战成员
+    // 优先在线可玩成员；都不在线时兜底取第一个可玩成员（观战者不能任房主）。
     const candidate =
-      room.members.find(
-        (member) =>
-          !member.spectating &&
-          !member.leftGame &&
-          this.context.players.get(member.playerId)?.connected,
-      ) ?? room.members.find((member) => !member.spectating && !member.leftGame)
+      room.members.find((member) => isOnlinePlayer(member, this.isOnline)) ??
+      room.members.find(isActivePlayer)
     if (!candidate) return false
     room.hostId = candidate.playerId
     this.rotatePrivateJoinCode(room)
@@ -445,9 +444,7 @@ export class RoomMembershipService {
     waitingForNextGame = false,
   ): MemberState {
     // 玩家加入房间时创建初始席位状态（spectating=true 表示观战身份）
-    const occupied = new Set(
-      room.members.filter((member) => !member.leftGame).map((member) => member.seatIndex),
-    )
+    const occupied = new Set(room.members.filter(occupiesSeat).map((member) => member.seatIndex))
     const seatIndex = APP_CONFIG.room.seatColors.findIndex((_color, index) => !occupied.has(index))
     if (seatIndex < 0) throw new GameError('ROOM_FULL', serverStrings.errors.ROOM_FULL)
     return {
@@ -484,14 +481,5 @@ export class RoomMembershipService {
     const { room } = this.requireMembership(playerId)
     if (room.hostId !== playerId) throw new GameError('FORBIDDEN', serverStrings.errors.FORBIDDEN)
     return room
-  }
-
-  public onlineMemberCount(room: RoomSecret): number {
-    return room.members.filter(
-      (member) =>
-        !member.spectating &&
-        !member.leftGame &&
-        this.context.players.get(member.playerId)?.connected,
-    ).length
   }
 }

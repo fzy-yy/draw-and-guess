@@ -1,0 +1,133 @@
+/**
+ * 成员事实单一口径（纯函数）。
+ *
+ * 为什么存在：房间内「谁还在席、谁可玩、谁在线、谁能进下一局、谁进最终榜单」这类判断，
+ * 曾在 scoring / round-machine / room-membership-service / game-service / snapshot 等 12+ 处
+ * 各写一遍内联过滤器；改一处忘一处就会造成隐性缺陷。本模块把每种语义收敛成一个具名谓词，
+ * 并派生集合选择器与计数，调用方只按语义调用（见 docs/adr/0023-member-facts-single-source.md）。
+ *
+ * 边界：只做只读判定，绝不修改成员；连通性一律经显式 `isOnline` 入参注入，
+ * 因此模块自身保持纯函数、可脱离房间与 Socket 独立单测。
+ */
+import type { RoomPhase, RoomSettings } from '@draw-guess/shared'
+import type { GameSecret, MemberState, PlayerSecret, RoomSecret } from '../../models.ts'
+
+/** 只依赖成员列表的窄入参：房间级选择器与计数只需要这一项。 */
+type MemberList = Pick<RoomSecret, 'members'>
+
+/** 玩家连通性查询：调用方注入（生产为 `players.get(id)?.connected`）。 */
+export type OnlineLookup = (playerId: string) => boolean
+
+/**
+ * 是否仍占用房间席位（未主动离局）。
+ * 离局成员会作为占位保留在 members 中用于展示成绩卡，因此「占席」比「可玩」更宽；
+ * 容量、缩容下限与大厅人数都用它。
+ */
+export function occupiesSeat(member: MemberState): boolean {
+  return !member.leftGame
+}
+
+/**
+ * 是否可玩成员：非观战且未离局。
+ * 观战者与离局者都不参与准备、画家轮换、猜词与计分。
+ */
+export function isActivePlayer(member: MemberState): boolean {
+  return !member.spectating && !member.leftGame
+}
+
+/**
+ * 是否在线可玩：可玩且当前连接可用。
+ * 用于房主迁移、选下一位画家、开局全员在线校验与自动暂停计数等需要「即时在线」的场景。
+ */
+export function isOnlinePlayer(member: MemberState, isOnline: OnlineLookup): boolean {
+  return isActivePlayer(member) && isOnline(member.playerId)
+}
+
+/**
+ * 是否下一局有效成员：非离局，且要么可玩、要么已登记候场。
+ * 纯观战者不算有效成员；离局者即便登记过也不计入。
+ */
+export function isRematchEligible(member: MemberState): boolean {
+  return !member.leftGame && (!member.spectating || member.waitingForNextGame === true)
+}
+
+/**
+ * 是否进入最终榜单：排除观战者，但**保留离局者**。
+ * 已公布的成绩属于本局历史，不随成员离开席位而消失（leaving 时冻结的 leftProfile 正是为展示成绩卡）。
+ */
+export function isRankedMember(member: MemberState): boolean {
+  return !member.spectating
+}
+
+/** 成员连接三态：离局或缺身份为 left，在线为 online，否则为重连中。 */
+export function connectionStatus(
+  member: MemberState,
+  player: Pick<PlayerSecret, 'connected'> | undefined,
+): 'left' | 'online' | 'reconnecting' {
+  if (member.leftGame || !player) return 'left'
+  return player.connected ? 'online' : 'reconnecting'
+}
+
+/** 可玩成员集合（非观战且未离局）。 */
+export function activePlayers(room: MemberList): MemberState[] {
+  return room.members.filter(isActivePlayer)
+}
+
+/** 在线可玩成员集合。 */
+export function onlinePlayers(room: MemberList, isOnline: OnlineLookup): MemberState[] {
+  return room.members.filter((member) => isOnlinePlayer(member, isOnline))
+}
+
+/** 下一局有效成员集合（候场者算数，纯观战不算）。 */
+export function rematchEligibleMembers(room: MemberList): MemberState[] {
+  return room.members.filter(isRematchEligible)
+}
+
+/** 最终榜单成员集合（排除观战、保留离局者）。 */
+export function rankedMembers(room: MemberList): MemberState[] {
+  return room.members.filter(isRankedMember)
+}
+
+/**
+ * 本回合猜词者全集：可玩且非画家。
+ * 计分与满员奖励用它——含已掉线者，只认「是否猜中」，因此猜中后掉线不取消奖励。
+ */
+export function activeGuessers(room: MemberList, drawerId: string): MemberState[] {
+  return room.members.filter((member) => isActivePlayer(member) && member.playerId !== drawerId)
+}
+
+/** 本回合在线猜词者：在线可玩且非画家，用于判「有效猜词者全部猜中即结束回合」。 */
+export function onlineGuessers(
+  room: MemberList,
+  drawerId: string,
+  isOnline: OnlineLookup,
+): MemberState[] {
+  return room.members.filter(
+    (member) => isOnlinePlayer(member, isOnline) && member.playerId !== drawerId,
+  )
+}
+
+/** 可玩成员数（非观战且未离局）。 */
+export function countActivePlayers(room: MemberList): number {
+  return activePlayers(room).length
+}
+
+/** 在线可玩成员数（自动暂停判定用）。 */
+export function countOnlinePlayers(room: MemberList, isOnline: OnlineLookup): number {
+  return onlinePlayers(room, isOnline).length
+}
+
+/**
+ * 阶段标称总时长（毫秒）：暂停/恢复需按原阶段总时长重建截止时间。
+ * 只对 drawing（用本回合实际作画时长）与 choosing_word（用房间选词秒数）有确定标称值；
+ * 其余阶段（如 round_result）没有独立总时长，返回 undefined，由调用方以各自兜底处理。
+ */
+export function nominalPhaseDurationMs(
+  phase: RoomPhase | undefined,
+  game: Pick<GameSecret, 'roundDurationMs'>,
+  settings: Pick<RoomSettings, 'chooseSeconds'>,
+): number | undefined {
+  if (phase === 'drawing') return game.roundDurationMs
+  if (phase === 'choosing_word') return settings.chooseSeconds * 1_000
+  return undefined
+}

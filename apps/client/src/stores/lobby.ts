@@ -20,7 +20,7 @@ export const useLobbyStore = defineStore('lobby', () => {
     if (presenceRequestInFlight) return
     presenceRequestInFlight = true
     try {
-      const result = await request(EVENTS.presenceGet, {}, { quiet: true, retry: true })
+      const result = await request(EVENTS.presenceGet, {}, { notify: 'silent' })
       if (result.ok) presence.value = result.data
     } finally {
       presenceRequestInFlight = false
@@ -32,7 +32,7 @@ export const useLobbyStore = defineStore('lobby', () => {
     if (roomListRequestInFlight) return
     roomListRequestInFlight = true
     try {
-      const result = await request(EVENTS.roomList, {}, { quiet: true, retry: true })
+      const result = await request(EVENTS.roomList, {}, { notify: 'silent' })
       if (result.ok) presence.value.rooms = result.data
     } finally {
       roomListRequestInFlight = false

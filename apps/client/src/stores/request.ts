@@ -1,6 +1,7 @@
 /**
  * 可失败请求的统一封装（timeout + ack 运行时校验 + 错误翻译 + 幂等 requestId）。
- * quiet 请求（绘图高频事件）失败时不弹 Toast，避免连续错误刷屏。
+ * 传输重试（retry）与失败 Toast（notify）是两个正交开关——旧 quiet 的一符双义已拆分
+ * （ADR-0022）：静默请求不再自动关闭重试，调用方按语义各自显式声明。
  */
 import { APP_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
@@ -11,17 +12,25 @@ import type {
   ErrorCode,
 } from '@draw-guess/shared'
 import { createUuid } from '@/utils/create-uuid'
-import type { GameSocket } from './socket.ts'
 import { reactive, readonly } from 'vue'
 import { decodeClientResponse } from './response-protocol.ts'
 
-/** 请求选项：quiet 表示失败时静默降级（不弹错误 Toast）。 */
+/** 请求选项：传输重试与失败 Toast 归属为两个独立开关（语义拆分见 ADR-0022）。 */
 export interface RequestOptions {
-  quiet?: boolean
+  /**
+   * 传输故障（超时/断线）时以同一 requestId 自动重试；默认启用。
+   * 高频绘图命令与画布控制（撤销/重做/清空）显式关闭——它们的收敛靠权威快照与
+   * 增量推送，不靠盲目重发；静默（notify:'silent'）不再隐式关闭重试。
+   */
+  retry?: boolean
+  /**
+   * 失败 Toast 归属：'always'（默认）对协议/业务/传输三类失败统一弹服务端安全文案；
+   * 'silent' 一条都不弹（避免连续错误刷屏），调用方按 ok:false 结果自行恢复，
+   * 需要提示的错误码由调用方选择性补弹（见 gameplay 的容量类拒绝）。
+   */
+  notify?: 'always' | 'silent'
   /** 网络超时后的重试必须复用同一 ID，保证服务端幂等缓存仍能返回原始 ack。 */
   requestId?: string
-  /** 是否启用传输故障自动重试；默认仅普通请求启用，高频 quiet 请求不重试。 */
-  retry?: boolean
 }
 
 export interface RequestState {
@@ -144,20 +153,31 @@ function classifyTransportError(error: unknown): { message: string; timeout: boo
 }
 
 /** 创建带统一错误翻译的请求函数：不抛错，返回可判别结果对象。 */
+/**
+ * 请求层所需的最小发送端口（socket.io 的 Socket 结构上满足；测试直接实现字面对象）。
+ *
+ * 刻意不含整个 Socket 面：调用方与替身只需知道「泛型事件名 → 载荷 → unknown ack」，
+ * 假实现无需 `as never` 伪装；ack 返回值收窄为 unknown 是安全姿态——线路响应必须过
+ * decodeClientResponse 运行时 Schema（防协议版本漂移），类型接入不等于信任。
+ */
+export interface RequestAckTransport {
+  emitWithAck<E extends ClientRequestEvent>(
+    event: E,
+    payload: ClientRequestPayload<E>,
+  ): Promise<unknown>
+}
+
 export function createRequester(options: {
-  socket: GameSocket
+  socket: RequestAckTransport
   notify: NotifyFn
 }): ManagedRequester {
   const { socket, notify } = options
-  // emitWithAck 的返回值刻意收窄为 unknown：客户端从不信任线路上的 ack，必须过
-  // decodeClientResponse 运行时 Schema（防协议版本漂移）；泛型事件名下 Socket.IO 的
-  // Parameters<> 是延迟索引类型，函数体内无法证明 {...payload, requestId} 与
-  // ClientRequestPayload<E> 匹配，故在这一唯一发送边界适配（事件↔payload 配对已由
-  // Requester 对外签名保证）。
-  const emitWithAck = socket.emitWithAck.bind(socket) as <E extends ClientRequestEvent>(
+  // 端口签名与转发箭头完全同形，无需断言；真实 Socket 的适配只发生在 game-transport 的
+  // io() 构造边界（Socket.IO 的 EventParams<> 对泛型事件名是延迟索引类型，不可直接证明）。
+  const emitWithAck = <E extends ClientRequestEvent>(
     event: E,
     payload: ClientRequestPayload<E>,
-  ) => Promise<unknown>
+  ): Promise<unknown> => socket.emitWithAck(event, payload)
   const mutableState = reactive<RequestState>({ pendingCount: 0, destroyed: false })
   const controllers = new Set<AbortController>()
   async function request<E extends ClientRequestEvent>(
@@ -171,7 +191,8 @@ export function createRequester(options: {
     const payload = (args[0] ?? {}) as RequestInput<E>
     const requestOptions = args[1] ?? {}
     const requestId = requestOptions.requestId ?? createUuid()
-    const retryEnabled = requestOptions.retry ?? !requestOptions.quiet
+    // 重试开关独立于 Toast 归属（ADR-0022）：静默请求默认仍可重试，关不关由调用方显式声明。
+    const retryEnabled = requestOptions.retry ?? true
     const maxAttempts = 1 + (retryEnabled ? APP_CONFIG.network.requestRetryAttempts : 0)
     let lastTransportError: { message: string; timeout: boolean } | undefined
 
@@ -190,7 +211,7 @@ export function createRequester(options: {
           // 既不重试也不回显任何原始内容，调用方得到 ok:false，绝不会把脏数据写进 Pinia。
           const decoded = decodeClientResponse(event, rawAck, requestId)
           if (decoded.status === 'invalid') {
-            if (!requestOptions.quiet) notify(strings.request.protocolFailure, 'error')
+            if (requestOptions.notify !== 'silent') notify(strings.request.protocolFailure, 'error')
             return {
               ok: false,
               failureKind: 'protocol',
@@ -200,7 +221,7 @@ export function createRequester(options: {
           }
           if (!decoded.ack.ok) {
             // 业务失败没有产生副作用且服务端不缓存；调用方应修正状态后发起新的逻辑请求。
-            if (!requestOptions.quiet) notify(decoded.ack.error.message, 'error')
+            if (requestOptions.notify !== 'silent') notify(decoded.ack.error.message, 'error')
             return {
               ok: false,
               failureKind: 'business',
@@ -223,7 +244,7 @@ export function createRequester(options: {
         timeout: false,
       }
       // 所有自动尝试均失败后只提示一次，避免瞬时重连产生重复 Toast。
-      if (!requestOptions.quiet) notify(transport.message, 'error')
+      if (requestOptions.notify !== 'silent') notify(transport.message, 'error')
       return {
         ok: false,
         failureKind: 'transport',

@@ -18,7 +18,7 @@ function socketWith(
     connected = false
     return socket
   })
-  const socket = {
+  const socket: TransportSocket = {
     get connected() {
       return connected
     },
@@ -30,9 +30,8 @@ function socketWith(
       return socket
     }),
     disconnect,
-    timeout: vi.fn(() => socket),
     emitWithAck,
-  } as unknown as TransportSocket
+  }
   return { socket, disconnect }
 }
 
@@ -112,14 +111,14 @@ describe('GameTransport 请求契约', () => {
     expect(notify).toHaveBeenCalledWith('当前阶段不能执行此操作', 'error')
   })
 
-  it('quiet 请求默认不重试、不发送失败通知，未知传输错误只暴露统一中文文案', async () => {
+  it('静默且不重试的请求只发送失败通知零次，未知传输错误只暴露统一中文文案', async () => {
     const notify = vi.fn()
     const emitWithAck = vi.fn(() => Promise.reject(new Error('xhr poll error')))
     const { socket } = socketWith(emitWithAck)
     const transport = createGameTransport({ socket, notify })
 
     await expect(
-      transport.request(EVENTS.networkPing, { clientTime: 1 }, { quiet: true }),
+      transport.request(EVENTS.networkPing, { clientTime: 1 }, { retry: false, notify: 'silent' }),
     ).resolves.toMatchObject({
       ok: false,
       failureKind: 'transport',
@@ -148,14 +147,14 @@ describe('GameTransport 请求契约', () => {
     const first = transport.request(
       EVENTS.networkPing,
       { clientTime: 1 },
-      { quiet: true, retry: false },
+      { retry: false, notify: 'silent' },
     )
 
     transport.cancelRequests()
     await expect(first).resolves.toMatchObject({ ok: false, cancelled: true })
     resolveAck({ ok: true, data: { clientTime: 1, serverTime: 1 }, requestId: 'cancelled' })
     await expect(
-      transport.request(EVENTS.networkPing, { clientTime: 2 }, { quiet: true }),
+      transport.request(EVENTS.networkPing, { clientTime: 2 }, { retry: false, notify: 'silent' }),
     ).resolves.toMatchObject({ ok: true, data: { clientTime: 2, serverTime: 2 } })
   })
 
@@ -165,7 +164,7 @@ describe('GameTransport 请求契约', () => {
     const pending = transport.request(
       EVENTS.networkPing,
       { clientTime: 1 },
-      { quiet: true, retry: false },
+      { retry: false, notify: 'silent' },
     )
 
     transport.destroy()
@@ -173,7 +172,7 @@ describe('GameTransport 请求契约', () => {
 
     await expect(pending).resolves.toMatchObject({ ok: false, cancelled: true })
     await expect(
-      transport.request(EVENTS.networkPing, { clientTime: 2 }, { quiet: true }),
+      transport.request(EVENTS.networkPing, { clientTime: 2 }, { retry: false, notify: 'silent' }),
     ).resolves.toMatchObject({ ok: false, cancelled: true })
     expect(transport.requestState).toMatchObject({ pendingCount: 0, destroyed: true })
     expect(disconnect).toHaveBeenCalledOnce()
@@ -253,7 +252,7 @@ describe('请求响应运行时 Schema 边界', () => {
     }
   })
 
-  it('无返回数据的事件允许 data 缺省或显式 undefined，且 quiet 协议失败不通知', async () => {
+  it('无返回数据的事件允许 data 缺省或显式 undefined，且静默请求协议失败不通知', async () => {
     const { socket } = socketWith((_event, payload) =>
       Promise.resolve({ ok: true, requestId: payload.requestId }),
     )
@@ -276,7 +275,7 @@ describe('请求响应运行时 Schema 边界', () => {
     const malformed = socketWith(() => Promise.resolve(undefined))
     const third = createGameTransport({ socket: malformed.socket, notify })
     await expect(
-      third.request(EVENTS.networkPing, { clientTime: 1 }, { quiet: true }),
+      third.request(EVENTS.networkPing, { clientTime: 1 }, { retry: false, notify: 'silent' }),
     ).resolves.toMatchObject({ ok: false, failureKind: 'protocol' })
     expect(notify).not.toHaveBeenCalled()
   })

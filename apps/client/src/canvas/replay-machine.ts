@@ -21,6 +21,7 @@ import type { DrawPoint, DrawingCommand, Stroke } from '@draw-guess/shared'
 import { APP_CONFIG } from '@draw-guess/config'
 import { FloodFillError } from './flood-fill-worker'
 import { colorToRgba, type Rgba } from './flood-fill'
+import { normalizedToPixelIndex } from './geometry'
 import { recordFillDiagnostic } from './fill-diagnostics'
 import { renderStroke } from './rendering'
 
@@ -323,14 +324,9 @@ export class DrawingReplayMachine {
     const canvasWidth = context.canvas.width
     const canvasHeight = context.canvas.height
     if (!canvasWidth || !canvasHeight) return false
-    const startX = Math.max(
-      0,
-      Math.min(canvasWidth - 1, Math.round(command.point.x * (canvasWidth - 1))),
-    )
-    const startY = Math.max(
-      0,
-      Math.min(canvasHeight - 1, Math.round(command.point.y * (canvasHeight - 1))),
-    )
+    // 归一化种子点 → 栅格索引：round + clamp 口径单源（geometry，ADR-0003/0022）。
+    const startX = normalizedToPixelIndex(command.point.x, canvasWidth)
+    const startY = normalizedToPixelIndex(command.point.y, canvasHeight)
     const image = context.getImageData(0, 0, canvasWidth, canvasHeight)
     this.setRenderTasks(this.renderTasks + 1)
     try {

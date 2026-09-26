@@ -6,16 +6,35 @@
 import { APP_CONFIG } from './config/index.ts'
 import { createHintSchedule } from './hint-scheduler.ts'
 import { serverStrings } from '@draw-guess/strings'
-import { canTransition, type FinalRankingEntry, type RoundResult } from '@draw-guess/shared'
-import type { MemberState, RoomSecret } from './models.ts'
+import {
+  canTransition,
+  type ChatMessage,
+  type FinalRankingEntry,
+  type RoomPhase,
+  type RoundResult,
+  type VocabularyWord,
+} from '@draw-guess/shared'
+import type { GameSecret, MemberState, RoomSecret } from './models.ts'
 import { buildDrawerScore, buildGuessDetail } from './scoring.ts'
 import type { TimerHandle } from './runtime.ts'
 import type { RoundContext } from './domain/game/round-context.ts'
-import { runtimeErrorType } from './errors.ts'
+import { selectDiverseCandidates } from './domain/vocabulary/candidate-selector.ts'
+import {
+  isOnlinePlayer,
+  isRematchEligible,
+  onlineGuessers,
+  rankedMembers,
+  rematchEligibleMembers,
+} from './domain/room/member-facts.ts'
+import { GameError, runtimeErrorType } from './errors.ts'
 
 /** 回合流转状态机；只操作房间的 game 与阶段，不直接接触 socket。 */
 export class RoundMachine {
   constructor(private readonly service: RoundContext) {}
+
+  /** 连通性查询：注入成员事实模块的显式 isOnline 入参（箭头字段保证回调时 this 绑定）。 */
+  private readonly isOnline = (playerId: string): boolean =>
+    this.service.players.get(playerId)?.connected === true
 
   /**
    * 画家在选词阶段离开/掉线时废弃当前回合，立即进入下一回合选词。
@@ -29,8 +48,8 @@ export class RoundMachine {
     // 清掉暂停残留字段（若之前在暂停态），保证后续状态干净
     delete game.phaseBeforePause
     delete game.pausedRemainingMs
-    this.service.transition(room, 'round_result')
-    this.service.addSystemNotice(room, notice)
+    this.transition(room, 'round_result')
+    this.addSystemNotice(room, notice)
     this.beginChoosing(room)
   }
   public beginGame(room: RoomSecret): void {
@@ -54,16 +73,16 @@ export class RoundMachine {
       return
     }
     // 按顺序选下一个在线的画家；没有可用画家则提前结算
-    const drawer = this.service.findNextDrawer(room, game)
+    const drawer = this.findNextDrawer(room, game)
     if (!drawer) {
       this.finishGame(room, serverStrings.notices.noDrawerAvailable)
       return
     }
     // 初始化本轮：随机候选词、空画布、空消息、重置猜中位
-    this.service.transition(room, 'choosing_word')
+    this.transition(room, 'choosing_word')
     game.drawerId = drawer // 指定当前画家（在切阶段后立即赋值）
     game.roundId = this.service.random.uuid()
-    game.candidates = this.service.pickCandidates(room, game)
+    game.candidates = this.pickCandidates(room, game)
     game.rerollUsed = false
     game.answer = undefined
     game.strokes = []
@@ -104,7 +123,7 @@ export class RoundMachine {
   public beginDrawing(room: RoomSecret, answer: { id: string; text: string }): void {
     const game = this.service.requireGame(room)
     this.service.scheduler.clear(game.timer)
-    this.service.transition(room, 'drawing')
+    this.transition(room, 'drawing')
     // 记录富答案：candidates 中的词条即含别称/分类/提示与加载期派生的时限权重，直接取用；
     // 兜底数据在极端情况下（候选被外部改动）保证不引用 undefined。
     const richAnswer = game.candidates.find((candidate) => candidate.id === answer.id) ?? {
@@ -142,7 +161,7 @@ export class RoundMachine {
       this.service.safeRun('drawingTimeout', () => this.finishRound(room, false)),
     )
     this.scheduleHints(room) // 若开启逐步/结构化提示则安排揭示计时器
-    this.service.addSystemNotice(room, serverStrings.notices.drawingStarted)
+    this.addSystemNotice(room, serverStrings.notices.drawingStarted)
     this.service.emitRoom(room.id)
   }
   public markCorrect(room: RoomSecret, member: MemberState): void {
@@ -165,7 +184,7 @@ export class RoundMachine {
     member.stats.correctCount += 1
     member.stats.totalGuessMs += member.guessedAt - game.phaseStartedAt
     // 广播猜中消息与顺序信息（不含答案正文）
-    this.service.addMessage(room, {
+    this.addMessage(room, {
       type: 'correct',
       text: serverStrings.notices.guessCorrect(
         this.service.players.get(member.playerId)?.profile.nickname ??
@@ -174,13 +193,7 @@ export class RoundMachine {
       playerId: member.playerId,
     })
     // 所有有效猜词者（可玩成员，排除观战）都已猜中时立即结束本回合，否则刷新房间快照
-    const eligible = room.members.filter(
-      (candidate) =>
-        candidate.playerId !== game.drawerId &&
-        !candidate.spectating &&
-        !candidate.leftGame &&
-        this.service.players.get(candidate.playerId)?.connected,
-    )
+    const eligible = onlineGuessers(room, game.drawerId, this.isOnline)
     if (eligible.length > 0 && eligible.every((candidate) => candidate.guessedAt))
       this.finishRound(room, false)
     else this.service.emitRoom(room.id)
@@ -193,14 +206,14 @@ export class RoundMachine {
     if (!['drawing', 'paused'].includes(room.phase)) return
 
     game.roundSettled = true
-    this.service.clearHintTimers(game)
+    this.clearHintTimers(game)
     this.service.scheduler.clear(game.timer)
     // paused → round_result 是领域允许的真实转换；无需伪造一次未记录的 drawing 中间阶段。
     if (room.phase === 'paused') {
       delete game.phaseBeforePause
       delete game.pausedRemainingMs
     }
-    this.service.transition(room, 'round_result')
+    this.transition(room, 'round_result')
     // 直接取用猜中当时入账的明细，不事后重算：重算会因暂停/恢复重置 phaseStartedAt
     // （使 elapsedMs 变负）或因成员中途离开改变可玩人数（使顺序奖归零），
     // 导致结算展示的分数与实际入账不一致。
@@ -225,20 +238,20 @@ export class RoundMachine {
   }
   public finishGame(room: RoomSecret, reason: string): void {
     const game = this.service.requireGame(room)
-    this.service.clearHintTimers(game)
+    this.clearHintTimers(game)
     this.service.scheduler.clear(game.timer)
     // 排行必须在首次进入最终结算时一次性冻结。之后 leaveRoom 会从 room.members 移除成员，
     // 但已公布的成绩属于本局历史，不能跟随当前房间席位继续变化。
     if (!game.finalRanking) {
-      const rankedMembers = room.members
-        .filter((member) => !member.spectating)
-        .sort((left, right) => right.score - left.score || left.joinedAt - right.joinedAt)
+      const ranked = rankedMembers(room).sort(
+        (left, right) => right.score - left.score || left.joinedAt - right.joinedAt,
+      )
       let previousScore: number | undefined
       let emittedCount = 0
       let rank = 0
       // 排名按实际产出的条目数递增，而不是用被 flatMap 丢弃成员后的 index+1，
       // 避免「成员无 profile 被丢弃」时后续名次跳号（见 docs/adr/0002-final-ranking-no-gaps.md）。
-      game.finalRanking = rankedMembers.flatMap<FinalRankingEntry>((member) => {
+      game.finalRanking = ranked.flatMap<FinalRankingEntry>((member) => {
         const player = this.service.players.get(member.playerId)
         const profile = member.leftProfile ?? player?.profile
         if (!profile) return []
@@ -262,7 +275,7 @@ export class RoundMachine {
       delete game.phaseBeforePause
       delete game.pausedRemainingMs
     }
-    if (room.phase !== 'game_result') this.service.transition(room, 'game_result')
+    if (room.phase !== 'game_result') this.transition(room, 'game_result')
     const now = this.service.clock.now()
     const minimumResultMs = APP_CONFIG.game.gameResultMinSeconds * 1_000
     // 即使未来配置误把自动上限设得更短，也绝不能绕过产品定义的最短展示期。
@@ -280,7 +293,7 @@ export class RoundMachine {
     // 收敛回合显示：beginChoosing 先自增 currentRound 再判断是否超限，进入最终结算时
     // 回退到总回合数，避免结算界面 HUD 短暂显示「5 / 4」这类越界数字。
     game.currentRound = Math.min(game.currentRound, game.totalRounds)
-    this.service.addSystemNotice(room, reason)
+    this.addSystemNotice(room, reason)
     // 战绩落盘：进入最终结算时把冻结的最终排名与玩家结果写入 SQLite（低频，无性能顾虑）。
     // 若落盘异常，记录错误并确保结算广播正常发出，客户端不因数据库错误卡死。
     try {
@@ -308,18 +321,18 @@ export class RoundMachine {
   }
   public pauseRoomInternal(room: RoomSecret, reason: string): void {
     // 只有选词/作画/回合结算可暂停；开局倒计时（starting）不在 paused 白名单内
-    if (!this.service.isPausable(room.phase) || room.phase === 'paused') return
+    if (!this.isPausable(room.phase) || room.phase === 'paused') return
     const game = this.service.requireGame(room)
     // 先确认状态机允许，再动现场：否则清除倒计时后转换失败，会留下无计时器的僵死阶段
     if (!canTransition(room.phase, 'paused')) return
-    this.service.clearHintTimers(game)
+    this.clearHintTimers(game)
     this.service.scheduler.clear(game.timer)
     // 冻结当前阶段与剩余毫秒，暂停期间所有计时停止
     game.phaseBeforePause = room.phase
     game.pausedRemainingMs = Math.max(0, game.phaseEndsAt - this.service.clock.now())
-    this.service.transition(room, 'paused')
+    this.transition(room, 'paused')
     game.phaseEndsAt = 0
-    this.service.addSystemNotice(room, reason)
+    this.addSystemNotice(room, reason)
   }
   public scheduleCurrentPhase(room: RoomSecret): void {
     const game = this.service.requireGame(room)
@@ -348,8 +361,8 @@ export class RoundMachine {
   public setWaiting(room: RoomSecret, notice: string, resetReady = true): void {
     // 把房间状态重置回等待：清理对局秘密、提示计时器与全员准备
     const game = room.game
-    this.service.transition(room, 'waiting')
-    if (game) this.service.clearHintTimers(game)
+    this.transition(room, 'waiting')
+    if (game) this.clearHintTimers(game)
     this.service.scheduler.clear(game?.timer)
     this.service.scheduler.clear(game?.rematchTimer)
     delete room.game
@@ -368,15 +381,15 @@ export class RoundMachine {
       member.guessedAt = undefined
       member.stats = { correctCount: 0, totalGuessMs: 0, drawingCorrectCount: 0 }
     })
-    if (resetReady) this.service.invalidateReady(room, notice, 'preserve')
-    else this.service.addSystemNotice(room, notice)
+    if (resetReady) this.invalidateReady(room, notice, 'preserve')
+    else this.addSystemNotice(room, notice)
     this.service.emitRoom(room.id)
   }
 
   /** 记录单个成员的再来一局意愿；重复和阶段迟到请求均按成功处理。 */
   public requestRematch(room: RoomSecret, member: MemberState): void {
     if (room.phase !== 'game_result' || !room.game) return
-    if (member.leftGame || (member.spectating && !member.waitingForNextGame)) return
+    if (!isRematchEligible(member)) return
     if (!member.rematchReady) {
       member.rematchReady = true
       room.stateVersion += 1
@@ -393,9 +406,7 @@ export class RoundMachine {
       this.service.emitRoom(room.id)
       return
     }
-    const eligible = room.members.filter(
-      (member) => !member.leftGame && (!member.spectating || member.waitingForNextGame),
-    )
+    const eligible = rematchEligibleMembers(room)
     if (
       game.hostReturnRequested ||
       (eligible.length > 0 && eligible.every((member) => member.rematchReady))
@@ -416,7 +427,7 @@ export class RoundMachine {
    */
   public scheduleHints(room: RoomSecret): void {
     const game = this.service.requireGame(room)
-    this.service.clearHintTimers(game)
+    this.clearHintTimers(game)
     if (!game.answer || room.phase !== 'drawing') return
 
     const totalMs = game.roundDurationMs
@@ -479,5 +490,113 @@ export class RoundMachine {
     const target = candidates[this.service.random.integer(candidates.length)]
     if (target) game.revealedIndices.add(target.index)
     this.service.emitRoom(room.id)
+  }
+
+  /**
+   * 是否允许暂停。开局倒计时（starting）不在 `LEGAL_PHASES` 的 `paused` 白名单内：
+   * 若允许暂停会先清除倒计时再转换失败，使房间永久停在无人推进的 starting。
+   */
+  public isPausable(phase: RoomPhase): boolean {
+    return ['choosing_word', 'drawing', 'round_result'].includes(phase)
+  }
+
+  /** Fisher-Yates 洗牌：随机打乱数组并返回新数组（不改原数组）。 */
+  public shuffle<T>(values: T[]): T[] {
+    const result = [...values]
+    for (let index = result.length - 1; index > 0; index -= 1) {
+      const target = this.service.random.integer(index + 1)
+      ;[result[index], result[target]] = [result[target] as T, result[index] as T]
+    }
+    return result
+  }
+
+  /** 候选词多样性抽样：保证候选词集合在难度（1~5星阶梯）和类别（无重复分类）上均匀随机分布。 */
+  private sampleDiverseCandidates(pool: VocabularyWord[], count: number): VocabularyWord[] {
+    const selected = selectDiverseCandidates({ pool: this.shuffle([...pool]), count })
+    return pool.length <= count ? selected : this.shuffle(selected)
+  }
+
+  /**
+   * 抽取本回合候选词：从本局已选词库中排除本局已展示过的词条（整局绝不重复），
+   * 词池不足且配置允许时重置已展示记录；抽中的候选立即记录进 offeredWordIds。
+   */
+  public pickCandidates(room: RoomSecret, game: GameSecret): VocabularyWord[] {
+    const store = this.service.getRoomVocabularyStore(room)
+    let pool = [...room.selectedWordIds]
+      .filter((id) => !game.offeredWordIds.has(id))
+      .map((id) => store.byId.get(id))
+      .filter((word): word is VocabularyWord => word !== undefined)
+
+    if (pool.length < room.settings.optionCount && APP_CONFIG.vocabulary.resetWhenExhausted) {
+      game.offeredWordIds.clear()
+      pool = [...room.selectedWordIds]
+        .map((id) => store.byId.get(id))
+        .filter((word): word is VocabularyWord => word !== undefined)
+    }
+
+    const picked = this.sampleDiverseCandidates(pool, room.settings.optionCount)
+    picked.forEach((word) => game.offeredWordIds.add(word.id))
+    return picked
+  }
+
+  /** 从当前回合序号起，按开局洗牌顺序寻找第一位仍在房间、在线的可玩成员任画家（观战者跳过）。 */
+  public findNextDrawer(room: RoomSecret, game: GameSecret): string | undefined {
+    const start = game.currentRound - 1
+    for (let offset = 0; offset < game.drawerOrder.length; offset += 1) {
+      const candidate = game.drawerOrder[(start + offset) % game.drawerOrder.length]
+      const member = room.members.find((item) => item.playerId === candidate)
+      if (candidate && member && isOnlinePlayer(member, this.isOnline)) return candidate
+    }
+    return undefined
+  }
+
+  /** 执行合法的阶段转换；非法转换直接抛错，绝不自作主张切换。转换后版本号 +1。 */
+  public transition(room: RoomSecret, next: RoomPhase): void {
+    if (!canTransition(room.phase, next))
+      throw new GameError(
+        'INVALID_TRANSITION',
+        serverStrings.errors.INVALID_TRANSITION(room.phase, next),
+      )
+    const previous = room.phase
+    room.phase = next
+    this.service.logger.info({ roomId: room.id, from: previous, to: next }, '房间阶段已转换')
+    room.stateVersion += 1
+  }
+
+  /**
+   * 规则变更后清空全员准备位并广播通知。
+   * 阶段转换已经递增版本时使用 preserve，保证一次原子状态发布只占一个版本号。
+   */
+  public invalidateReady(
+    room: RoomSecret,
+    notice: string,
+    versionMode: 'increment' | 'preserve' = 'increment',
+  ): void {
+    room.members.forEach((member) => (member.ready = false))
+    if (versionMode === 'increment') room.stateVersion += 1
+    this.addSystemNotice(room, notice)
+  }
+
+  /** 追加一条对局消息并裁剪队列，防止内存无限增长。 */
+  public addMessage(room: RoomSecret, input: Omit<ChatMessage, 'id' | 'createdAt'>): void {
+    const game = this.service.requireGame(room)
+    game.messages.push({
+      ...input,
+      id: this.service.random.uuid(),
+      createdAt: this.service.clock.now(),
+    })
+    game.messages = game.messages.slice(-APP_CONFIG.ui.recentMessageCount * 2)
+  }
+
+  /** 系统通知：写入消息历史并作为独立事件推送（即使尚无对局也能收到）。 */
+  public addSystemNotice(room: RoomSecret, text: string): void {
+    if (room.game) this.addMessage(room, { type: 'system', text })
+    this.service.emitSystemNotice(room.id, text)
+  }
+
+  /** 清理全部逐步提示计时器，防止暂停/切换阶段后旧回调误触发。 */
+  public clearHintTimers(game: GameSecret): void {
+    for (const timer of game.hintTimers ?? []) this.service.scheduler.clear(timer)
+    game.hintTimers = []
   }
 }

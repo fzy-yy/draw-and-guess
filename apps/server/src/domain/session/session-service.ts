@@ -425,6 +425,7 @@ export class SessionService {
               player.disconnectGeneration !== disconnectGeneration ||
               player.roomId !== room.id ||
               room.hostId !== playerId ||
+              // 房主迁移前按原始成员数（含离局占位）判断是否还有其它成员：仅剩占位也保持现状。
               room.members.length <= 1
             )
               return

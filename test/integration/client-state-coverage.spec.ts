@@ -61,7 +61,7 @@ beforeEach(() => {
   const installed = createPiniaWithFakeTransport()
   fakeTransport = installed.fakeTransport
   setActivePinia(installed.pinia)
-  ;(fakeTransport.socket as { connected: boolean }).connected = true
+  fakeTransport.setConnected(true)
 })
 
 afterEach(() => {

@@ -30,6 +30,8 @@ export class InviteService {
     const { room } = this.context.getMembership(playerId)
     const sender = this.context.getPlayer(playerId)
     const target = this.context.getPlayer(targetId)
+    // 容量按原始成员数（含离局占位与观战）判定：邀请只在 waiting 阶段发出，
+    // 而 setWaiting 已清理离局占位，此处长度即占席数；这一口径与 joinResolvedRoom 的占席判定等效。
     if (room.phase !== 'waiting' || room.members.length >= room.settings.maxPlayers)
       throw new GameError('ROOM_NOT_JOINABLE', serverStrings.errors.ROOM_NOT_JOINABLE_INVITE)
     if (room.hostId !== playerId && !room.settings.allowPlayerInvite)

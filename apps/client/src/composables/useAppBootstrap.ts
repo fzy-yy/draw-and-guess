@@ -9,6 +9,7 @@ import {
 } from '@draw-guess/shared'
 import type { InvalidPushReason } from '@/stores/push-protocol'
 import { useGameTransport, type GameTransport } from '@/application/game-transport'
+import type { PushHandlerMap } from '@/stores/socket'
 import { useGameStore } from '@/stores/game'
 import { useLobbyStore } from '@/stores/lobby'
 import { useProfileStore } from '@/stores/profile'
@@ -61,34 +62,97 @@ export function useAppBootstrap(transport: GameTransport = useGameTransport()) {
     }
   }
 
+  /**
+   * 推送单注册表（ADR-0020）：协议每个事件在此登记「处理回调 + 非法载荷恢复策略」。
+   * `PushHandlerMap` 按 SERVER_PUSH_SCHEMAS 逐事件穷尽——新增推送事件漏登记（任一项）
+   * 直接编译失败；attachSocketListeners 的注册/解绑清单由事件名派生，本表即唯一登记处。
+   */
+  const push: PushHandlerMap = {
+    [EVENTS.presenceSnapshot]: {
+      on: (snapshot) => (lobbyStore.presence = snapshot),
+      // 大厅域推送：非法载荷时通用 resync 让服务端计数，再走各自的权威列表入口。
+      recovery: 'presence-refresh',
+    },
+    [EVENTS.roomListChanged]: {
+      on: (rooms) => (lobbyStore.presence.rooms = rooms),
+      recovery: 'room-list-refresh',
+    },
+    [EVENTS.roomSnapshot]: { on: roomSync.onRoomSnapshot, recovery: 'room-snapshot' },
+    [EVENTS.roomMemberConnectionChanged]: {
+      on: onMemberConnectionChanged,
+      recovery: 'room-snapshot',
+    },
+    [EVENTS.inviteReceived]: {
+      on: (invite) => {
+        lobbyStore.invites.push(invite)
+        notify(strings.app.inviteReceived(invite.from.nickname, invite.roomName), 'warning')
+      },
+      recovery: 'generic-resync',
+    },
+    [EVENTS.inviteResolved]: {
+      on: ({ id }) => {
+        lobbyStore.invites = lobbyStore.invites.filter((invite) => invite.id !== id)
+      },
+      recovery: 'generic-resync',
+    },
+    [EVENTS.roomClosed]: {
+      on: ({ reason, code }) => {
+        sessionStore.incrementGeneration()
+        roomStore.clearLocalRoomState()
+        vocabularyStore.clear()
+        // 业务语义只看稳定关闭码；reason 仅作为展示文案，允许随时改文案或做本地化。
+        if (code === ROOM_CLOSE_CODE.kicked) sessionStore.kickedNotice = true
+        notify(reason, 'warning')
+      },
+      recovery: 'room-snapshot',
+    },
+    [EVENTS.systemNotice]: {
+      on: ({ text }) => notify(text, 'warning'),
+      recovery: 'generic-resync',
+    },
+    [EVENTS.systemError]: { on: ({ text }) => notify(text, 'error'), recovery: 'generic-resync' },
+    [EVENTS.drawStrokeBatch]: {
+      // 增量事件按回合 ID 与序号直接合并进本地历史，无需等待下一次快照；
+      // data 结构上即 DrawingIncrementMeta 的超集，解构留给消费端。
+      on: (data) => roomSync.onStroke(data, data.stroke),
+      recovery: 'room-snapshot',
+    },
+    [EVENTS.drawFillCommit]: {
+      on: (data) => roomSync.onFill(data, data.fill),
+      recovery: 'room-snapshot',
+    },
+  }
+
+  /** 非房间推送的通用自愈请求：用无内容的枚举原因让服务端计数，绝不回传非法载荷。 */
+  function requestGenericResync(): void {
+    void transport.request(
+      EVENTS.stateResync,
+      { reason: 'invalid_push' },
+      { retry: false, notify: 'silent' },
+    )
+  }
+
   function handleInvalidPush(event: ServerPushEventName, reason: InvalidPushReason): void {
     if (reason === 'protocol_mismatch') {
       sessionStore.markProtocolMismatch()
       return
     }
-    const roomScoped =
-      event === EVENTS.roomSnapshot ||
-      event === EVENTS.roomMemberConnectionChanged ||
-      event === EVENTS.roomClosed ||
-      event === EVENTS.drawStrokeBatch ||
-      event === EVENTS.drawFillCommit
-    if (roomScoped) {
-      void roomSync.requestFullSnapshot('invalid_push')
-      return
-    }
-    // 非房间 push 无需覆盖本地房间，但仍用无内容的枚举原因让服务端计数；不回传非法载荷。
-    void transport.request(
-      EVENTS.stateResync,
-      { reason: 'invalid_push' },
-      { quiet: true, retry: false },
-    )
-    if (event === EVENTS.presenceSnapshot) {
-      void lobbyStore.refreshPresence()
-      return
-    }
-    if (event === EVENTS.roomListChanged) {
-      void lobbyStore.refreshRooms()
-      return
+    // 恢复通道查注册表：事件 ↔ 策略的配对在登记处声明，这里只看策略执行（不再有事件名单）。
+    switch (push[event].recovery) {
+      case 'room-snapshot':
+        void roomSync.requestFullSnapshot('invalid_push')
+        return
+      case 'presence-refresh':
+        requestGenericResync()
+        void lobbyStore.refreshPresence()
+        return
+      case 'room-list-refresh':
+        requestGenericResync()
+        void lobbyStore.refreshRooms()
+        return
+      case 'generic-resync':
+        requestGenericResync()
+        return
     }
   }
 
@@ -131,30 +195,8 @@ export function useAppBootstrap(transport: GameTransport = useGameTransport()) {
         )
           sessionStore.sessionState = 'disconnected'
       },
-      onPresence: (snapshot) => (lobbyStore.presence = snapshot),
-      onRooms: (rooms) => (lobbyStore.presence.rooms = rooms),
-      onRoomSnapshot: roomSync.onRoomSnapshot,
-      onMemberConnectionChanged,
-      onInviteReceived: (invite) => {
-        lobbyStore.invites.push(invite)
-        notify(strings.app.inviteReceived(invite.from.nickname, invite.roomName), 'warning')
-      },
-      onInviteResolved: (id) => {
-        lobbyStore.invites = lobbyStore.invites.filter((invite) => invite.id !== id)
-      },
-      onRoomClosed: (reason, code) => {
-        sessionStore.incrementGeneration()
-        roomStore.clearLocalRoomState()
-        vocabularyStore.clear()
-        // 业务语义只看稳定关闭码；reason 仅作为展示文案，允许随时改文案或做本地化。
-        if (code === ROOM_CLOSE_CODE.kicked) sessionStore.kickedNotice = true
-        notify(reason, 'warning')
-      },
-      onSystemNotice: (text) => notify(text, 'warning'),
-      onSystemError: (message) => notify(message, 'error'),
       onInvalidPush: handleInvalidPush,
-      onDrawStrokeBatch: roomSync.onStroke,
-      onDrawFillCommit: roomSync.onFill,
+      push,
     })
     // 所有具名监听器注册完成后才允许连接，快速 connect/push 不会越过初始化窗口。
     if (transport.socket.connected) handleConnect()

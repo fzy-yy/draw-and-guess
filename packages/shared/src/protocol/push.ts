@@ -208,6 +208,15 @@ export const SERVER_PUSH_SCHEMAS = {
 
 export type ServerPushEventName = keyof typeof SERVER_PUSH_SCHEMAS
 
+/**
+ * 推送事件的运行时清单：`SERVER_PUSH_SCHEMAS` 的键（唯一事实源同时派生类型与清单）。
+ * `Object.keys` 只能返回 string[]，对字面量映射的同态派生不可证，断言放在事实源旁边；
+ * 客户端 attach/dispose 直接迭代本清单（ADR-0020），不再各自维护注册/解绑列表。
+ */
+export const SERVER_PUSH_EVENT_NAMES: readonly ServerPushEventName[] = Object.keys(
+  SERVER_PUSH_SCHEMAS,
+) as ServerPushEventName[]
+
 export type ServerPushEnvelope<E extends ServerPushEventName = ServerPushEventName> = z.infer<
   (typeof SERVER_PUSH_SCHEMAS)[E]
 >

@@ -89,7 +89,9 @@ export const useSessionStore = defineStore('session', () => {
             ? { recoveryToken: profileStore.profile.recoveryToken }
             : {}),
         },
-        { quiet: automatic },
+        // 手动注册：失败弹 Toast 且重试；自动重连注册：静默且单次尝试——失败由重连循环
+        // 下一轮再触发，避免重试风暴与断线期刷屏（旧 quiet: automatic 的双义在此显式化）。
+        { retry: !automatic, notify: automatic ? 'silent' : 'always' },
       )
 
       if (!result.ok) {
@@ -144,7 +146,12 @@ export const useSessionStore = defineStore('session', () => {
   async function measureLatency(): Promise<void> {
     if (!playerId.value) return
     const started = Date.now()
-    const result = await request(EVENTS.networkPing, { clientTime: started }, { quiet: true })
+    const result = await request(
+      EVENTS.networkPing,
+      { clientTime: started },
+      // 周期探测：失败静默、不重试（下一轮间隔自然补测）。
+      { retry: false, notify: 'silent' },
+    )
     if (!result.ok) return
     const rtt = Date.now() - started
     // Date.now() 只有毫秒精度：局域网亚毫秒级往返会测得 0，而展示层把 0 视作「尚未测得」
@@ -164,7 +171,8 @@ export const useSessionStore = defineStore('session', () => {
    * 避免会话域反向依赖房间/词库域。
    */
   async function clearProfile(): Promise<void> {
-    if (playerId.value) await request(EVENTS.sessionLogout, {}, { quiet: true })
+    // 注销尽力而为：断线时静默放过（本地清理照常进行），不阻塞、不重试。
+    if (playerId.value) await request(EVENTS.sessionLogout, {}, { retry: false, notify: 'silent' })
     profileStore.clearStoredProfile()
     playerId.value = ''
     incrementGeneration()
