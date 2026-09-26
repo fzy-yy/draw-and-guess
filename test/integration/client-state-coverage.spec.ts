@@ -11,6 +11,7 @@ import { useRoomSync } from '@/composables/useRoomSync'
 import { useGameplayStore } from '@/stores/gameplay'
 import { useLobbyStore } from '@/stores/lobby'
 import { useProfileStore } from '@/stores/profile'
+import { useResyncStore } from '@/stores/resync'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
 import { useVocabularyStore } from '@/stores/vocabulary'
@@ -226,7 +227,9 @@ describe('useRoomSync 修订门禁', () => {
   it('只合并连续修订，并为缺口请求完整权威快照', () => {
     const room = useRoomStore()
     room.room = createRoomFixture('drawing', { drawingRevision: 1 })
-    const requestFullSnapshot = vi.spyOn(room, 'requestFullSnapshot').mockResolvedValue()
+    const requestFullSnapshot = vi
+      .spyOn(useResyncStore(), 'requestFullSnapshot')
+      .mockResolvedValue()
     const sync = useRoomSync()
 
     sync.onStroke(
@@ -252,7 +255,9 @@ describe('useRoomSync 修订门禁', () => {
       lastSequence: 3,
       drawingRevision: 2,
     })
-    const requestFullSnapshot = vi.spyOn(room, 'requestFullSnapshot').mockResolvedValue()
+    const requestFullSnapshot = vi
+      .spyOn(useResyncStore(), 'requestFullSnapshot')
+      .mockResolvedValue()
     const sync = useRoomSync()
 
     sync.onRoomSnapshot(
@@ -408,8 +413,8 @@ describe('大厅、房间与词库权威请求', () => {
     await expect(room.transferHost(GUEST_ID)).resolves.toBe(true)
 
     vi.spyOn(Date, 'now').mockReturnValue(10_000)
-    await room.requestFullSnapshot()
-    await room.requestFullSnapshot()
+    await useResyncStore().requestFullSnapshot()
+    await useResyncStore().requestFullSnapshot()
     expect(room.room?.id).toBe(ROOM_ID)
     await room.leaveRoom()
     expect(room.room).toBeUndefined()

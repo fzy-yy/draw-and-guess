@@ -9,6 +9,7 @@ import { EVENTS, createServerPush, type Stroke } from '@draw-guess/shared'
 import { useAppBootstrap } from '@/composables/useAppBootstrap'
 import { useStrokeSession } from '@/composables/useStrokeSession'
 import { useGameplayStore } from '@/stores/gameplay'
+import { useResyncStore } from '@/stores/resync'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
 import { clearProtocolDiagnostics, getProtocolDiagnostics } from '@/stores/push-protocol'
@@ -215,7 +216,7 @@ describe('绘图失败回滚链路', () => {
         lastSequence: () => room.room?.game?.lastSequence ?? -1,
         preview,
         emitStroke: (command, onResult) => void gameplay.sendStroke(command).then(onResult),
-        onBatchFailure: () => void room.requestFullSnapshot(),
+        onBatchFailure: () => void useResyncStore().requestFullSnapshot(),
         emitFill: vi.fn(),
       })
     })

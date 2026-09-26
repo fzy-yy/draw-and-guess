@@ -15,6 +15,7 @@ import {
 } from '@/components/common'
 import { InviteDialog, RuleSummary, RulesDialog, SeatGrid } from '@/components/room'
 import { defineLazyComponent } from '@/utils/lazy-component'
+import { activeMembers } from '@/utils/room-facts'
 import type { RoomSettings } from '@draw-guess/shared'
 
 // 词库管理弹窗低频且体积较大（含虚拟表格依赖）：懒加载，不进首屏包。
@@ -36,16 +37,18 @@ watch(showVocabulary, (open) => {
   if (open) vocabularyMounted.value = true
 })
 
+// 可玩成员集合（非观战且未离局，口径见 utils/room-facts）：allSet 与下方提示文案共用。
+const activePlayers = computed(() => activeMembers(store.room?.members ?? []))
+
 // 开局/全员就绪判定：服务端快照已把房主裁剪为「隐式已准备」（见 snapshot.ts 的 ready 字段），
 // 因此房主与非房主共用同一个条件：≥ minPlayers 名可玩成员在线且全部已准备（下限取共享配置，与服务端开局门槛一致）。
-const allSet = computed(() => {
-  const active = (store.room?.members ?? []).filter((member) => !member.spectating)
-  return Boolean(
+const allSet = computed(() =>
+  Boolean(
     store.room &&
-    active.length >= store.config.player.minPlayers &&
-    active.every((member) => member.connection === 'online' && member.ready),
-  )
-})
+    activePlayers.value.length >= store.config.player.minPlayers &&
+    activePlayers.value.every((member) => member.connection === 'online' && member.ready),
+  ),
+)
 
 /** 打开词库弹窗：实际拉取与虚拟网格初始化由 VocabularyDialog 在 open 触发时完成。 */
 function openVocabulary(): void {
@@ -165,8 +168,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
         </p>
         <p v-else-if="!allSet" class="min-h-[1.6em] text-muted text-fs-12">
           {{
-            (store.room.members || []).filter((member) => !member.spectating).length <
-            store.config.player.minPlayers
+            activePlayers.length < store.config.player.minPlayers
               ? strings.room.needMorePlayers
               : store.isHost
                 ? strings.room.waitForGuestsReady

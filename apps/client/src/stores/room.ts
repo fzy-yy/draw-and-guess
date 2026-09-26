@@ -4,10 +4,8 @@
 */
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { APP_CONFIG } from '@draw-guess/config'
 import {
   EVENTS,
-  RoomSnapshotSchema,
   type RoomSettings,
   type RoomSnapshot,
   type RoomVisibility,
@@ -15,14 +13,11 @@ import {
 import { strings } from '@draw-guess/strings'
 import { useGameTransport } from '@/application/game-transport'
 import { useSessionStore } from './session.ts'
-import { acceptRoomSnapshot } from './snapshot-gate.ts'
 
 export const useRoomStore = defineStore('room', () => {
   const { request, notify } = useGameTransport()
   const sessionStore = useSessionStore()
   const room = ref<RoomSnapshot>()
-  let resyncInFlight = false
-  let lastResyncAt = 0
 
   const me = computed(() =>
     room.value?.members.find((member) => member.id === sessionStore.playerId),
@@ -32,54 +27,6 @@ export const useRoomStore = defineStore('room', () => {
 
   function clearLocalRoomState(): void {
     room.value = undefined
-  }
-
-  /** 请求一次受冷却保护的权威全量快照；迟到响应必须仍属于发起时的会话与房间。 */
-  async function requestFullSnapshot(
-    reason: 'invalid_push' | 'state_gap' | 'drawing_rollback' = 'state_gap',
-  ): Promise<void> {
-    const current = room.value
-    if (!current || resyncInFlight) return
-    const now = Date.now()
-    if (now - lastResyncAt < APP_CONFIG.network.stateResyncCooldownMs) return
-    resyncInFlight = true
-    lastResyncAt = now
-    const context = {
-      generation: sessionStore.generation,
-      roomId: current.id,
-      gameId: current.game?.gameId,
-      roundId: current.game?.roundId,
-    }
-    try {
-      const result = await request(
-        EVENTS.stateResync,
-        {
-          roomId: context.roomId,
-          ...(context.gameId ? { gameId: context.gameId } : {}),
-          ...(context.roundId ? { roundId: context.roundId } : {}),
-          reason,
-        },
-        // 静默但仍重试：重同步是自愈路径，弹 Toast 只会与恢复遮罩重复（ADR-0022）。
-        { notify: 'silent' },
-      )
-      if (!result.ok) return
-      if (sessionStore.generation !== context.generation || room.value?.id !== context.roomId)
-        return
-      if (result.data === undefined) {
-        room.value = undefined
-        return
-      }
-      const parsed = RoomSnapshotSchema.safeParse(result.data)
-      if (
-        !parsed.success ||
-        parsed.data.id !== context.roomId ||
-        acceptRoomSnapshot(room.value, parsed.data) !== 'accept'
-      )
-        return
-      room.value = parsed.data
-    } finally {
-      resyncInFlight = false
-    }
   }
 
   async function createRoom(input: {
@@ -142,7 +89,6 @@ export const useRoomStore = defineStore('room', () => {
     isHost,
     isDrawer,
     clearLocalRoomState,
-    requestFullSnapshot,
     createRoom,
     joinRoom,
     joinPrivateRoom,

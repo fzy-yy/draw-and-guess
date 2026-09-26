@@ -7,6 +7,7 @@ import { strings, serverStrings } from '@draw-guess/strings'
 import { EVENTS, createServerPush, type RoomSnapshot, type Stroke } from '@draw-guess/shared'
 import { useAppBootstrap } from '@/composables/useAppBootstrap'
 import { useLobbyStore } from '@/stores/lobby'
+import { useResyncStore } from '@/stores/resync'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
 import {
@@ -306,7 +307,9 @@ describe('非法推送按事件恢复', () => {
 
   it('绘图 revision 缺口触发一次完整房间快照恢复', () => {
     const roomStore = useRoomStore()
-    const requestFullSnapshot = vi.spyOn(roomStore, 'requestFullSnapshot').mockResolvedValue()
+    const requestFullSnapshot = vi
+      .spyOn(useResyncStore(), 'requestFullSnapshot')
+      .mockResolvedValue()
     const roomId = '00000000-0000-4000-8000-000000000001'
     const gameId = '00000000-0000-4000-8000-000000000002'
     const roundId = '00000000-0000-4000-8000-000000000003'

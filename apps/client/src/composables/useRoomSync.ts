@@ -1,6 +1,7 @@
 import { type FillCommand, type RoomSnapshot, type Stroke } from '@draw-guess/shared'
 import { useGameplayStore } from '@/stores/gameplay'
 import { useRoomStore } from '@/stores/room'
+import { useResyncStore } from '@/stores/resync'
 import {
   acceptDrawingIncrement,
   acceptRoomSnapshot,
@@ -11,7 +12,8 @@ import {
 export function useRoomSync() {
   const roomStore = useRoomStore()
   const gameplayStore = useGameplayStore()
-  const requestFullSnapshot = roomStore.requestFullSnapshot
+  const resyncStore = useResyncStore()
+  const requestFullSnapshot = resyncStore.requestFullSnapshot
 
   function onRoomSnapshot(snapshot: RoomSnapshot): void {
     const current = roomStore.room

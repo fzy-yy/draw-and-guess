@@ -13,6 +13,7 @@ import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
 import RuleSelectField, { type RuleSelectOption } from '@/components/common/RuleSelectField.vue'
 import { useGameStore } from '@/stores/game'
+import { playerCountOptions } from '@/utils/room-facts'
 
 const open = defineModel<boolean>('open', { default: false })
 const store = useGameStore()
@@ -26,17 +27,12 @@ const roomSettings = reactive<RoomSettings>(
   defaultRoomSettings(store.config.player.defaultMaxPlayers),
 )
 
-const playerOptions = computed<readonly RuleSelectOption<number>[]>(() => {
-  const result: RuleSelectOption<number>[] = []
-  for (
-    let count = store.config.player.minPlayers;
-    count <= store.config.player.maxPlayers;
-    count += 1
-  ) {
-    result.push({ value: count, label: strings.common.playersUnit(count) })
-  }
-  return result
-})
+const playerOptions = computed<readonly RuleSelectOption<number>[]>(() =>
+  playerCountOptions({
+    min: store.config.player.minPlayers,
+    max: store.config.player.maxPlayers,
+  }),
+)
 
 async function submitCreate(): Promise<void> {
   const ok = await store.createRoom({

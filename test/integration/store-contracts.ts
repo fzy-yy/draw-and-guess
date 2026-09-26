@@ -50,6 +50,7 @@ expectTypeOf<BusinessKeys<ReturnType<typeof useGameStore>>>().toEqualTypeOf<
   | 'joinPrivateRoom'
   | 'leaveRoom'
   | 'requestFullSnapshot'
+  | 'invalidateSession'
   | 'setReady'
   | 'updateRoomSettings'
   | 'loadVocabulary'

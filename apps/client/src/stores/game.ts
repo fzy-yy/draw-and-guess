@@ -19,6 +19,7 @@ import { useLobbyStore } from './lobby.ts'
 import { useRoomStore } from './room.ts'
 import { useGameplayStore } from './gameplay.ts'
 import { useVocabularyStore } from './vocabulary.ts'
+import { useResyncStore } from './resync.ts'
 
 export type { ConnectionLabel, SessionState, ShellPage, StoredProfile, LocalSettings }
 
@@ -31,6 +32,7 @@ export const useGameStore = defineStore('game', () => {
   const roomStore = useRoomStore()
   const gameplayStore = useGameplayStore()
   const vocabularyStore = useVocabularyStore()
+  const resyncStore = useResyncStore()
 
   const { profile } = storeToRefs(profileStore)
   const { settings } = storeToRefs(settingsStore)
@@ -123,7 +125,8 @@ export const useGameStore = defineStore('game', () => {
     joinRoom: roomStore.joinRoom,
     joinPrivateRoom: roomStore.joinPrivateRoom,
     leaveRoom: roomStore.leaveRoom,
-    requestFullSnapshot: roomStore.requestFullSnapshot,
+    requestFullSnapshot: resyncStore.requestFullSnapshot,
+    invalidateSession: resyncStore.invalidateSession,
     setReady: roomStore.setReady,
     updateRoomSettings: roomStore.updateRoomSettings,
     loadVocabulary: vocabularyStore.loadVocabulary,

@@ -22,6 +22,7 @@ import RuleSliderField from '@/components/common/RuleSliderField.vue'
 import RuleSelectField, { type RuleSelectOption } from '@/components/common/RuleSelectField.vue'
 import RuleToggleField from '@/components/common/RuleToggleField.vue'
 import { useGameStore } from '@/stores/game'
+import { playerCountOptions } from '@/utils/room-facts'
 
 const open = defineModel<boolean>('open', { default: false })
 const props = defineProps<{ draft?: RoomSettings }>()
@@ -35,13 +36,10 @@ function handleClose(): void {
 
 /** 下拉选项：数值范围/枚举值一律来自公开配置与 strings，禁止另写一套。 */
 const maxPlayerOptions = computed(() =>
-  Array.from(
-    { length: store.config.player.maxPlayers - store.config.player.minPlayers + 1 },
-    (_, index) => {
-      const count = store.config.player.minPlayers + index
-      return { value: count, label: strings.common.playersUnit(count) }
-    },
-  ),
+  playerCountOptions({
+    min: store.config.player.minPlayers,
+    max: store.config.player.maxPlayers,
+  }),
 )
 // 显式标注选项值类型为协议联合：不加标注时 value 会被拓宽为 string，
 // RuleSelectField 的 v-model 与 options 泛型配对即失效（strictTemplates 试点抓出的真实缺陷）。

@@ -27,6 +27,7 @@ import type { DataTableColumn } from '@/components/common/data-table.types'
 import VocabTableView from '@/components/room/VocabTableView.vue'
 import VocabPackageTableView from '@/components/room/VocabPackageTableView.vue'
 import { useGameStore } from '@/stores/game'
+import { useVocabularyDialogSession } from '@/composables/useVocabularyDialogSession'
 import { useVocabularyPackages } from '@/composables/useVocabularyPackages'
 import { useVocabularyQuery } from '@/composables/useVocabularyQuery'
 import { useVocabularySelection } from '@/composables/useVocabularySelection'
@@ -38,8 +39,6 @@ const store = useGameStore()
 
 // ---- 词库弹窗内部状态 ----
 const viewMode = ref<'words' | 'packages'>('words')
-const vocabularyLoading = ref(false) // 拉取中标记（防重复打开）
-let loadGeneration = 0
 type ScrollableTable = { scrollToTop(): void; scrollToIndex(index: number): void }
 const wordTable = ref<ScrollableTable>()
 const packageTable = ref<ScrollableTable>()
@@ -59,13 +58,6 @@ const setSelection = selection.setSelection
  * 直接断言会在点击「恢复默认/确认选择」时抛 TypeError。
  */
 const allWordIds = computed(() => (store.vocabulary?.items ?? []).map((item) => item.id))
-
-/** 保存词库选择；失败由统一请求层提示，并保留当前弹窗和选择供重试。 */
-async function saveVocabulary(): Promise<void> {
-  if (isReadOnly.value) return
-  const ok = await store.saveVocabulary([...selectedIds.value])
-  if (ok) handleClose()
-}
 
 /**
  * 表格列定义（label 全部来自 strings；所有字段恒显示，无列显隐）。
@@ -202,53 +194,30 @@ function toggleViewMode(): void {
   )
 }
 
-function handleClose(): void {
-  loadGeneration += 1
-  query.cancel()
-  store.cancelVocabularyRequests()
-  packageState.resetPending()
-  vocabularyLoading.value = false
-  loading.value = false
-  open.value = false
-  emit('close')
-}
-
-/** 打开弹窗：拉取词库成功后初始化选择与搜索，并让虚拟器基于当前内容重新测量。 */
-watch(
+/**
+ * 会话生命周期（打开→拉取→失效校验→关闭→保存）收敛在 composable；
+ * 本组件只提供协作者与「加载成功后重置视图」的钩子。
+ */
+const { handleClose, saveVocabulary } = useVocabularyDialogSession({
   open,
-  async (isOpen) => {
-    const generation = ++loadGeneration
-    if (!isOpen) {
-      query.cancel()
-      store.cancelVocabularyRequests()
-      packageState.resetPending()
-      vocabularyLoading.value = false
-      loading.value = false
-      return
-    }
-    if (vocabularyLoading.value) return
-    vocabularyLoading.value = true
-    loading.value = true
-    try {
-      await store.loadVocabulary()
-    } finally {
-      vocabularyLoading.value = false
-      loading.value = false
-    }
-    // 首次拉取失败时 store.vocabulary 为空：不显示弹窗，由父组件收下 close 供重试。
-    if (generation !== loadGeneration || !open.value) return
+  loading,
+  store,
+  selectedIds,
+  isReadOnly: () => isReadOnly.value,
+  cancelInFlight: () => {
+    query.cancel()
+    store.cancelVocabularyRequests()
+    packageState.resetPending()
+  },
+  emitClose: () => emit('close'),
+  onLoaded: async () => {
     const vocab = store.vocabulary
-    if (!vocab) {
-      handleClose()
-      return
-    }
-    selection.reset(vocab.selectedIds)
+    if (vocab) selection.reset(vocab.selectedIds)
     query.clearSearch()
     viewMode.value = 'words'
     await nextTick()
   },
-  { immediate: true },
-)
+})
 </script>
 
 <template>

@@ -143,6 +143,7 @@ draw_and_guess/
 │       │   ├── session.ts         # 连接与服务端会话 Store（注册、鉴权、在线状态）
 │       │   ├── lobby.ts           # 大厅与房间发现 Store（公开房间列表、在线玩家、刷新与加入）
 │       │   ├── room.ts            # 房间内生命周期 Store（成员席位、准备、房主权限与规则变动）
+│       │   ├── resync.ts          # 重连/重同步 Store（受限全量重同步与会话失效跨域重置，ADR-0025）
 │       │   ├── gameplay.ts        # 实时对局业务 Store（回合状态、词语选项、实时猜词流）
 │       │   ├── vocabulary.ts      # 词库选择与配置 Store
 │       │   ├── socket.ts          # Socket 单例 + 事件绑定循环（注册/解绑由推送清单派生；HMR dispose）
@@ -161,6 +162,7 @@ draw_and_guess/
 │       │   ├── useVirtualTableRows.ts # 虚拟表格测量、占位与滚动归零
 │       │   ├── useShortcuts.ts    # 画板快捷键：自定义单键切换工具、撤销/重做组合键
 │       │   ├── useContextMenu.ts  # 右键菜单单例状态层：任意场景 open(event, items)，配合 components/common/ContextMenu.vue
+│       │   ├── useVocabularyDialogSession.ts / useVocabularyQuery.ts / useVocabularySelection.ts / useVocabularyPackages.ts # 词库弹窗会话生命周期（打开/拉取/失效/关闭/保存）与查询、选择、包管理
 │       │   └── useToasts.ts       # 自建 Toast 状态层：队列/去重合并(key=type:text)/超时消失/弹跳事件（小条配色统一走橙色派生）
 │       ├── components/
 │       │   ├── AppButton.vue      # 统一动作按钮（primary/secondary/danger），内置类与外部类用 cn() 合并
@@ -186,6 +188,9 @@ draw_and_guess/
 │           ├── avatar.ts          # Vite SVG 静态资源白名单编号到 URL 映射
 │           ├── cn.ts              # 类名合并：clsx + tailwind-merge（注册 @theme 自定义语义色）
 │           ├── lazy-component.ts  # 低频模块懒加载工厂（动态 import + 轻量 loading/失败重试）
+│           ├── bounded-diagnostics.ts # 有界诊断列表与 Zod 问题格式化统一内核（ADR-0026）
+│           ├── phase-text.ts      # 阶段文案统一映射（HUD 标签与阶段播报共用，ADR-0028）
+│           ├── room-facts.ts      # 客户端房间事实：可玩成员谓词与玩家人数选项（ADR-0028）
 │           └── create-uuid.ts     # 多环境 UUID：nanoid 十六进制 + RFC 4122 v4 位点（兼容服务端 z.string().uuid()）
 ```
 
@@ -251,7 +256,7 @@ pnpm format:check  # 仅检查格式
 - **请求响应运行时边界**：`CLIENT_RESPONSE_SCHEMAS` 为每个请求事件声明完整 ack Schema（成功 data、`requestId`、已登记 `ErrorCode` 的失败外壳，均为 strict），响应类型由 Schema 推导。`createRequester` 对每次 `emitWithAck` 结果先经 `response-protocol.ts` 解码并核对 `requestId`：解析失败或不匹配返回 `failureKind: 'protocol'`（不重试、不写入 Pinia、只显示统一安全文案并记录脱敏诊断），只有传输故障才自动重试。
 - **版本化主动推送**：服务端主动事件一律使用 `createServerPush()` 包装；客户端先经 `SERVER_PUSH_SCHEMAS` 完整 Zod 解码，再通过 `snapshot-gate.ts` 校验房间、对局、回合、`stateVersion` 与 `drawingRevision`。非法推送只记录脱敏诊断，并以冷却窗口触发一次全量重同步。**推送事件在客户端只有唯一登记处**：`useAppBootstrap` 的 `push: PushHandlerMap` 注册表按协议事件逐条登记 `{ on, recovery }`（载荷整体透传、解码层零字段知识；非法载荷恢复策略即原「门禁域」与 handler 同条目共存）；注册/解绑清单由 `SERVER_PUSH_EVENT_NAMES`（schema 键派生）循环生成，`stores/socket.ts` 内不再有事件名单（见 `docs/adr/0020-push-registry.md`）。
 - **统一运行时依赖**：`GameService`、`RoundMachine`、`rate-limit.ts`、`snapshot.ts`、`scoring.ts`、`hint-scheduler.ts` 及 `apps/server/src/domain/`、`application/`、`protocol/` 全目录的领域时间、定时器与随机数统一来自 `runtime.ts` 的 `Clock` / `Scheduler` / `RandomSource`；这些作用域禁止直接调用系统时间、随机数或定时器，只有 `runtime.ts` 生产适配层放行，ESLint 会阻止回退。
-- **回合状态机**：`round-machine.ts` + `packages/shared/src/pure.ts` 的 `LEGAL_PHASES` 白名单；非法转换由服务端拒绝（`INVALID_TRANSITION`）。
+- **回合状态机**：`round-machine.ts` + `packages/shared/src/pure.ts` 的 `LEGAL_PHASES` 白名单；非法转换由服务端拒绝（`INVALID_TRANSITION`）。**阶段写入、准备失效、对局消息/系统通知与候选抽取、画家轮换、提示计时器只归 `round-machine.ts` 所有**（阶段写入静态守卫见 `test/unit/room-phase-transition.spec.ts`）；`RoundContext` 是运行时/副作用窄端口，`GameService` 退为请求 API 与装配适配（见 `docs/adr/0024-round-machine-ownership.md`）。
 - **计分统一口径**：`scoring.ts` 与 `pure.ts` 的 `calculateGuessScore` 使用同一规则（基础 + 速度 + 顺序；两人局禁用顺序奖）。
 - **成员事实单一口径**：房间内「占席 / 可玩 / 在线可玩 / 候场可玩 / 进榜」与连接三态、阶段标称时长只写在 `apps/server/src/domain/room/member-facts.ts`（纯函数，连通性经显式 `isOnline` 入参注入），其他模块经具名谓词 / 选择器调用；禁止在别处重新内联 `spectating`×`leftGame` 复合判定（防回潮见 `test/unit/member-facts-boundaries.spec.ts`，取舍见 `docs/adr/0023-member-facts-single-source.md`）。
 - **画布增量绘制**（`GameCanvas.vue` + `canvas/replay-machine.ts`）：坐标一律**归一化 0～1**；绘图序号单调递增，服务端拒绝旧包；橡皮擦/填充只传「点击位置 + 颜色」，不传像素，客户端按同一历史重放；`lastSequence` 用于重连续接。**渲染为直线段描边（`stroke()` + `round` 线帽），增量只补画新增段（fromIndex）**。**权威重放原子提交**：重放只画进后备 canvas，整帧成功后一次换入逻辑层——中止/取消的重放不得触碰逻辑层，`drawnPoints` 簿记与后备内容同口径（见 `docs/adr/0017-drawing-replay-atomic-commit.md`）。**「历史 → 栅格」的全部决策归画布重放状态机 `DrawingReplayMachine`**：唯一入口 `sync({commands, undoneIds, roundId})` + `resize/replay/预览方法`，增量 vs 整帧、undone 可见性过滤、世代取代、原子提交都是机器内政；组件与笔画会话不得直接绘制或清空逻辑层（见 `docs/adr/0018-canvas-replay-machine.md`）。
@@ -317,7 +322,7 @@ pnpm format:check  # 仅检查格式
   - **不要**在视图里另建菜单实例或直接写右键浮层：单例保证同一时刻只有一个菜单、菜单不被中间 `overflow` 容器裁剪，且键盘/定位/关闭行为只有一处实现；
   - 原因与取舍（为什么不用 Teleport、点外点击为何穿透）见 `docs/adr/0008-context-menu-singleton-vs-teleport.md`。
 - **Pinia Store 领域解耦与 Facade 架构**：
-  - 状态按领域边界拆分为微 store：`useProfileStore`（资料/头像）、`useSettingsStore`（本地偏好）、`useSessionStore`（连接与会话鉴权）、`useLobbyStore`（大厅房间与玩家）、`useRoomStore`（房间生命周期与席位）、`useGameplayStore`（实时对局与消息）、`useVocabularyStore`（词库配置）；
+  - 状态按领域边界拆分为微 store：`useProfileStore`（资料/头像）、`useSettingsStore`（本地偏好）、`useSessionStore`（连接与会话鉴权）、`useLobbyStore`（大厅房间与玩家）、`useRoomStore`（房间生命周期与席位）、`useGameplayStore`（实时对局与消息）、`useVocabularyStore`（词库配置）、`useResyncStore`（重连/重同步与会话失效重置）；
   - `stores/game.ts` 保留作为统一 Facade（`useGameStore()`），聚合所有子 store 的 state、getters 与 actions，提供向后兼容、无破坏性的单一入口；
   - **消费边界**：视图/组件统一消费 Facade；组合式函数（`useAppBootstrap`/`useRoomSync`）为精确订阅可直接注入微 store。**跨领域编排（如注销后的房间/词库清理、注册恢复后的房间落位）只允许写在 Facade 或所属领域 action 中**，组合式函数与组件不得串联多个 store 自行编排；
   - 会话域 action 只处理会话/资料/连接，`localStorage` 读写必须收敛在 `profile`/`settings` store 内，其他模块不得直接访问；
@@ -558,6 +563,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 | 回合流转/阶段                            | `apps/server/src/round-machine.ts`                                                                                                                                                                                                                |
 | 计分规则                                 | `apps/server/src/scoring.ts`                                                                                                                                                                                                                      |
 | 成员状态判定（占席/可玩/在线/候场/进榜） | `apps/server/src/domain/room/member-facts.ts`（ADR-0023）                                                                                                                                                                                         |
+| 重连/重同步与自愈                        | `apps/client/src/stores/resync.ts`（冷却/在途/世代校验与会话失效重置，ADR-0025）                                                                                                                                                                  |
 | 快照裁剪/隐私边界                        | `apps/server/src/snapshot.ts`（端口与裁剪）+ `test/unit/snapshot.matrix.spec.ts`（角色×阶段穷举矩阵）                                                                                                                                             |
 | SQLite 建表/迁移                         | `apps/server/src/db/migrate.ts`（新变更追加新迁移）                                                                                                                                                                                               |
 | 持久化仓储（玩家/战报）                  | `apps/server/src/repositories/`                                                                                                                                                                                                                   |

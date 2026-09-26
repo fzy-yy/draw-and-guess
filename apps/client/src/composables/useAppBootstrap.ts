@@ -13,10 +13,9 @@ import type { PushHandlerMap } from '@/stores/socket'
 import { useGameStore } from '@/stores/game'
 import { useLobbyStore } from '@/stores/lobby'
 import { useProfileStore } from '@/stores/profile'
-import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
-import { useVocabularyStore } from '@/stores/vocabulary'
+import { useResyncStore } from '@/stores/resync'
 import { useRoomSync } from './useRoomSync'
 
 /** 应用级 Socket、恢复、ping 与 HMR 生命周期；start/stop 均幂等。 */
@@ -27,8 +26,7 @@ export function useAppBootstrap(transport: GameTransport = useGameTransport()) {
   const settingsStore = useSettingsStore()
   const sessionStore = useSessionStore()
   const lobbyStore = useLobbyStore()
-  const roomStore = useRoomStore()
-  const vocabularyStore = useVocabularyStore()
+  const resyncStore = useResyncStore()
   const roomSync = useRoomSync()
   let detachListeners: (() => void) | undefined
   let pingTimer: number | undefined
@@ -97,9 +95,7 @@ export function useAppBootstrap(transport: GameTransport = useGameTransport()) {
     },
     [EVENTS.roomClosed]: {
       on: ({ reason, code }) => {
-        sessionStore.incrementGeneration()
-        roomStore.clearLocalRoomState()
-        vocabularyStore.clear()
+        resyncStore.invalidateSession()
         // 业务语义只看稳定关闭码；reason 仅作为展示文案，允许随时改文案或做本地化。
         if (code === ROOM_CLOSE_CODE.kicked) sessionStore.kickedNotice = true
         notify(reason, 'warning')
@@ -140,7 +136,7 @@ export function useAppBootstrap(transport: GameTransport = useGameTransport()) {
     // 恢复通道查注册表：事件 ↔ 策略的配对在登记处声明，这里只看策略执行（不再有事件名单）。
     switch (push[event].recovery) {
       case 'room-snapshot':
-        void roomSync.requestFullSnapshot('invalid_push')
+        void resyncStore.requestFullSnapshot('invalid_push')
         return
       case 'presence-refresh':
         requestGenericResync()
@@ -168,8 +164,7 @@ export function useAppBootstrap(transport: GameTransport = useGameTransport()) {
           (sessionStore.playerId || profileStore.profile.recoveryToken)
         ) {
           sessionStore.sessionState = 'idle'
-          roomStore.clearLocalRoomState()
-          vocabularyStore.clear()
+          resyncStore.invalidateSession()
           sessionStore.page = 'profile'
           sessionStore.connectionLabel = strings.connection.disconnected
           notify(strings.store.sessionTakenOver, 'warning')

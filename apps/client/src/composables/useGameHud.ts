@@ -5,9 +5,9 @@
  */
 import { computed } from 'vue'
 import { useTimestamp } from '@vueuse/core'
-import { strings } from '@draw-guess/strings'
 import type { FinalRankingEntry } from '@draw-guess/shared'
 import type { useGameStore } from '@/stores/game'
+import { phaseTextFor } from '@/utils/phase-text'
 
 type GameStore = ReturnType<typeof useGameStore>
 
@@ -57,20 +57,8 @@ export function useGameHud(store: GameStore) {
       !store.me?.guessed &&
       store.me?.connection === 'online',
   )
-  // 阶段中文标签（画布状态遮罩 / 各面板复用；统一来自 @draw-guess/strings）
-  const phaseLabel = computed(
-    () =>
-      ({
-        starting: strings.status.phaseStarting,
-        choosing_word: strings.status.phaseChoosing,
-        drawing: strings.status.phaseDrawing,
-        round_result: strings.status.phaseRoundResult,
-        paused: strings.status.phasePaused,
-        game_result: strings.status.phaseGameResult,
-        waiting: strings.status.phaseWaiting,
-        closed: strings.status.phaseClosed,
-      })[store.room?.phase ?? 'waiting'],
-  )
+  // 阶段中文标签（画布状态遮罩 / 各面板复用；映射与文案统一来自 utils/phase-text）
+  const phaseLabel = computed(() => phaseTextFor(store.room?.phase))
   // 当前画家成员信息
   const drawer = computed(() =>
     store.room?.members.find((member) => member.id === game.value?.drawerId),

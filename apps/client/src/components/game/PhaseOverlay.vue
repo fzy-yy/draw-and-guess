@@ -9,10 +9,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Brush, CirclePause, CirclePlay, RefreshCw, Trophy } from 'lucide-vue-next'
-import type { GameView, RoomPhase } from '@draw-guess/shared'
+import type { GameView } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
+import { phaseTextFor } from '@/utils/phase-text'
 import type { RankedMember } from '@/composables/useGameHud'
 import AppButton from '@/components/common/AppButton.vue'
 import AvatarImage from '@/components/common/AvatarImage.vue'
@@ -39,19 +40,8 @@ const emit = defineEmits<{
 }>()
 
 const store = useGameStore()
-const phaseAnnouncement = computed(() => {
-  const labels: Record<RoomPhase, string> = {
-    starting: strings.status.phaseStarting,
-    choosing_word: strings.status.phaseChoosing,
-    drawing: strings.status.phaseDrawing,
-    round_result: strings.status.phaseRoundResult,
-    paused: strings.status.phasePaused,
-    game_result: strings.status.phaseGameResult,
-    waiting: strings.status.phaseWaiting,
-    closed: strings.status.phaseClosed,
-  }
-  return labels[store.room?.phase ?? 'waiting']
-})
+/** 阶段播报文案与 HUD 共用同一映射（utils/phase-text），保证展示与播报一致。 */
+const phaseAnnouncement = computed(() => phaseTextFor(store.room?.phase))
 
 function chooseWord(wordId: string): void {
   playInteractionSound('select')

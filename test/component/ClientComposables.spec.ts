@@ -2,7 +2,12 @@ import { defineComponent, h, nextTick, ref } from 'vue'
 import { setActivePinia, type Pinia } from 'pinia'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { EVENTS, type VocabularyPackageInfo, type VocabularyWord } from '@draw-guess/shared'
+import {
+  EVENTS,
+  type VocabularyPackageInfo,
+  type VocabularySnapshot,
+  type VocabularyWord,
+} from '@draw-guess/shared'
 import { APP_CONFIG } from '@draw-guess/config'
 import type { RequestResult } from '@/stores/request'
 import { useCanvasCursor } from '@/composables/useCanvasCursor'
@@ -13,6 +18,7 @@ import { useInviteQueue } from '@/composables/useInviteQueue'
 import { useSelectAllState } from '@/composables/useSelectAllState'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { useTableSort } from '@/composables/useTableSort'
+import { useVocabularyDialogSession } from '@/composables/useVocabularyDialogSession'
 import { useVocabularyPackages } from '@/composables/useVocabularyPackages'
 import { useVocabularyQuery } from '@/composables/useVocabularyQuery'
 import { useVocabularySelection } from '@/composables/useVocabularySelection'
@@ -385,5 +391,136 @@ describe('表格、选择与词库 composables', () => {
     await packageState.select('p2')
     packageState.resetPending()
     expect(packageState.pendingPackageId.value).toBeUndefined()
+  })
+})
+
+describe('词库弹窗会话生命周期（useVocabularyDialogSession）', () => {
+  const snapshot = { selectedIds: ['a'] } as unknown as VocabularySnapshot
+
+  function harness() {
+    const open = ref(false)
+    const loading = ref(false)
+    const onLoaded = vi.fn(async () => undefined)
+    const cancelInFlight = vi.fn()
+    const emitClose = vi.fn()
+    const selectedIds = ref(new Set<string>())
+    let readOnly = false
+    const store = {
+      vocabulary: undefined as VocabularySnapshot | undefined,
+      loadVocabulary: vi.fn(async () => {
+        store.vocabulary = snapshot
+      }),
+      saveVocabulary: vi.fn(async () => true),
+      cancelVocabularyRequests: vi.fn(),
+    }
+    const session = mountComposable(() =>
+      useVocabularyDialogSession({
+        open,
+        loading,
+        store,
+        selectedIds,
+        isReadOnly: () => readOnly,
+        cancelInFlight,
+        emitClose,
+        onLoaded,
+      }),
+    )
+    // 挂载时 immediate 监听会按「未打开」执行一次取消/复位；清空断言基线。
+    onLoaded.mockClear()
+    cancelInFlight.mockClear()
+    emitClose.mockClear()
+    store.loadVocabulary.mockClear()
+    store.saveVocabulary.mockClear()
+    return {
+      open,
+      loading,
+      store,
+      selectedIds,
+      onLoaded,
+      cancelInFlight,
+      emitClose,
+      session,
+      setReadOnly: (value: boolean) => (readOnly = value),
+    }
+  }
+
+  /** 依次刷新微任务与 Vue 更新队列，覆盖「watch → await load → onLoaded」链路。 */
+  async function flushAsync(): Promise<void> {
+    for (let index = 0; index < 6; index += 1) {
+      await Promise.resolve()
+      await nextTick()
+    }
+  }
+
+  it('打开即拉取；成功后复位加载态并回调 onLoaded', async () => {
+    const h = harness()
+    h.open.value = true
+    await flushAsync()
+    expect(h.store.loadVocabulary).toHaveBeenCalledOnce()
+    expect(h.onLoaded).toHaveBeenCalledOnce()
+    expect(h.loading.value).toBe(false)
+  })
+
+  it('关闭会作废迟到的加载结果，并取消在途', async () => {
+    const h = harness()
+    let resolveLoad!: () => void
+    h.store.loadVocabulary.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveLoad = () => {
+            h.store.vocabulary = snapshot
+            resolve()
+          }
+        }),
+    )
+    h.open.value = true
+    await flushAsync()
+
+    h.open.value = false
+    await flushAsync()
+    expect(h.cancelInFlight).toHaveBeenCalledOnce()
+
+    resolveLoad()
+    await flushAsync()
+    expect(h.onLoaded).not.toHaveBeenCalled()
+    expect(h.loading.value).toBe(false)
+  })
+
+  it('加载失败（词库为空）时自动关闭并通知父层', async () => {
+    const h = harness()
+    h.store.loadVocabulary.mockImplementation(async () => undefined)
+    h.open.value = true
+    await flushAsync()
+    expect(h.emitClose).toHaveBeenCalledOnce()
+    expect(h.open.value).toBe(false)
+    expect(h.onLoaded).not.toHaveBeenCalled()
+  })
+
+  it('保存：只读不提交，成功才关闭，失败保留弹窗', async () => {
+    const h = harness()
+    h.setReadOnly(true)
+    await h.session.saveVocabulary()
+    expect(h.store.saveVocabulary).not.toHaveBeenCalled()
+
+    h.setReadOnly(false)
+    h.selectedIds.value = new Set(['a', 'b'])
+    h.store.saveVocabulary.mockResolvedValueOnce(false)
+    await h.session.saveVocabulary()
+    expect(h.emitClose).not.toHaveBeenCalled()
+
+    h.store.saveVocabulary.mockResolvedValueOnce(true)
+    await h.session.saveVocabulary()
+    expect(h.store.saveVocabulary).toHaveBeenLastCalledWith(['a', 'b'])
+    expect(h.emitClose).toHaveBeenCalledOnce()
+    expect(h.open.value).toBe(false)
+  })
+
+  it('handleClose 取消在途、复位加载态并关闭', () => {
+    const h = harness()
+    h.session.handleClose()
+    expect(h.cancelInFlight).toHaveBeenCalledOnce()
+    expect(h.emitClose).toHaveBeenCalledOnce()
+    expect(h.open.value).toBe(false)
+    expect(h.loading.value).toBe(false)
   })
 })

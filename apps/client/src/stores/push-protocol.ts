@@ -5,6 +5,7 @@ import {
   type ServerPushData,
   type ServerPushEventName,
 } from '@draw-guess/shared'
+import { createBoundedDiagnostics, describeZodIssues } from '@/utils/bounded-diagnostics'
 
 export type InvalidPushReason = 'invalid_payload' | 'protocol_mismatch'
 
@@ -14,8 +15,7 @@ export interface ProtocolDiagnostic {
   receivedAt: number
 }
 
-const diagnostics: ProtocolDiagnostic[] = []
-const MAX_DIAGNOSTICS = 20
+const diagnostics = createBoundedDiagnostics<ProtocolDiagnostic>()
 
 export type DecodeServerPushResult<E extends ServerPushEventName> =
   { ok: true; data: ServerPushData<E> } | { ok: false; reason: InvalidPushReason }
@@ -37,26 +37,22 @@ export function decodeServerPush<E extends ServerPushEventName>(
       ? 'protocol_mismatch'
       : 'invalid_payload'
 
-  diagnostics.push({
+  diagnostics.record({
     event,
     reason:
       reason === 'protocol_mismatch'
         ? 'protocolVersion:mismatch'
-        : result.error.issues
-            .slice(0, 3)
-            .map((issue) => `${issue.path.join('.') || '<root>'}:${issue.code}`)
-            .join(','),
+        : describeZodIssues(result.error.issues),
     receivedAt: Date.now(),
   })
-  if (diagnostics.length > MAX_DIAGNOSTICS) diagnostics.shift()
   return { ok: false, reason }
 }
 
 /** 只暴露副本，避免诊断 UI 或测试修改内部记录。 */
 export function getProtocolDiagnostics(): readonly ProtocolDiagnostic[] {
-  return diagnostics.map((item) => ({ ...item }))
+  return diagnostics.list()
 }
 
 export function clearProtocolDiagnostics(): void {
-  diagnostics.length = 0
+  diagnostics.clear()
 }
