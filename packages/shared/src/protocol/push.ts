@@ -100,7 +100,8 @@ export const GameViewSchema = z
     pausedRemainingMs: z.number().nonnegative().optional(),
     answerMask: z.string(),
     answer: z.string().optional(),
-    wordCategory: z.string().optional(),
+    // 画家专属：完整词条提示（hint 优先、空回退 category），供「画家模式」与答案一同明文展示
+    wordHint: z.string().optional(),
     wordOptions: z
       .array(
         z

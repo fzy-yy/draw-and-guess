@@ -47,6 +47,33 @@ test.describe('04 - 实时猜词与计分流转 (Guessing, Chat & Scoring)', () 
 
       // 3. 猜词者输入正确题目完成猜中
       await guesser.game.sendGuess(answer)
+      // 最后一名猜词者（本局唯一猜词者）猜中即结束本回合，服务端会在同一份快照里把阶段切到
+      // round_result；此时礼花仍应触发，且必须**真的绘制出像素**（主线程渲染，画布可读）。
+      // 回归点：若退回 canvas-confetti 默认的 Blob Worker，CSP `script-src 'self'` 会拦掉 Worker，
+      // 画布被 transferControlToOffscreen 后既不显示也无法回退。
+      await guesser.page.waitForFunction(
+        () => {
+          const canvas = [...document.querySelectorAll('canvas')].find(
+            (element): element is HTMLCanvasElement =>
+              element instanceof HTMLCanvasElement && !element.closest('.game-stage'),
+          )
+          if (!canvas || !canvas.width || !canvas.height) return false
+          try {
+            const context = canvas.getContext('2d')
+            if (!context) return false
+            const { data } = context.getImageData(0, 0, canvas.width, canvas.height)
+            for (let index = 3; index < data.length; index += 4) {
+              if ((data[index] ?? 0) > 0) return true
+            }
+            return false
+          } catch {
+            // 画布控制权已被转移（Worker 路径）：视为未绘制
+            return false
+          }
+        },
+        undefined,
+        { polling: 200, timeout: 10_000 },
+      )
       // 验证系统下发猜中提示或得分增加
       await expect(
         guesser.page.locator('div[aria-live="polite"]:has-text("猜中了！")'),

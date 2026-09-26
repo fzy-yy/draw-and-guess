@@ -88,19 +88,23 @@ function toggleDrawerAnswerReveal(): void {
   drawerRevealed.value = !drawerRevealed.value
 }
 
-/** 结构化类别提示：已揭示时展示真实分类，未揭示（15秒前）时展示下划线占位符 */
-const categoryHint = computed(() => props.game?.revealedHints?.[0] || '')
+/**
+ * 猜词者视角的结构化提示：服务端按揭示节奏下发的首条；揭示前为空串（模板显示占位）。
+ */
+const revealedHint = computed(() => props.game?.revealedHints?.[0] || '')
 
 /**
- * 类别提示展示内容：
- * 画家在显示状态（drawerRevealed === true）下同时显示题目与真实提示类别；
- * 画家切换后（drawerRevealed === false）或猜词玩家，显示猜词玩家当前看到的提示内容（揭示前为占位下划线，揭示后为真实类别）。
+ * 提示展示内容：
+ * - 画家在「画家模式」（显示答案）：完整显示词条提示（服务端 `wordHint`，hint 优先、空回退 category），
+ *   与答案一同明文；
+ * - 画家切到「猜词者模式」，或猜词者本人：只显示按时间逐渐披露的 `revealedHint`。
+ * 两条分支同源（hint 优先、空回退 category），不会出现一侧分类、一侧 hint 的不一致（见 ADR-0032）。
  */
-const displayedCategoryHint = computed(() => {
+const displayedHint = computed(() => {
   if (store.isDrawer && drawerRevealed.value) {
-    return props.game?.wordCategory || categoryHint.value || ''
+    return props.game?.wordHint || revealedHint.value || ''
   }
-  return categoryHint.value || ''
+  return revealedHint.value || ''
 })
 
 /** 答案区展示文本：画家按显隐状态决定明文或遮罩，猜词者恒为遮罩 */
@@ -164,8 +168,9 @@ const displayedAnswer = computed(() => {
       @keydown.space.prevent="toggleDrawerAnswerReveal"
     >
       <!--
-        结构化提示区（位于答案上方）：单分类作为提示。
-        画家在显示状态下同时显示真实词与提示类别；切换后或猜词玩家显示猜词玩家视角（未揭示时显示下划线占位符，揭示后显示真实分类）。
+        结构化提示区（位于答案上方）：提示来源统一为词条 hint（空回退 category）。
+        画家模式完整显示提示与答案；画家切到猜词者模式、或猜词者本人，则按时间逐渐披露
+        （未揭示时显示占位符，揭示后显示同一条提示）。
       -->
       <p
         v-if="
@@ -180,10 +185,10 @@ const displayedAnswer = computed(() => {
         }}</span>
         <span
           class="min-w-0 max-w-[12cqw] truncate"
-          :class="displayedCategoryHint ? 'text-sky' : 'text-sky/70 tracking-[0.12em]'"
-          :title="displayedCategoryHint || strings.game.hintUnrevealed"
+          :class="displayedHint ? 'text-sky' : 'text-sky/70 tracking-[0.12em]'"
+          :title="displayedHint || strings.game.hintUnrevealed"
         >
-          {{ displayedCategoryHint || strings.game.hintUnrevealed }}
+          {{ displayedHint || strings.game.hintUnrevealed }}
         </span>
       </p>
       <b class="min-h-[3.8cqh] flex items-center text-yellow text-fs-24 tracking-[0.16em]">{{

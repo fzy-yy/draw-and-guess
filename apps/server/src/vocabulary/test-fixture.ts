@@ -15,6 +15,14 @@ import path from 'node:path'
 import Database from 'better-sqlite3'
 import { APP_CONFIG } from '../config/index.ts'
 
+/**
+ * E2E 词条时限（秒）：远大于产品默认 90s。
+ * 09 容量用例要在同一回合内用**真实点击**推满 maxHistoryCommands=1500 条命令，
+ * 而 CI runner 的点击吞吐远低于本地，90s 窗口会在推满前到期（main 长期红的原因）。
+ * 只影响 e2e fixture，不进生产词库。
+ */
+const E2E_WORD_TIME_LIMIT_SECONDS = 600
+
 export interface MinimalVocabularyFixtureOptions {
   wordCount?: number
   name?: string
@@ -65,7 +73,7 @@ export function createMinimalVocabularyDb(
     const levelConfig: Record<string, { time_limit: number; score_weight: number }> = {}
     for (const level of difficultyEnum) {
       levelConfig[String(level)] = {
-        time_limit: APP_CONFIG.game.drawSeconds.default,
+        time_limit: E2E_WORD_TIME_LIMIT_SECONDS,
         score_weight: APP_CONFIG.game.score.defaultWordWeight,
       }
     }

@@ -6,7 +6,7 @@
   渲染态由机器经 onRenderingChange 报告，两者在此合成填充门禁。
 -->
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   EVENTS,
   type ClientResponse,
@@ -107,6 +107,19 @@ const strokeSession = useStrokeSession({
 const { resizeTick } = useCanvasViewport(canvas, machine.logicalCanvas, (w, h) =>
   machine.resize(w, h),
 )
+
+// E2E 只读探针：在展示层画布上暴露「权威命令计数」（客户端镜像的 DrawingCommand 条数），
+// 供 09 用例按命令数推进到上限，而不是靠固定点击次数 + Toast 时序猜测。
+// 与 __logicalCanvas 同一开关：默认生产构建不包含，E2E 构建由 launcher 注入 VITE_EXPOSE_LOGICAL_CANVAS=1。
+onMounted(() => {
+  const element = canvas.value
+  if (element && (import.meta.env.DEV || import.meta.env.VITE_EXPOSE_LOGICAL_CANVAS === '1')) {
+    Object.defineProperty(element, '__authoritativeCommandCount', {
+      configurable: true,
+      get: () => props.strokes.length,
+    })
+  }
+})
 const cursor = useCanvasCursor({
   canvas,
   width,

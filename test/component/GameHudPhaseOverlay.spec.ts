@@ -110,7 +110,11 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
   it('画家可切换答案明文，猜词者始终只看到遮罩', async () => {
     const roomStore = useRoomStore()
     const session = useSessionStore()
-    roomStore.room = createRoomFixture()
+    // 画家模式完整显示「提示 + 答案」；画家切到猜词者模式、或猜词者本人，只按时间逐渐披露提示
+    roomStore.room = createRoomFixture('drawing', {
+      wordHint: '完整提示',
+      revealedHints: ['渐显提示'],
+    })
     session.playerId = HOST_ID
     useSettingsStore().settings.drawerDefaultReveal = false
     const game = roomStore.room.game!
@@ -122,16 +126,24 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
       drawer: roomStore.room.members[0],
     }) as VueWrapper
 
+    // 猜词者模式：答案遮罩 + 已披露提示
     expect(wrapper.text()).toContain(game.answerMask)
     expect(wrapper.text()).not.toContain(game.answer)
+    expect(wrapper.text()).toContain('渐显提示')
+    expect(wrapper.text()).not.toContain('完整提示')
+
+    // 画家模式：答案明文 + 完整提示
     await wrapper.get(`[aria-label="${strings.game.toggleAnswerVisibilityAria}"]`).trigger('click')
     expect(wrapper.text()).toContain(game.answer)
-    expect(wrapper.text()).toContain(game.wordCategory)
+    expect(wrapper.text()).toContain('完整提示')
 
+    // 猜词者本人：答案遮罩 + 逐渐披露提示
     session.playerId = GUEST_ID
     await nextTick()
     expect(wrapper.text()).toContain(game.answerMask)
     expect(wrapper.text()).not.toContain(game.answer)
+    expect(wrapper.text()).toContain('渐显提示')
+    expect(wrapper.text()).not.toContain('完整提示')
     wrapper.unmount()
   })
 

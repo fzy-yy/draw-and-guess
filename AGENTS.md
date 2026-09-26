@@ -16,7 +16,7 @@
 - **日志文件化**：服务端日志**不输出到控制台**（规避 Windows 控制台 GBK 解码 UTF-8 中文乱码），通过 Pino 异步缓冲写入 `apps/server/log/app-<秒级时间戳>.log`（每次启动新建一个、最多保留 `LOG_MAX_FILES` 条），优雅关闭时 flush/close；可通过 `.env` 的 `LOG_ENABLED` 完全关闭（零内存开销）。
 - **画板**：高 DPI 实时画布，支持自由画笔、橡皮擦（`destination-out`）与封闭区域洪泛填充；画笔/橡皮擦共用连续粗细，可滚轮调整；支持预设或任意 HEX 颜色，工具可自定义单键切换。**渲染模型为「归一化点列 + 直线段描边」增量同步**（不引入轮廓填充型平滑库，曾因此导致白边/闪烁/空心缺陷）。
 - **头像**：仅允许从 40 个内置 SVG 白名单编号中选择，协议只传编号；禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像。
-- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '13'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
+- **应用标识**：名称「你画我猜」、版本 `2.3.0`、协议版本 `protocolVersion: '14'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
 
 ### 技术栈与运行环境
 
@@ -161,6 +161,7 @@ draw_and_guess/
 │       │   ├── useInviteQueue.ts / useFullscreenPrompt.ts # 根 Shell 的邀请倒计时与全屏提示生命周期
 │       │   ├── useVirtualTableRows.ts # 虚拟表格测量、占位与滚动归零
 │       │   ├── useShortcuts.ts    # 画板快捷键：自定义单键切换工具、撤销/重做组合键
+│       │   ├── useGuessConfetti.ts # 猜中礼花反馈：严格跃迁触发、不枚举阶段（ADR-0031）
 │       │   ├── useContextMenu.ts  # 右键菜单单例状态层：任意场景 open(event, items)，配合 components/common/ContextMenu.vue
 │       │   ├── useVocabularyDialogSession.ts / useVocabularyQuery.ts / useVocabularySelection.ts / useVocabularyPackages.ts # 词库弹窗会话生命周期（打开/拉取/失效/关闭/保存）与查询、选择、包管理
 │       │   └── useToasts.ts       # 自建 Toast 状态层：队列/去重合并(key=type:text)/超时消失/弹跳事件（小条配色统一走橙色派生）
@@ -495,7 +496,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
    - 头像只允许 `packages/shared/src/protocol/constants.ts` 白名单中的内置 SVG 编号；**禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像**。
 3. **词库与内容**
    - `vocabulary/` 目录下的 SQLite 词库包是唯一词库来源（当前仅 `base_words.db`，可并存多个 `.db`，服务启动时全部加载并从中选默认包）：`metadata` 表存 name/description/version/updated_at/category_enum/difficulty_enum/drawability_enum/enabled_enum/level_config（难度 → `{time_limit, score_weight}` 映射，JSON，**库内为 snake_case 命名**）/drawability_desc；`words` 表词条含 id/text/**category**（单词条仅一个分类）/difficulty/**drawability**（可绘制性 1~5，词库作者标注）/enabled/**hint**（对局结构化提示，≤10 字，空串合法）/aliases（JSON）/updated_at（仅编辑时间，不进 DTO）。逐词 `time_limit/score_weight` 已废弃：Provider **加载期**按难度查 `level_config` 派生到词条 `timeLimit/scoreWeight`，下游（回合时限/计分/UI/哈希）语义不变（见 `docs/adr/0013-vocabulary-level-config-and-hints.md`）。校验为 fail-fast：分类 ⊆ category_enum、难度 ⊆ difficulty_enum ∩ 配置区间、可绘制性 ⊆ drawability_enum、`level_config` 与 `difficulty_enum` 严格互相覆盖、hint 长度 ≤ `maxHintLength`、enabled=0 词条不进入候选池；目录内没有任何 `.db` 时按 `apps/server/src/config/private.ts` 的 `dbPath` 兜底探测（默认文件名 `base_words.db`）。修改后需重启服务，异常数据以中文错误阻止启动。
-   - **猜词提示使用词条 hint**：结构化提示揭示的是 `hint` 字段（hint 为空回退揭示 `category`，两者皆空不开启提示）；单揭示槽位与揭示时机（`hintStartRatio`）不变；选词卡对画家**不展示** hint（`wordOptions` 只带 `text/difficulty/drawability`），避免提示泄露。
+   - **猜词提示使用词条 hint**：结构化提示揭示的是 `hint` 字段（hint 为空回退揭示 `category`，两者皆空不开启提示）；单揭示槽位与揭示时机（`hintStartRatio`）不变；选词卡对画家**不展示** hint（`wordOptions` 只带 `text/difficulty/drawability`），避免提示泄露。**提示同源、按角色区分完整度**：来源统一为词条 hint（空回退 category）——画家在「画家模式」完整显示提示（服务端画家专属 `wordHint`）与答案，画家切到「猜词者模式」或猜词者本人只看按时间逐渐披露的 `revealedHints[0]`；不再向画家下发独立的 `wordCategory`。
    - 猜词判定固定用 `normalizeAnswer`（NFKC + 去空白 + 折叠空白 + 忽略拉丁大小写），不要在别处另写一套比较。
 4. **配置治理**
    - 协议公开约束**只允许**写在 shared protocol constants；公开默认值与服务端私有策略按包边界分别维护，禁止复制同一协议常量。

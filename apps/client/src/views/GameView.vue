@@ -4,7 +4,7 @@
   这里仅保留画布区、弹窗编排与浏览器级状态（全屏/弹窗开关/颜色线宽工具）。
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useFullscreen } from '@vueuse/core'
 import { Brush, LogOut, Trash2, X } from 'lucide-vue-next'
 import { APP_CONFIG } from '@draw-guess/config'
@@ -28,28 +28,16 @@ import {
 } from '@/components/game'
 import { useGameHud } from '@/composables/useGameHud'
 import { useShortcuts } from '@/composables/useShortcuts'
-import { fireGuessCorrectConfetti } from '@/utils/confetti'
+import { useGuessConfetti } from '@/composables/useGuessConfetti'
 import type { RequestResult } from '@/stores/request'
 // 对局内设置页复用同一个静态导入的视图组件（首开白闪取舍见 docs/adr/0014-settings-view-static-import.md）
 import SettingsView from '@/views/SettingsView.vue'
 
 const store = useGameStore()
 
-// 当自己猜中时触发全屏礼花庆祝特效。
-// 守卫同时放行 drawing 与 round_result：最后一名猜词者猜中时，服务端在**同一份快照**里
-// 已把阶段切到回合结算，若只认 drawing 会漏掉「最后一人猜中」这一最该庆祝的时刻（缺陷回归守卫）。
-watch(
-  () => store.me?.guessed,
-  (guessed, prev) => {
-    const phase = store.room?.phase
-    if (guessed && !prev && (phase === 'drawing' || phase === 'round_result')) {
-      if (store.settings.animationsEnabled) {
-        // 礼花模块按需下载，失败静默降级（见 utils/confetti.ts）
-        void fireGuessCorrectConfetti()
-      }
-    }
-  },
-)
+// 自己猜中时触发全屏礼花（含「最后一人猜中」时阶段已切到 round_result 的情况，
+// 触发条件与防误触发取舍见 composables/useGuessConfetti.ts 与 docs/adr/0031-*）。
+useGuessConfetti(store)
 // ---- 对局 HUD（计时/进度/权限/排行等，含 ticker 生命周期，见 composables/useGameHud.ts）----
 // 整局只在此处调用一次 useGameHud，把派生值（剩余秒数/进度/画家/排位）作为 props 下发给
 // GameHud/PhaseOverlay 等子组件，避免各组件各自开启 ticker 造成重复刷新。

@@ -42,7 +42,6 @@ export function createRoomFixture(
     phaseEndsAt: 61_000,
     answerMask: '＿ ＿',
     answer: '苹果',
-    wordCategory: '水果',
     revealedHints: [],
     strokes: [],
     undoneStrokeIds: [],

@@ -1,7 +1,7 @@
 import { APP_CONFIG } from '../../../packages/config/src/index.ts'
 import { serverStrings } from '../../../packages/strings/src/index.ts'
 import { test, expect, createPlayer } from '../fixtures/test-base'
-import { readLogicalRaster } from '../fixtures/canvas-probe'
+import { readAuthoritativeCommandCount, readLogicalRaster } from '../fixtures/canvas-probe'
 
 /**
  * 09 - 绘图历史上限（容量压力下的跨客户端一致性）
@@ -10,16 +10,17 @@ import { readLogicalRaster } from '../fixtures/canvas-probe'
  * 期望：超限提交被**确定性拒绝**（服务端错误码 + 中文提示），权威历史里早期边界与后续填充完好无损，
  * 因此「一直在线者的增量画布」与「晚加入者的全量重放」逻辑栅格指纹必须完全一致。
  *
- * 为什么这条用例很慢：上限是 1500 条命令，而服务端对单玩家的绘图事件限频为 45/秒，
- * 所以只能按约 40 条/秒 推送，全流程固定耗时约 40~60 秒（这是**真实协议约束**，不是可以调小的时间预算）。
+ * 为什么这条用例很慢：上限是 1500 条命令，只能逐次真实点击生成（每次点击 = 一条单点命令）；
+ * e2e 词库 fixture 的时限特意放宽到 600s（见 apps/server/src/vocabulary/test-fixture.ts），
+ * 以便慢 runner 也能在**同一回合内**推满——用默认 90s 时限会在推满前到期，是 main 间歇失败的主因。
  * 数据源：packages/config 的 drawing.maxHistoryCommands、packages/strings 的默认安全文案（勿在用例内硬编码）。
  */
 /** 单次点击之间的等待（毫秒）：与 Playwright 点击自身开销合计约 25ms，即约 40 条/秒。 */
 const CLICK_INTERVAL_MS = 15
-/** 点击上限：上限数 + 余量（限频丢包会多耗几次点击），超时即判定为「未拒绝」。 */
-const MAX_CLICKS = APP_CONFIG.drawing.maxHistoryCommands + 80
-/** 每隔若干次点击暂停/恢复一次，冻结回合计时，避免慢机器上回合作画时间先耗尽。 */
-const PAUSE_EVERY_CLICKS = 500
+/** 推送到上限的墙钟上限：需覆盖慢 runner 的真实点击吞吐（e2e 回合窗口为 600s）。 */
+const PUSH_DEADLINE_MS = 540_000
+/** 到达上限后额外提交的点击次数：用于确认新增被确定性拒绝（权威历史不再增长）。 */
+const REJECT_PROBE_CLICKS = 30
 /** 构造历史用的填充色（与工具栏色板一致）。 */
 const FILL_COLOR = '#EF4444'
 
@@ -27,7 +28,7 @@ test.describe('09 - 绘图历史上限', () => {
   test('达到命令上限后拒绝新增，早期封闭边界与后续填充在跨客户端重放中保持一致', async ({
     browser,
   }) => {
-    test.setTimeout(300_000)
+    test.setTimeout(720_000)
     const host = await createPlayer(browser, '容量房主')
     const guest = await createPlayer(browser, '容量客人')
     const observer = await createPlayer(browser, '容量观察者')
@@ -75,30 +76,42 @@ test.describe('09 - 绘图历史上限', () => {
       expect(filled.stableSampleHash).toBe('ef4444ff-1f2937ff-00000000')
 
       // 3. 用单点笔画把命令数推到上限：每点一次 = 一条命令（1 个点）。
+      //    推进依据是「权威命令计数」（客户端镜像的 DrawingCommand 条数），而不是固定点击次数：
+      //    CI 上点击可能被丢弃，按次数猜会在到达上限前就耗尽预算（此前的失败根因）。
       await drawer.game.selectTool('pen')
       const box = await drawerCanvas.boundingBox()
       if (!box) throw new Error('画布不可见')
       const clickPoint = { x: box.x + box.width * 0.65, y: box.y + box.height * 0.5 }
       const limitMessage = drawer.page.getByText(serverStrings.errors.DRAW_HISTORY_LIMIT_REACHED)
-      let limitReached = false
+      const cap = APP_CONFIG.drawing.maxHistoryCommands
       let clicks = 0
       const startedAt = Date.now()
-      while (clicks < MAX_CLICKS && !limitReached) {
+      let commandCount = await readAuthoritativeCommandCount(drawerCanvas)
+      while (commandCount < cap && Date.now() - startedAt < PUSH_DEADLINE_MS) {
         await drawer.page.mouse.click(clickPoint.x, clickPoint.y)
         await drawer.page.waitForTimeout(CLICK_INTERVAL_MS)
         clicks += 1
-        if (clicks % PAUSE_EVERY_CLICKS === 0) {
-          // 冻结回合计时（暂停期间不接受绘图输入），随后继续推送。
-          await host.game.pauseGame()
-          await host.game.resumeGame()
-        }
-        if (clicks % 25 === 0 && (await limitMessage.count()) > 0) limitReached = true
+        if (clicks % 25 === 0) commandCount = await readAuthoritativeCommandCount(drawerCanvas)
       }
-      // 达到上限的当次提交被拒绝：这是「硬上限 + 拒绝新增」唯一的可见信号。
-      expect(limitReached, `点击 ${clicks} 次后仍未收到画布命令上限提示`).toBe(true)
+      // 失败现场：把「点击次数 / 权威命令数 / 上限」写进断言消息，便于直接定位丢包或缺权。
+      expect(
+        commandCount,
+        `点击 ${clicks} 次后权威命令计数 ${commandCount} 仍未达到上限 ${cap}` +
+          `（用时 ${((Date.now() - startedAt) / 1000).toFixed(1)}s）`,
+      ).toBeGreaterThanOrEqual(cap)
+      const countAtCap = commandCount
+
+      // 达到上限后继续提交：必须被确定性拒绝——权威历史不再增长，且出现上限提示。
+      for (let extra = 0; extra < REJECT_PROBE_CLICKS; extra += 1) {
+        await drawer.page.mouse.click(clickPoint.x, clickPoint.y)
+        await drawer.page.waitForTimeout(CLICK_INTERVAL_MS)
+      }
+      await expect(limitMessage).toBeVisible({ timeout: 15_000 })
+      const countAfterReject = await readAuthoritativeCommandCount(drawerCanvas)
+      expect(countAfterReject, '达到上限后新增命令必须被拒绝（权威历史不再增长）').toBe(countAtCap)
       console.log(
-        `[绘图容量] ${clicks} 次点击（${((Date.now() - startedAt) / 1000).toFixed(1)}s）后到达 ` +
-          `maxHistoryCommands=${APP_CONFIG.drawing.maxHistoryCommands} 并收到拒绝提示`,
+        `[绘图容量] ${clicks} 次点击（${((Date.now() - startedAt) / 1000).toFixed(1)}s）后权威命令达上限 ` +
+          `maxHistoryCommands=${cap}；拒绝后计数保持 ${countAfterReject}`,
       )
       await host.game.pauseGame()
 

@@ -66,7 +66,7 @@ export const settings = {
   diagProtocol: (version: string) => `协议版本：${version}`,
   diagAddress: (address: string) => `服务地址：${address}`,
   diagConnection: (label: string) => `连接状态：${label}`,
-  diagLatency: (latency: string) => `近似延迟：${latency}ms`,
+  diagLatency: (latency: string) => `近似延迟：${latency}`,
   diagPlayerId: (id: string) => `玩家 ID：${id}`,
   diagRoom: (name: string) => `房间：${name}`,
   unknownLatency: '未知',

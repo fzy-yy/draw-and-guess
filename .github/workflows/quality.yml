@@ -48,36 +48,41 @@ jobs:
         run: pnpm benchmark:flood-fill > benchmark-flood-fill.json
 
       - name: Upload flood-fill benchmark
+        # 配额耗尽时上传失败不应误伤质量门禁（定期清理见 cleanup-artifacts.yml）。
+        continue-on-error: true
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: flood-fill-benchmark-node-22
           path: benchmark-flood-fill.json
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 7
 
       - name: Upload Vitest JUnit on failure
+        continue-on-error: true
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: vitest-junit-node-22
           path: test/test-results/vitest/junit.xml
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 3
 
       - name: Upload coverage report
+        continue-on-error: true
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-report-node-22
           path: coverage/
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 7
 
   e2e-node-22:
     name: Node 22 Playwright
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 09 容量用例按真实点击推满 1500 条命令，慢 runner 可能耗时数分钟；放宽以容纳一次重试。
+    timeout-minutes: 35
     steps:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -96,6 +101,7 @@ jobs:
         run: pnpm test:e2e
 
       - name: Upload Playwright diagnostics on failure
+        continue-on-error: true
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -104,7 +110,7 @@ jobs:
             test/test-results/
             test/playwright-report/
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 3
 
   compatibility-node-24:
     name: Node 24 compatibility

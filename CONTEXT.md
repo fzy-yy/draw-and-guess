@@ -34,6 +34,9 @@
 | 词库弹窗会话（vocabulary dialog session）                | 词库弹窗的生命周期：打开→拉取→按世代作废迟到结果→关闭（取消在途）→保存成功才关闭；视图模式不属于会话                                                                      | ADR-0027、`useVocabularyDialogSession.ts`              |
 | 客户端房间事实（client room facts）                      | 阶段文案、可玩成员判定与玩家人数选项的单一具名口径（与服务端 member-facts 对齐）；榜单与占席数是不同语义，不复用                                                          | ADR-0028、`utils/room-facts.ts`、`utils/phase-text.ts` |
 | 浅层包装（shallow wrappers）                             | 图标按钮与视觉包装组件（Base/Icon/Round/Tool、HudPill/OverlayCard/RuleRow/StageHeader/SectionHeader）是为消除调用点长串而抽取的；删除测试判定删除只会搬移复杂度，保持现状 | ADR-0029                                               |
+| 猜中礼花（guess confetti）                               | 本机反馈：`me.guessed` 严格跃迁（false→true）触发一次全屏礼花，不枚举阶段；`prev===false` 防止重载补放                                                                    | ADR-0031、ADR-0033、`useGuessConfetti.ts`              |
+
+| 结构化提示（structured hint） | 提示来源统一为词条 hint（空回退 category）：画家在「画家模式」完整显示提示（画家专属 `wordHint`）与答案；猜词者（含画家切到猜词者模式）按时间逐渐披露 `revealedHints[0]` | ADR-0032、`GameHud.vue` |
 
 ## 待打磨（deliberately unresolved）
 

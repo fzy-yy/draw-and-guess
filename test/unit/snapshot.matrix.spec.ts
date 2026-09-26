@@ -341,17 +341,17 @@ describe('角色裁剪快照穷举矩阵', () => {
         }
         const gameView = snapshot.game
         expect(gameView).toBeDefined()
-        // 画家本人（房主与否无关）在任何阶段都收 answer/wordCategory 真值；
+        // 画家本人（房主与否无关）在任何阶段都收 answer/wordHint 真值；
         // 观战身份即使 ID 与 drawerId 相同也不算画家。
         const isViewerDrawer =
           (role === 'drawer' || role === 'drawer-host') && viewerId === roomDrawerId
-        // answer 只发给画家本人（所有对局阶段一致）
+        // answer 与完整提示只发给画家本人（所有对局阶段一致）
         if (isViewerDrawer) {
           expect(gameView?.answer).toBe(room.game?.answer?.text)
-          expect(gameView?.wordCategory).toBeDefined()
+          expect(gameView?.wordHint).toBeDefined()
         } else {
           expect(gameView?.answer).toBeUndefined()
-          expect(gameView?.wordCategory).toBeUndefined()
+          expect(gameView?.wordHint).toBeUndefined()
         }
         // 选词选项仅画家本人在 choosing_word 可见
         if (isViewerDrawer && phase === 'choosing_word') {

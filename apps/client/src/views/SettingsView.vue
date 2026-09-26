@@ -89,7 +89,7 @@ const diagnostic = computed(() =>
     strings.settings.diagAddress(serverAddress),
     strings.settings.diagConnection(store.connectionLabel),
     strings.settings.diagLatency(
-      store.latency ? String(store.latency) : strings.settings.unknownLatency,
+      store.latency ? strings.common.latencyShort(store.latency) : strings.settings.unknownLatency,
     ),
     strings.settings.diagPlayerId(
       store.playerId ? `${store.playerId.slice(0, 8)}…` : strings.settings.notLoggedIn,

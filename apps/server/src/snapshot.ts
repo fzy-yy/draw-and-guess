@@ -89,9 +89,11 @@ export class SnapshotBuilder {
                 ? createAnswerMask(game.answer.text, game.revealedIndices)
                 : serverStrings.notices.answerHidden
             : '',
-          // 画家才可看到真实答案、真实分类与候选词（候选词携带难度供选词星级展示，以及换一组权限标识）
+          // 画家才可看到真实答案、完整提示与候选词（候选词携带难度供选词星级展示，以及换一组权限标识）；
+          // 完整提示与猜词者按时间披露的 revealedHints 同源（hint 优先、空回退 category），
+          // 供「画家模式」把提示与答案一并明文展示；猜词者视角始终只看 revealedHints。
           ...(viewerIsDrawer && game.answer
-            ? { answer: game.answer.text, wordCategory: game.answer.category }
+            ? { answer: game.answer.text, wordHint: game.answer.hint || game.answer.category }
             : {}),
           ...(viewerIsDrawer && room.phase === 'choosing_word'
             ? {

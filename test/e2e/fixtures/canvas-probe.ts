@@ -62,3 +62,16 @@ export async function readLogicalRaster(target: Locator): Promise<LogicalRaster>
     height: size.height,
   }
 }
+
+/**
+ * 权威命令计数（客户端镜像的 DrawingCommand 条数）：上限用例按它推进到
+ * `maxHistoryCommands`，不再依赖固定点击次数；探针未开启时抛错（同 __logicalCanvas）。
+ */
+export async function readAuthoritativeCommandCount(target: Locator): Promise<number> {
+  return target.evaluate((element) => {
+    const probe = (element as HTMLCanvasElement & { __authoritativeCommandCount?: unknown })
+      .__authoritativeCommandCount
+    if (typeof probe !== 'number') throw new Error('权威命令计数探针未挂载')
+    return probe
+  })
+}

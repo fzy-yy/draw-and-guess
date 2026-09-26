@@ -20,37 +20,41 @@
 
 ## 索引
 
-| 编号                                                     | 主题                                           | 来源                       | 状态   |
-| :------------------------------------------------------- | :--------------------------------------------- | :------------------------- | :----- |
-| [0001](0001-progressive-hint-interval.md)                | 逐步提示间隔用毫秒计算、不再按秒向下取整       | 审查报告 #3                | 已采纳 |
-| [0002](0002-final-ranking-no-gaps.md)                    | 战报名次按实际产出条目递增，不留下排名空洞     | 审查报告 #6                | 已采纳 |
-| [0003](0003-canvas-coordinate-bounds.md)                 | 画布归一化坐标统一映射到 `canvas-1`            | 审查报告 #8                | 已采纳 |
-| [0004](0004-vocabulary-default-package.md)               | 词库默认包按「词数 + id」确定性选择            | 审查报告 #10               | 已采纳 |
-| [0005](0005-log-retention-order.md)                      | 日志保留按创建时间删最旧，不按文件名排序       | 审查报告 #11               | 已采纳 |
-| [0006](0006-bgm-teardown-dispose.md)                     | BGM 切歌时释放旧实例（dispose 清 src）         | 审查报告 #12               | 已采纳 |
-| [0007](0007-local-observability-privacy.md)              | 本地运维诊断采用有界安全聚合                   | 运维需求                   | 已采纳 |
-| [0008](0008-context-menu-singleton-vs-teleport.md)       | 右键菜单用舞台内单例状态，不用 Teleport        | 通用右键菜单需求           | 已采纳 |
-| [0009](0009-fill-degradation-and-locks.md)               | 填充的渲染态/提交态两把锁与 Worker 失败降级    | 填充状态机修复需求         | 已采纳 |
-| [0010](0010-drawing-history-cap.md)                      | 绘图历史上限用「拒绝新增」而非 FIFO 丢弃       | 绘图历史上限语义修复需求   | 已采纳 |
-| [0011](0011-session-logout-atomicity.md)                 | 会话注销先原子吊销持久化令牌，再清理内存       | 会话注销原子性修复需求     | 已采纳 |
-| [0012](0012-ack-runtime-boundary.md)                     | 客户端请求响应也建立运行时 Schema 边界         | 请求响应协议对称性需求     | 已采纳 |
-| [0013](0013-vocabulary-level-config-and-hints.md)        | 词库难度级配置加载期解析与提示字段改版         | 词库重建适配需求           | 已采纳 |
-| [0014](0014-settings-view-static-import.md)              | 设置页静态导入消除首开白闪；懒加载重试桥       | 首开设置白闪缺陷           | 已采纳 |
-| [0015](0015-select-dropdown-fixed-anchoring.md)          | 下拉面板 fixed 视口锚定、祖先滚动即关闭        | 弹窗下拉布局异常缺陷       | 已采纳 |
-| [0016](0016-type-aware-guardrails.md)                    | 类型护栏分层：协议泛型接入与 strictTemplates   | 全库类型严谨性整改         | 已采纳 |
-| [0017](0017-drawing-replay-atomic-commit.md)             | 画布重放原子提交：后备缓冲整帧换入除空白窗     | e2e 09 偶发失败诊断        | 已采纳 |
-| [0018](0018-canvas-replay-machine.md)                    | 画布重放状态机：决策入机、单快照入口与锁分家   | 架构评审候选 C1            | 已采纳 |
-| [0019](0019-socket-narrow-ports.md)                      | Socket 窄端口：消费者与替身不依赖全量实例      | 架构评审候选 C3            | 已采纳 |
-| [0020](0020-push-registry.md)                            | 推送事件单注册表：登记一处、清单派生           | 架构评审候选 C2            | 已采纳 |
-| [0021](0021-snapshot-view-port-and-matrix.md)            | 快照裁剪窄端口与角色×阶段穷举矩阵              | 架构评审候选 C5            | 已采纳 |
-| [0022](0022-geometry-single-source-and-request-flags.md) | 坐标几何单口径与请求标志语义分离               | 架构评审候选 C6            | 已采纳 |
-| [0023](0023-member-facts-single-source.md)               | 成员事实单一口径：具名谓词取代内联组合判定     | 架构评审 2026-09-26 候选 2 | 已采纳 |
-| [0024](0024-round-machine-ownership.md)                  | 回合所有权归 RoundMachine：阶段写入与对局消息  | 架构评审 2026-09-26 候选 1 | 已采纳 |
-| [0025](0025-resync-module.md)                            | 重连/重同步独立成 resync 模块                  | 架构评审 2026-09-26 候选 3 | 已采纳 |
-| [0026](0026-client-diagnostics-core.md)                  | 客户端诊断内核单一口径                         | 架构评审 2026-09-26 候选 4 | 已采纳 |
-| [0027](0027-vocabulary-dialog-session.md)                | 词库弹窗会话生命周期独立成 composable          | 架构评审 2026-09-26 候选 5 | 已采纳 |
-| [0028](0028-client-room-facts.md)                        | 客户端房间事实单一口径：阶段文案与可玩成员     | 架构评审 2026-09-26 候选 6 | 已采纳 |
-| [0029](0029-shallow-wrappers-kept.md)                    | 客户端浅层包装保持现状：删除测试判定不复用折叠 | 架构评审 2026-09-26 候选 7 | 已采纳 |
+| 编号                                                       | 主题                                           | 来源                       | 状态   |
+| :--------------------------------------------------------- | :--------------------------------------------- | :------------------------- | :----- |
+| [0001](0001-progressive-hint-interval.md)                  | 逐步提示间隔用毫秒计算、不再按秒向下取整       | 审查报告 #3                | 已采纳 |
+| [0002](0002-final-ranking-no-gaps.md)                      | 战报名次按实际产出条目递增，不留下排名空洞     | 审查报告 #6                | 已采纳 |
+| [0003](0003-canvas-coordinate-bounds.md)                   | 画布归一化坐标统一映射到 `canvas-1`            | 审查报告 #8                | 已采纳 |
+| [0004](0004-vocabulary-default-package.md)                 | 词库默认包按「词数 + id」确定性选择            | 审查报告 #10               | 已采纳 |
+| [0005](0005-log-retention-order.md)                        | 日志保留按创建时间删最旧，不按文件名排序       | 审查报告 #11               | 已采纳 |
+| [0006](0006-bgm-teardown-dispose.md)                       | BGM 切歌时释放旧实例（dispose 清 src）         | 审查报告 #12               | 已采纳 |
+| [0007](0007-local-observability-privacy.md)                | 本地运维诊断采用有界安全聚合                   | 运维需求                   | 已采纳 |
+| [0008](0008-context-menu-singleton-vs-teleport.md)         | 右键菜单用舞台内单例状态，不用 Teleport        | 通用右键菜单需求           | 已采纳 |
+| [0009](0009-fill-degradation-and-locks.md)                 | 填充的渲染态/提交态两把锁与 Worker 失败降级    | 填充状态机修复需求         | 已采纳 |
+| [0010](0010-drawing-history-cap.md)                        | 绘图历史上限用「拒绝新增」而非 FIFO 丢弃       | 绘图历史上限语义修复需求   | 已采纳 |
+| [0011](0011-session-logout-atomicity.md)                   | 会话注销先原子吊销持久化令牌，再清理内存       | 会话注销原子性修复需求     | 已采纳 |
+| [0012](0012-ack-runtime-boundary.md)                       | 客户端请求响应也建立运行时 Schema 边界         | 请求响应协议对称性需求     | 已采纳 |
+| [0013](0013-vocabulary-level-config-and-hints.md)          | 词库难度级配置加载期解析与提示字段改版         | 词库重建适配需求           | 已采纳 |
+| [0014](0014-settings-view-static-import.md)                | 设置页静态导入消除首开白闪；懒加载重试桥       | 首开设置白闪缺陷           | 已采纳 |
+| [0015](0015-select-dropdown-fixed-anchoring.md)            | 下拉面板 fixed 视口锚定、祖先滚动即关闭        | 弹窗下拉布局异常缺陷       | 已采纳 |
+| [0016](0016-type-aware-guardrails.md)                      | 类型护栏分层：协议泛型接入与 strictTemplates   | 全库类型严谨性整改         | 已采纳 |
+| [0017](0017-drawing-replay-atomic-commit.md)               | 画布重放原子提交：后备缓冲整帧换入除空白窗     | e2e 09 偶发失败诊断        | 已采纳 |
+| [0018](0018-canvas-replay-machine.md)                      | 画布重放状态机：决策入机、单快照入口与锁分家   | 架构评审候选 C1            | 已采纳 |
+| [0019](0019-socket-narrow-ports.md)                        | Socket 窄端口：消费者与替身不依赖全量实例      | 架构评审候选 C3            | 已采纳 |
+| [0020](0020-push-registry.md)                              | 推送事件单注册表：登记一处、清单派生           | 架构评审候选 C2            | 已采纳 |
+| [0021](0021-snapshot-view-port-and-matrix.md)              | 快照裁剪窄端口与角色×阶段穷举矩阵              | 架构评审候选 C5            | 已采纳 |
+| [0022](0022-geometry-single-source-and-request-flags.md)   | 坐标几何单口径与请求标志语义分离               | 架构评审候选 C6            | 已采纳 |
+| [0023](0023-member-facts-single-source.md)                 | 成员事实单一口径：具名谓词取代内联组合判定     | 架构评审 2026-09-26 候选 2 | 已采纳 |
+| [0024](0024-round-machine-ownership.md)                    | 回合所有权归 RoundMachine：阶段写入与对局消息  | 架构评审 2026-09-26 候选 1 | 已采纳 |
+| [0025](0025-resync-module.md)                              | 重连/重同步独立成 resync 模块                  | 架构评审 2026-09-26 候选 3 | 已采纳 |
+| [0026](0026-client-diagnostics-core.md)                    | 客户端诊断内核单一口径                         | 架构评审 2026-09-26 候选 4 | 已采纳 |
+| [0027](0027-vocabulary-dialog-session.md)                  | 词库弹窗会话生命周期独立成 composable          | 架构评审 2026-09-26 候选 5 | 已采纳 |
+| [0028](0028-client-room-facts.md)                          | 客户端房间事实单一口径：阶段文案与可玩成员     | 架构评审 2026-09-26 候选 6 | 已采纳 |
+| [0029](0029-shallow-wrappers-kept.md)                      | 客户端浅层包装保持现状：删除测试判定不复用折叠 | 架构评审 2026-09-26 候选 7 | 已采纳 |
+| [0030](0030-ci-artifact-quota-and-capacity-test-window.md) | CI 工件配额兜底与容量用例的回合窗口            | 2026-09-26 CI 排查         | 已采纳 |
+| [0031](0031-guess-confetti-strict-transition.md)           | 猜中礼花触发：严格跃迁、不枚举阶段             | 2026-09-26 缺陷修复        | 已采纳 |
+| [0032](0032-drawer-hint-full-and-progressive.md)           | 画家模式完整提示、猜词者逐渐披露（wordHint）   | 2026-09-26 提示一致性      | 已采纳 |
+| [0033](0033-confetti-main-thread-rendering.md)             | 礼花改主线程渲染（CSP 拦截 blob Worker）       | 2026-09-26 缺陷修复        | 已采纳 |
 
 > 原始审查报告保留在仓库根级 [`bug-审查报告.md`](../../bug-审查报告.md)，作为一次性记录；
 > **决策与后果以本目录为准**，源码注释只链接本目录。

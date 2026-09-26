@@ -35,7 +35,7 @@ constructor 收整张 `GameService`（`snapshot.ts` ↔ `game-service.ts` 类型
    - ① `RoomSnapshotSchema`（strict）safeParse 必过——任何 Secret 字段混入即现形；
    - ② 序列化不含 36 个秘密键名（PlayerSecret/MemberState/RoomSecret/GameSecret
      全内部字段清单）+ `SENTINEL-` 哨兵值（秘密字段换键位泄漏也会被抓）；
-   - ③ 授权可见性真值表：answer/wordCategory 仅画家本人（全阶段）、wordOptions
+   - ③ 授权可见性真值表：answer/wordHint 仅画家本人（全阶段）、wordOptions
      仅画家 × choosing_word、answerMask 结算即全文/作画非画家非真值、
      privateJoinCode 仅房主、canReturnWaiting 三条件——欠曝与越权同罪。
 3. **fixture 直构 Secret**（带哨兵值）+ fake 端口（词库复用 mini-vocabulary registry，
