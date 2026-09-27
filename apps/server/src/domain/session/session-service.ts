@@ -13,9 +13,11 @@ import {
   type SessionRegistration,
 } from '@draw-guess/shared'
 import { APP_CONFIG } from '../../config/index.ts'
+import { invalidateMemberCanvasSync } from '../drawing/canvas-sync.ts'
 import { serverStrings } from '@draw-guess/strings'
 import { GameError, runtimeErrorType, type RuntimeLogger } from '../../errors.ts'
 import type { PlayerSecret, RoomSecret } from '../../models.ts'
+import { phaseEquivalent } from '../room/room-facts.ts'
 import type { PlayerRecord, PlayerRepository } from '../../repositories/index.ts'
 import type { AppSocket } from '../../socket-types.ts'
 import { type RuntimeDependencies } from '../../runtime.ts'
@@ -25,7 +27,7 @@ import { digestRecoveryToken } from '../../security/recovery-token.ts'
 export interface SessionServiceContext {
   broadcastPresence(): void
   clock: RuntimeDependencies['clock']
-  emitRoom(roomId?: string): void
+  emitRoom(roomId: string): void
   /** 向房间广播推送事件：事件名与信封在编译期配对（信封由 createServerPush 生成）。 */
   emitRoomEvent<E extends ServerPushEventName>(
     roomId: string,
@@ -72,9 +74,8 @@ export class SessionService {
     if (input.protocolVersion !== APP_CONFIG.app.protocolVersion) {
       throw new GameError('PROTOCOL_MISMATCH', serverStrings.errors.PROTOCOL_MISMATCH)
     }
-    // 头像编号已由共享 Zod 白名单校验；服务层再次防御性确认，拒绝任意资源路径或 URL。
-    if (!APP_CONFIG.player.avatarIds.includes(input.profile.avatarId))
-      throw new GameError('INVALID_AVATAR_ID', serverStrings.errors.INVALID_AVATAR_ID)
+    // 头像编号的白名单裁决在协议层（AvatarIdSchema 枚举）完成，类型 AvatarId 已收窄；
+    // 服务层不再重复 includes 判断（跨持久化边界的恢复路径另有复核，见 restorePlayerFromRecord）。
 
     // 携带恢复令牌且仍处于宽限期内的玩家：复用原身份与座位（如仍在房间）
     const recoveryTokenDigest = input.recoveryToken
@@ -240,10 +241,10 @@ export class SessionService {
     const room = player.roomId ? this.context.rooms.get(player.roomId) : undefined
     if (room) {
       const member = room.members.find((item) => item.playerId === player.id)
-      if (member) member.lastSyncedSeq = undefined
+      if (member) invalidateMemberCanvasSync(member)
     }
     this.joinSocketRoom(player) // 重新加入 Socket 房间，恢复广播接收
-    this.context.emitRoom(player.roomId) // 重新推送房间快照，恢复对局视图
+    if (player.roomId) this.context.emitRoom(player.roomId) // 重新推送房间快照，恢复对局视图
     // 只有「作画阶段断线且席位被保留」才通知同局其他在线成员；本人由连接恢复模态框反馈。
     if (room && player.drawingDisconnectRoomId === room.id) {
       const payload: MemberConnectionChange = {
@@ -324,8 +325,7 @@ export class SessionService {
     const player = this.context.requirePlayer(playerId)
     // 房间内锁定资料，避免对局期间玩家频繁改名干扰其他成员辨识
     if (player.roomId) throw new GameError('PROFILE_LOCKED', serverStrings.errors.PROFILE_LOCKED)
-    if (!APP_CONFIG.player.avatarIds.includes(profile.avatarId))
-      throw new GameError('INVALID_AVATAR_ID', serverStrings.errors.INVALID_AVATAR_ID)
+    // avatarId 白名单裁决同注册路径：协议枚举收窄后服务层不重复校验。
     // 改名后需要重新做唯一性校验（排除自己当前占用）
     player.profile = {
       nickname: this.makeUniqueNickname(this.cleanNickname(profile.nickname), player.id),
@@ -356,9 +356,7 @@ export class SessionService {
     if (!player || player.socketId !== socket.id) return
     const room = player.roomId ? this.context.rooms.get(player.roomId) : undefined
     // 暂停中的作画仍是同一未完成回合；只有暂停前阶段确为 drawing 才保留席位。
-    const retainDrawingSeat =
-      room?.phase === 'drawing' ||
-      (room?.phase === 'paused' && room.game?.phaseBeforePause === 'drawing')
+    const retainDrawingSeat = phaseEquivalent(room, 'drawing')
     player.disconnectGeneration += 1
     const disconnectGeneration = player.disconnectGeneration
 
@@ -384,7 +382,7 @@ export class SessionService {
       player.drawingDisconnectRoomId = room.id
       // 断线期间可能丢失增量广播，重连后的首份快照必须携带完整画布历史。
       const member = room.members.find((item) => item.playerId === playerId)
-      if (member) member.lastSyncedSeq = undefined
+      if (member) invalidateMemberCanvasSync(member)
       const payload: MemberConnectionChange = {
         playerId,
         nickname: player.profile.nickname,
@@ -402,9 +400,7 @@ export class SessionService {
       if (room.game?.drawerId === playerId) {
         this.context.scheduler.set(APP_CONFIG.network.drawerReconnectGraceMs, () =>
           this.context.safeRun('drawerReconnectTimeout', () => {
-            const phaseIsRoundDrawing =
-              room.phase === 'drawing' ||
-              (room.phase === 'paused' && room.game?.phaseBeforePause === 'drawing')
+            const phaseIsRoundDrawing = phaseEquivalent(room, 'drawing')
             if (
               !player.connected &&
               player.disconnectGeneration === disconnectGeneration &&

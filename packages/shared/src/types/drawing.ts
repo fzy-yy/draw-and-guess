@@ -14,4 +14,3 @@ export type StrokeAck = z.infer<typeof StrokeAckSchema>
 
 export type StrokePush = ServerPushData<typeof EVENTS.drawStrokeBatch>
 export type FillPush = ServerPushData<typeof EVENTS.drawFillCommit>
-export type DrawingPushContext = Omit<StrokePush, 'stroke'>

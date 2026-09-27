@@ -170,9 +170,9 @@ export function formatManifestIssues(manifest: SoundManifest): string {
 }
 
 /**
- * 严格断言：必需资源缺失或重复扩展名时抛出可定位错误（供开发/测试/构建期 fail-fast）。
- * 可选资源缺失永不判失败；strict 关闭（生产降级）时静默通过。
- * 生产环境运行时不调用本函数，而是由 runtime.ts 按可用性安全降级（绝不抛异常）。
+ * 严格断言：必需资源缺失或重复扩展名时抛出可定位错误（仅供单元测试 fail-fast）。
+ * 可选资源缺失永不判失败；strict 关闭时静默通过。
+ * 生产运行时不调用本函数，而是由 runtime.ts 按可用性安全降级（绝不抛异常）。
  */
 export function assertSoundManifestIntegrity(
   manifest: SoundManifest,
@@ -189,7 +189,7 @@ export function reportManifestIssues(manifest: SoundManifest): void {
   console.error(formatManifestIssues(manifest))
 }
 
-/** 检查指定清单中某个键是否可播放（存在可用资源）；纯查询，供单测与组件共用。 */
+/** 检查指定清单中某个键是否可播放（存在可用资源）；纯查询，仅供单元测试消费。 */
 export function isManifestEntryAvailable(
   manifest: SoundManifest,
   name: SoundName | string,

@@ -100,7 +100,15 @@ describe('幂等请求重试', () => {
           playerId: '00000000-0000-4000-8000-000000000001',
           requestCache: sharedCache,
           inFlightRequests: new Map(),
-          service: { clock: { now: () => 1_000 }, logUnexpectedError: () => undefined },
+          // binder 现经类型必选的 service 记录观测指标：双件套齐 clock/metrics/logUnexpectedError。
+          service: {
+            clock: { now: () => 1_000 },
+            metrics: {
+              recordAcknowledgement: () => undefined,
+              recordResync: () => undefined,
+            },
+            logUnexpectedError: () => undefined,
+          },
         },
         on: (_event: string, callback: typeof listener) => {
           listener = callback
@@ -135,7 +143,14 @@ describe('幂等请求重试', () => {
         playerId: '00000000-0000-4000-8000-000000000001',
         requestCache: new Map(),
         inFlightRequests: new Map(),
-        service: { clock: { now: () => 1_000 }, logUnexpectedError: () => undefined },
+        service: {
+          clock: { now: () => 1_000 },
+          metrics: {
+            recordAcknowledgement: () => undefined,
+            recordResync: () => undefined,
+          },
+          logUnexpectedError: () => undefined,
+        },
       },
       on: (_event: string, callback: typeof listener) => (listener = callback),
     } as unknown as BinderSocket

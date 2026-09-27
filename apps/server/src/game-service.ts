@@ -1,12 +1,12 @@
-import { RoomPersistenceCoordinator } from './application/room-persistence-coordinator.ts'
-import { RoomMembershipService } from './domain/room/room-membership-service.ts'
-import { SessionService } from './domain/session/session-service.ts'
 /**
  * 服务端权威游戏服务。
  *
  * 本类独占所有可改变比赛结果的状态：身份、成员资格、准备、阶段、答案、计时、绘图与分数。
  * Socket 处理器只负责校验载荷并调用这些方法，客户端永远不能上传裁决结果。
  */
+import { RoomPersistenceCoordinator } from './application/room-persistence-coordinator.ts'
+import { RoomMembershipService } from './domain/room/room-membership-service.ts'
+import { SessionService } from './domain/session/session-service.ts'
 import {
   EVENTS,
   MIN_SELECTED_VOCABULARY_WORDS,
@@ -30,7 +30,6 @@ import {
 import type { AppServer, AppSocket } from './socket-types.ts'
 import type { ServerPushEnvelope, ServerPushEventName } from '@draw-guess/shared'
 import { APP_CONFIG } from './config/index.ts'
-import { defaultRoomSettings } from '@draw-guess/config'
 import { serverStrings } from '@draw-guess/strings'
 import { RoomPublisher } from './application/room-publisher.ts'
 import { DomainContext } from './domain/domain-context.ts'
@@ -39,10 +38,13 @@ import { InviteService } from './domain/invite/invite-service.ts'
 import { RoomVocabularyService } from './domain/vocabulary/room-vocabulary-service.ts'
 import {
   activePlayers,
+  createOnlineLookup,
   isOnlinePlayer,
+  isPhaseExpired,
   nominalPhaseDurationMs,
   occupiesSeat,
 } from './domain/room/member-facts.ts'
+import { reseatMembers } from './domain/room/room-facts.ts'
 import {
   GameError,
   SILENT_LOGGER,
@@ -53,17 +55,11 @@ import {
 import type { GameSecret, MemberState, PlayerSecret, RoomSecret } from './models.ts'
 import { enforceEventRate } from './rate-limit.ts'
 import type { ArchiveRepository, PlayerRepository } from './repositories/index.ts'
-import { validateRoomSettings } from './room-settings.ts'
 import { RoundMachine } from './round-machine.ts'
 import { SYSTEM_RUNTIME, type RuntimeDependencies } from './runtime.ts'
 import { SnapshotBuilder } from './snapshot.ts'
 import type { VocabularyRegistry, VocabularyStore } from './vocabulary/index.ts'
 import { OperationalMetrics } from './observability/metrics.ts'
-
-/** 默认房间规则只从根级配置生成，避免处理器中出现另一套默认值。 */
-export function createDefaultRoomSettings(): RoomSettings {
-  return defaultRoomSettings(APP_CONFIG.player.defaultMaxPlayers)
-}
 
 /**
  * 计时器全部保存在房间秘密状态中。每次切换阶段前清理旧计时器，可阻止旧回调在新回合中误执行。
@@ -90,9 +86,8 @@ export class GameService {
   readonly roomVocabulary: RoomVocabularyService
   readonly publisher: RoomPublisher
 
-  /** 连通性查询：注入成员事实模块的显式 isOnline 入参（箭头字段保证回调时 this 绑定）。 */
-  private readonly isOnline = (playerId: string): boolean =>
-    this.players.get(playerId)?.connected === true
+  /** 连通性查询：从成员事实单一口径构造，供各选择器复用。 */
+  private readonly isOnline = createOnlineLookup(this.players)
 
   constructor(
     readonly io: AppServer,
@@ -151,7 +146,6 @@ export class GameService {
       setWaiting: (...args) => this.round.setWaiting(...args),
       snapshot: (room, playerId) => this.snapshotter.snapshot(room, playerId),
       transition: (...args) => this.round.transition(...args),
-      validateSettings: (...args) => this.validateSettings(...args),
       vocabulary: this.vocabulary,
     })
     this.persistence = new RoomPersistenceCoordinator({
@@ -231,11 +225,12 @@ export class GameService {
 
   /** 获取房间当前绑定的词库 Store（若未绑定或未找到则回退默认词库）。 */
   getRoomVocabularyStore(room?: RoomSecret): VocabularyStore {
-    if (room?.vocabularyPackageId && 'get' in this.vocabulary) {
+    // VocabularyRegistry 契约保证 get/getDefault 必存在（必选成员），无需再运行时探活。
+    if (room?.vocabularyPackageId) {
       const store = this.vocabulary.get(room.vocabularyPackageId)
       if (store) return store
     }
-    return 'getDefault' in this.vocabulary ? this.vocabulary.getDefault() : this.vocabulary
+    return this.vocabulary.getDefault()
   }
 
   /** 记录未预期的服务器内部错误（脱敏到错误名），供排查 bindRequest 兜底返回的 INTERNAL_ERROR。 */
@@ -360,17 +355,14 @@ export class GameService {
     if (room.stateVersion !== expectedVersion)
       throw new GameError('VERSION_CONFLICT', serverStrings.errors.VERSION_CONFLICT_SETTINGS)
     const next = { ...room.settings, ...patch }
-    this.validateSettings(next)
-    // 最大人数不能小于当前占席成员数（含离局占位与观战），否则会出现超员
+    // 规则范围由 RoomSettingsSchema（含 partial 更新）在绑定层裁决；
+    // 这里只保留 schema 给不了的房间态领域判定：最大人数不能小于当前占席成员数（含离局占位与观战），否则会出现超员
     const seatedMembers = room.members.filter(occupiesSeat)
     if (next.maxPlayers < seatedMembers.length)
       throw new GameError('INVALID_SETTINGS', serverStrings.errors.INVALID_SETTINGS_MAX_PLAYERS)
     room.settings = next
-    if (room.phase === 'waiting') {
-      room.members.forEach((member, index) => {
-        member.seatIndex = index
-      })
-    }
+    // 上方 SETTINGS_LOCKED/VERSION/超员校验已保证 waiting 阶段；人数上限变化后席位编号必须紧凑重排
+    reseatMembers(room)
     this.round.invalidateReady(room, serverStrings.notices.rulesUpdated)
     this.emitRoom(room.id)
     // maxPlayers 会显示在大厅房间行中，规则变更后需同步广播大厅快照，避免列表展示陈旧人数。
@@ -418,7 +410,7 @@ export class GameService {
       .every((member) => member.ready)
     if (!allOnline || !guestsReady)
       throw new GameError('NOT_ALL_READY', serverStrings.errors.NOT_ALL_READY)
-    // 本局词条数必须不少于最小词数（60条）且覆盖选词候选数
+    // 本局词条数必须不少于最小词数（MIN_SELECTED_VOCABULARY_WORDS）且覆盖选词候选数
     const requiredWords = Math.max(MIN_SELECTED_VOCABULARY_WORDS, room.settings.optionCount)
     if (room.selectedWordIds.size < requiredWords) {
       throw new GameError(
@@ -477,7 +469,7 @@ export class GameService {
     if (room.phase !== 'choosing_word' || game.drawerId !== playerId || game.roundId !== roundId) {
       throw new GameError('NOT_DRAWER', serverStrings.errors.NOT_DRAWER_CHOOSE)
     }
-    if (game.phaseEndsAt > 0 && this.clock.now() >= game.phaseEndsAt) {
+    if (isPhaseExpired(game, this.clock.now())) {
       throw new GameError('PHASE_EXPIRED', serverStrings.errors.PHASE_EXPIRED)
     }
     const answer = game.candidates.find((word) => word.id === wordId)
@@ -492,7 +484,7 @@ export class GameService {
     if (room.phase !== 'choosing_word' || game.drawerId !== playerId || game.roundId !== roundId) {
       throw new GameError('NOT_DRAWER', serverStrings.errors.NOT_DRAWER_CHOOSE)
     }
-    if (game.phaseEndsAt > 0 && this.clock.now() >= game.phaseEndsAt) {
+    if (isPhaseExpired(game, this.clock.now())) {
       throw new GameError('PHASE_EXPIRED', serverStrings.errors.PHASE_EXPIRED)
     }
     if (!room.settings.allowWordReroll) {
@@ -514,7 +506,7 @@ export class GameService {
     // 仅作画阶段可猜词，且必须在当前回合，且答案已确定；观战者不能猜词
     if (room.phase !== 'drawing' || game.roundId !== roundId || !game.answer)
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_GUESS)
-    if (game.phaseEndsAt > 0 && this.clock.now() >= game.phaseEndsAt)
+    if (isPhaseExpired(game, this.clock.now()))
       throw new GameError('PHASE_EXPIRED', serverStrings.errors.PHASE_EXPIRED)
     if (game.drawerId === playerId)
       throw new GameError('DRAWER_CANNOT_GUESS', serverStrings.errors.DRAWER_CANNOT_GUESS)
@@ -666,17 +658,17 @@ export class GameService {
   /**
    * 向房间所有成员推送各自的角色裁剪快照。
    * 每个成员看到的答案/候选词不同，因此必须以成员为观看者分别生成。
+   * @internal 内部协作接口（RoundMachine / 模块间调用）
    */
-  /** @internal 内部协作接口（RoundMachine / 模块间调用） */
-  public emitRoom(roomId?: string): void {
+  public emitRoom(roomId: string): void {
     this.publisher.emitRoom(roomId)
   }
 
   /**
    * 执行不得抛出到调用方的副作用（计时器回调、异步清理等）：
    * 这些位置没有 ack 可以承载错误，一旦抛出就是未捕获异常，会直接打断 Node 事件循环并丢失全部内存态。
+   * @internal 内部协作接口（RoundMachine / 模块间调用）
    */
-  /** @internal 内部协作接口（RoundMachine / 模块间调用） */
   public safeRun(label: string, fn: () => void): void {
     try {
       fn()
@@ -688,8 +680,8 @@ export class GameService {
   /**
    * 在线玩家与公开房间列表同源广播；独立 room:listChanged 事件让大厅可明确订阅房间变化，
    * presence:snapshot 则继续承担初始全量同步和向后兼容。
+   * @internal 内部协作接口（RoundMachine / 模块间调用）
    */
-  /** @internal 内部协作接口（RoundMachine / 模块间调用） */
   public broadcastPresence(): void {
     this.publisher.broadcastPresence()
   }
@@ -707,10 +699,6 @@ export class GameService {
   /** 推送系统通知事件：RoundMachine 的系统通知出口（事件名与信封编译期配对）。 */
   emitSystemNotice(roomId: string, text: string): void {
     this.io.to(roomId).emit(EVENTS.systemNotice, createServerPush(EVENTS.systemNotice, { text }))
-  }
-
-  private validateSettings(settings: RoomSettings): void {
-    validateRoomSettings(settings)
   }
 
   /** @internal 内部协作接口（RoundMachine / 模块间调用） */
@@ -746,8 +734,10 @@ export class GameService {
     }
   }
 
-  /** 取对局秘密，房间没有进行中的游戏时抛 NO_GAME。 */
-  /** @internal 内部协作接口（RoundMachine / 模块间调用） */
+  /**
+   * 取对局秘密，房间没有进行中的游戏时抛 NO_GAME。
+   * @internal 内部协作接口（RoundMachine / 模块间调用）
+   */
   public requireGame(room: RoomSecret): GameSecret {
     if (!room.game) throw new GameError('NO_GAME', serverStrings.errors.NO_GAME)
     return room.game
@@ -758,13 +748,15 @@ export class GameService {
     const game = this.requireGame(room)
     if (room.phase !== 'drawing' || game.drawerId !== playerId || game.roundId !== roundId)
       throw new GameError('NOT_DRAWER', serverStrings.errors.NOT_DRAWER)
-    if (game.phaseEndsAt > 0 && this.clock.now() >= game.phaseEndsAt)
+    if (isPhaseExpired(game, this.clock.now()))
       throw new GameError('PHASE_EXPIRED', serverStrings.errors.PHASE_EXPIRED)
     return game
   }
 
-  /** 是否为对局进行中的阶段（用于“是否已开赛”类判定）。 */
-  /** @internal 内部协作接口（RoundMachine / 模块间调用） */
+  /**
+   * 是否为对局进行中的阶段（用于“是否已开赛”类判定）。
+   * @internal 内部协作接口（RoundMachine / 模块间调用）
+   */
   public isPlaying(phase: RoomPhase): boolean {
     return ['starting', 'choosing_word', 'drawing', 'round_result'].includes(phase)
   }

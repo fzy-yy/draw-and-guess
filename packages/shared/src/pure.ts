@@ -2,13 +2,15 @@
  * 共享领域纯函数：答案规范化、遮罩生成、计分与状态机转换表。
  * 无任何运行时依赖，可在 Node 与浏览器中直接单测。
  */
-import { DRAWING_PROTOCOL_LIMITS } from './protocol/constants.ts'
-import type { RoomPhase, ScoreDetail } from './types.ts'
+import type { RoomPhase, ScoreDetail } from './types/index.ts'
 
-export function normalizeHexColor(value: string): string | undefined {
-  return new RegExp(DRAWING_PROTOCOL_LIMITS.colorPattern).test(value)
-    ? value.toUpperCase()
-    : undefined
+/**
+ * 规范化画板颜色为大写 HEX。
+ * 格式合法性由协议 Schema（同一条 colorPattern）在统一请求绑定层裁决，
+ * 本函数只承担「规范化」这一职责，不再重复校验——校验点保持单一。
+ */
+export function normalizeHexColor(value: string): string {
+  return value.toUpperCase()
 }
 
 /** 标准化猜词；Unicode NFKC 可合并全角拉丁字符，中文词面不会被破坏。

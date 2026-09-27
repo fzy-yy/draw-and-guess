@@ -4,7 +4,7 @@
  */
 import { APP_CONFIG } from './config/index.ts'
 import { calculateGuessScore, type ScoreDetail } from '@draw-guess/shared'
-import type { GameSecret, MemberState, RoomSecret } from './models.ts'
+import type { GameSecret, RoomSecret } from './models.ts'
 import { activeGuessers, countActivePlayers } from './domain/room/member-facts.ts'
 
 /** 为单个猜中者构造得分明细（与猜中时同规则、同口径）。 */
@@ -46,16 +46,15 @@ export function buildDrawerScore(input: {
   game: GameSecret
   room: RoomSecret
   drawerAbandoned: boolean
-}): { score: number; allCorrect: boolean; roundGuessers: MemberState[] } {
+}): number {
   const { game, room, drawerAbandoned } = input
   // 参与本回合的可玩成员全集（含已掉线者）：满员奖励按「每个人都确实猜中」判定。
   // 只认 guessedAt（猜中瞬间必然在线才置位）：猜中后掉线/离场不取消奖励，
   // 掉线但未猜中的成员仍会使奖励不成立；同一时刻离场成员（leftGame）不参与判定。
   const roundGuessers = activeGuessers(room, game.drawerId)
   const allCorrect = roundGuessers.length > 0 && roundGuessers.every((member) => member.guessedAt)
-  const score = drawerAbandoned
+  return drawerAbandoned
     ? 0
     : game.correctOrder.length * APP_CONFIG.game.score.drawerPerCorrect +
-      (allCorrect ? APP_CONFIG.game.score.drawerAllCorrectBonus : 0)
-  return { score, allCorrect, roundGuessers }
+        (allCorrect ? APP_CONFIG.game.score.drawerAllCorrectBonus : 0)
 }

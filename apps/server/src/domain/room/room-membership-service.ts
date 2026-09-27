@@ -16,8 +16,18 @@ import { serverStrings } from '@draw-guess/strings'
 import { GameError, type RuntimeLogger } from '../../errors.ts'
 import type { GameSecret, MemberState, PlayerSecret, RoomSecret } from '../../models.ts'
 import { type RuntimeDependencies } from '../../runtime.ts'
+import { slidingWindowAllow } from '../../rate-limit.ts'
 import type { VocabularyRegistry, VocabularyStore } from '../../vocabulary/index.ts'
-import { countOnlinePlayers, isActivePlayer, isOnlinePlayer, occupiesSeat } from './member-facts.ts'
+import {
+  countOnlinePlayers,
+  createOnlineLookup,
+  isActivePlayer,
+  isOnlinePlayer,
+  nicknameOf,
+  occupiesSeat,
+  type OnlineLookup,
+} from './member-facts.ts'
+import { phaseEquivalent, reseatMembers } from './room-facts.ts'
 
 /** 仅暴露本用例需要的数据与副作用端口；由应用层连接跨用例动作。 */
 export interface RoomMembershipServiceContext {
@@ -26,7 +36,7 @@ export interface RoomMembershipServiceContext {
   broadcastPresence(): void
   clearHintTimers(game: GameSecret): void
   clock: RuntimeDependencies['clock']
-  emitRoom(roomId?: string): void
+  emitRoom(roomId: string): void
   /** 向房间广播推送事件：事件名与信封编译期配对（信封由 createServerPush 生成）。 */
   emitRoomEvent<E extends ServerPushEventName>(
     roomId: string,
@@ -54,16 +64,17 @@ export interface RoomMembershipServiceContext {
   setWaiting(room: RoomSecret, notice: string, resetReady?: boolean): void
   snapshot(room: RoomSecret, playerId: string): RoomSnapshot
   transition(room: RoomSecret, next: RoomPhase): void
-  validateSettings(settings: RoomSettings): void
   vocabulary: VocabularyRegistry
 }
 
 export class RoomMembershipService {
-  constructor(private readonly context: RoomMembershipServiceContext) {}
+  /** 连通性查询：从成员事实单一口径构造（在构造函数体赋值，避开字段初始化早于参数属性的顺序）。 */
+  private readonly isOnline: OnlineLookup
 
-  /** 连通性查询：注入成员事实模块的显式 isOnline 入参（箭头字段保证回调时 this 绑定）。 */
-  private readonly isOnline = (playerId: string): boolean =>
-    this.context.players.get(playerId)?.connected === true
+  constructor(private readonly context: RoomMembershipServiceContext) {
+    this.isOnline = createOnlineLookup(this.context.players)
+  }
+
   /** 断线代次与宽限期由会话用例校验；房主迁移只改变进程内房间状态。 */
   transferDisconnectedHost(room: RoomSecret, playerId: string): void {
     const candidate = room.members.find(
@@ -76,8 +87,7 @@ export class RoomMembershipService {
     this.context.addSystemNotice(
       room,
       serverStrings.notices.hostMigratedTimeout(
-        this.context.players.get(candidate.playerId)?.profile.nickname ??
-          serverStrings.notices.hostFallback,
+        nicknameOf(this.context.players, candidate.playerId, serverStrings.notices.hostFallback),
       ),
     )
     this.context.emitRoom(room.id)
@@ -87,14 +97,11 @@ export class RoomMembershipService {
     input: { name: string; visibility: RoomVisibility; settings: RoomSettings },
   ): RoomSnapshot {
     const player = this.requireAvailablePlayer(playerId) // 玩家必须不在其他房间
-    this.context.validateSettings(input.settings)
+    // 规则范围由 RoomCreateSchema 内嵌的 RoomSettingsSchema 在绑定层裁决，服务端不再重校。
     const privateJoinCode =
       input.visibility === 'private' ? this.generatePrivateJoinCode() : undefined
     // 新房间默认选择词数最多的词库并全选其词条，成员只有房主一人，状态版本从 1 开始。
-    const defaultPackageId =
-      'defaultPackageId' in this.context.vocabulary
-        ? this.context.vocabulary.defaultPackageId
-        : undefined
+    const defaultPackageId = this.context.vocabulary.defaultPackageId
     const defaultStore = this.context.getRoomVocabularyStore()
     const room: RoomSecret = {
       id: this.context.random.uuid(),
@@ -108,7 +115,6 @@ export class RoomMembershipService {
       members: [],
       vocabularyPackageId: defaultPackageId,
       selectedWordIds: new Set(defaultStore.items.map((word) => word.id)),
-      createdAt: this.context.clock.now(),
     }
     room.members.push(this.createMember(player, room))
     player.roomId = room.id
@@ -127,23 +133,26 @@ export class RoomMembershipService {
   joinRoom(playerId: string, roomId: string): RoomSnapshot {
     const player = this.requireAvailablePlayer(playerId)
     const room = this.context.rooms.get(roomId)
-    if (!room || room.phase === 'closed' || room.visibility !== 'public')
+    if (!room || room.visibility !== 'public')
       throw new GameError('ROOM_NOT_FOUND', serverStrings.errors.ROOM_NOT_FOUND)
     return this.joinResolvedRoom(player, room, 'public')
   }
 
   joinPrivateRoom(playerId: string, code: string): RoomSnapshot {
     const player = this.requireAvailablePlayer(playerId)
-    const now = this.context.clock.now()
-    player.privateJoinAttemptTimes = player.privateJoinAttemptTimes.filter(
-      (timestamp) => now - timestamp < APP_CONFIG.room.privateJoinWindowMs,
+    const attempt = slidingWindowAllow(
+      player.privateJoinAttemptTimes,
+      this.context.clock.now(),
+      APP_CONFIG.room.privateJoinWindowMs,
+      APP_CONFIG.room.privateJoinMaxAttempts,
     )
-    if (player.privateJoinAttemptTimes.length >= APP_CONFIG.room.privateJoinMaxAttempts)
+    // 与迁移前的原行为一致：无论拒绝与否都回写修剪后的队列（窗口随时间前滚，旧戳不滞留）。
+    player.privateJoinAttemptTimes = attempt.times
+    if (!attempt.allowed)
       throw new GameError('RATE_LIMITED', serverStrings.errors.RATE_LIMITED_PRIVATE_JOIN)
-    player.privateJoinAttemptTimes.push(now)
     const roomId = this.context.roomsByPrivateCode.get(code)
     const room = roomId ? this.context.rooms.get(roomId) : undefined
-    if (!room || room.phase === 'closed' || room.visibility !== 'private')
+    if (!room || room.visibility !== 'private')
       throw new GameError('PRIVATE_ROOM_NOT_FOUND', serverStrings.errors.PRIVATE_ROOM_NOT_FOUND)
     player.privateJoinAttemptTimes = []
     return this.joinResolvedRoom(player, room, 'private-code')
@@ -203,65 +212,27 @@ export class RoomMembershipService {
     }
     void player.socket?.leave(room.id)
     room.members = room.members.filter((member) => member.playerId !== playerId)
-    if (room.phase === 'waiting') {
-      room.members.forEach((member, index) => {
-        member.seatIndex = index
-      })
-    }
+    if (room.phase === 'waiting') reseatMembers(room)
     this.context.logger.info({ roomId: room.id, playerId, reason }, '玩家已离开房间')
     delete player.roomId
     room.stateVersion += 1
-    // 空房间直接关闭；房主离开时迁移控制权；倒计时/等待/对局各有对应处理
+    // 空房间直接关闭；房主离开先迁移/关闭；再按阶段收敛与统一广播（三段均为离场共用口径）。
     if (room.members.length === 0) {
       this.closeRoom(room, serverStrings.notices.closeRoomEmpty, ROOM_CLOSE_CODE.roomEmpty)
       return
     }
-    if (room.hostId === playerId && !this.transferHostInternal(room)) {
-      this.closeRoom(
-        room,
-        serverStrings.notices.closeRoomNoPlayableHost,
-        ROOM_CLOSE_CODE.noPlayableHost,
-      )
-      return
-    }
+    if (this.reclaimHostOrClose(room, playerId)) return
     if (room.phase === 'starting')
       this.context.setWaiting(room, serverStrings.notices.countdownCanceled, false)
     else if (room.phase === 'waiting')
       this.context.addSystemNotice(room, serverStrings.notices.playerLeft(player.profile.nickname))
-    else if (
-      room.game?.drawerId === playerId &&
-      (room.phase === 'choosing_word' ||
-        (room.phase === 'paused' && room.game.phaseBeforePause === 'choosing_word'))
-    )
-      // 画家在选词阶段（包括该阶段处于暂停时）离开：本回合作废并直接进入下一回合选词。
-      // 否则会落到下面的 finishRound，而它因 answer 尚未确定会静默 return，
-      // 使房间卡在 paused 且 drawerId 指向已离开的玩家（恢复后进入无人能作画的空回合）。
-      this.context.abandonChoosing(
-        room,
-        serverStrings.notices.drawerLeftChoosing(player.profile.nickname),
-      )
-    else if (
-      room.game?.drawerId === playerId &&
-      (room.phase === 'drawing' ||
-        (room.phase === 'paused' && room.game.phaseBeforePause === 'drawing'))
-    )
-      this.context.finishRound(room, true) // 画家在作画阶段离开，本回合作废
-
-    // 在线人数不足 2 人时自动暂停比赛
-    if (
-      countOnlinePlayers(room, this.isOnline) < APP_CONFIG.player.minPlayers &&
-      this.context.isPlaying(room.phase)
-    ) {
-      this.context.pauseRoomInternal(room, serverStrings.notices.autoPaused)
-    }
-    if (room.phase === 'game_result') this.context.evaluateRematch(room)
-    this.context.emitRoom(room.id)
-    this.context.broadcastPresence()
+    else this.settleDrawerDeparture(room, playerId, player.profile.nickname)
+    this.finalizeDepartureTail(room)
   }
 
   leaveGame(playerId: string): void {
     const { room, member, player } = this.requireMembership(playerId)
-    if (room.phase === 'waiting' || room.phase === 'closed')
+    if (room.phase === 'waiting')
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_LEAVE_GAME)
     if (member.spectating) {
       this.leaveRoom(playerId, serverStrings.notices.leaveReasonDefault)
@@ -287,39 +258,55 @@ export class RoomMembershipService {
       createServerPush(EVENTS.roomMemberConnectionChanged, payload),
     )
 
-    if (room.hostId === playerId && !this.transferHostInternal(room)) {
-      this.closeRoom(
-        room,
-        serverStrings.notices.closeRoomNoPlayableHost,
-        ROOM_CLOSE_CODE.noPlayableHost,
-      )
-      return
-    }
+    if (this.reclaimHostOrClose(room, playerId)) return
 
     if (room.phase === 'starting') {
       // 倒计时尚未正式开局：返回等待并移除离局占位，保留其他人的准备状态。
+      // 与离房不同：退局不动其他人的席位与广播（维持原行为，仅刷在线 presence 后提前返回）。
       room.members = room.members.filter((candidate) => !candidate.leftGame)
       this.context.setWaiting(room, serverStrings.notices.countdownCanceled, false)
       this.context.broadcastPresence()
       return
     }
 
-    if (
-      room.game?.drawerId === playerId &&
-      (room.phase === 'choosing_word' ||
-        (room.phase === 'paused' && room.game.phaseBeforePause === 'choosing_word'))
-    )
-      this.context.abandonChoosing(
-        room,
-        serverStrings.notices.drawerLeftChoosing(player.profile.nickname),
-      )
-    else if (
-      room.game?.drawerId === playerId &&
-      (room.phase === 'drawing' ||
-        (room.phase === 'paused' && room.game.phaseBeforePause === 'drawing'))
-    )
-      this.context.finishRound(room, true)
+    // waiting 阶段已在用例入口拒绝，画家作废判定可直接进行
+    this.settleDrawerDeparture(room, playerId, player.profile.nickname)
+    this.finalizeDepartureTail(room)
+  }
 
+  /**
+   * 离场共用①：离开的是房主则迁移控制权；迁移失败（无可承接成员）关闭房间。
+   * 返回 true 表示房间已关闭，调用方立即结束收敛。
+   */
+  private reclaimHostOrClose(room: RoomSecret, playerId: string): boolean {
+    if (room.hostId !== playerId || this.transferHostInternal(room)) return false
+    this.closeRoom(
+      room,
+      serverStrings.notices.closeRoomNoPlayableHost,
+      ROOM_CLOSE_CODE.noPlayableHost,
+    )
+    return true
+  }
+
+  /**
+   * 离场共用②：画家缺席的阶段收敛。
+   * 选词阶段（含该阶段处于暂停时）离开：本回合作废并直接进入下一回合选词——
+   * 否则会落到 finishRound，而它因 answer 尚未确定会静默 return，
+   * 使房间卡在 paused 且 drawerId 指向已离开的玩家（恢复后进入无人能作画的空回合）。
+   * 作画阶段（含暂停前为作画）离开：本回合立即结算作废。
+   */
+  private settleDrawerDeparture(room: RoomSecret, playerId: string, nickname: string): void {
+    if (room.game?.drawerId !== playerId) return
+    if (phaseEquivalent(room, 'choosing_word'))
+      this.context.abandonChoosing(room, serverStrings.notices.drawerLeftChoosing(nickname))
+    else if (phaseEquivalent(room, 'drawing')) this.context.finishRound(room, true)
+  }
+
+  /**
+   * 离场共用③：统一收尾——在线人数不足自动暂停、结算期重赛评估、全房间快照与在线在场广播。
+   */
+  private finalizeDepartureTail(room: RoomSecret): void {
+    // 在线人数不足 2 人时自动暂停比赛
     if (
       countOnlinePlayers(room, this.isOnline) < APP_CONFIG.player.minPlayers &&
       this.context.isPlaying(room.phase)
@@ -399,8 +386,6 @@ export class RoomMembershipService {
   }
 
   private transferHostInternal(room: RoomSecret): boolean {
-    // 房主离开/超时后把控制权迁移给第一个在线的可玩成员（观战者不能任房主），
-    // 没有在线成员则取第一个非观战成员
     // 优先在线可玩成员；都不在线时兜底取第一个可玩成员（观战者不能任房主）。
     const candidate =
       room.members.find((member) => isOnlinePlayer(member, this.isOnline)) ??
@@ -411,8 +396,7 @@ export class RoomMembershipService {
     this.context.addSystemNotice(
       room,
       serverStrings.notices.hostMigrated(
-        this.context.players.get(candidate.playerId)?.profile.nickname ??
-          serverStrings.notices.hostFallback,
+        nicknameOf(this.context.players, candidate.playerId, serverStrings.notices.hostFallback),
       ),
     )
     return true

@@ -31,18 +31,6 @@ export class ProfilePage {
     await expect(this.page.getByRole('dialog')).toBeVisible()
   }
 
-  async selectAvatar(avatarId: string) {
-    await this.openAvatarPicker()
-    // 选择指定头像
-    const avatarBtn = this.page.locator(`button:has(img[src*="${avatarId}"])`)
-    if (await avatarBtn.count()) {
-      await avatarBtn.first().click()
-    } else {
-      // 备用：点击弹窗中的某个头像按钮
-      await this.page.locator('div[role="dialog"] button:has(img)').nth(3).click()
-    }
-  }
-
   async enterLobby() {
     const submitBtn = this.page.getByRole('button', { name: /^进入.*大厅$/ })
     await expect(submitBtn).toBeEnabled({ timeout: 10_000 })

@@ -93,7 +93,6 @@ describe('动态 UI 无障碍语义', () => {
     await user.keyboard('{Enter}')
 
     expect(view.emitted()['update:modelValue']).toContainEqual([''])
-    expect(view.emitted().clear).toHaveLength(1)
   })
 
   it('动态通用组件通过 axe 扫描', async () => {

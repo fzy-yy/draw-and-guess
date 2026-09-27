@@ -1,6 +1,7 @@
 /**
- * Socket 连接单例与其推送事件绑定。
- * 与 store 解耦：监听器通过回调接口桥接回 store 状态，便于独立测试与复用。
+ * Socket 窄端口类型与推送事件的绑定/解绑函数。
+ * io() 构造在 application/game-transport.ts（ADR-0019）；本文件不含连接单例，
+ * 监听器注册表只认 PushBindingTarget 端口——store 解耦，测试替身可直接实现该面。
  */
 import type { Socket } from 'socket.io-client'
 import {
@@ -21,8 +22,6 @@ import type { RequestAckTransport } from './request.ts'
  * 即可（unknown 参数可承接任意事件签名，逆变兼容）。
  */
 export type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>
-
-/** socket.io 连接级系统事件（非协议推送）。 */
 
 /**
  * 推送监听端口：attachSocketListeners / disposeSocketLifecycle 只认这个面。

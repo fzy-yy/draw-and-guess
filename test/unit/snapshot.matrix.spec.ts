@@ -72,7 +72,6 @@ const FORBIDDEN_KEYS = [
   'hintOrder',
   'revealedHintCount',
   'roundSettled',
-  'archived',
   'hostReturnRequested',
   'timer',
   'rematchTimer',
@@ -260,7 +259,6 @@ function makeRoom(
     settings: testRoomSettings({ showWordLength: true }),
     members,
     selectedWordIds: new Set(['word-1', 'word-2', 'word-3']),
-    createdAt: NOW - 120_000,
     ...(game ? { game } : {}),
   }
   return { room, players }
@@ -276,7 +274,7 @@ function makePort(
     rooms: new Map([[room.id, room]]),
     clock: { now: () => now },
     isPlaying: (phase) => ['starting', 'choosing_word', 'drawing', 'round_result'].includes(phase),
-    getRoomVocabularyStore: () => createMemoryVocabularyRegistry(),
+    getRoomVocabularyStore: () => createMemoryVocabularyRegistry().getDefault(),
     requirePlayer: (playerId) => {
       const player = players.get(playerId)
       if (!player) throw new GameError('UNAUTHORIZED', 'requirePlayer')

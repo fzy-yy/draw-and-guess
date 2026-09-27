@@ -4,8 +4,8 @@
  * 领域层（GameService/RoundMachine/Snapshot）只依赖本文件定义的接口与 LoadedVocabulary 结构，
  * 与「词库数据从哪来」彻底解耦：
  * - 当前实现：sqlite-provider.ts（SQLite 词库库文件，words/metadata 表）；
- * - 将来扩展：新增其它 Provider 实现本接口，并在服务端私有配置的 provider 字段
- *   切换标识即可接入，领域代码零改动。
+ * - 将来扩展：实现本接口的新 Provider 后，在 vocabulary/index.ts 的 loadVocabulary
+ *   构造点接入（当前无按配置分发——不存在 provider 开关字段）。
  *
  * 各 Provider 的职责边界：
  * 1. 读取原始数据（文件 / 数据库 / 远程）；
@@ -28,7 +28,7 @@ export interface VocabularyLevelConfig {
   scoreWeight: number
 }
 
-/** 词库元信息：透传给快照与排障日志，不参与玩法裁决。 */
+/** 词库元信息：登记来源、范围白名单与派生配置，不参与玩法裁决（sourceId 与 wordCount 供测试核验来源与词数）。 */
 export interface VocabularyMeta {
   /** 来源实现标识（与 VocabularyProvider.sourceId 一致） */
   sourceId: string
@@ -50,7 +50,7 @@ export interface VocabularyMeta {
   drawabilityEnum: number[]
   /** 难度 → 时限/权重映射：Provider 加载期按词条 difficulty 派生到词条字段 */
   levelConfig: Record<number, VocabularyLevelConfig>
-  /** 词库词数（words 表有效词数，服务端预先检查并保存） */
+  /** 词库词数（words 表有效词数，服务端预先检查并保存；供测试核验） */
   wordCount?: number
 }
 

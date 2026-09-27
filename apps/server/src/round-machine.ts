@@ -20,21 +20,27 @@ import type { TimerHandle } from './runtime.ts'
 import type { RoundContext } from './domain/game/round-context.ts'
 import { selectDiverseCandidates } from './domain/vocabulary/candidate-selector.ts'
 import {
+  createOnlineLookup,
   isOnlinePlayer,
   isRematchEligible,
+  nicknameOf,
   onlineGuessers,
   rankedMembers,
   rematchEligibleMembers,
+  type OnlineLookup,
 } from './domain/room/member-facts.ts'
+import { reseatMembers } from './domain/room/room-facts.ts'
+import { invalidateCanvasSync } from './domain/drawing/canvas-sync.ts'
 import { GameError, runtimeErrorType } from './errors.ts'
 
 /** 回合流转状态机；只操作房间的 game 与阶段，不直接接触 socket。 */
 export class RoundMachine {
-  constructor(private readonly service: RoundContext) {}
+  /** 连通性查询：从成员事实单一口径构造（在构造函数体赋值，避开字段初始化早于参数属性的顺序）。 */
+  private readonly isOnline: OnlineLookup
 
-  /** 连通性查询：注入成员事实模块的显式 isOnline 入参（箭头字段保证回调时 this 绑定）。 */
-  private readonly isOnline = (playerId: string): boolean =>
-    this.service.players.get(playerId)?.connected === true
+  constructor(private readonly service: RoundContext) {
+    this.isOnline = createOnlineLookup(this.service.players)
+  }
 
   /**
    * 画家在选词阶段离开/掉线时废弃当前回合，立即进入下一回合选词。
@@ -94,7 +100,7 @@ export class RoundMachine {
     game.correctOrder = []
     game.correctDetails = [] // 新回合重置得分明细
     game.revealedIndices = new Set()
-    game.hintOrder = [] // 结构化提示顺序在 beginDrawing（答案确定后）洗牌
+    game.hintOrder = [] // 占位清空；真正的揭示槽位在 beginDrawing（答案确定后）按 hint/分类置为 [0] 或空
     game.revealedHintCount = 0
     game.roundResult = undefined
     game.roundSettled = false
@@ -103,7 +109,7 @@ export class RoundMachine {
     game.phaseEndsAt = this.service.clock.now() + room.settings.chooseSeconds * 1_000
     // 新回合从空画布开始：重置全员绘图差分游标，保证本回合首份快照始终携带完整（空）画布，
     // 不沿用上一回合的高水位序号（否则新回合第一条笔画可能被误判为「已同步」而差分省略）。
-    room.members.forEach((member) => (member.lastSyncedSeq = undefined))
+    invalidateCanvasSync(room)
     // 选词超时：服务端随机选择一个候选词并直接开画。
     // 候选池按规则在开局前已校验充足（resetWhenExhausted 保障轮转），正常不会为空；
     // 此处仍作防御：极端情况下（词库被掏空）走弃权流程作废本回合，避免房间滞留 choosing_word。
@@ -187,8 +193,7 @@ export class RoundMachine {
     this.addMessage(room, {
       type: 'correct',
       text: serverStrings.notices.guessCorrect(
-        this.service.players.get(member.playerId)?.profile.nickname ??
-          serverStrings.notices.fallbackPlayerName,
+        nicknameOf(this.service.players, member.playerId, serverStrings.notices.fallbackPlayerName),
       ),
       playerId: member.playerId,
     })
@@ -219,8 +224,7 @@ export class RoundMachine {
     // 导致结算展示的分数与实际入账不一致。
     const details = [...game.correctDetails]
     // 画家得分：每个猜中者计一件，全员猜中另有满员奖励（均排除观战成员，scoring 模块统一）
-    const drawerScoreInfo = buildDrawerScore({ game, room, drawerAbandoned })
-    const drawerScore = drawerScoreInfo.score
+    const drawerScore = buildDrawerScore({ game, room, drawerAbandoned })
     const drawer = room.members.find((member) => member.playerId === game.drawerId)
     if (drawer) {
       drawer.score += drawerScore
@@ -321,7 +325,7 @@ export class RoundMachine {
   }
   public pauseRoomInternal(room: RoomSecret, reason: string): void {
     // 只有选词/作画/回合结算可暂停；开局倒计时（starting）不在 paused 白名单内
-    if (!this.isPausable(room.phase) || room.phase === 'paused') return
+    if (!this.isPausable(room.phase)) return
     const game = this.service.requireGame(room)
     // 先确认状态机允许，再动现场：否则清除倒计时后转换失败，会留下无计时器的僵死阶段
     if (!canTransition(room.phase, 'paused')) return
@@ -367,9 +371,7 @@ export class RoundMachine {
     this.service.scheduler.clear(game?.rematchTimer)
     delete room.game
     room.members = room.members.filter((member) => !member.leftGame)
-    room.members.forEach((member, index) => {
-      member.seatIndex = index
-    })
+    reseatMembers(room)
     // next_game 候场成员只在真正进入下一局 waiting 时晋升；纯观战成员保持观战。
     room.members.forEach((member) => {
       member.rematchReady = false
@@ -474,7 +476,7 @@ export class RoundMachine {
     game.revealedHintCount += 1
     this.service.emitRoom(room.id)
   }
-  public revealHint(room: RoomSecret): void {
+  private revealHint(room: RoomSecret): void {
     const game = room.game
     if (!game?.answer || room.phase !== 'drawing') return
     // 筛选出尚未揭示的非标点/空白字符作为待揭示候选
@@ -540,7 +542,7 @@ export class RoundMachine {
   }
 
   /** 从当前回合序号起，按开局洗牌顺序寻找第一位仍在房间、在线的可玩成员任画家（观战者跳过）。 */
-  public findNextDrawer(room: RoomSecret, game: GameSecret): string | undefined {
+  private findNextDrawer(room: RoomSecret, game: GameSecret): string | undefined {
     const start = game.currentRound - 1
     for (let offset = 0; offset < game.drawerOrder.length; offset += 1) {
       const candidate = game.drawerOrder[(start + offset) % game.drawerOrder.length]

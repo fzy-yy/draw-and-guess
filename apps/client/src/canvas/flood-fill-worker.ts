@@ -61,6 +61,11 @@ export class FloodFillWorkerClient {
   private jobId = 0
   private rejectActive?: (reason: Error) => void
 
+  /**
+   * 是否有填充任务在途（worker 已派发、尚未回包/降级）。
+   * 生产侧渲染锁归 DrawingReplayMachine 的 renderTasks；本标志的唯一消费者是
+   * flood-fill-worker.spec 的并发行为断言（删除会把观察复杂度搬进测试脚手架），故保留。
+   */
   get busy(): boolean {
     return Boolean(this.rejectActive)
   }

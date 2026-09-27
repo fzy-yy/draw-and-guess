@@ -148,7 +148,14 @@ describe('SessionService 与 Facade 契约', () => {
         playerId: player.playerId,
         requestCache: new Map(),
         inFlightRequests: new Map(),
-        service: { clock: { now: () => 1_000 }, logUnexpectedError: () => undefined },
+        service: {
+          clock: { now: () => 1_000 },
+          metrics: {
+            recordAcknowledgement: () => undefined,
+            recordResync: () => undefined,
+          },
+          logUnexpectedError: () => undefined,
+        },
       },
       on: (_event: string, callback: typeof listener) => (listener = callback),
     } as unknown as Parameters<typeof bindRequest>[0]

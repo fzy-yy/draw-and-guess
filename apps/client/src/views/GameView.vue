@@ -9,13 +9,7 @@ import { useFullscreen } from '@vueuse/core'
 import { Brush, LogOut, Trash2, X } from 'lucide-vue-next'
 import { APP_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
-import {
-  EVENTS,
-  type ClientResponse,
-  type FillCommand,
-  type Stroke,
-  type StrokeAck,
-} from '@draw-guess/shared'
+import { EVENTS, type FillCommand, type Stroke, type StrokeAck } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
 import { AppButton, ConfirmDialog } from '@/components/common'
 import {
@@ -29,6 +23,8 @@ import {
 import { useGameHud } from '@/composables/useGameHud'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { useGuessConfetti } from '@/composables/useGuessConfetti'
+// 填充 ack 类型与提交锁语义归 useFillSession 单点定义（GameCanvas 同源导入）。
+import type { FillAck } from '@/composables/useFillSession'
 import type { RequestResult } from '@/stores/request'
 // 对局内设置页复用同一个静态导入的视图组件（首开白闪取舍见 docs/adr/0014-settings-view-static-import.md）
 import SettingsView from '@/views/SettingsView.vue'
@@ -61,9 +57,6 @@ const fullscreenTarget = computed<HTMLElement | null>(() =>
   document.querySelector<HTMLElement>('.game-stage'),
 )
 const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(fullscreenTarget)
-
-/** 填充 ack 携带服务端画布修订，供画布判断本地是否已追平后解除填充锁。 */
-type FillAck = ClientResponse<typeof EVENTS.drawFillCommit>
 
 function submitStroke(stroke: Stroke, callback: (result: RequestResult<StrokeAck>) => void): void {
   void store.sendStroke(stroke).then(callback)

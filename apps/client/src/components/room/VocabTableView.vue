@@ -11,7 +11,7 @@
 import { computed, ref } from 'vue'
 import { strings } from '@draw-guess/strings'
 import type { VocabularyWord } from '@draw-guess/shared'
-import type { DataTableColumn } from '@/components/common/data-table.types'
+import type { DataTableColumn, ScrollableTable } from '@/components/common/data-table.types'
 import DataTable from '@/components/common/DataTable.vue'
 import DifficultyStars from '@/components/common/DifficultyStars.vue'
 import { useSelectAllState } from '@/composables/useSelectAllState'
@@ -48,7 +48,7 @@ const selectAllState = useSelectAllState(
   computed(() => props.rows),
   selectedSet,
 )
-const table = ref<{ scrollToTop(): void; scrollToIndex(index: number): void }>()
+const table = ref<ScrollableTable>()
 
 defineExpose({
   scrollToTop: () => table.value?.scrollToTop(),

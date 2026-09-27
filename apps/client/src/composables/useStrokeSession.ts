@@ -241,13 +241,10 @@ export function useStrokeSession(options: {
   })
 
   return {
-    activePoints,
-    drawing,
     pendingBatches,
     get activeStrokeId() {
       return activeStrokeId
     },
-    currentStrokeStyle,
     pointerDown,
     pointerMove,
     pointerUp,

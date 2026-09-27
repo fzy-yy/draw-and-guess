@@ -12,7 +12,7 @@
 - `packages/config/src/**`（公开默认值的单一来源）
 - `packages/strings/src/**`（全部展示文案的单一来源）
 
-`apps/client/src/views/**` 显式排除：视图以编排与模板为主，由 `test/e2e/specs/` 跨四种浏览器环境验收真实链路；V8 也不统计 SFC `<template>`。视图内如出现值得单测的脚本逻辑，应先抽成 composable/组件再纳入统计，而不是把视图重新塞回 include 制造虚假分母。
+`apps/client/src/views/**` 显式排除：视图以编排与模板为主，由 `test/e2e/specs/` 跨三种浏览器环境（Chromium DPR 1/1.5、Firefox DPR 2）验收真实链路；V8 也不统计 SFC `<template>`。视图内如出现值得单测的脚本逻辑，应先抽成 composable/组件再纳入统计，而不是把视图重新塞回 include 制造虚假分母。
 
 ## 门禁分层（与 vitest.config.ts 保持一致）
 
@@ -26,28 +26,30 @@
 | `composables/{useGameHud,useRoomSync}.ts` |        75% |      60% |         — |     — |
 | `composables/useStrokeSession.ts`         |        65% |      50% |         — |     — |
 | `components/game/GameCanvas.vue`          |        60% |      50% |       55% |   62% |
+| `canvas/replay-machine.ts`                |        90% |      85% |      100% |   95% |
+| `canvas/geometry.ts`                      |       100% |     100% |      100% |  100% |
 | `components/game/{GameHud,PhaseOverlay}`  |        60% |      55% |         — |     — |
 | `server/game-service.ts`                  |        59% |      49% |       70% |   60% |
 | `server/round-machine.ts`                 |        83% |      67% |       83% |   89% |
 | `server/snapshot.ts`                      |        84% |      76% |      100% |   93% |
 | `shared/pure.ts`                          |        86% |      70% |      100% |   86% |
 
-## 最近一次全量结果（2026-09-15，`pnpm test:coverage`）
+## 最近一次全量结果（2026-09-27，`pnpm test:coverage`）
 
 分区数字为对应目录/文件的整体聚合（含子目录），与 `coverage/coverage-summary.json` 口径一致：
 
-| 分区                    | Statements | Branches | Functions |  Lines |
-| ----------------------- | ---------: | -------: | --------: | -----: |
-| 全局                    |     72.41% |   63.73% |    66.08% | 74.64% |
-| `apps/server/src`（全） |     71.46% |   65.44% |    71.78% | 73.46% |
-| `packages/shared/src`   |     94.50% |   68.42% |    80.00% | 94.50% |
-| `packages/config`       |    100.00% |  100.00% |   100.00% |   100% |
-| `packages/strings`      |     64.00% |  100.00% |    57.14% | 64.00% |
-| `drawing-service.ts`    |     85.42% |   77.19% |    92.86% | 88.24% |
-| `session-service.ts`    |     78.53% |   71.30% |    80.00% | 81.71% |
-| `GameCanvas.vue`        |     78.68% |   68.63% |    77.78% | 81.51% |
-| `useFillSession.ts`     |    100.00% |  100.00% |   100.00% |   100% |
-| `ContextMenu.vue`       |     96.19% |   89.19% |   100.00% |   100% |
+| 分区                                | Statements | Branches | Functions |  Lines |
+| ----------------------------------- | ---------: | -------: | --------: | -----: |
+| 全局                                |     76.93% |   68.73% |    70.33% | 79.23% |
+| `apps/server/src`（全）             |     77.74% |   71.03% |    77.39% | 79.95% |
+| `packages/shared/src`               |     95.41% |   70.59% |    81.25% | 95.41% |
+| `packages/config`                   |    100.00% |  100.00% |   100.00% |   100% |
+| `packages/strings`                  |     69.61% |  100.00% |    63.10% | 69.31% |
+| `domain/drawing/drawing-service.ts` |     85.56% |   76.00% |    91.67% | 87.80% |
+| `domain/session/session-service.ts` |     78.72% |   72.90% |    80.00% | 82.94% |
+| `GameCanvas.vue`                    |     83.87% |   75.00% |    74.19% | 83.33% |
+| `useFillSession.ts`                 |    100.00% |  100.00% |   100.00% |   100% |
+| `ContextMenu.vue`                   |     96.19% |   89.19% |   100.00% |   100% |
 
 ## 维护约定
 

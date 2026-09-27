@@ -20,7 +20,9 @@ export function registerSessionHandlers(socket: AppSocket, service: GameService)
     (input) => {
       const identity = service.register(socket, input)
       // 把该玩家的幂等缓存挂到 socket 上，供后续请求复用。
-      socket.data.requestCache = service.players.get(identity.player.id)?.requestCache
+      // register 刚返回的身份必在玩家册内；兜底保留连接级 Map，绝不写入 undefined。
+      const owner = service.players.get(identity.player.id)
+      if (owner) socket.data.requestCache = owner.requestCache
       // 注册 ack 必须显式携带 room|null，客户端才能原子清除旧房间；恢复对局时强制返回全量画布，
       // 避免页面刷新后的空本地历史收到 strokesOmitted 快照而显示空画布。
       const room = service.snapshotForPlayer(identity.player.id, true) ?? null

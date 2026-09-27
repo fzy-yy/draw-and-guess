@@ -74,19 +74,15 @@ export const useProfileStore = defineStore('profile', () => {
     }
   }
 
-  /** 提交资料修改并保存。 */
+  /** 提交资料修改并保存。request 契约上不抛错（失败已提示），此处无需再包 try/catch。 */
   async function updateProfile(): Promise<void> {
-    try {
-      const result = await request(EVENTS.sessionUpdateProfile, {
-        profile: { nickname: profile.value.nickname, avatarId: profile.value.avatarId },
-      })
-      if (!result.ok) return
-      profile.value = { ...profile.value, ...result.data }
-      saveProfile()
-      notify(strings.store.profileUpdated)
-    } catch {
-      // 网络请求已处理提示
-    }
+    const result = await request(EVENTS.sessionUpdateProfile, {
+      profile: { nickname: profile.value.nickname, avatarId: profile.value.avatarId },
+    })
+    if (!result.ok) return
+    profile.value = { ...profile.value, ...result.data }
+    saveProfile()
+    notify(strings.store.profileUpdated)
   }
 
   return {

@@ -2,7 +2,8 @@ import { mount, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { APP_CONFIG } from '@draw-guess/config'
-import type { DrawingCommand, FillCommand, Stroke, ToolKind } from '@draw-guess/shared'
+import type { DrawingCommand, Stroke, ToolKind } from '@draw-guess/shared'
+import { makeFill, makeStroke } from '../client/canvas-stubs'
 import type { RequestResult } from '@/stores/request'
 import { clearFillDiagnostics, getFillDiagnostics } from '@/canvas/fill-diagnostics'
 import type { FloodFillWorkerRequest, FloodFillWorkerResponse } from '@/canvas/flood-fill-worker'
@@ -91,34 +92,6 @@ function createContextStub(): CanvasRenderingContext2D {
     getImageData: vi.fn(() => imageDataFactory?.() ?? new ImageData(CONTEXT_WIDTH, CONTEXT_HEIGHT)),
     putImageData: vi.fn(),
   } as unknown as CanvasRenderingContext2D
-}
-
-function makeStroke(overrides: Partial<Stroke> = {}): Stroke {
-  return {
-    kind: 'stroke',
-    id: '00000000-0000-4000-8000-0000000000a1',
-    tool: 'pen',
-    color: '#1F2937',
-    width: 5,
-    points: [
-      { x: 0.1, y: 0.1 },
-      { x: 0.5, y: 0.5 },
-    ],
-    sequence: 1,
-    startPointIndex: 0,
-    ...overrides,
-  }
-}
-
-function makeFill(overrides: Partial<FillCommand> = {}): FillCommand {
-  return {
-    kind: 'fill',
-    id: '00000000-0000-4000-8000-0000000000b1',
-    point: { x: 0.5, y: 0.5 },
-    color: '#EF4444',
-    sequence: 1,
-    ...overrides,
-  }
 }
 
 interface CanvasProps {

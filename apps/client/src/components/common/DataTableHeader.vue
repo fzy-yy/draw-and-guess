@@ -7,7 +7,6 @@ export interface DataTableHeaderColumn {
   key: string
   label: string
   sortable?: boolean
-  align?: 'left' | 'center' | 'right'
 }
 
 defineProps<{
@@ -50,10 +49,6 @@ const emit = defineEmits<{ sort: [key: string]; 'toggle-all': [] }>()
         :key="column.key"
         class="whitespace-nowrap px-[0.6em] py-[0.55cqh] font-bold text-muted"
         :style="{ width: widths.get(column.key) }"
-        :class="{
-          'text-center': column.align === 'center',
-          'text-right': column.align === 'right',
-        }"
         :aria-sort="
           sortKey === column.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'
         "

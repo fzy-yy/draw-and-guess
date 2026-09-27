@@ -15,8 +15,6 @@ import type { VocabularyPackageInfo, VocabularyWord } from '@draw-guess/shared'
 import type { VocabularyMeta } from './contract.ts'
 import { SqliteProvider } from './sqlite-provider.ts'
 
-export type { LoadedVocabulary, VocabularyMeta, VocabularyProvider } from './contract.ts'
-
 /** 项目根目录：由文件位置上溯（apps/server/src/vocabulary/../../../..）。 */
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
 
@@ -29,7 +27,9 @@ export interface VocabularyStore {
 }
 
 /** 多词库注册表：管理所有可用词库包，支持按 ID 检索与默认词库获取。 */
-export interface VocabularyRegistry extends VocabularyStore {
+export interface VocabularyRegistry {
+  /** 默认词库的全部词条（转发自 getDefault()，供启动期统计与大厅展示） */
+  items: VocabularyWord[]
   /** 全部已加载词库包元数据列表 */
   packages: VocabularyPackageInfo[]
   /** 默认选中的词库 ID（词数最多者） */
@@ -148,18 +148,8 @@ export async function loadVocabulary(
     defaultPackageId,
     get: (id: string) => stores.get(id),
     getDefault,
-    // 兼容原 VocabularyStore 接口属性（直接转发至默认词库）
     get items() {
       return getDefault().items
-    },
-    get byId() {
-      return getDefault().byId
-    },
-    get version() {
-      return getDefault().version
-    },
-    get meta() {
-      return getDefault().meta
     },
   }
 }

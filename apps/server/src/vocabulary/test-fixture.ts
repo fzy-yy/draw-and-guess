@@ -3,7 +3,7 @@
  *
  * 供 E2E launcher 在「唯一临时目录」内生成最小但**可开完整局**的词库 SQLite 库文件：
  * - 包 ID 取数据库文件名，名称/描述/版本等元数据可按测试场景注入；
- * - 词条数 ≥ MIN_SELECTED_VOCABULARY_WORDS(60)，否则 startGame 会因词条不足而拒绝；
+ * - 词条数 ≥ MIN_SELECTED_VOCABULARY_WORDS（协议常量裁决线），否则 startGame 会因词条不足而拒绝；
  * - 表结构与重建后的正式词库一致（metadata 含 level_config/difficulty_enum/drawability_enum，
  *   words 含 drawability/hint/updated_at），通过 SqliteProvider 的严格校验。
  *
@@ -13,7 +13,9 @@
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import Database from 'better-sqlite3'
+import { MIN_SELECTED_VOCABULARY_WORDS } from '@draw-guess/shared'
 import { APP_CONFIG } from '../config/index.ts'
+import { buildWordSpecs } from './test-word-specs.ts'
 
 /**
  * E2E 词条时限（秒）：远大于产品默认 90s。
@@ -37,7 +39,7 @@ export function createMinimalVocabularyDb(
   options: MinimalVocabularyFixtureOptions = {},
 ): void {
   const {
-    wordCount = 60,
+    wordCount = MIN_SELECTED_VOCABULARY_WORDS,
     name = path.basename(filePath, '.db'),
     description = 'E2E 隔离环境自动生成的最小词库',
     version = '1.0.0',
@@ -98,19 +100,20 @@ export function createMinimalVocabularyDb(
       `INSERT INTO words(id, text, category, difficulty, drawability, enabled, aliases, hint, updated_at)
        VALUES(?, ?, ?, ?, ?, 1, ?, ?, '')`,
     )
-    const categories = ['物品', '动物', '动作']
-    for (let index = 1; index <= wordCount; index += 1) {
-      const difficulty = diffMin + ((index - 1) % difficultyEnum.length)
+    // 词面来自共享数据源（与内存 fixture 单源）；难度仍按配置的 difficulty_enum 取模
+    // （保持「测试时限/难度服从 APP_CONFIG」的原行为，配置枚举变化时不越白名单）。
+    for (const spec of buildWordSpecs(wordCount)) {
+      const difficulty = difficultyEnum[(spec.index - 1) % difficultyEnum.length] ?? spec.difficulty
       insertWord.run(
-        index,
-        `测试词${String(index).padStart(3, '0')}`,
-        categories[(index - 1) % categories.length],
+        spec.index,
+        spec.text,
+        spec.category,
         difficulty,
         // 可绘制性在 1~5 内轮换，覆盖星级展示的各档位
-        ((index - 1) % 5) + 1,
+        spec.drawability,
         '[]',
         // 提示文案与正式词库同款形态（≤10 字），供 E2E 验证结构化提示链路
-        `提示${String(index).padStart(3, '0')}`,
+        spec.hint,
       )
     }
   } finally {

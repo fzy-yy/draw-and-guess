@@ -15,13 +15,11 @@ withDefaults(
     type?: string
     placeholder?: string
     disabled?: boolean
-    readonly?: boolean
     maxlength?: number
     autocomplete?: string
     ariaLabel?: string
     align?: 'left' | 'center' | 'right'
     inputClass?: string
-    error?: boolean
     size?: 'compact' | 'body'
   }>(),
   {
@@ -29,21 +27,17 @@ withDefaults(
     type: 'text',
     placeholder: '',
     disabled: false,
-    readonly: false,
     maxlength: undefined,
     autocomplete: 'off',
     ariaLabel: undefined,
     align: 'left',
     inputClass: '',
-    error: false,
     size: 'compact',
   },
 )
 
 const emit = defineEmits<{
   enter: [event: KeyboardEvent]
-  focus: [event: FocusEvent]
-  blur: [event: FocusEvent]
 }>()
 
 const inputRef = ref<HTMLInputElement>()
@@ -63,7 +57,7 @@ function handleKeyDown(event: KeyboardEvent): void {
     class="flex items-center gap-[0.5em] rounded-[0.7em] border-[0.18cqh] bg-white px-[0.75em] transition-colors focus-within:border-navy"
     :class="[
       size === 'body' ? 'h-[5.2cqh]' : 'h-[4.8cqh]',
-      error ? 'border-red' : 'border-control',
+      'border-control',
       disabled ? 'cursor-not-allowed opacity-50 bg-line/40' : '',
     ]"
   >
@@ -78,7 +72,6 @@ function handleKeyDown(event: KeyboardEvent): void {
       :type="type"
       :placeholder="placeholder"
       :disabled="disabled"
-      :readonly="readonly"
       :maxlength="maxlength"
       :autocomplete="autocomplete"
       :aria-label="ariaLabel"
@@ -89,8 +82,6 @@ function handleKeyDown(event: KeyboardEvent): void {
         inputClass,
       ]"
       @keydown="handleKeyDown"
-      @focus="emit('focus', $event)"
-      @blur="emit('blur', $event)"
     />
 
     <div v-if="$slots.suffix" class="flex shrink-0 items-center text-muted">

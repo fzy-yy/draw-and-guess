@@ -59,24 +59,24 @@ describe('音量折算算法与静音控制', () => {
 
   it('在未静音状态下正确计算主音量与音效通道乘积', () => {
     // 默认配置下 masterVolume=0.8, soundVolume=0.8
-    const volume = calculateEffectiveVolume(baseSettings, 1.0, 1.0)
+    const volume = calculateEffectiveVolume(baseSettings, 1.0)
     expect(volume).toBeCloseTo(0.64, 2)
 
-    // 音量缩放测试
-    const scaledVolume = calculateEffectiveVolume(baseSettings, 0.5, 1.0)
+    // 音效特定倍率（volumeMultiplier）参与折算
+    const scaledVolume = calculateEffectiveVolume(baseSettings, 0.5)
     expect(scaledVolume).toBeCloseTo(0.32, 2)
   })
 
   it('在静音开启时无论音量多大均返回 0', () => {
     const mutedSettings = { ...baseSettings, muted: true }
-    expect(calculateEffectiveVolume(mutedSettings, 1.0, 1.0)).toBe(0)
+    expect(calculateEffectiveVolume(mutedSettings, 1.0)).toBe(0)
   })
 
   it('音量计算严格被截断在 [0, 1] 区间内', () => {
-    const overflow = calculateEffectiveVolume(baseSettings, 5.0, 5.0)
+    const overflow = calculateEffectiveVolume(baseSettings, 5.0)
     expect(overflow).toBe(1.0)
 
-    const negative = calculateEffectiveVolume(baseSettings, -1.0, 1.0)
+    const negative = calculateEffectiveVolume(baseSettings, -1.0)
     expect(negative).toBe(0.0)
   })
 })

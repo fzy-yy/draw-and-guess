@@ -1,6 +1,6 @@
 /**
- * 前后端共享协议、运行时校验与无环境依赖领域纯函数。
- * 此模块只描述可公开的数据结构，绝不声明服务端秘密答案容器或密码字段。
+ * Socket.IO 事件名与请求/响应类型契约（前后端唯一事件名来源）。
+ * 本文件只描述可公开的数据结构，绝不声明服务端秘密答案容器或密码字段。
  */
 import { z } from 'zod'
 import { ProfileSchema, RequestSchema } from './protocol/base.ts'
@@ -26,7 +26,7 @@ import {
 import { LogoutSchema, RegisterSchema, StateResyncSchema } from './protocol/session.ts'
 import { SelectVocabularyPackageSchema, UpdateVocabularySchema } from './protocol/vocabulary.ts'
 import type { ClientResponseData } from './protocol/response.ts'
-import type { Ack } from './types.ts'
+import type { Ack } from './types/index.ts'
 
 /**
  * 全部 Socket.IO 事件名常量表。
@@ -85,9 +85,6 @@ export const EVENTS = {
   systemNotice: 'system:notice',
   systemError: 'system:error',
 } as const
-
-/** 协议事件名联合类型，禁止业务层绕过 EVENTS 手写任意字符串。 */
-export type EventName = (typeof EVENTS)[keyof typeof EVENTS]
 
 const DrawingRoundSchema = RequestSchema.extend({ roundId: z.string().uuid() })
 

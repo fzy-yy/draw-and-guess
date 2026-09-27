@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { resolveRuntimeLayout } from '../../apps/server/src/runtime-layout.ts'
 
 /**
@@ -9,6 +10,8 @@ import { resolveRuntimeLayout } from '../../apps/server/src/runtime-layout.ts'
  */
 describe('运行时资源布局解析', () => {
   it('产物模式：资源相对入口目录解析，开启端口顺延与自动开浏览器', () => {
+    // 产物模式只做 join 拼接、不调用 resolve，故这里用 Windows 风格安装路径模拟分发包
+    // 也不会在 POSIX 上出问题（正因如此才固定住「产物模式不做路径归一化」这一事实）。
     const entryDir = join('F:', 'app', 'draw-and-guess')
     const layout = resolveRuntimeLayout({ mode: 'dist', entryDir })
 
@@ -27,7 +30,10 @@ describe('运行时资源布局解析', () => {
   })
 
   it('源码模式：沿用仓库相对路径，端口固定且不自动开浏览器', () => {
-    const repoRoot = join('F:', 'repo')
+    // 源码模式内部经 path.resolve 归一化，必须传入真实的绝对路径：
+    // 伪造盘符（如 join('F:', 'repo')）在 POSIX 上是相对路径，会被拼到 cwd 前面而误判，
+    // 因此这里从测试文件位置（test/unit/）上溯两级取真实仓库根，Windows/Linux 均成立。
+    const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
     const entryDir = join(repoRoot, 'apps', 'server', 'src')
     const layout = resolveRuntimeLayout({ mode: 'source', entryDir })
 

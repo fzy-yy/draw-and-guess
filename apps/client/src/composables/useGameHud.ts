@@ -8,6 +8,7 @@ import { useTimestamp } from '@vueuse/core'
 import type { FinalRankingEntry } from '@draw-guess/shared'
 import type { useGameStore } from '@/stores/game'
 import { phaseTextFor } from '@/utils/phase-text'
+import { isOnlineActiveMember } from '@/utils/room-facts'
 
 type GameStore = ReturnType<typeof useGameStore>
 
@@ -53,9 +54,9 @@ export function useGameHud(store: GameStore) {
     () =>
       store.room?.phase === 'drawing' &&
       !store.isDrawer &&
-      !store.me?.spectating &&
       !store.me?.guessed &&
-      store.me?.connection === 'online',
+      !!store.me &&
+      isOnlineActiveMember(store.me),
   )
   // 阶段中文标签（画布状态遮罩 / 各面板复用；映射与文案统一来自 utils/phase-text）
   const phaseLabel = computed(() => phaseTextFor(store.room?.phase))

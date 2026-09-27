@@ -22,7 +22,8 @@ export function createHintSchedule(input: HintScheduleInput): HintSchedule {
   const progressiveDelays: number[] = []
   if (input.progressiveHints) {
     // 只调度能真正揭示的提示数：revealHint 会保留最后一个非标点字符（避免泄露答案），
-    // 故最多能揭示 nonPunctCount-1 个；含大量标点的答案以此封顶，避免调度出空转计时器（#9）。
+    // 故最多能揭示 nonPunctCount-1 个；含大量标点的答案以此封顶，避免调度出空转计时器
+    // （取舍属提示揭示节奏设计，见 docs/adr/0001-progressive-hint-interval.md）。
     const chars = Array.from(input.wordText)
     const nonPunctCount = chars.filter((char) => !/^[\p{P}\p{Z}\s]$/u.test(char)).length
     const maxReveals = Math.max(0, nonPunctCount - 1)

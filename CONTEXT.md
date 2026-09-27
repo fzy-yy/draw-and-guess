@@ -18,6 +18,7 @@
 | 回合流转状态机（round state machine）                    | LEGAL_PHASES 白名单裁决阶段转换，非法即 INVALID_TRANSITION                                                                                                                | `round-machine.ts`、`pure.ts`                          |
 | 作画资格（drawing turn）                                 | 每回合由服务端指派画家；笔画/填充按序号单调递增，超预算/越资格被拒                                                                                                        | `drawing-service.ts`                                   |
 | 绘图命令历史（drawing command history）                  | 权威历史只增不删，达 `maxHistoryCommands` 拒绝新增（撤销/清空释放名额）；橡皮/填充只传点击与颜色，像素由客户端重放                                                        | ADR-0010、`drawing-service.ts`                         |
+| 画布同步游标（canvas sync cursor）                       | 成员最近一次快照已同步到的权威绘图序号（`member.lastSyncedSeq`）：整帧下发推进、历史作废重置，差分快照据此只补新增笔画                                                    | `domain/drawing/canvas-sync.ts`                        |
 | 画布重放状态机（Drawing Replay Machine）                 | 「权威历史 → 逻辑栅格」的单一所有者：增量 vs 整帧决策、世代取代、undone 过滤、后备缓冲原子提交与在途预览全在其内                                                          | ADR-0018、`canvas/replay-machine.ts`                   |
 | 原子换入（atomic commit）                                | 重放只画进后备缓冲，整帧成功后一次性 clearRect+drawImage 换入逻辑层；被取代的重放零可见副作用                                                                             | ADR-0017                                               |
 | 渲染态 / 提交态两把锁（render / submit lock）            | 渲染态＝重放里有填充在算（归画布重放状态机）；提交态＝本地填充待权威修订追平（归 useFillSession）。合成 canFill 门禁                                                      | ADR-0009、ADR-0018                                     |
@@ -35,8 +36,7 @@
 | 客户端房间事实（client room facts）                      | 阶段文案、可玩成员判定与玩家人数选项的单一具名口径（与服务端 member-facts 对齐）；榜单与占席数是不同语义，不复用                                                          | ADR-0028、`utils/room-facts.ts`、`utils/phase-text.ts` |
 | 浅层包装（shallow wrappers）                             | 图标按钮与视觉包装组件（Base/Icon/Round/Tool、HudPill/OverlayCard/RuleRow/StageHeader/SectionHeader）是为消除调用点长串而抽取的；删除测试判定删除只会搬移复杂度，保持现状 | ADR-0029                                               |
 | 猜中礼花（guess confetti）                               | 本机反馈：`me.guessed` 严格跃迁（false→true）触发一次全屏礼花，不枚举阶段；`prev===false` 防止重载补放                                                                    | ADR-0031、ADR-0033、`useGuessConfetti.ts`              |
-
-| 结构化提示（structured hint） | 提示来源统一为词条 hint（空回退 category）：画家在「画家模式」完整显示提示（画家专属 `wordHint`）与答案；猜词者（含画家切到猜词者模式）按时间逐渐披露 `revealedHints[0]` | ADR-0032、`GameHud.vue` |
+| 结构化提示（structured hint）                            | 提示来源统一为词条 hint（空回退 category）：画家在「画家模式」完整显示提示（画家专属 `wordHint`）与答案；猜词者（含画家切到猜词者模式）按时间逐渐披露 `revealedHints[0]`  | ADR-0032、`GameHud.vue`                                |
 
 ## 待打磨（deliberately unresolved）
 

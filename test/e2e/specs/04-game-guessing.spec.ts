@@ -1,4 +1,4 @@
-import { test, expect, createPlayer } from '../fixtures/test-base'
+import { test, expect, createPlayer, startTwoPlayerGame } from '../fixtures/test-base'
 
 test.describe('04 - 实时猜词与计分流转 (Guessing, Chat & Scoring)', () => {
   test('发送普通聊天、预设快捷短语与正确猜中计分', async ({ browser }) => {
@@ -7,24 +7,8 @@ test.describe('04 - 实时猜词与计分流转 (Guessing, Chat & Scoring)', () 
 
     try {
       const roomName = `猜词测试-${Date.now()}`
-      await host.lobby.createRoom({ name: roomName })
-      await guest.lobby.joinPublicRoom(roomName)
-      await guest.room.toggleReady()
-      await host.room.startGame()
-
       // 等待进入选词并动态识别画家
-      const isHostDrawer = await Promise.race([
-        host.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => true),
-        guest.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => false),
-      ])
-      const drawer = isHostDrawer ? host : guest
-      const guesser = isHostDrawer ? guest : host
+      const { drawer, guesser } = await startTwoPlayerGame(host, guest, roomName)
 
       // 画家选词并捕获所选题目
       const answer = await drawer.game.chooseWord(0)

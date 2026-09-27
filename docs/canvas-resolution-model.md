@@ -12,8 +12,8 @@
 - 只有 CSS 宽高比改变导致逻辑尺寸变化时才完整重放历史；单纯 DPR 或展示尺寸变化只重新投影，
   不重复执行洪泛填充。
 
-`devicePixelRatioCap` 现已用于展示层分配，不再是 dead config。兼容性测试覆盖 DPR 1、1.5、2，
-横屏与窄屏宽高比、触屏输入、逻辑缓冲跨客户端哈希和展示层像素尺寸。
+`devicePixelRatioCap` 现已用于展示层分配，不再是 dead config。兼容性测试覆盖 Chromium DPR 1、1.5
+与 Firefox DPR 2，以及逻辑缓冲跨客户端哈希、展示层像素尺寸与后台标签页恢复。
 
 洪泛填充采用可取消 Worker job，扫描线算法、性能基线和一致性约束见
 [`flood-fill-performance.md`](./flood-fill-performance.md)。

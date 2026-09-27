@@ -73,7 +73,6 @@ const SAFE_CONTEXT_KEYS = [
   'source',
   'to',
   'visibility',
-  'waitingForNextGame',
 ] as const satisfies readonly (keyof RuntimeLogContext)[]
 
 function sanitizeContext(context: RuntimeLogContext): RuntimeLogContext {
@@ -129,14 +128,12 @@ export function makeLogger(
   }
 
   const write =
-    (level: 'debug' | 'info' | 'warn' | 'error') =>
+    (level: 'info' | 'error') =>
     (context: RuntimeLogContext, message: RuntimeLogMessage): void =>
       void logger[level](sanitizeContext(context), message)
 
   return {
-    debug: write('debug'),
     info: write('info'),
-    warn: write('warn'),
     error: write('error'),
     flush,
     close,

@@ -82,9 +82,8 @@ export class OperationalMetrics {
     }
     return {
       onlineConnections: this.onlineConnections,
-      roomCount: Number.isFinite(roomCount)
-        ? Math.min(MAX_COUNTER, Math.max(0, Math.floor(roomCount)))
-        : 0,
+      // 调用方唯一（app.ts 传 Map.size）：恒为有限非负整数，无需再钳制/取整/有限性重判。
+      roomCount,
       protocol: {
         invalidPushReports: this.invalidPushReports,
         resyncRequests: this.resyncRequests,

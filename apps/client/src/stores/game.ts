@@ -7,21 +7,14 @@ import { defineStore, storeToRefs } from 'pinia'
 import { PUBLIC_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import { useGameTransport } from '@/application/game-transport'
-import { useProfileStore, type StoredProfile } from './profile.ts'
-import { useSettingsStore, type LocalSettings } from './settings.ts'
-import {
-  useSessionStore,
-  type ConnectionLabel,
-  type SessionState,
-  type ShellPage,
-} from './session.ts'
+import { useProfileStore } from './profile.ts'
+import { useSettingsStore } from './settings.ts'
+import { useSessionStore } from './session.ts'
 import { useLobbyStore } from './lobby.ts'
 import { useRoomStore } from './room.ts'
 import { useGameplayStore } from './gameplay.ts'
 import { useVocabularyStore } from './vocabulary.ts'
 import { useResyncStore } from './resync.ts'
-
-export type { ConnectionLabel, SessionState, ShellPage, StoredProfile, LocalSettings }
 
 export const useGameStore = defineStore('game', () => {
   const transport = useGameTransport()
@@ -126,7 +119,6 @@ export const useGameStore = defineStore('game', () => {
     joinPrivateRoom: roomStore.joinPrivateRoom,
     leaveRoom: roomStore.leaveRoom,
     requestFullSnapshot: resyncStore.requestFullSnapshot,
-    invalidateSession: resyncStore.invalidateSession,
     setReady: roomStore.setReady,
     updateRoomSettings: roomStore.updateRoomSettings,
     loadVocabulary: vocabularyStore.loadVocabulary,

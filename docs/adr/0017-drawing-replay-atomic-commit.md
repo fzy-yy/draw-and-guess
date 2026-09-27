@@ -53,8 +53,8 @@
 
 ## 关联
 
-- 组件：`apps/client/src/components/game/GameCanvas.vue`（`scratchCanvas`/`getScratchContext`/
-  `redrawLogical` 提交段）
+- 组件：`apps/client/src/components/game/GameCanvas.vue`（装配壳）；重放与提交段已迁入
+  `apps/client/src/canvas/replay-machine.ts`（见 ADR-0018）
 - 触发方：`apps/client/src/composables/useStrokeSession.ts`（ack 合并重放保持现状，其语义
   由本 ADR 变为不可见）
 - 前序：ADR-0003（坐标边界）、ADR-0009（填充降级与两把锁）、ADR-0010（历史上限只增不删）

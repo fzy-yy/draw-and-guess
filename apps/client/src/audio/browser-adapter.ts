@@ -1,5 +1,5 @@
 import type { AudioFactory, AudioPort, AudioPreload, SoundClock } from './contracts.ts'
-import type { PlaySoundOptions, SoundName } from './types.ts'
+import type { SoundName } from './types.ts'
 import { SoundManager } from './manager.ts'
 import { getSoundUrl } from './runtime.ts'
 import { interactionToAudio, type InteractionAudioEvent } from './routing.ts'
@@ -93,18 +93,15 @@ export const soundManager = new SoundManager({
 })
 
 /** 便捷函数式发音接口：播放短音效。 */
-export function playSound(name: SoundName, options?: PlaySoundOptions): void {
-  soundManager.play(name, options)
+export function playSound(name: SoundName): void {
+  soundManager.play(name)
 }
 
 /**
  * 通用组件的统一交互反馈入口。
  * 调用方只表达“激活/选择/切换/打开/关闭”，具体资源由 routing.ts 集中映射。
  */
-export function playInteractionSound(
-  event: InteractionAudioEvent,
-  options?: PlaySoundOptions,
-): void {
-  const sound = interactionToAudio(event).sfx
-  if (sound) soundManager.play(sound, options)
+export function playInteractionSound(event: InteractionAudioEvent): void {
+  const sound = interactionToAudio(event)
+  if (sound) soundManager.play(sound)
 }

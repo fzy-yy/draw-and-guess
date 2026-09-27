@@ -14,6 +14,7 @@ import type { ChatMessage, RoomMember } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
 import { roleTextFor } from '@/utils/role-text'
+import { isOnlineActiveMember } from '@/utils/room-facts'
 import ActionPopover from '@/components/common/ActionPopover.vue'
 import AppInput from '@/components/common/AppInput.vue'
 
@@ -33,8 +34,7 @@ const shouldFollowMessages = ref(true)
 const messages = computed(() => store.room?.game?.messages ?? [])
 // 画家、猜词者和已猜中者在作画阶段都能使用受控互动；观战者始终只读。
 const canSendPreset = computed(
-  () =>
-    store.room?.phase === 'drawing' && !store.me?.spectating && store.me?.connection === 'online',
+  () => store.room?.phase === 'drawing' && !!store.me && isOnlineActiveMember(store.me),
 )
 
 function memberForMessage(message: ChatMessage): RoomMember | undefined {
@@ -95,14 +95,12 @@ watch(
 )
 
 // 按「自动聚焦猜词框」开关在进入可猜词状态时聚焦输入框（替代静态 autofocus）。
+// 可猜词判定唯一口径是父组件传入的 props.canGuess（useGameHud 计算，含连接态），
+// 组件内不再内联第二份 phase/drawer/guessed/spectating 组合（ADR-0028 客户端事实口径）。
 // AppInput 经 defineExpose 暴露 focus()，输入元素本身仍是原语内部实现细节。
 const guessInput = ref<{ focus: () => void }>()
 watch(
-  () =>
-    store.room?.phase === 'drawing' &&
-    !store.isDrawer &&
-    !store.me?.guessed &&
-    !store.me?.spectating,
+  () => props.canGuess,
   (canGuessNow) => {
     if (canGuessNow && store.settings.autoFocusGuess) void nextTick(() => guessInput.value?.focus())
   },

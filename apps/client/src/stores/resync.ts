@@ -12,7 +12,7 @@
  */
 import { defineStore } from 'pinia'
 import { APP_CONFIG } from '@draw-guess/config'
-import { EVENTS, RoomSnapshotSchema } from '@draw-guess/shared'
+import { EVENTS } from '@draw-guess/shared'
 import { useGameTransport } from '@/application/game-transport'
 import { useRoomStore } from './room.ts'
 import { useSessionStore } from './session.ts'
@@ -65,14 +65,13 @@ export const useResyncStore = defineStore('resync', () => {
         roomStore.room = undefined
         return
       }
-      const parsed = RoomSnapshotSchema.safeParse(result.data)
-      if (
-        !parsed.success ||
-        parsed.data.id !== context.roomId ||
-        acceptRoomSnapshot(roomStore.room, parsed.data) !== 'accept'
-      )
-        return
-      roomStore.room = parsed.data
+      // ack 已在 request 解码缝按 CLIENT_RESPONSE_SCHEMAS（同一 RoomSnapshotSchema）校验并
+      // 类型收窄——此处不再做第二次 safeParse（解码单点）。前提：快照 Schema 链为纯校验、
+      // 无 transform/default；若未来给快照链引入 transform，必须重审解码侧（ADR-0025）。
+      // 下面是状态比较而非解码：房间标识核对 + 快照门禁，属重同步自愈的裁决。
+      if (result.data.id !== context.roomId) return
+      if (acceptRoomSnapshot(roomStore.room, result.data) !== 'accept') return
+      roomStore.room = result.data
     } finally {
       resyncInFlight = false
     }

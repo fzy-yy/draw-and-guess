@@ -35,8 +35,6 @@ const props = withDefaults(
     selectAllLabel: string
     /** 弹层「全不选」按钮文案（已全选时点击切换为全不选） */
     deselectAllLabel: string
-    /** 弹层关闭按钮文案（已废弃：勾选即时生效，无需确认按钮） */
-    doneLabel?: string
     disabled?: boolean
     /** 纯图标触发模式：只显示图标，语义由悬浮 title 与 aria 标签表达 */
     iconOnly?: boolean
@@ -48,7 +46,6 @@ const props = withDefaults(
     placement?: 'top' | 'bottom'
   }>(),
   {
-    doneLabel: '',
     disabled: false,
     iconOnly: false,
     icon: undefined,

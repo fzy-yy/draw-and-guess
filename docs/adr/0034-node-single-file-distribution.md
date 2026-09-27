@@ -88,7 +88,7 @@ CI（`windows-latest`，runner 在境外）显式设 `NODE_DIST_MIRROR=https://n
 超出局域网工具的威胁模型，明确不做）。
 
 **七、发布。** `.github/workflows/windows-release.yml`：打 `v*` tag 在 `windows-latest` 构建两个 zip 并作为
-**两个 Release 资产**发布；手动触发只产出两个 artifact。本功能随 `2.5.0` 发布，协议版本不变。
+**两个 Release 资产**发布；手动触发只产出一个 artifact（内含两个 zip）。本功能随 `2.5.0` 发布，协议版本不变。
 
 ## 后果
 

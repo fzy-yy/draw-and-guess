@@ -20,6 +20,7 @@ import AppButton from '@/components/common/AppButton.vue'
 import SectionHeader from '@/components/common/SectionHeader.vue'
 import SearchInput from '@/components/common/SearchInput.vue'
 import RoundIconButton from '@/components/common/RoundIconButton.vue'
+import type { ScrollableTable } from '@/components/common/data-table.types'
 import MultiSelectPopover, {
   type MultiSelectOption,
 } from '@/components/common/MultiSelectPopover.vue'
@@ -39,7 +40,6 @@ const store = useGameStore()
 
 // ---- 词库弹窗内部状态 ----
 const viewMode = ref<'words' | 'packages'>('words')
-type ScrollableTable = { scrollToTop(): void; scrollToIndex(index: number): void }
 const wordTable = ref<ScrollableTable>()
 const packageTable = ref<ScrollableTable>()
 /** 只读标志：非房主可打开查看，但不可选择词条（无复选框/无保存）。 */

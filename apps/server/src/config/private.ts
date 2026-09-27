@@ -17,6 +17,8 @@ export const serverPrivateConfig = {
     guessEventsPerSecond: 5,
     requestEventsPerSecond: 25,
     requestRateWindowMs: 1_000,
+    /** 猜词/绘图等事件级滑动窗口的宽度（原硬编码 1 秒，与请求级窗口分列可调）。 */
+    eventRateWindowMs: 1_000,
     idempotencyCacheMax: 100,
   },
   room: {
@@ -27,7 +29,6 @@ export const serverPrivateConfig = {
     maxDrawEventsPerSecond: 45,
   },
   vocabulary: {
-    provider: 'sqlite' as const,
     // 目录扫描不到任何 .db 时的兜底词库文件名（与 vocabulary/ 目录现库对齐）
     dbPath: 'vocabulary/base_words.db',
     maxWords: 10_000,

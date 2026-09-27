@@ -6,7 +6,7 @@ import Database from 'better-sqlite3'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-export const DEFAULT_DATABASE_FILE = path.join(
+const DEFAULT_DATABASE_FILE = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../data/game.db',
 )

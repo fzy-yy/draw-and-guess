@@ -21,7 +21,7 @@ describe('SoundManager 假音频/假时钟', () => {
     // 收敛后的唯一音效调用面：playSound→play、stopAll、updateSettings（均被
     // useAudioFeedback/App 使用），以及作为运行依赖的查询与销毁入口。
     //（playBgm/stopBgm/syncBgmVolume 已随 BGM 系统移除。）
-    for (const method of ['play', 'stopAll', 'updateSettings', 'getSettings', 'dispose'] as const) {
+    for (const method of ['play', 'stopAll', 'updateSettings', 'dispose'] as const) {
       expect(typeof (manager as unknown as Record<string, unknown>)[method]).toBe('function')
     }
   })

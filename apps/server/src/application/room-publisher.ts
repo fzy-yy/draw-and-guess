@@ -5,6 +5,7 @@ import {
   type RoomSnapshot,
 } from '@draw-guess/shared'
 import type { RuntimeLogContext } from '../errors.ts'
+import { invalidateMemberCanvasSync } from '../domain/drawing/canvas-sync.ts'
 import type { PlayerSecret, RoomSecret } from '../models.ts'
 import type { AppServer } from '../socket-types.ts'
 
@@ -23,8 +24,7 @@ export interface RoomPublisherContext {
 export class RoomPublisher {
   constructor(private readonly context: RoomPublisherContext) {}
 
-  emitRoom(roomId?: string): void {
-    if (!roomId) return
+  emitRoom(roomId: string): void {
     const room = this.context.rooms.get(roomId)
     if (!room) return
     for (const member of room.members) {
@@ -48,7 +48,7 @@ export class RoomPublisher {
       .filter((player) => player.preferences.discoverable)
       .map((player) => this.context.toPublicPlayer(player))
     const rooms = [...this.context.rooms.values()]
-      .filter((room) => room.visibility === 'public' && room.phase !== 'closed')
+      .filter((room) => room.visibility === 'public')
       .map((room) => this.context.toPublicRoom(room))
     return { players, rooms }
   }
@@ -70,7 +70,7 @@ export class RoomPublisher {
     const room = player?.roomId ? this.context.rooms.get(player.roomId) : undefined
     if (!player || !room) return undefined
     const member = room.members.find((item) => item.playerId === playerId)
-    if (forceFull && member) member.lastSyncedSeq = undefined
+    if (forceFull && member) invalidateMemberCanvasSync(member)
     return this.context.snapshot(room, playerId)
   }
 }

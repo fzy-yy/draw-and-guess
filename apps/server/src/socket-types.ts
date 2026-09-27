@@ -32,17 +32,20 @@ export interface SocketServiceAccess {
 export interface AppSocketData {
   /** 当前连接绑定的玩家身份（注册/恢复成功后写入；注销/断线清理后删除）。 */
   playerId?: string
-  /** 权威领域服务（结构上即 GameService）：binder 经它取限频时钟、运维指标与异常日志。 */
-  service?: SocketServiceAccess
+  /**
+   * 权威领域服务（结构上即 GameService）：binder 经它取限频时钟、运维指标与异常日志。
+   * 注册任何 handler 前即写入（app.ts registerSocketHandlers），运行期恒存在，故为必选。
+   */
+  service: SocketServiceAccess
   /**
    * 幂等 ack 缓存（事件名 + requestId → 成功 ack）。
-   * 注册前为连接级 Map；注册 handler 会把它切换为玩家级共享引用（见 handlers/session.ts），
+   * 建连时即为连接级 Map；注册 handler 会把它切换为玩家级共享引用（见 handlers/session.ts），
    * 使同一玩家换连接后仍能命中旧请求的结果。
    */
-  requestCache?: Map<string, Ack<unknown>>
-  /** 执行中的同 requestId 请求：并发重复请求共享同一个执行 Promise。 */
-  inFlightRequests?: Map<string, Promise<Ack<unknown>>>
-  /** 每连接一秒滑动窗口限频的时间戳队列。 */
+  requestCache: Map<string, Ack<unknown>>
+  /** 执行中的同 requestId 请求：并发重复请求共享同一个执行 Promise。建连时即创建。 */
+  inFlightRequests: Map<string, Promise<Ack<unknown>>>
+  /** 每连接一秒滑动窗口限频的时间戳队列（首个限频事件前不存在）。 */
   eventTimes?: number[]
 }
 

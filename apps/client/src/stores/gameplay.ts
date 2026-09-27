@@ -64,48 +64,48 @@ export const useGameplayStore = defineStore('gameplay', () => {
     return result.ok
   }
 
+  /**
+   * 无对局上下文时的合成拒绝（画布请求共用一份形状）：
+   * 客户端本地就能判定「会话已失效」，不发请求直接按业务失败回给调用方。
+   */
+  function staleDrawingFailure<T>(): RequestResult<T> {
+    return {
+      ok: false,
+      failureKind: 'business',
+      error: strings.request.genericFailure,
+      code: ERROR_CODES.STALE_DRAWING_CONTEXT,
+      timeout: false,
+    }
+  }
+
+  /** 画布容量告警统一口径：预算/命令数上限类拒绝提示一次，其余错误保持静默（ADR-0022）。 */
+  function warnDrawingCapacity(result: RequestResult<unknown>): void {
+    if (!result.ok && getErrorRecoveryAction(result.code) === 'warn-drawing-limit') {
+      notify(result.error, 'warning')
+    }
+  }
+
   async function sendStroke(stroke: Stroke): Promise<RequestResult<StrokeAck>> {
-    if (!roomStore.room?.game)
-      return {
-        ok: false,
-        failureKind: 'business',
-        error: strings.request.genericFailure,
-        code: ERROR_CODES.STALE_DRAWING_CONTEXT,
-        timeout: false,
-      }
+    if (!roomStore.room?.game) return staleDrawingFailure<StrokeAck>()
     const result = await request(
       EVENTS.drawStrokeBatch,
       { roundId: roomStore.room.game.roundId, stroke },
       // 高频绘图：不弹 Toast、不盲目重发（收敛靠权威快照与增量推送；ADR-0022）。
       { retry: false, notify: 'silent' },
     )
-    if (!result.ok) {
-      if (getErrorRecoveryAction(result.code) === 'warn-drawing-limit') {
-        notify(result.error ?? strings.request.genericFailure, 'warning')
-      }
-      return result
-    }
+    warnDrawingCapacity(result)
     return result
   }
 
   async function sendFill(fill: FillCommand): Promise<RequestResult<{ drawingRevision: number }>> {
-    if (!roomStore.room?.game)
-      return {
-        ok: false,
-        failureKind: 'business',
-        error: strings.request.genericFailure,
-        code: ERROR_CODES.STALE_DRAWING_CONTEXT,
-        timeout: false,
-      }
+    if (!roomStore.room?.game) return staleDrawingFailure<{ drawingRevision: number }>()
     const result = await request(
       EVENTS.drawFillCommit,
       { roundId: roomStore.room.game.roundId, fill },
+      // 与 sendStroke 同一口径：静默高频 + 容量类拒绝提示一次。
       { retry: false, notify: 'silent' },
     )
-    // 与 sendStroke 同一口径：画布容量类拒绝（预算或命令数上限）提示一次，其余错误保持静默。
-    if (!result.ok && getErrorRecoveryAction(result.code) === 'warn-drawing-limit') {
-      notify(result.error ?? strings.request.genericFailure, 'warning')
-    }
+    warnDrawingCapacity(result)
     return result
   }
 
@@ -156,7 +156,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
       existing.sequence = stroke.sequence
     } else if (existing) {
       // 该笔画 id 处于「已撤销」状态又收到迟到批次：恢复其既有历史点并追加本批点，
-      // 并把它从 undoneStrokeIds 移除（取消撤销），避免 purgeUndone 把历史点一并丢弃（#7）。
+      // 并把它从 undoneStrokeIds 移除（取消撤销），避免 purgeUndone 把历史点一并丢弃。
       existing.points.push(...stroke.points)
       existing.sequence = Math.max(existing.sequence, stroke.sequence)
       game.undoneStrokeIds = game.undoneStrokeIds.filter((id) => id !== existing.id)
@@ -193,6 +193,5 @@ export const useGameplayStore = defineStore('gameplay', () => {
     returnWaiting,
     handleStrokeBatch,
     handleFillCommit,
-    purgeUndone,
   }
 })

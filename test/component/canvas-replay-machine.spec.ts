@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DrawingCommand, FillCommand, Stroke } from '@draw-guess/shared'
+import type { DrawingCommand, FillCommand } from '@draw-guess/shared'
 import {
   DrawingReplayMachine,
   type FillComputePort,
@@ -8,6 +8,7 @@ import {
 } from '@/canvas/replay-machine'
 import { FloodFillError } from '@/canvas/flood-fill-worker'
 import { clearFillDiagnostics, getFillDiagnostics } from '@/canvas/fill-diagnostics'
+import { makeFill, makeStroke } from '../client/canvas-stubs'
 
 /**
  * 画布重放状态机的直接单测（ADR-0018）：以假填充端口 + 记录型画布替身驱动
@@ -111,32 +112,12 @@ async function flush(): Promise<void> {
   for (let index = 0; index < 8; index += 1) await Promise.resolve()
 }
 
-function strokeCommand(overrides: Partial<Stroke> = {}): Stroke {
-  return {
-    kind: 'stroke',
-    id: '00000000-0000-4000-8000-0000000000a1',
-    tool: 'pen',
-    color: '#1F2937',
-    width: 5,
-    points: [
-      { x: 0.1, y: 0.1 },
-      { x: 0.5, y: 0.5 },
-    ],
-    sequence: 1,
-    startPointIndex: 0,
-    ...overrides,
-  }
-}
+/** 标准笔画工厂（形状单点在 test/client/canvas-stubs）。 */
+const strokeCommand = makeStroke
 
+/** 本 spec 的填充默认序号为 2（跟在首笔 sequence 1 之后）。 */
 function fillCommand(overrides: Partial<FillCommand> = {}): FillCommand {
-  return {
-    kind: 'fill',
-    id: '00000000-0000-4000-8000-0000000000b1',
-    point: { x: 0.5, y: 0.5 },
-    color: '#EF4444',
-    sequence: 2,
-    ...overrides,
-  }
+  return makeFill({ sequence: 2, ...overrides })
 }
 
 function snapshotOf(

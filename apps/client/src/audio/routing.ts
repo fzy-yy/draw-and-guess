@@ -23,35 +23,29 @@ export type AudioEvent =
  */
 export type InteractionAudioEvent = 'activate' | 'select' | 'toggle' | 'open' | 'close'
 
-/** 一次音频决策：进入阶段/发生事件时的一次性 SFX（可能无）。 */
-export interface AudioDecision {
-  /** 一次性音效（可能无）。 */
-  sfx?: SoundName
-}
-
 /**
- * 房间阶段 → 音频决策：只保留入场 SFX。
+ * 房间阶段 → 入场音效：只保留入场 SFX，无入场音的阶段返回 undefined。
  * starting/drawing/round_result/game_result 有入场音；
- * waiting/choosing_word/paused/closed 无入场音（返回空决策）。
+ * waiting/choosing_word/paused/closed 无入场音。
  */
-export function phaseToAudio(phase: RoomPhase): AudioDecision {
+export function phaseToAudio(phase: RoomPhase): SoundName | undefined {
   switch (phase) {
     case 'waiting':
-      return {}
+      return undefined
     case 'starting':
-      return { sfx: 'start' }
+      return 'start'
     case 'choosing_word':
-      return {}
+      return undefined
     case 'drawing':
-      return { sfx: 'drawing' }
+      return 'drawing'
     case 'round_result':
-      return { sfx: 'round_result' }
+      return 'round_result'
     case 'game_result':
-      return { sfx: 'game_result' }
+      return 'game_result'
     case 'paused':
-      return {}
+      return undefined
     case 'closed':
-      return {}
+      return undefined
     default: {
       // RoomPhase 已全覆盖，此处仅为未来新增阶段提供编译期遗漏提示
       const exhaustive: never = phase
@@ -60,21 +54,21 @@ export function phaseToAudio(phase: RoomPhase): AudioDecision {
   }
 }
 
-/** 领域事件 → 音频决策：全部是一次性 SFX。 */
-export function eventToAudio(event: AudioEvent): AudioDecision {
+/** 领域事件 → 音效：全部是一次性 SFX。 */
+export function eventToAudio(event: AudioEvent): SoundName {
   switch (event) {
     case 'self-ready':
-      return { sfx: 'ready' }
+      return 'ready'
     case 'self-guessed':
-      return { sfx: 'correct' }
+      return 'correct'
     case 'invite':
-      return { sfx: 'invite' }
+      return 'invite'
     case 'countdown-tick':
-      return { sfx: 'tick' }
+      return 'tick'
     case 'room-leave':
-      return { sfx: 'close' }
+      return 'close'
     case 'session-restore':
-      return { sfx: 'switch' }
+      return 'switch'
     default: {
       const exhaustive: never = event
       return exhaustive
@@ -82,18 +76,18 @@ export function eventToAudio(event: AudioEvent): AudioDecision {
   }
 }
 
-/** 通用交互语义 → 音效决策；组件统一通过此映射接入，避免散落资源键。 */
-export function interactionToAudio(event: InteractionAudioEvent): AudioDecision {
+/** 通用交互语义 → 音效；组件统一通过此映射接入，避免散落资源键。 */
+export function interactionToAudio(event: InteractionAudioEvent): SoundName {
   switch (event) {
     case 'activate':
-      return { sfx: 'click' }
+      return 'click'
     case 'select':
     case 'toggle':
-      return { sfx: 'switch' }
+      return 'switch'
     case 'open':
-      return { sfx: 'popup' }
+      return 'popup'
     case 'close':
-      return { sfx: 'close' }
+      return 'close'
     default: {
       const exhaustive: never = event
       return exhaustive

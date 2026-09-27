@@ -13,13 +13,8 @@ export const BASELINES = responsive.baselines
 
 export type Baseline = (typeof BASELINES)[number]
 
-/** 把视口切到某个基准。 */
-export async function applyBaseline(page: Page, baseline: Baseline): Promise<void> {
-  await page.setViewportSize({ width: baseline.width, height: baseline.height })
-}
-
 /** 舞台（.game-stage）的位置与尺寸。 */
-export async function stageRect(page: Page) {
+async function stageRect(page: Page) {
   return page.locator('.game-stage').evaluate((element) => {
     const rect = element.getBoundingClientRect()
     return {

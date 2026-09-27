@@ -24,7 +24,7 @@ const avatarUrlById = new Map<string, string>(
  * 开发环境额外输出一次错误，便于在新增/删除头像资源时发现配置与文件不一致。
  */
 export function getAvatarUrl(id: AvatarId | string | undefined): string {
-  // 回退：优先默认头像，其次任意确实存在资源的头像；都缺时才返回空串，避免空 src 破图（#14）。
+  // 回退：优先默认头像，其次任意确实存在资源的头像；都缺时才返回空串，避免空 src 破图。
   const fallback =
     avatarUrlById.get(APP_CONFIG.player.defaultAvatarId) ??
     avatarUrlById.values().next().value ??

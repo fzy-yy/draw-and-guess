@@ -21,6 +21,7 @@ import type { Clock } from './runtime.ts'
 import type { VocabularyStore } from './vocabulary/index.ts'
 import {
   connectionStatus,
+  nicknameOf,
   nominalPhaseDurationMs,
   occupiesSeat,
 } from './domain/room/member-facts.ts'
@@ -50,6 +51,8 @@ export class SnapshotBuilder {
     // 快照差分：若观看者已在线同步全部绘图增量（lastSyncedSeq 追平 lastSequence），
     // 快照用空数组 + strokesOmitted 标记省略画布历史，由客户端沿用本地已有笔画，降低序列化开销。
     const viewerMember = room.members.find((member) => member.playerId === viewerId)
+    // 本守卫对现有调用方不可达（publisher 循环节点 / requireMembership 之后 / 入房刚占席），
+    // 但它是隐私 fail-safe 且被快照穷举矩阵显式断言（非成员必须被拒绝而非降级为观众视角）——保留。
     if (!viewerMember) throw new GameError('NOT_IN_ROOM', serverStrings.errors.NOT_IN_ROOM)
     // 候场/观战身份永远不能获得画家答案权限；即使异常状态下 ID 碰巧与 drawerId 相同也要裁剪。
     const viewerIsDrawer = !viewerMember.spectating && game?.drawerId === viewerId
@@ -97,7 +100,7 @@ export class SnapshotBuilder {
             : {}),
           ...(viewerIsDrawer && room.phase === 'choosing_word'
             ? {
-                canReroll: !game.rerollUsed && (room.settings.allowWordReroll ?? true),
+                canReroll: !game.rerollUsed && room.settings.allowWordReroll,
                 wordOptions: game.candidates.map((word) => ({
                   id: word.id,
                   text: word.text,
@@ -224,8 +227,7 @@ export class SnapshotBuilder {
       visibility: 'public',
       id: room.id,
       name: room.name,
-      hostName:
-        this.port.players.get(room.hostId)?.profile.nickname ?? serverStrings.notices.hostUnknown,
+      hostName: nicknameOf(this.port.players, room.hostId, serverStrings.notices.hostUnknown),
       playerCount: room.members.filter(occupiesSeat).length,
       maxPlayers: room.settings.maxPlayers,
       phase: room.phase,

@@ -13,9 +13,8 @@ import type {
 } from '@draw-guess/shared'
 import { EVENTS } from '@draw-guess/shared'
 import { failure, GameError, success } from '../errors.ts'
+import { slidingWindowAllow } from '../rate-limit.ts'
 import type { AppSocket } from '../socket-types.ts'
-
-export type { Ack }
 
 /** 把校验错误归一化为稳定业务错误，其余异常交给统一失败响应隐藏内部细节。 */
 function normalizeRequestError(error: unknown): unknown {
@@ -32,7 +31,7 @@ function logUnexpected(
   normalized: unknown,
 ): void {
   if (normalized instanceof GameError || original instanceof z.ZodError) return
-  socket.data.service?.logUnexpectedError(original, { event })
+  socket.data.service.logUnexpectedError(original, { event })
 }
 
 /**
@@ -58,8 +57,9 @@ export function bindRequest<E extends ClientRequestEvent>(
     listener: (raw: unknown, callback?: (ack: Ack<ClientResponse<Ev>>) => void) => void,
   ) => void
   on(event, async (raw: unknown, callback?: (ack: Ack<ClientResponse<E>>) => void) => {
+    // service 在注册任何 handler 前即挂上（app.ts），类型必选；观测记录不再需要可选链。
     const service = socket.data.service
-    const startedAt = service?.clock.now()
+    const startedAt = service.clock.now()
     const provisionalId =
       typeof raw === 'object' && raw && 'requestId' in raw
         ? String(raw.requestId)
@@ -68,11 +68,9 @@ export function bindRequest<E extends ClientRequestEvent>(
     const respond = (ack: Ack<ClientResponse<E>>): void => {
       if (!metricsRecorded) {
         metricsRecorded = true
-        const finishedAt = service?.clock.now()
-        // 指标记录是尽力而为的观测：service/metrics 任一缺失都不应让请求处理崩溃，故用可选链。
-        service?.metrics?.recordAcknowledgement(
+        service.metrics.recordAcknowledgement(
           event,
-          startedAt === undefined || finishedAt === undefined ? 0 : finishedAt - startedAt,
+          service.clock.now() - startedAt,
           ack.ok ? undefined : ack.error.code,
         )
       }
@@ -84,7 +82,7 @@ export function bindRequest<E extends ClientRequestEvent>(
     try {
       input = schema.parse(raw)
       if (event === EVENTS.stateResync) {
-        service?.metrics?.recordResync(
+        service.metrics.recordResync(
           (input as ClientRequestPayload<typeof EVENTS.stateResync>).reason === 'invalid_push',
         )
       }
@@ -93,30 +91,29 @@ export function bindRequest<E extends ClientRequestEvent>(
         throw new GameError('UNAUTHORIZED', serverStrings.errors.UNAUTHORIZED_REGISTER)
 
       const cacheKey = `${event}:${input.requestId}`
-      const cache = socket.data.requestCache
-      const cached = cache?.get(cacheKey)
+      const cached = socket.data.requestCache.get(cacheKey)
       if (cached) {
         // 缓存只写入「已通过 ack Schema 校验」的成功结果，取回时按当前事件收窄一次类型。
         respond(cached as Ack<ClientResponse<E>>)
         return
       }
 
-      const inFlight = socket.data.inFlightRequests
-      const existing = inFlight?.get(cacheKey)
+      const existing = socket.data.inFlightRequests.get(cacheKey)
       if (existing) {
         respond((await existing) as Ack<ClientResponse<E>>)
         return
       }
 
       if (options.rateLimit !== false) {
-        const clock = service?.clock
-        if (!clock) throw new Error('binder runtime clock is not initialized')
-        const now = clock.now()
-        const history = (socket.data.eventTimes ?? []).filter(
-          (time) => now - time < APP_CONFIG.network.requestRateWindowMs,
+        const decision = slidingWindowAllow(
+          socket.data.eventTimes ?? [],
+          service.clock.now(),
+          APP_CONFIG.network.requestRateWindowMs,
+          APP_CONFIG.network.requestEventsPerSecond,
         )
-        if (history.length >= APP_CONFIG.network.requestEventsPerSecond) {
-          socket.data.eventTimes = history
+        // 无论放行与否都回写过滤后的队列：窗口必须随时间前滚，拒绝记录同样受益。
+        socket.data.eventTimes = decision.times
+        if (!decision.allowed) {
           respond(
             failure(
               new GameError('RATE_LIMITED', serverStrings.errors.RATE_LIMITED),
@@ -125,8 +122,6 @@ export function bindRequest<E extends ClientRequestEvent>(
           )
           return
         }
-        history.push(now)
-        socket.data.eventTimes = history
       }
 
       // Promise 在调用 handler 前先写入表，确保同一时刻的重复副作用只执行一次。
@@ -139,15 +134,15 @@ export function bindRequest<E extends ClientRequestEvent>(
           return failure(normalized, input.requestId)
         }
       })()
-      inFlight?.set(cacheKey, execution)
+      socket.data.inFlightRequests.set(cacheKey, execution)
       const ack = await execution
-      inFlight?.delete(cacheKey)
+      socket.data.inFlightRequests.delete(cacheKey)
 
       // 注册 handler 会把 socket 缓存切换到玩家级缓存；因此执行后重新读取当前引用。
       const liveCache = socket.data.requestCache
       // 只缓存成功结果：失败的请求没有产生副作用，若也缓存，客户端用同一 requestId 重试
       // 会永远取回旧的 RATE_LIMITED / VERSION_CONFLICT 等瞬时错误而无法自愈。
-      if (liveCache && ack.ok) {
+      if (ack.ok) {
         liveCache.set(cacheKey, ack)
         // 简单 FIFO 上限，防止长时间连接下幂等缓存无界增长
         if (liveCache.size > APP_CONFIG.network.idempotencyCacheMax) {

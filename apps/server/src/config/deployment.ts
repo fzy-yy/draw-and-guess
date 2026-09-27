@@ -8,7 +8,8 @@ import { serverPrivateConfig } from './private.ts'
 export type DeploymentConfig = {
   host: string
   port: number
-  logLevel: 'debug' | 'info' | 'warn' | 'error'
+  /** 日志级别只有 info/error 两档：RuntimeLogger 没有 debug/warn 通道（零调用者已删除），档位必须与可观察行为一致。 */
+  logLevel: 'info' | 'error'
   /** 是否启用日志记录：false 时服务端完全不创建日志记录器、不写日志文件，节省内存。 */
   logEnabled: boolean
   /** 日志文件保留的最大条数（1～100）：每次启动新建一个，超出时删除最老的。 */
@@ -35,7 +36,7 @@ export function getDeploymentConfig(env: NodeJS.ProcessEnv = process.env): Deplo
   const host = env.HOST?.trim() || serverPrivateConfig.network.host
   const candidateLevel = env.LOG_LEVEL?.trim() || 'info'
   // 类型谓词集中「字符串 → 合法日志级别」的收窄：调用点无需再各自 `as DeploymentConfig['logLevel']`
-  const levels: readonly string[] = ['debug', 'info', 'warn', 'error']
+  const levels: readonly string[] = ['info', 'error']
   const isLogLevel = (value: string): value is DeploymentConfig['logLevel'] =>
     levels.includes(value)
   const logEnabled = parseBooleanEnv(env.LOG_ENABLED, true)

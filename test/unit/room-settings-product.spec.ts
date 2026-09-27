@@ -1,31 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import { APP_CONFIG, defaultRoomSettings, roomSettingsDefaults } from '@draw-guess/config'
 import { RoomSettingsSchema, type RoomSettings } from '@draw-guess/shared'
-import { createDefaultRoomSettings } from '../../apps/server/src/game-service.ts'
-import { validateRoomSettings } from '../../apps/server/src/room-settings.ts'
 import { createGameHarness, startTwoPlayerGame, testRoomSettings } from './helpers/game-harness.ts'
 
 /**
- * 房间规则产品闭环（旧「玩法预设」三档映射已移除）：
- * 唯一默认组、服务端默认工厂、协议 Schema 与服务端逐字段校验必须口径一致；
- * 「额外猜词时间」为新增规则项，边界（0~90、整数）在此守护。
+ * 房间规则产品闭环（校验点唯一化后）：
+ * 规则范围只由协议 RoomSettingsSchema（strict + 同源约束常量）裁决——服务端不再二次重校，
+ * 这里守护「Schema 拒得掉、默认组过得了」；schema 给不了的领域判定（人数上限不得低于占席数）
+ * 走真实用例断言。「额外猜词时间」边界（0~90、整数）在 Schema 守护下回归。
  */
 describe('房间规则产品闭环', () => {
-  it('默认设置工厂生成完整合法对象，服务端默认与配置基线一致', () => {
+  it('默认设置工厂生成完整合法对象，与各滑块/区间默认一致', () => {
     const settings = defaultRoomSettings(5)
-    expect(Object.keys(settings).sort()).toEqual(Object.keys(createDefaultRoomSettings()).sort())
-    expect(RoomSettingsSchema.safeParse(settings).success).toBe(true)
-    expect(() => validateRoomSettings(settings)).not.toThrow()
-    expect(settings.maxPlayers).toBe(5)
-    expect(createDefaultRoomSettings()).toEqual(
-      defaultRoomSettings(APP_CONFIG.player.defaultMaxPlayers),
+    // 默认组不含 maxPlayers（由建房人数注入），键集合应恰为默认组 + maxPlayers
+    expect(Object.keys(settings).sort()).toEqual(
+      [...Object.keys(roomSettingsDefaults), 'maxPlayers'].sort(),
     )
+    expect(RoomSettingsSchema.safeParse(settings).success).toBe(true)
+    expect(settings.maxPlayers).toBe(5)
     // 额外猜词时间默认 0（不额外增加），且与滑块区间默认一致
     expect(settings.extraGuessSeconds).toBe(0)
     expect(roomSettingsDefaults.extraGuessSeconds).toBe(APP_CONFIG.game.extraGuessSeconds.default)
   })
 
-  it('服务端逐字段拒绝越界、非整数、错误枚举与非布尔值', () => {
+  it('协议 Schema 逐字段拒绝越界、非整数、错误枚举与非布尔值（唯一裁决点）', () => {
     const valid = defaultRoomSettings(6)
     const invalidPatches: Array<Partial<Record<keyof RoomSettings, unknown>>> = [
       { maxPlayers: 1 },
@@ -47,11 +45,35 @@ describe('房间规则产品闭环', () => {
       { joinPolicy: 'open' },
     ]
     for (const patch of invalidPatches) {
-      expect(() => validateRoomSettings({ ...valid, ...patch } as RoomSettings)).toThrow()
+      expect(RoomSettingsSchema.safeParse({ ...valid, ...patch }).success).toBe(false)
     }
     // 边界合法值：0 与 90 都必须通过
-    expect(() => validateRoomSettings({ ...valid, extraGuessSeconds: 0 })).not.toThrow()
-    expect(() => validateRoomSettings({ ...valid, extraGuessSeconds: 90 })).not.toThrow()
+    expect(RoomSettingsSchema.safeParse({ ...valid, extraGuessSeconds: 0 }).success).toBe(true)
+    expect(RoomSettingsSchema.safeParse({ ...valid, extraGuessSeconds: 90 }).success).toBe(true)
+  })
+
+  it('人数上限不得低于当前占席成员数（Schema 给不了的房间态领域判定）', () => {
+    const harness = createGameHarness()
+    const host = harness.register('房主')
+    const guest = harness.register('客人')
+    const room = harness.service.createRoom(host.playerId, {
+      name: '测试房间',
+      visibility: 'public',
+      settings: testRoomSettings(),
+    })
+    const afterJoin = harness.service.joinRoom(guest.playerId, room.id)
+    // 两人占席后把上限压到 1：必须被服务端权威拒绝
+    expect(() =>
+      harness.service.updateSettings(host.playerId, { maxPlayers: 1 }, afterJoin.stateVersion),
+    ).toThrow()
+    // 合法调整（保持占席数以内）应通过并推进状态版本（规则变更 + 准备态失效各推一次，只断言前进）
+    const updated = harness.service.updateSettings(
+      host.playerId,
+      { maxPlayers: 2 },
+      afterJoin.stateVersion,
+    )
+    expect(updated.settings.maxPlayers).toBe(2)
+    expect(updated.stateVersion).toBeGreaterThan(afterJoin.stateVersion)
   })
 
   it('额外猜词时间叠加到回合时限（在难度派生时限之上）', () => {

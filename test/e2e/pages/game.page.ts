@@ -3,10 +3,6 @@ import { type Page, expect } from '@playwright/test'
 export class GamePage {
   constructor(readonly page: Page) {}
 
-  async waitForChoosingWord() {
-    await expect(this.page.locator('text=轮到你作画了')).toBeVisible({ timeout: 20_000 })
-  }
-
   async chooseWord(index = 0): Promise<string> {
     const wordBtns = this.page.locator('.game-stage button.bg-yellow:has(span)')
     await expect(wordBtns.first()).toBeVisible({ timeout: 15_000 })

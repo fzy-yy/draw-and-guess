@@ -8,7 +8,7 @@ import {
   type RoomSnapshot,
   type RoomSettings,
 } from '@draw-guess/shared'
-import { applyFloodFill, colorToRgba } from '../../apps/client/src/canvas/flood-fill.ts'
+import { applyFloodFillMeasured, colorToRgba } from '../../apps/client/src/canvas/flood-fill.ts'
 import {
   clearProtocolDiagnostics,
   decodeServerPush,
@@ -293,7 +293,7 @@ describe('洪泛填充固定逻辑缓冲', () => {
       const offset = (y * size + boundaryX) * 4
       data.set([31, 41, 55, 255], offset)
     }
-    const filled = applyFloodFill(
+    const filled = applyFloodFillMeasured(
       data,
       size,
       size,
@@ -301,7 +301,7 @@ describe('洪泛填充固定逻辑缓冲', () => {
       Math.floor(size / 2),
       colorToRgba('#EF4444'),
       APP_CONFIG.drawing.fillTolerance,
-    )
+    ).filledPixels
     expect(filled).toBe(boundaryX * size)
     const left = (Math.floor(size / 2) * size + 1) * 4
     const boundary = (Math.floor(size / 2) * size + boundaryX) * 4

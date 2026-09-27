@@ -4,7 +4,7 @@
  * 领域层只依赖接口（见下方 PlayerRepository），便于测试时注入内存实现、生产时用 SQLite。
  * 持久化的是「跨重启可恢复」的身份关键字段（id/令牌摘要/资料/偏好/连接状态），
  * 运行时对象（socket、幂等请求缓存、限频时间窗、邀请冷却表）**不入库**——它们属于进程内瞬态，
- * 重启后由 GameService 重建（regist 时重新绑定 socket、缓存清空）。
+ * 重启后由 GameService 重建（注册时重新绑定 socket、缓存清空）。
  * 接口与行类型放在本文件，SQLite 实现用 better-sqlite3 同步适配。
  */
 import type { Database } from 'better-sqlite3'

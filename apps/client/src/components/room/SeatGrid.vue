@@ -29,7 +29,8 @@ const slots = computed(() => {
   while (result.length < max) {
     result.push(undefined)
   }
-  return result.slice(0, Math.max(result.length, max))
+  // 超员（历史跳号或缩容后）刻意全部保留展示，补齐只在不足时发生——无需截断。
+  return result
 })
 
 // 待确认踢出的成员：置位后弹出确认框，确认后调用 store.kick（踢人是广播全员的破坏性操作）。

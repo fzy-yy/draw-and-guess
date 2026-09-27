@@ -1,5 +1,5 @@
 import { APP_CONFIG } from '@draw-guess/config'
-import type { PlaySoundOptions, SoundName } from './types.ts'
+import type { SoundName } from './types.ts'
 import type { AudioFactory, AudioPort, SoundClock } from './contracts.ts'
 import { calculateEffectiveVolume, type AudioSettingsState } from './volume.ts'
 
@@ -29,9 +29,6 @@ export class SoundManager {
   /** SFX 池满时的轮转游标（soundName -> 下一个复用的下标），保证可预测、不固定复用首个实例。 */
   private sfxPoolCursor = new Map<SoundName, number>()
 
-  /** 记录每个 SFX 实例最近一次播放用到的音量缩放（volumeScale），供设置变化时重算音量。 */
-  private sfxScale = new Map<AudioPort, number>()
-
   /** 各音效最近一次可听触发时间戳（用于冷却限频）。 */
   private lastTriggerTime = new Map<string, number>()
 
@@ -59,17 +56,12 @@ export class SoundManager {
     this.syncActiveSfxVolumes()
   }
 
-  /** 获取当前音频管理器持有的设置副本。 */
-  public getSettings(): AudioSettingsState {
-    return this.settings
-  }
-
   /**
    * 播放指定短音效。
    * 自动检查冷却防刷、发音池复用、音量折算；静音时不触发、不写冷却；
    * 资源缺失或浏览器 Autoplay 拦截时静默降级（短音效不做解锁重试）。
    */
-  public play(name: SoundName, options?: PlaySoundOptions): void {
+  public play(name: SoundName): void {
     const meta = APP_CONFIG.audio.sounds[name]
     if (!meta) return
 
@@ -81,18 +73,14 @@ export class SoundManager {
     const url = this.getSoundUrl(name)
     if (!url) return
 
-    const targetVolume = calculateEffectiveVolume(
-      this.settings,
-      meta.volumeMultiplier,
-      options?.volumeScale,
-    )
+    const targetVolume = calculateEffectiveVolume(this.settings, meta.volumeMultiplier)
     // 静音或音量为 0：真正听不到，既不触发播放也不写冷却
     if (targetVolume <= 0) return
 
     // 只有确实要开始可听播放后才写冷却（避免静音触发吞掉非静音时的提示音）
     this.lastTriggerTime.set(name, now)
 
-    const port = this.acquireSfxPort(name, url, options?.volumeScale)
+    const port = this.acquireSfxPort(name, url)
     port.volume = targetVolume
     // 短音效为一次性触发，Autoplay 被拦截时静默忽略（适配器内部吞掉失败）
     port.play()
@@ -100,9 +88,9 @@ export class SoundManager {
 
   /**
    * 从 SFX 池取一个可复用实例：优先复用空闲实例，池满时按配置策略（round-robin）轮转复用，
-   * 避免固定命中数组首个实例。返回一个已重置 currentTime 并记录音量缩放的可用端口。
+   * 避免固定命中数组首个实例。返回一个已重置 currentTime 的可用端口。
    */
-  private acquireSfxPort(name: SoundName, url: string, volumeScale?: number): AudioPort {
+  private acquireSfxPort(name: SoundName, url: string): AudioPort {
     const { maxInstances, preemptStrategy } = APP_CONFIG.audio.sfxPool
 
     let pool = this.sfxPool.get(name)
@@ -148,7 +136,6 @@ export class SoundManager {
     }
 
     port.currentTime = 0
-    this.sfxScale.set(port, volumeScale ?? 1.0)
     return port
   }
 
@@ -159,11 +146,7 @@ export class SoundManager {
       if (!meta) continue
       for (const port of pool) {
         if (port.paused) continue // 已暂停的实例下次播放会重新设音量，无需同步
-        port.volume = calculateEffectiveVolume(
-          this.settings,
-          meta.volumeMultiplier,
-          this.sfxScale.get(port) ?? 1.0,
-        )
+        port.volume = calculateEffectiveVolume(this.settings, meta.volumeMultiplier)
       }
     }
   }
@@ -186,10 +169,9 @@ export class SoundManager {
     for (const pool of this.sfxPool.values()) {
       for (const port of pool) port.dispose()
     }
-    // 清空池、轮转游标、音量缩放与冷却记录
+    // 清空池、轮转游标与冷却记录
     this.sfxPool.clear()
     this.sfxPoolCursor.clear()
-    this.sfxScale.clear()
     this.lastTriggerTime.clear()
   }
 }

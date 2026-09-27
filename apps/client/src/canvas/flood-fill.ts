@@ -4,7 +4,6 @@ export type Rgba = readonly [number, number, number, number]
 
 export interface FloodFillMetrics {
   filledPixels: number
-  pushedSpans: number
   peakWorkingBytes: number
 }
 
@@ -54,7 +53,7 @@ export function applyFloodFillMeasured(
   tolerance: number,
 ): FloodFillMetrics {
   if (width <= 0 || height <= 0 || data.length !== width * height * 4)
-    return { filledPixels: 0, pushedSpans: 0, peakWorkingBytes: 0 }
+    return { filledPixels: 0, peakWorkingBytes: 0 }
   // 像素种子 clamp 到合法栅格索引（口径单源，geometry/ADR-0022）。
   const x = clampPixelAxis(startX, width)
   const y = clampPixelAxis(startY, height)
@@ -69,14 +68,13 @@ export function applyFloodFillMeasured(
   // target 由 data 的 4 通道构造、replacement 恒为 Rgba 四元组，every 的 index ∈ [0,4) 必命中；
   // noUncheckedIndexedAccess 下元组数字索引带 undefined，用 ?? 0 兜底（该分支运行时不可达）替代 `!`。
   if (target.every((channel, index) => Math.abs(channel - (replacement[index] ?? 0)) <= tolerance))
-    return { filledPixels: 0, pushedSpans: 0, peakWorkingBytes: 0 }
+    return { filledPixels: 0, peakWorkingBytes: 0 }
 
   // 扫描线只压入相邻行的连续 span 种子。常见空白画布的栈深接近 1；复杂图形按需扩容，
   // 避免旧 BFS 固定分配 width*height 个 Int32（720p 约 3.5 MiB）。
   const pixelCount = width * height
   let stack = new Int32Array(Math.min(pixelCount, Math.max(64, width * 2)))
   let stackSize = 0
-  let pushedSpans = 0
   let peakWorkingBytes = stack.byteLength
   const push = (pixelIndex: number): void => {
     if (stackSize >= stack.length) {
@@ -87,7 +85,6 @@ export function applyFloodFillMeasured(
     }
     stack[stackSize] = pixelIndex
     stackSize += 1
-    pushedSpans += 1
   }
 
   const blendAntialiasPixel = (pixelX: number, pixelY: number): void => {
@@ -153,19 +150,5 @@ export function applyFloodFillMeasured(
   }
 
   peakWorkingBytes = Math.max(peakWorkingBytes, stack.byteLength)
-  return { filledPixels, pushedSpans, peakWorkingBytes }
-}
-
-/** 兼容既有调用：只返回填充像素数。tolerance 同样必须显式传入。 */
-export function applyFloodFill(
-  data: Uint8ClampedArray,
-  width: number,
-  height: number,
-  startX: number,
-  startY: number,
-  replacement: Rgba,
-  tolerance: number,
-): number {
-  return applyFloodFillMeasured(data, width, height, startX, startY, replacement, tolerance)
-    .filledPixels
+  return { filledPixels, peakWorkingBytes }
 }

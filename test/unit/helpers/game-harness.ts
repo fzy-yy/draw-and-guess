@@ -1,6 +1,7 @@
 import { APP_CONFIG } from '../../../apps/server/src/config/index.ts'
 import type { RoomSettings } from '@draw-guess/shared'
-import { GameService, createDefaultRoomSettings } from '../../../apps/server/src/game-service.ts'
+import { defaultRoomSettings } from '@draw-guess/config'
+import { GameService } from '../../../apps/server/src/game-service.ts'
 import { SILENT_LOGGER, type RuntimeLogger } from '../../../apps/server/src/errors.ts'
 import type { RuntimeDependencies } from '../../../apps/server/src/runtime.ts'
 import { createMemoryRepositories } from './in-memory-repositories.ts'
@@ -121,7 +122,12 @@ export function createGameHarness(
 }
 
 export function testRoomSettings(patch: Partial<RoomSettings> = {}): RoomSettings {
-  return { ...createDefaultRoomSettings(), roundsPerPlayer: 1, ...patch }
+  // 默认规则唯一来源就是公开配置的 defaultRoomSettings；测试不再经服务端中转工厂。
+  return {
+    ...defaultRoomSettings(APP_CONFIG.player.defaultMaxPlayers),
+    roundsPerPlayer: 1,
+    ...patch,
+  }
 }
 
 export function startTwoPlayerGame(

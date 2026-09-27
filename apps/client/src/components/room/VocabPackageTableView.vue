@@ -6,7 +6,7 @@
 <script setup lang="ts">
 import { strings } from '@draw-guess/strings'
 import type { VocabularyPackageInfo } from '@draw-guess/shared'
-import type { DataTableColumn } from '@/components/common/data-table.types'
+import type { DataTableColumn, ScrollableTable } from '@/components/common/data-table.types'
 import DataTable from '@/components/common/DataTable.vue'
 import { computed, ref } from 'vue'
 
@@ -40,7 +40,7 @@ const columns: DataTableColumn<VocabularyPackageInfo>[] = [
 
 /** DataTable 以 Set 作为统一受控选择接口；词库包只允许一个激活项。 */
 const selectedPackageIds = computed(() => new Set([props.selectedPackageId]))
-const table = ref<{ scrollToTop(): void; scrollToIndex(index: number): void }>()
+const table = ref<ScrollableTable>()
 
 defineExpose({
   scrollToTop: () => table.value?.scrollToTop(),

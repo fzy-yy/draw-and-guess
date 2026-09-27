@@ -106,7 +106,7 @@ export const useSessionStore = defineStore('session', () => {
           sessionState.value = 'idle'
           playerId.value = ''
           page.value = 'profile'
-          notify(result.error ?? strings.request.genericFailure, 'error')
+          notify(result.error, 'error')
         } else if (
           sessionState.value === 'restoring' &&
           profileStore.profile.recoveryToken &&

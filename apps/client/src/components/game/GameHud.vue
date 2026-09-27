@@ -127,7 +127,7 @@ const displayedAnswer = computed(() => {
   >
     <!-- 回合指示：胶囊底衬（与计时器一致），横排「ROUND 1 / 4」 -->
     <HudPill>
-      <!-- 回合英文标签属装饰性说明：低高度舞台下折叠，把横向空间留给答案与计时。 -->
+      <!-- 回合英文标签属装饰性说明。 -->
       <span class="text-sky text-fs-12">{{ strings.game.roundLabel }}</span>
       <b class="text-white text-fs-24 leading-none tabular-nums">
         <!-- 当前回合固定 2ch 宽：两位数回合（如 9→10）不会挤动顶栏后续栏目 -->

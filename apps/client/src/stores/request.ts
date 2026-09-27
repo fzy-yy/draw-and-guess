@@ -194,10 +194,13 @@ export function createRequester(options: {
     // 重试开关独立于 Toast 归属（ADR-0022）：静默请求默认仍可重试，关不关由调用方显式声明。
     const retryEnabled = requestOptions.retry ?? true
     const maxAttempts = 1 + (retryEnabled ? APP_CONFIG.network.requestRetryAttempts : 0)
-    let lastTransportError: { message: string; timeout: boolean } | undefined
 
     try {
-      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      // 循环不变式：try 分支要么 return 要么 continue 到下一轮；catch 分支在最后一次尝试就地返回。
+      // 因此不存在「循环正常退出」的路径，终态传输失败无需再兜底默认值。
+      let attempt = 0
+      for (;;) {
+        attempt += 1
         try {
           const rawAck = await raceTimeout(
             // {...payload, requestId} 结构上等于 ClientRequestPayload<E>，但泛型 E 下
@@ -233,23 +236,20 @@ export function createRequester(options: {
           return { ok: true, data: decoded.ack.data }
         } catch (error) {
           if (error instanceof RequestCancelledError) return cancellationFailure()
-          lastTransportError = classifyTransportError(error)
-          if (attempt + 1 < maxAttempts)
+          const transport = classifyTransportError(error)
+          if (attempt < maxAttempts) {
             await raceCancellation(delay(APP_CONFIG.network.requestRetryDelayMs), controller.signal)
+            continue
+          }
+          // 所有自动尝试均失败后只提示一次，避免瞬时重连产生重复 Toast。
+          if (requestOptions.notify !== 'silent') notify(transport.message, 'error')
+          return {
+            ok: false,
+            failureKind: 'transport',
+            error: transport.message,
+            timeout: transport.timeout,
+          }
         }
-      }
-
-      const transport = lastTransportError ?? {
-        message: strings.request.genericFailure,
-        timeout: false,
-      }
-      // 所有自动尝试均失败后只提示一次，避免瞬时重连产生重复 Toast。
-      if (requestOptions.notify !== 'silent') notify(transport.message, 'error')
-      return {
-        ok: false,
-        failureKind: 'transport',
-        error: transport.message,
-        timeout: transport.timeout,
       }
     } catch (error) {
       if (error instanceof RequestCancelledError) return cancellationFailure()

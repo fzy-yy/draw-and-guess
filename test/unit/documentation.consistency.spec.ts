@@ -72,15 +72,7 @@ describe('文档与工程一致性', () => {
 
   it('文档引用的仓库路径都真实存在且大小写正确', () => {
     // 只校验「以顶层目录开头」的完整仓库路径；相对片段（如 composables/useToasts.ts）由上下文决定，跳过。
-    const topLevelPrefixes = [
-      'apps/',
-      'packages/',
-      'config/',
-      'string/',
-      'test/',
-      'docs/',
-      'vocabulary/',
-    ]
+    const topLevelPrefixes = ['apps/', 'packages/', 'test/', 'docs/', 'vocabulary/']
     const tokenPattern = /`([A-Za-z0-9_@./-]+\.(?:ts|mts|vue|css|json|md|yml|yaml|db|html))`/gu
     const offenders: string[] = []
     for (const [docName, text] of docs) {

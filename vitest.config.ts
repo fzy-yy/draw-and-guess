@@ -69,7 +69,7 @@ export default defineConfig({
         'apps/client/src/views/**',
       ],
       thresholds: {
-        // 全局底线贴近当前实测（约 67/60/62/70），防止总体覆盖率在新增代码后悄悄回落。
+        // 全局底线防止覆盖率在新增代码后悄悄回落；实测数字与分层门禁以 test/COVERAGE.md 为准，此处不复述。
         statements: 60,
         branches: 52,
         functions: 54,

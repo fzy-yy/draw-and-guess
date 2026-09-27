@@ -7,7 +7,6 @@
 -->
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue'
-import { cn } from '@/utils/cn'
 
 const props = defineProps<{
   /** 横幅是否可见 */
@@ -18,8 +17,6 @@ const props = defineProps<{
   heading?: string
   /** 主提示文本 */
   message?: string
-  /** 自定义外层样式覆盖 */
-  class?: string
 }>()
 
 const root = ref<HTMLElement>()
@@ -48,12 +45,7 @@ watch(
     <div
       v-if="open"
       ref="root"
-      :class="
-        cn(
-          'absolute bottom-[3cqh] left-1/2 z-50 grid min-h-[10cqh] w-[66cqw] grid-cols-[auto_1fr_auto_auto] items-center gap-[1em] border-[0.3cqh] border-blue border-l-[1cqh] bg-white px-[1em] py-[1cqh] shadow-float -translate-x-1/2',
-          props.class,
-        )
-      "
+      class="absolute bottom-[3cqh] left-1/2 z-50 grid min-h-[10cqh] w-[66cqw] grid-cols-[auto_1fr_auto_auto] items-center gap-[1em] border-[0.3cqh] border-blue border-l-[1cqh] bg-white px-[1em] py-[1cqh] shadow-float -translate-x-1/2"
       role="region"
       :aria-label="ariaLabel"
       aria-live="polite"

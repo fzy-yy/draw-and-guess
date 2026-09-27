@@ -28,7 +28,7 @@ function temporaryDirectory(): string {
   return directory
 }
 
-function deployment(logLevel: 'debug' | 'info' | 'warn' | 'error') {
+function deployment(logLevel: 'info' | 'error') {
   return getDeploymentConfig({
     PORT: '5174',
     LOG_ENABLED: 'true',
@@ -39,9 +39,7 @@ function deployment(logLevel: 'debug' | 'info' | 'warn' | 'error') {
 
 function mockLogger(order: string[] = []): RuntimeLogger {
   return {
-    debug: vi.fn(),
     info: vi.fn(),
-    warn: vi.fn(),
     error: vi.fn(),
     flush: vi.fn(async () => void order.push('flush')),
     close: vi.fn(async () => void order.push('logger-close')),
@@ -79,42 +77,49 @@ async function applicationWithHealthDetails(enabled: boolean) {
 }
 
 describe('异步文件日志生命周期与脱敏', () => {
-  it('LOG_LEVEL 控制 debug/info/warn/error，关闭前排空缓冲且丢弃非白名单上下文', async () => {
+  it('LOG_LEVEL 控制 info/error 两档，关闭前排空缓冲且丢弃非白名单上下文', async () => {
     const root = temporaryDirectory()
     const logPath = join(root, 'operations.log')
-    const logger = makeLogger(deployment('warn'), { logPath })
+    // error 档：info 级整行被过滤；非白名单上下文键即便在 error 行也必须被脱敏丢弃。
+    const logger = makeLogger(deployment('error'), { logPath })
     const secret = 'sensitive-recovery-token'
 
-    logger.debug({ event: 'debug' }, '房间阶段已转换')
     logger.info({ event: 'info' }, '玩家会话已注册')
-    logger.warn(
+    logger.error(
       {
-        event: 'room:create',
+        errorType: 'TypeError',
         recoveryToken: secret,
         answer: 'secret-answer',
         payload: { chat: 'full-chat' },
       } as never,
       '正在优雅关闭服务',
     )
-    logger.error({ errorType: 'TypeError' }, '服务器启动失败')
     await logger.flush()
     await logger.close()
 
     const content = readFileSync(logPath, 'utf8')
     expect(content).toContain('正在优雅关闭服务')
-    expect(content).toContain('服务器启动失败')
-    expect(content).not.toContain('房间阶段已转换')
     expect(content).not.toContain('玩家会话已注册')
     for (const forbidden of [secret, 'secret-answer', 'full-chat', 'recoveryToken', 'payload']) {
       expect(content).not.toContain(forbidden)
     }
   })
 
+  it('info 档记录普通事件行', async () => {
+    const root = temporaryDirectory()
+    const logPath = join(root, 'info.log')
+    const logger = makeLogger(deployment('info'), { logPath })
+    logger.info({ event: 'info' }, '玩家会话已注册')
+    await logger.flush()
+    expect(readFileSync(logPath, 'utf8')).toContain('玩家会话已注册')
+    await logger.close()
+  })
+
   it('异常退出路径可用 flushSync 尽力保存最后一条错误，不依赖异步 close 回调', async () => {
     const root = temporaryDirectory()
     const logPath = join(root, 'fatal.log')
-    const logger = makeLogger(deployment('debug'), { logPath })
-    logger.debug({ event: EVENTS.roomCreate }, '房间阶段已转换')
+    const logger = makeLogger(deployment('info'), { logPath })
+    logger.info({ event: EVENTS.roomCreate }, '房间阶段已转换')
     await logger.flush()
     expect(readFileSync(logPath, 'utf8')).toContain('房间阶段已转换')
 

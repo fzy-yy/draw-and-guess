@@ -4,8 +4,11 @@ import { APP_CONFIG } from '@draw-guess/config'
 import { EVENTS, type ClientResponse } from '@draw-guess/shared'
 import type { RequestResult } from '@/stores/request'
 
-/** 填充 ack 携带服务端画布修订，用于判断本地是否已追平并安全解除提交锁。 */
-type FillAck = ClientResponse<typeof EVENTS.drawFillCommit>
+/**
+ * 填充 ack 携带服务端画布修订，用于判断本地是否已追平并安全解除提交锁。
+ * 具名导出：GameCanvas / GameView 共用这一份定义，不再各写别名。
+ */
+export type FillAck = ClientResponse<typeof EVENTS.drawFillCommit>
 
 /**
  * 洪泛填充的**提交态锁**（本地填充已发出、等权威修订追平）。

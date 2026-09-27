@@ -306,7 +306,7 @@ export default tseslint.config([
     },
   },
   {
-    // 面向 .vue 文件的 SFC 惯例约束：启用自有规则（仅作用于 .vue，不触碰 string/ 等 .ts）。
+    // 面向 .vue 文件的 SFC 惯例约束：启用自有规则（仅作用于 .vue，不触碰 packages/strings 等 .ts）。
     files: ['**/*.vue'],
     plugins: { 'project-conventions': projectConventions },
     rules: {

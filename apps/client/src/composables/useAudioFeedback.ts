@@ -9,7 +9,7 @@ import { APP_CONFIG } from '@draw-guess/config'
 import type { RoomPhase } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
 import { playSound, soundManager } from '@/audio'
-import { eventToAudio, phaseToAudio, type AudioDecision } from '@/audio/routing'
+import { eventToAudio, phaseToAudio } from '@/audio/routing'
 import type { SoundName } from '@/audio'
 
 export function useAudioFeedback(): void {
@@ -23,12 +23,7 @@ export function useAudioFeedback(): void {
 
   /** 按阶段应用决策：进入新阶段时播放入场 SFX。 */
   function applyPhase(phase: RoomPhase): void {
-    applySfx(phaseToAudio(phase).sfx)
-  }
-
-  /** 应用一次领域事件决策。 */
-  function applyDecision(decision: AudioDecision): void {
-    applySfx(decision.sfx)
+    applySfx(phaseToAudio(phase))
   }
 
   // 房间阶段变化：进入时播放入场 SFX；进入作画时复位「末位秒数」
@@ -55,7 +50,7 @@ export function useAudioFeedback(): void {
   watch(
     () => Boolean(store.room),
     (hasRoom, previous) => {
-      if (previous && !hasRoom) applyDecision(eventToAudio('room-leave'))
+      if (previous && !hasRoom) applySfx(eventToAudio('room-leave'))
     },
   )
 
@@ -66,22 +61,22 @@ export function useAudioFeedback(): void {
       // 仅在从断开恢复为连接时处理；首次连接（无 room）由下方阶段守卫自然跳过
       if (!connected || previous !== false) return
       if (!store.room?.phase) return
-      applyDecision(eventToAudio('session-restore'))
+      applySfx(eventToAudio('session-restore'))
     },
   )
 
   // 自己准备/猜中/收到邀请时播放对应音效
   watch(
     () => store.me?.ready,
-    (ready) => ready && applyDecision(eventToAudio('self-ready')),
+    (ready) => ready && applySfx(eventToAudio('self-ready')),
   )
   watch(
     () => store.me?.guessed,
-    (guessed) => guessed && applyDecision(eventToAudio('self-guessed')),
+    (guessed) => guessed && applySfx(eventToAudio('self-guessed')),
   )
   watch(
     () => store.invites.length,
-    (count, previous) => count > previous && applyDecision(eventToAudio('invite')),
+    (count, previous) => count > previous && applySfx(eventToAudio('invite')),
   )
 
   // 最后十秒按服务端结束时间与全局时钟偏移计算倒计时滴答警报
@@ -91,7 +86,7 @@ export function useAudioFeedback(): void {
     const second = Math.ceil((endsAt - (Date.now() + store.clockOffset)) / 1_000)
     if (second > 0 && second <= APP_CONFIG.game.warningSeconds && second !== lastWarningSecond) {
       lastWarningSecond = second
-      applyDecision(eventToAudio('countdown-tick'))
+      applySfx(eventToAudio('countdown-tick'))
     }
   }, store.config.ui.tickIntervalMs)
 

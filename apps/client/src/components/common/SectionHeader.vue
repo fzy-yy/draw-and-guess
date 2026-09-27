@@ -13,19 +13,16 @@ withDefaults(
     title: string
     /** 标题 id（弹窗 labelledby 等锚点场景使用，可选） */
     id?: string
-    /** 视觉色调：default 适配浅底；light 适配深色 navy 顶栏 */
-    tone?: 'default' | 'light'
   }>(),
   {
     id: undefined,
-    tone: 'default',
   },
 )
 </script>
 
 <template>
   <div>
-    <p :class="tone === 'light' ? 'eyebrow-light' : 'eyebrow'">{{ eyebrow }}</p>
-    <h2 :id="id" :class="tone === 'light' ? 'text-white' : ''">{{ title }}</h2>
+    <p class="eyebrow">{{ eyebrow }}</p>
+    <h2 :id="id">{{ title }}</h2>
   </div>
 </template>

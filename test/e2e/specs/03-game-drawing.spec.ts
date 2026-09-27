@@ -1,4 +1,4 @@
-import { test, expect, createPlayer } from '../fixtures/test-base'
+import { test, expect, createPlayer, startTwoPlayerGame } from '../fixtures/test-base'
 
 test.describe('03 - 对局画板与绘图工具 (Game Drawing & Canvas)', () => {
   test('选词流程、画笔/橡皮擦、撤销重做与清空画板', async ({ browser }) => {
@@ -7,24 +7,8 @@ test.describe('03 - 对局画板与绘图工具 (Game Drawing & Canvas)', () => 
 
     try {
       const roomName = `画板测试-${Date.now()}`
-      await host.lobby.createRoom({ name: roomName })
-      await guest.lobby.joinPublicRoom(roomName)
-      await guest.room.toggleReady()
-      await host.room.startGame()
-
       // 1. 动态判断首位当选画家并选词
-      const isHostDrawer = await Promise.race([
-        host.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => true),
-        guest.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => false),
-      ])
-      const drawer = isHostDrawer ? host : guest
-      const guesser = isHostDrawer ? guest : host
+      const { drawer, guesser } = await startTwoPlayerGame(host, guest, roomName)
 
       await drawer.game.chooseWord(0)
 
@@ -64,22 +48,7 @@ test.describe('03 - 对局画板与绘图工具 (Game Drawing & Canvas)', () => 
 
     try {
       const roomName = `填充测试-${Date.now()}`
-      await host.lobby.createRoom({ name: roomName })
-      await guest.lobby.joinPublicRoom(roomName)
-      await guest.room.toggleReady()
-      await host.room.startGame()
-
-      const isHostDrawer = await Promise.race([
-        host.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => true),
-        guest.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => false),
-      ])
-      const drawer = isHostDrawer ? host : guest
+      const { drawer } = await startTwoPlayerGame(host, guest, roomName)
 
       await drawer.game.chooseWord(0)
 

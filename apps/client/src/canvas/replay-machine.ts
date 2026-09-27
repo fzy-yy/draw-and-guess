@@ -160,13 +160,15 @@ export class DrawingReplayMachine {
 
   /** 追加预览点（pointermove）：只画新增段并同步簿记。 */
   addPreviewPoint(point: DrawPoint): void {
-    if (!this.preview) return
+    const preview = this.preview
+    if (!preview) return
     const context = this.logicalContext()
-    const fromIndex = this.preview.points.length
-    this.preview.points.push(point)
-    this.drawn.set(this.preview.id, this.preview.points.length)
+    const fromIndex = preview.points.length
+    preview.points.push(point)
+    this.drawn.set(preview.id, preview.points.length)
     if (context) {
-      this.renderPreview(context, fromIndex, this.preview.points)
+      // 单点预览由 drawPreviewStroke 的 +0.01 补偿渲染成圆点（见 ADR-0003 坐标约定）。
+      this.drawPreviewStroke(context, preview, preview.points, fromIndex)
       this.ports.present(this.logicalCanvas)
     }
   }
@@ -210,17 +212,6 @@ export class DrawingReplayMachine {
 
   private logicalContext(): CanvasRenderingContext2D | null {
     return this.logicalCanvas.getContext('2d', { willReadFrequently: true })
-  }
-
-  private renderPreview(
-    context: CanvasRenderingContext2D,
-    fromIndex: number,
-    points: DrawPoint[] | undefined,
-  ): void {
-    const preview = this.preview
-    if (!preview || !points || !points.length) return
-    // 单点预览由 renderStroke 的 +0.01 补偿渲染成圆点（见 ADR-0003 坐标约定）。
-    this.drawPreviewStroke(context, preview, points, fromIndex)
   }
 
   private drawPreviewStroke(

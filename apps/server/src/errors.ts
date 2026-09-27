@@ -34,7 +34,6 @@ export interface RuntimeLogContext {
   source?: string
   to?: string
   visibility?: string
-  waitingForNextGame?: boolean
 }
 
 /** 日志消息采用代码内静态白名单，禁止把用户输入或异常 message 当作日志正文。 */
@@ -64,11 +63,9 @@ export type RuntimeLogMessage =
   | '玩家断线并进入身份恢复宽限'
   | '房间阶段已转换'
 
-/** 运行日志只接受脱敏结构化上下文；生产入口注入 Pino，未注入时保持静默。 */
+/** 运行日志只接受脱敏结构化上下文；生产入口注入 Pino，未注入时保持静默。通道只保留有真实调用者的两级（info/error）。 */
 export interface RuntimeLogger {
-  debug(context: RuntimeLogContext, message: RuntimeLogMessage): void
   info(context: RuntimeLogContext, message: RuntimeLogMessage): void
-  warn(context: RuntimeLogContext, message: RuntimeLogMessage): void
   error(context: RuntimeLogContext, message: RuntimeLogMessage): void
   /** 正常关闭前异步排空缓冲区。 */
   flush(): Promise<void>
@@ -80,9 +77,7 @@ export interface RuntimeLogger {
 
 /** 未注入日志器时的静默实现。 */
 export const SILENT_LOGGER: RuntimeLogger = {
-  debug: () => undefined,
   info: () => undefined,
-  warn: () => undefined,
   error: () => undefined,
   flush: () => Promise.resolve(),
   close: () => Promise.resolve(),

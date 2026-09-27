@@ -169,7 +169,7 @@ function goBack(): void {
          导航列取「15% 与 11em 的较大值」：低高度舞台下 15% 会窄到把条目文字截断，需保底宽度。 -->
     <div class="grid min-h-0 grid-cols-[minmax(11em,15%)_minmax(0,1fr)]">
       <SideNav v-model="tab" :items="navItems" :label="strings.settings.categoryAria" />
-      <!-- 正文区：内容高度由设置项自然撑开；relative 保留为一般定位锚点（诊断页已静态化，懒加载占位场景见 ADR-0014） -->
+      <!-- 正文区：内容高度由设置项自然撑开；relative 保留为一般定位锚点 -->
       <div class="relative min-h-0 min-w-0">
         <!-- 声音设置 -->
         <AudioTab v-if="tab === 'audio'" />

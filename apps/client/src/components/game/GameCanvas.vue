@@ -8,8 +8,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
-  EVENTS,
-  type ClientResponse,
   type DrawingCommand,
   type FillCommand,
   type Stroke,
@@ -23,7 +21,7 @@ import { DrawingReplayMachine } from '@/canvas/replay-machine'
 import { presentLogicalCanvas } from '@/canvas/viewport'
 import { useCanvasCursor } from '@/composables/useCanvasCursor'
 import { useCanvasViewport } from '@/composables/useCanvasViewport'
-import { useFillSession } from '@/composables/useFillSession'
+import { useFillSession, type FillAck } from '@/composables/useFillSession'
 import { useStrokeSession } from '@/composables/useStrokeSession'
 import type { PendingStrokeBatch } from '@/composables/useStrokeSession'
 import type { RequestFailure, RequestResult } from '@/stores/request'
@@ -39,8 +37,6 @@ const props = defineProps<{
   color: string
   revision?: number
 }>()
-/** 填充 ack 携带服务端画布修订，用于判断本地是否已追平并安全解除提交锁。 */
-type FillAck = ClientResponse<typeof EVENTS.drawFillCommit>
 
 const emit = defineEmits<{
   stroke: [stroke: Stroke, onResult: (result: RequestResult<StrokeAck>) => void]

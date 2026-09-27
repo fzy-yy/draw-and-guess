@@ -23,19 +23,9 @@ withDefaults(
   },
 )
 
-const emit = defineEmits<{
-  search: [value: string]
-  clear: []
-}>()
-
 function clear(): void {
   playInteractionSound('activate')
   model.value = ''
-  emit('clear')
-}
-
-function handleEnter(): void {
-  emit('search', model.value)
 }
 </script>
 
@@ -46,7 +36,6 @@ function handleEnter(): void {
     :placeholder="placeholder"
     :aria-label="ariaLabel"
     :disabled="disabled"
-    @enter="handleEnter"
   >
     <template #prefix>
       <Search class="h-[3.2cqh] w-[3.2cqh] text-muted" />

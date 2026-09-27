@@ -20,6 +20,16 @@ export function activeMembers(members: readonly RoomMember[]): RoomMember[] {
   return members.filter(isActiveMember)
 }
 
+/**
+ * 在线可玩身份：非观战且连接在线。
+ * 用于「准备就绪」「可猜词」「可发送互动」这类要求当前身份即时在线的判定。
+ * 与 `isActiveMember` 的差异：本谓词不排除 leftGame——调用点本身就是当前在线身份场景，
+ * 离局占位成员是否需要排除由调用方按语义另行处理。
+ */
+export function isOnlineActiveMember(member: RoomMember): boolean {
+  return !member.spectating && member.connection === 'online'
+}
+
 /** 玩家人数下拉选项（min..max 闭区间，文案经 strings.common.playersUnit）。 */
 export function playerCountOptions(range: { min: number; max: number }): Array<{
   value: number

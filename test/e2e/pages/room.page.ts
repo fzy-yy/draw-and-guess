@@ -61,10 +61,4 @@ export class RoomPage {
       timeout: 10_000,
     })
   }
-
-  async getMemberCount(): Promise<number> {
-    // 统计已占席位数
-    const members = this.page.locator('section:has-text("玩家席位") article:has(b)')
-    return await members.count()
-  }
 }

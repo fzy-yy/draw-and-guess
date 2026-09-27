@@ -41,3 +41,36 @@ export async function createPlayer(browser: Browser, nickname: string): Promise<
 
 export const test = base
 export { expect }
+
+/**
+ * 建立两人对局并识别首位画家：建房（可选最大人数/中途加入策略）→ 加入 → 准备 → 开局 →
+ * 竞速等待「轮到你作画了」。返回画家与猜词者客户端，供各 spec 复用同一开局样板。
+ * 07 响应式用例使用带 `.catch` 的宽松竞速，语义不同，仍由该用例自定义。
+ */
+export async function startTwoPlayerGame(
+  host: PlayerClient,
+  guest: PlayerClient,
+  roomName: string,
+  options: { maxPlayers?: number; joinPolicy?: 'forbid' | 'spectate' | 'next_game' } = {},
+): Promise<{ drawer: PlayerClient; guesser: PlayerClient }> {
+  await host.lobby.createRoom({
+    name: roomName,
+    ...(options.maxPlayers ? { maxPlayers: options.maxPlayers } : {}),
+  })
+  if (options.joinPolicy) await host.room.updateJoinPolicy(options.joinPolicy)
+  await guest.lobby.joinPublicRoom(roomName)
+  await guest.room.toggleReady()
+  await host.room.startGame()
+
+  const isHostDrawer = await Promise.race([
+    host.page
+      .locator('text=轮到你作画了')
+      .waitFor({ timeout: 15_000 })
+      .then(() => true),
+    guest.page
+      .locator('text=轮到你作画了')
+      .waitFor({ timeout: 15_000 })
+      .then(() => false),
+  ])
+  return { drawer: isHostDrawer ? host : guest, guesser: isHostDrawer ? guest : host }
+}

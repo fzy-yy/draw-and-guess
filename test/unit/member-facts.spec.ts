@@ -5,10 +5,13 @@ import {
   connectionStatus,
   countActivePlayers,
   countOnlinePlayers,
+  createOnlineLookup,
   isActivePlayer,
   isOnlinePlayer,
+  isPhaseExpired,
   isRankedMember,
   isRematchEligible,
+  nicknameOf,
   nominalPhaseDurationMs,
   occupiesSeat,
   onlineGuessers,
@@ -16,7 +19,7 @@ import {
   rankedMembers,
   rematchEligibleMembers,
 } from '../../apps/server/src/domain/room/member-facts.ts'
-import type { MemberState } from '../../apps/server/src/models.ts'
+import type { MemberState, PlayerSecret } from '../../apps/server/src/models.ts'
 
 /** 构造一名最小成员；只覆盖被测字段，其余取默认值。 */
 function member(overrides: Partial<MemberState> = {}): MemberState {
@@ -166,5 +169,33 @@ describe('member-facts 纯函数契约', () => {
     countActivePlayers(input)
     countOnlinePlayers(input, online('a'))
     expect(input).toEqual(before)
+  })
+})
+
+describe('member-facts 同构判定单一口径', () => {
+  it('createOnlineLookup 只在玩家存在且 connected 为 true 时判为在线', () => {
+    const players = new Map([
+      ['a', { connected: true }],
+      ['b', { connected: false }],
+    ])
+    const isOnline = createOnlineLookup(players)
+    expect(isOnline('a')).toBe(true)
+    expect(isOnline('b')).toBe(false)
+    expect(isOnline('missing')).toBe(false)
+  })
+
+  it('isPhaseExpired 把 phaseEndsAt=0 视为未到期（暂停期哨兵）', () => {
+    expect(isPhaseExpired({ phaseEndsAt: 0 }, 1_000)).toBe(false)
+    expect(isPhaseExpired({ phaseEndsAt: 999 }, 1_000)).toBe(true)
+    expect(isPhaseExpired({ phaseEndsAt: 1_000 }, 1_000)).toBe(true)
+    expect(isPhaseExpired({ phaseEndsAt: 1_001 }, 1_000)).toBe(false)
+  })
+
+  it('nicknameOf 读取昵称并在身份缺失时回退调用方文案', () => {
+    const players = new Map<string, Pick<PlayerSecret, 'profile'>>([
+      ['a', { profile: { nickname: '画家' } as PlayerSecret['profile'] }],
+    ])
+    expect(nicknameOf(players, 'a', '兜底')).toBe('画家')
+    expect(nicknameOf(players, 'missing', '兜底')).toBe('兜底')
   })
 })

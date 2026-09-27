@@ -36,10 +36,8 @@ const props = withDefaults(
     y: number
     /** 菜单的无障碍名称；缺省取 strings.common.contextMenuAria。 */
     ariaLabel?: string
-    /** 追加到面板的扩展类（宽度/层级等按场景覆盖默认约束）。 */
-    panelClass?: string
   }>(),
-  { ariaLabel: undefined, panelClass: '' },
+  { ariaLabel: undefined },
 )
 
 const emit = defineEmits<{ select: [item: ContextMenuItem] }>()
@@ -230,10 +228,7 @@ useEventListener(document, 'scroll', handleScroll, { capture: true, passive: tru
         role="menu"
         tabindex="-1"
         :aria-label="label"
-        :class="[
-          'pointer-events-auto absolute max-h-[70cqh] w-max max-w-[22cqw] min-w-[10em] overflow-y-auto overscroll-contain rounded-[0.7em] border-[0.18cqh] border-line bg-white p-[0.35em] shadow-float outline-hidden',
-          panelClass,
-        ]"
+        class="pointer-events-auto absolute max-h-[70cqh] w-max max-w-[22cqw] min-w-[10em] overflow-y-auto overscroll-contain rounded-[0.7em] border-[0.18cqh] border-line bg-white p-[0.35em] shadow-float outline-hidden"
         :style="panelStyle"
       >
         <template v-for="item in items" :key="item.id">

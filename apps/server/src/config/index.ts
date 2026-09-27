@@ -12,4 +12,4 @@ export const APP_CONFIG = {
   vocabulary: { ...publicAppConfig.vocabulary, ...serverPrivateConfig.vocabulary },
 } as const
 
-export { PUBLIC_CONFIG, getDeploymentConfig, serverPrivateConfig, type DeploymentConfig }
+export { PUBLIC_CONFIG, getDeploymentConfig, type DeploymentConfig }

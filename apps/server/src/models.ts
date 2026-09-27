@@ -112,13 +112,13 @@ export interface GameSecret {
    */
   correctDetails: ScoreDetail[]
   revealedIndices: Set<number> // 逐步提示已揭示的字符下标
-  /** 结构化提示的揭示槽位：词库单分类即提示，开局固定为 [0]（揭示一次分类）；分类为空时为空数组 */
+  /** 结构化提示的揭示槽位：beginDrawing 答案确定后置为 [0]（hint 优先、空回退 category）；两者皆空时为空数组 */
   hintOrder: number[]
   /** 已揭示的结构化提示条数（snapshot 据此切片下发 revealedHints，至多 1） */
   revealedHintCount: number
   drawingRevision: number // 画布修订代次，增量操作单调递增
   roundSettled?: boolean // 当前回合是否已结算（防止暂停+离房等竞态下重复累计）
-  archived?: boolean // 战报是否已写入数据库（防重）
+  // 战报防重不设标志位：finishGame 以 finalRanking 是否已置 + 仓储幂等 upsert 兜底。
   roundResult?: RoundResult // 回合结算数据
   /** 进入最终结算时冻结；成员随后离房不会改变已公布的排名与统计。 */
   finalRanking?: FinalRankingEntry[]
@@ -148,7 +148,6 @@ export interface RoomSecret {
   vocabularyPackageId?: string // 本局绑定的词库包 ID（缺省为词数最多者）
   selectedWordIds: Set<string> // 本局启用的词条 ID 集合
   game?: GameSecret // 对局进行中才有
-  createdAt: number
 }
 
 /** 定向邀请秘密状态：过期后由定时器自动回收。 */

@@ -42,7 +42,7 @@ export interface FakeGameTransport {
   setConnected(value: boolean): void
 }
 
-export function createFakeGameTransport(): FakeGameTransport {
+function createFakeGameTransport(): FakeGameTransport {
   const socketListeners = new Map<string, Set<Listener>>()
   const managerListeners = new Map<string, Set<Listener>>()
   const requests: FakeGameTransport['requests'] = []

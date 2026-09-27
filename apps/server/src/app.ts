@@ -81,7 +81,7 @@ function registerSocketHandlers(socket: AppSocket, service: GameService): void {
  *
  * 注入项均为「基础设施」参数：dbFile / clientDist 仅供测试或嵌入场景指向隔离目录，
  * 生产路径保持默认（apps/server/data/game.db 与 ../client/dist）；本文件不承载任何业务规则，
- * 业务规则读取公开配置包与服务端私有配置的组合视图（按 ROLE 裁剪的快照与计分逻辑不变）。
+ * 业务规则读取公开配置包与服务端私有配置的组合视图（快照按观看者角色裁剪，计分级纯函数裁决）。
  */
 export async function createApplication(
   options: {
@@ -224,10 +224,7 @@ export async function createApplication(
   // 每个新连接注册全部协议事件处理器
   io.on('connection', (socket) => {
     metrics.connectionOpened()
-    let counted = true
     socket.once('disconnect', () => {
-      if (!counted) return
-      counted = false
       metrics.connectionClosed()
     })
     registerSocketHandlers(socket, service)

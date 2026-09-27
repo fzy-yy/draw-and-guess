@@ -61,7 +61,7 @@
 ## 关联
 
 - 代码：`apps/client/src/stores/resync.ts`、`stores/room.ts`、`stores/game.ts`、
-  `stores/index.ts`、`composables/useRoomSync.ts`、`composables/useAppBootstrap.ts`
+  `composables/useRoomSync.ts`、`composables/useAppBootstrap.ts`
 - 测试：`test/integration/client-state-coverage.spec.ts`、`socket-lifecycle.spec.ts`、
   `app-runtime-boundaries.spec.ts`、`store-contracts.ts`
 - 来源：2026-09-26 架构评审候选 3（重连/重同步独立成模块）

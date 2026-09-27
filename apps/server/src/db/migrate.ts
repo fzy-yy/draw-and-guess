@@ -14,7 +14,7 @@ import type { Database } from 'better-sqlite3'
 import type { DatabaseContext } from './index.ts'
 import { digestRecoveryToken } from '../security/recovery-token.ts'
 
-export interface Migration {
+interface Migration {
   version: number
   name: string
   up: string | ((database: Database) => void)

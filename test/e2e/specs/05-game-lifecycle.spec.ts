@@ -1,4 +1,4 @@
-import { test, expect, createPlayer } from '../fixtures/test-base'
+import { test, expect, createPlayer, startTwoPlayerGame } from '../fixtures/test-base'
 
 test.describe('05 - 对局控制、暂停与完整生命周期 (Game Lifecycle & Pause)', () => {
   test('房主暂停对局、冻结倒计时与恢复作画', async ({ browser }) => {
@@ -7,23 +7,8 @@ test.describe('05 - 对局控制、暂停与完整生命周期 (Game Lifecycle &
 
     try {
       const roomName = `暂停生命周期-${Date.now()}`
-      await host.lobby.createRoom({ name: roomName })
-      await guest.lobby.joinPublicRoom(roomName)
-      await guest.room.toggleReady()
-      await host.room.startGame()
-
       // 动态识别画家并选词
-      const isHostDrawer = await Promise.race([
-        host.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => true),
-        guest.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => false),
-      ])
-      const drawer = isHostDrawer ? host : guest
+      const { drawer } = await startTwoPlayerGame(host, guest, roomName)
       await drawer.game.chooseWord(0)
 
       // 1. 房主暂停对局
@@ -51,23 +36,8 @@ test.describe('05 - 对局控制、暂停与完整生命周期 (Game Lifecycle &
 
     try {
       const roomName = `终局测试-${Date.now()}`
-      await host.lobby.createRoom({ name: roomName })
-      await guest.lobby.joinPublicRoom(roomName)
-      await guest.room.toggleReady()
-      await host.room.startGame()
-
       // 动态识别画家并选词
-      const isHostDrawer = await Promise.race([
-        host.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => true),
-        guest.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => false),
-      ])
-      const drawer = isHostDrawer ? host : guest
+      const { drawer } = await startTwoPlayerGame(host, guest, roomName)
       await drawer.game.chooseWord(0)
 
       // 房主暂停并提前结束本局
@@ -101,22 +71,9 @@ test.describe('05 - 对局控制、暂停与完整生命周期 (Game Lifecycle &
 
     try {
       const roomName = `下一局候场-${Date.now()}`
-      await host.lobby.createRoom({ name: roomName, maxPlayers: 3 })
-      await guest.lobby.joinPublicRoom(roomName)
-      await guest.room.toggleReady()
-      await host.room.startGame()
+      const { drawer } = await startTwoPlayerGame(host, guest, roomName, { maxPlayers: 3 })
 
-      const isHostDrawer = await Promise.race([
-        host.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => true),
-        guest.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => false),
-      ])
-      await (isHostDrawer ? host : guest).game.chooseWord(0)
+      await drawer.game.chooseWord(0)
 
       await candidate.lobby.joinNextGame(roomName)
       const inGameCandidate = candidate.page
@@ -150,22 +107,9 @@ test.describe('05 - 对局控制、暂停与完整生命周期 (Game Lifecycle &
 
     try {
       const roomName = `结算迁移-${Date.now()}`
-      await host.lobby.createRoom({ name: roomName })
-      await guest.lobby.joinPublicRoom(roomName)
-      await guest.room.toggleReady()
-      await host.room.startGame()
+      const { drawer } = await startTwoPlayerGame(host, guest, roomName)
 
-      const isHostDrawer = await Promise.race([
-        host.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => true),
-        guest.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => false),
-      ])
-      await (isHostDrawer ? host : guest).game.chooseWord(0)
+      await drawer.game.chooseWord(0)
       await host.game.pauseGame()
       await host.page.getByRole('button', { name: /提前结束/ }).click()
       await host.page

@@ -40,7 +40,6 @@ export const common = {
   percentUnit: (value: number) => `${value}%`,
   countBadge: (label: string, count: number) => `${label} · ${count}`,
   roundsField: '每人作画次数',
-  drawTimeField: '作画时间',
   myAvatarAria: '我的 SVG 头像',
   playerAvatarAria: (nickname: string) => `${nickname}的 SVG 头像`,
   // 通用右键菜单的默认无障碍名称（具体场景可用 ariaLabel 覆盖，见 ContextMenu.vue）

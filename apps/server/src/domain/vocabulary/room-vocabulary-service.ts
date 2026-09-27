@@ -20,12 +20,9 @@ export class RoomVocabularyService {
   get(playerId: string): VocabularySnapshot {
     const { room } = this.context.getMembership(playerId)
     const store = this.context.getStore(room)
-    const packages = 'packages' in this.context.registry ? this.context.registry.packages : []
-    const packageId =
-      room.vocabularyPackageId ||
-      ('defaultPackageId' in this.context.registry
-        ? this.context.registry.defaultPackageId
-        : store.meta.id || '')
+    // registry 契约成员均为必选（VocabularyRegistry），直接取用，不再运行时探活。
+    const packages = this.context.registry.packages
+    const packageId = room.vocabularyPackageId || this.context.registry.defaultPackageId
     return {
       packageId,
       packages,
@@ -42,7 +39,7 @@ export class RoomVocabularyService {
       throw new GameError('SETTINGS_LOCKED', serverStrings.errors.SETTINGS_LOCKED_VOCABULARY)
     if (expectedVersion !== undefined && room.stateVersion !== expectedVersion)
       throw new GameError('VERSION_CONFLICT', serverStrings.errors.VERSION_CONFLICT_VOCABULARY)
-    const target = 'get' in this.context.registry ? this.context.registry.get(packageId) : undefined
+    const target = this.context.registry.get(packageId)
     if (!target) throw new GameError('NOT_FOUND', serverStrings.errors.VOCABULARY_PACKAGE_NOT_FOUND)
     room.vocabularyPackageId = packageId
     room.selectedWordIds = new Set(target.items.map((word) => word.id))

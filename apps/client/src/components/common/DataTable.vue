@@ -6,7 +6,7 @@
   - 单元格支持两种渲染方式：具名插槽 `cell-<key>`（自定义富内容）或缺省的文本渲染；
   - 可选行首选择列：传入 selectedIds 后显示；multiple 模式使用三态复选框，single 模式使用单选按钮；
     选择状态始终由父组件持有，点击上抛 toggle/toggle-all 事件，由父组件裁决；
-  - 表体经 useVirtualRows 虚拟滚动：数千行词条只挂载可视行，避免一次性渲染卡顿；
+  - 表体经 useVirtualTableRows（内含 useVirtualRows）虚拟滚动：数千行词条只挂载可视行，避免一次性渲染卡顿；
   - 空态文案、行悬停高亮、斑马纹等视觉细节内置，与游戏舞台主题协调。
   典型用法见 components/room/VocabTableView.vue（词库管理表格视图）。
 -->
@@ -42,8 +42,6 @@ const props = defineProps<{
   selectAllAria: string
   /** 空态标题文案（语义由调用方注入，组件不感知业务命名空间） */
   emptyText: string
-  /** 空态补充说明（如「可在显示字段中开启更多列」） */
-  emptyHint?: string
   /** 行首复选框的无障碍标签取值（默认取行唯一键的字符串化；建议传入更可读的字段） */
   rowAria?: (row: T) => string
 }>()
@@ -200,13 +198,6 @@ const visibleRows = computed(() =>
               v-for="column in props.columns"
               :key="column.key"
               class="min-w-0 px-[0.6em] py-[0.4cqh] align-middle"
-              :class="
-                column.align === 'center'
-                  ? 'text-center'
-                  : column.align === 'right'
-                    ? 'text-right'
-                    : ''
-              "
             >
               <!-- 富内容插槽：调用方可为任意列提供自定义渲染（如难度星级、分类徽章） -->
               <slot :name="`cell-${column.key}`" :row="item.row" :value="item.row[column.key]">
@@ -235,7 +226,6 @@ const visibleRows = computed(() =>
         class="flex flex-col items-center gap-[0.4cqh] px-[1em] py-[3cqh] text-center text-fs-12 text-muted"
       >
         <b>{{ emptyText }}</b>
-        <span v-if="props.emptyHint">{{ props.emptyHint }}</span>
       </div>
     </div>
   </div>

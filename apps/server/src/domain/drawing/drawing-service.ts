@@ -12,6 +12,7 @@ import {
 import { GameError } from '../../errors.ts'
 import type { GameSecret, PlayerSecret, RoomSecret } from '../../models.ts'
 import { enforceEventRate } from '../../rate-limit.ts'
+import { markAllSynced } from './canvas-sync.ts'
 import type { Clock } from '../../runtime.ts'
 
 export interface DrawingContext {
@@ -73,14 +74,9 @@ export class DrawingService {
     enforceEventRate(player, 'draw', this.context.clock)
     if (stroke.sequence <= game.lastSequence)
       throw new GameError('STALE_DRAW_EVENT', serverStrings.errors.STALE_DRAW_EVENT_STROKE)
+    // 颜色/线宽的格式与范围由 StrokeSchema（协议同源常量）在绑定层裁决；
+    // 此处仅做大写规范化与「续接批次风格一致」的真实领域判定。
     const color = normalizeHexColor(stroke.color)
-    if (
-      !color ||
-      stroke.width < APP_CONFIG.drawing.width.min ||
-      stroke.width > APP_CONFIG.drawing.width.max
-    )
-      throw new GameError('INVALID_DRAW_STYLE', serverStrings.errors.INVALID_DRAW_STYLE)
-
     this.discardUndone(game)
     const existing = game.strokes.find(
       (candidate): candidate is Stroke => candidate.kind === 'stroke' && candidate.id === stroke.id,
@@ -115,7 +111,7 @@ export class DrawingService {
       game.strokes.push({ ...stroke, color, points: [...stroke.points] })
     }
     game.drawingRevision += 1
-    room.members.forEach((member) => (member.lastSyncedSeq = game.lastSequence))
+    markAllSynced(room, game.lastSequence)
     this.context.publishStroke({
       roomId: room.id,
       gameId: game.id,
@@ -136,8 +132,8 @@ export class DrawingService {
     enforceEventRate(player, 'draw', this.context.clock)
     if (fill.sequence <= game.lastSequence)
       throw new GameError('STALE_DRAW_EVENT', serverStrings.errors.STALE_DRAW_EVENT_FILL)
+    // 颜色格式由 FillCommandSchema 裁决（与 StrokeSchema 同一条 colorPattern），此处只规范化。
     const color = normalizeHexColor(fill.color)
-    if (!color) throw new GameError('INVALID_FILL', serverStrings.errors.INVALID_FILL)
     this.discardUndone(game)
     // 填充总是新增一条命令：先判历史容量，再判点数与填充次数预算。
     this.assertHistoryCapacity(game)
@@ -151,7 +147,7 @@ export class DrawingService {
     game.fillCount += 1
     game.strokes.push({ ...fill, color })
     game.drawingRevision += 1
-    room.members.forEach((member) => (member.lastSyncedSeq = game.lastSequence))
+    markAllSynced(room, game.lastSequence)
     this.context.publishFill({
       roomId: room.id,
       gameId: game.id,

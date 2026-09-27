@@ -2,7 +2,6 @@
  * 大厅页（LobbyView.vue）、建房弹窗、私密加入弹窗与在线玩家发现相关文案。
  */
 export const lobby = {
-  autoFullscreenToast: '已自动进入全屏',
   fullscreenPromptHeading: '全屏体验推荐',
   fullscreenPromptBody: '是否开启全屏？提示：按 F11 可随时退出或进入全屏',
   fullscreenPromptConfirm: '确定',

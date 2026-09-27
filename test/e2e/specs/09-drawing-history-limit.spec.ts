@@ -1,6 +1,6 @@
 import { APP_CONFIG } from '../../../packages/config/src/index.ts'
 import { serverStrings } from '../../../packages/strings/src/index.ts'
-import { test, expect, createPlayer } from '../fixtures/test-base'
+import { test, expect, createPlayer, startTwoPlayerGame } from '../fixtures/test-base'
 import { readAuthoritativeCommandCount, readLogicalRaster } from '../fixtures/canvas-probe'
 
 /**
@@ -35,23 +35,7 @@ test.describe('09 - 绘图历史上限', () => {
 
     try {
       const roomName = `容量测试-${Date.now()}`
-      await host.lobby.createRoom({ name: roomName })
-      await host.room.updateJoinPolicy('spectate')
-      await guest.lobby.joinPublicRoom(roomName)
-      await guest.room.toggleReady()
-      await host.room.startGame()
-
-      const isHostDrawer = await Promise.race([
-        host.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => true),
-        guest.page
-          .locator('text=轮到你作画了')
-          .waitFor({ timeout: 15_000 })
-          .then(() => false),
-      ])
-      const drawer = isHostDrawer ? host : guest
+      const { drawer } = await startTwoPlayerGame(host, guest, roomName, { joinPolicy: 'spectate' })
       const drawerCanvas = drawer.page.locator('canvas.bg-white')
       await drawer.game.chooseWord(0)
       await expect(drawerCanvas).toBeVisible()

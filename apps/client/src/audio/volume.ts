@@ -11,14 +11,13 @@ export interface AudioSettingsState {
 
 /**
  * 折算最终有效播放音量（0~1）。
- * 若用户开启静音，返回 0；否则综合 主音量 * 音效总线音量 * 音效特定微调倍率 * 单次缩放。
+ * 若用户开启静音，返回 0；否则综合 主音量 * 音效总线音量 * 音效特定微调倍率。
  */
 export function calculateEffectiveVolume(
   settings: AudioSettingsState,
   volumeMultiplier = 1.0,
-  volumeScale = 1.0,
 ): number {
   if (settings.muted) return 0
-  const raw = settings.masterVolume * settings.soundVolume * volumeMultiplier * volumeScale
+  const raw = settings.masterVolume * settings.soundVolume * volumeMultiplier
   return Math.max(0, Math.min(1, raw))
 }

@@ -15,12 +15,11 @@ const forbidden = [
   'privateJoinWindowMs',
   'privateJoinMaxAttempts',
   'maxDrawEventsPerSecond',
-  'vocabulary/draw_guess_words.db',
+  'vocabulary/base_words.db',
   'maxAliasesPerWord',
   'maxAliasLength',
   'resetWhenExhausted',
   'useWordTimeLimit',
-  'useWordScoreWeight',
 ]
 
 function collectFiles(directory) {

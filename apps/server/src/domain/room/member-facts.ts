@@ -19,6 +19,36 @@ type MemberList = Pick<RoomSecret, 'members'>
 export type OnlineLookup = (playerId: string) => boolean
 
 /**
+ * 构造连通性查询闭包：map 的键空间与 `connected` 语义只在此定义一次，
+ * 供 game-service / round-machine / room-membership-service 共用，避免同一 lambda 内联三处。
+ */
+export function createOnlineLookup(
+  players: ReadonlyMap<string, Pick<PlayerSecret, 'connected'>>,
+): OnlineLookup {
+  return (playerId) => players.get(playerId)?.connected === true
+}
+
+/**
+ * 阶段是否已到期。`phaseEndsAt` 为 0 是暂停期的哨兵（暂停时冻结截止时间），此时不算到期；
+ * 与阶段白名单配合使用，调用方传入当前时钟毫秒。
+ */
+export function isPhaseExpired(game: Pick<GameSecret, 'phaseEndsAt'>, now: number): boolean {
+  return game.phaseEndsAt > 0 && now >= game.phaseEndsAt
+}
+
+/**
+ * 取玩家昵称，身份缺失时回退调用方给定的文案。
+ * 各调用点的回退语义不同（房主兜底、系统通知兜底等），故回退文案由调用方决定而不写死。
+ */
+export function nicknameOf(
+  players: ReadonlyMap<string, Pick<PlayerSecret, 'profile'>>,
+  playerId: string,
+  fallback: string,
+): string {
+  return players.get(playerId)?.profile.nickname ?? fallback
+}
+
+/**
  * 是否仍占用房间席位（未主动离局）。
  * 离局成员会作为占位保留在 members 中用于展示成绩卡，因此「占席」比「可玩」更宽；
  * 容量、缩容下限与大厅人数都用它。

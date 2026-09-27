@@ -15,7 +15,7 @@ import {
 } from '@/components/common'
 import { InviteDialog, RuleSummary, RulesDialog, SeatGrid } from '@/components/room'
 import { defineLazyComponent } from '@/utils/lazy-component'
-import { activeMembers } from '@/utils/room-facts'
+import { activeMembers, isOnlineActiveMember } from '@/utils/room-facts'
 import type { RoomSettings } from '@draw-guess/shared'
 
 // 词库管理弹窗低频且体积较大（含虚拟表格依赖）：懒加载，不进首屏包。
@@ -46,7 +46,7 @@ const allSet = computed(() =>
   Boolean(
     store.room &&
     activePlayers.value.length >= store.config.player.minPlayers &&
-    activePlayers.value.every((member) => member.connection === 'online' && member.ready),
+    activePlayers.value.every((member) => isOnlineActiveMember(member) && member.ready),
   ),
 )
 
