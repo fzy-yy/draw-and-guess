@@ -3,7 +3,7 @@
  */
 export const profile = {
   brandAria: '游戏介绍',
-  brandEyebrow: '局域网派对游戏',
+  brandEyebrow: '实时派对游戏',
   brandCopy: '一人作画，大家来猜。连接同一主机服务即可实时加入。',
   sectionLabel: 'PLAYER PROFILE',
   sectionTitle: '准备好你的角色',

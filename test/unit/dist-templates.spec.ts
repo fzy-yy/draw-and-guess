@@ -43,8 +43,8 @@ describe('使用说明.txt 模板', () => {
   })
 
   it('标题带上注入的版本号，正文其余章节两包一致', () => {
-    expect(buildUsageNotes('9.9.9', 'full')).toContain('「你画我猜」局域网版 v9.9.9')
-    expect(buildUsageNotes('9.9.9', 'slim')).toContain('「你画我猜」局域网版 v9.9.9')
+    expect(buildUsageNotes('9.9.9', 'full')).toContain('「你画我猜」 v9.9.9')
+    expect(buildUsageNotes('9.9.9', 'slim')).toContain('「你画我猜」 v9.9.9')
     for (const variant of ['slim', 'full'] as const) {
       const notes = buildUsageNotes('2.5.0', variant)
       expect(notes).toContain('data/vocabulary/custom/')

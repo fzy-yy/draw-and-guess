@@ -42,7 +42,7 @@ function ensureLayoutDirectories(layout: RuntimeLayout): void {
 function printStartupBanner(port: number, addresses: readonly string[]): void {
   const line = '═'.repeat(64)
   console.log(`\n${line}`)
-  console.log(`  ${APP_CONFIG.app.name} · 局域网游戏服务已启动`)
+  console.log(`  ${APP_CONFIG.app.name} · 游戏服务已启动`)
   console.log(`  主机访问地址： http://localhost:${port}`)
   if (addresses.length) {
     addresses.forEach((address, index) =>

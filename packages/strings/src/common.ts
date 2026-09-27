@@ -3,7 +3,7 @@
  */
 export const meta = {
   title: '你画我猜',
-  description: '局域网实时多人你画我猜游戏',
+  description: '实时多人你画我猜游戏',
 } as const
 
 /**

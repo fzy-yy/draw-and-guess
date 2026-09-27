@@ -70,7 +70,7 @@ export function buildUsageNotes(version: string, variant: DistVariant): string {
     ? '  1. 本包已内置 Node 运行时，无需安装 Node.js。'
     : `  1. 本机需安装 Node.js ${MIN_NODE_MAJOR} 或更高版本（https://nodejs.org/）。`
   const lines: (string | null)[] = [
-    `「你画我猜」局域网版 v${version} 使用说明${withNode ? '（full：自带 Node）' : '（slim：需自备 Node）'}`,
+    `「你画我猜」 v${version} 使用说明${withNode ? '（full：自带 Node）' : '（slim：需自备 Node）'}`,
     '================================================',
     '',
     '一、运行要求',
