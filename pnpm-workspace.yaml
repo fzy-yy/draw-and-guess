@@ -2,7 +2,10 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+# allowBuilds：显式声明是否允许执行构建脚本（preinstall/install/postinstall）。
+# better-sqlite3 设为 false（明确忽略构建）：其 v13 自带多平台预编译（prebuilds/，gypfile: false），
+# 设为 true 会因 binding.gyp 触发 node-gyp 编译，并在缺少 VS C++ 工具链的机器上安装失败。
 allowBuilds:
-  better-sqlite3: true
+  better-sqlite3: false
   esbuild: true
   msw: true
