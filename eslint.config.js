@@ -1,6 +1,7 @@
 /** ESLint 扁平配置：统一检查 Vue、TypeScript 与 Node 代码，并忽略构建产物。 */
 import js from '@eslint/js'
 import pluginVue from 'eslint-plugin-vue'
+import noOnlyTests from 'eslint-plugin-no-only-tests'
 import tseslint from 'typescript-eslint'
 
 const CJK_PATTERN = /\p{Script=Han}/u
@@ -246,13 +247,22 @@ export default tseslint.config([
   {
     ignores: ['**/node_modules/**', '**/dist/**', '**/release/**'],
   },
+  {
+    // 过期豁免守护：被禁用却不再命中任何问题的 eslint-disable 直接报错（AGENTS 要求生产源码零 eslint-disable 记录）。
+    linterOptions: {
+      reportUnusedDisableDirectives: 'error',
+    },
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
-  ...pluginVue.configs['flat/recommended'],
+  // Vue 预设默认未限定 files，会把 100+ 条 vue/* 规则施加到 .ts/.js；这里统一收敛到 SFC。
+  ...pluginVue.configs['flat/recommended'].map((config) => ({ ...config, files: ['**/*.vue'] })),
   {
     files: ['**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,vue}'],
     rules: {
       'no-console': 'error',
+      // 强制严格相等（smart 放行 == null 这类惯用写法，仍拦截其它隐式转换）。
+      eqeqeq: ['error', 'smart'],
     },
   },
   {
@@ -294,7 +304,19 @@ export default tseslint.config([
     },
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+      'no-constant-condition': 'off',
+    },
+  },
+  {
+    // 面向 .vue 文件的 SFC 约束：关闭与 Prettier 冲突的排版规则，开启模板正确性、响应式丢失防护与自有规则。
+    files: ['**/*.vue'],
+    plugins: { 'project-conventions': projectConventions },
+    rules: {
+      // 排版交给 Prettier：关闭 pluginVue 预设里的格式规则。
       'vue/multi-word-component-names': 'off',
       'vue/html-self-closing': 'off',
       'vue/max-attributes-per-line': 'off',
@@ -302,14 +324,11 @@ export default tseslint.config([
       'vue/multiline-html-element-content-newline': 'off',
       'vue/html-closing-bracket-newline': 'off',
       'vue/html-indent': 'off',
-      'no-constant-condition': 'off',
-    },
-  },
-  {
-    // 面向 .vue 文件的 SFC 惯例约束：启用自有规则（仅作用于 .vue，不触碰 packages/strings 等 .ts）。
-    files: ['**/*.vue'],
-    plugins: { 'project-conventions': projectConventions },
-    rules: {
+      // 模板正确性与响应式丢失防护（不在 flat/recommended 预设内）。
+      'vue/no-undef-components': 'error',
+      'vue/no-ref-object-reactivity-loss': 'error',
+      'vue/no-setup-props-reactivity-loss': 'error',
+      // 项目自有 SFC 惯例。
       'project-conventions/ban-style-block': 'error',
       'project-conventions/ban-cjk-literal': 'error',
       'project-conventions/ban-forbidden-utility': 'error',
@@ -386,6 +405,8 @@ export default tseslint.config([
     rules: {
       // 非空断言：生产源码必须显式守卫或可选链（保留项须带中文理由的定点豁免注释）。
       '@typescript-eslint/no-non-null-assertion': 'error',
+      // switch 对联合类型必须穷尽，防漏分支（server/packages 当前无 switch，属前瞻护栏）。
+      '@typescript-eslint/switch-exhaustiveness-check': 'error',
       // 异步事件回调（scheduler 回调返回 Promise 被丢弃）属设计内语义，no-misused-promises 误报源。
       '@typescript-eslint/no-misused-promises': 'off',
       // 模板字符串宽松化：日志/错误文案大量 `${number}`/`${boolean}` 拼接属预期用法。
@@ -400,6 +421,21 @@ export default tseslint.config([
     files: ['apps/client/src/**/*.{ts,vue}'],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'error',
+    },
+  },
+  {
+    // 防误提交聚焦用例（it.only / describe.only / fdescribe 等）导致 CI 只跑一个用例。
+    files: ['test/**/*.{js,mjs,cjs,ts,mts,cts,tsx,vue}'],
+    plugins: { 'no-only-tests': noOnlyTests },
+    rules: {
+      'no-only-tests/no-only-tests': 'error',
+    },
+  },
+  {
+    // 该文件用 RuleTester.itOnly = it.only 为 RuleTester 提供聚焦能力，属测试工具配置而非聚焦用例。
+    files: ['test/unit/eslint-custom-rules.spec.ts'],
+    rules: {
+      'no-only-tests/no-only-tests': 'off',
     },
   },
 ])

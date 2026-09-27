@@ -311,6 +311,7 @@ pnpm format:check  # 仅检查格式
   - type-checked ESLint 仅覆盖 `apps/server/src` 与 `packages/*/src`（typescript-eslint 无法解析跨文件 .vue 类型）；客户端类型严格性由 vue-tsc + strictTemplates 把关；`test/**` 不启用 type-checked 层（配置块级豁免，测试替身 `as unknown as` 属惯例）；
   - 生产代码禁用非空断言（`no-non-null-assertion: error`）：以守卫重排/可选链/类型谓词消除；确需保留（热点循环、接口适配）必须带中文理由的定点 `eslint-disable-next-line`；泛型边界适配断言（binder `on`、GameService 推送、game-transport `io()` 构造、request payload 展开 cast）须注释说明「延迟条件类型不可证」的原因；
   - `useGameStore` Facade 与 `useGameHud`/`useRoomSync`/`useToasts` 的成员名单由 `test/integration/store-contracts.ts` 编译期快照锁定：增删成员必须同步该名单（提醒机制，非阻力）。
+- **Lint 护栏**：类型感知层（`apps/server/src`、`packages/*/src`）额外强制联合类型 `switch` 穷尽（`@typescript-eslint/switch-exhaustiveness-check`）；全仓启用 `eqeqeq`（smart）、`no-only-tests`（防误提交 `it.only`/`fdescribe`）与 `linterOptions.reportUnusedDisableDirectives: error`（过期的 `eslint-disable` 直接报错）；`eslint-plugin-vue` 预设只作用于 `.vue`，客户端类型严格性仍由 vue-tsc + strictTemplates 把关（见 `docs/adr/0016-type-aware-guardrails.md`）。
 - **命名**：组件/视图 `PascalCase.vue`；TS 文件 **kebab-case**（`data-table-layout.ts`），例外仅三类——Vue 组合式函数 `useXxx.ts`、工具链配置 `*.config.ts`、测试 `*.spec.ts` / `*.page.ts`；事件名用 `EVENTS` 常量；领域模型用「Secret 后缀」标记服务端秘密对象。命名由 `test/unit/documentation.consistency.spec.ts` 静态校验，不要新增 camelCase 的普通模块文件。
 - **格式**：Prettier（无分号、单引号、行宽 100、尾逗号 all）。编码前先 `pnpm format`。
 - **换行**：由根目录 `.gitattributes` 统一管理；默认文本文件提交为 LF，`.bat`/`.cmd` 保留 CRLF，数据库、音频等二进制文件禁止换行转换。新增文件类型时同步确认其 Git 属性，不依赖开发者本机的 `core.autocrlf` 设置。

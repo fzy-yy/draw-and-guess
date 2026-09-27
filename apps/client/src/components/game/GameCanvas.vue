@@ -70,6 +70,8 @@ const machine = new DrawingReplayMachine(
 )
 // 初始快照先登记进机器（此时逻辑层尚未定尺寸，重放留待挂载时 viewport 的首次 resize 触发）：
 // 断线恢复/刷新直达对局时，挂载即有历史，不能只靠后续 watch。
+// 这里读取 props 是一次性初始快照（后续更新由下方 watch 驱动），并非响应式丢失。
+// eslint-disable-next-line vue/no-setup-props-reactivity-loss
 machine.sync({
   commands: props.strokes,
   undoneIds: props.undoneStrokeIds,
@@ -127,6 +129,8 @@ const cursor = useCanvasCursor({
 
 // 回放决策（增量补画 vs 整帧重放）、世代与簿记全在机器内部；本 watch 的触发集
 // 与旧版逐项一致（引用/长度/修订/撤销集），仅承担「快照转发 + 回合切换清会话」两件事。
+// 仅取进入时的初始回合号作变更基准，后续变更由下方 watch 比较，并非响应式丢失。
+// eslint-disable-next-line vue/no-setup-props-reactivity-loss
 let lastRoundId = props.roundId
 watch(
   () => [
