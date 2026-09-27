@@ -12,7 +12,6 @@
     "@draw-guess/config": "workspace:*",
     "@draw-guess/shared": "workspace:*",
     "@draw-guess/strings": "workspace:*",
-    "@tailwindcss/vite": "^4.1.14",
     "@tanstack/vue-virtual": "^3.13.36",
     "@vueuse/core": "^14.4.0",
     "@vueuse/integrations": "^14.4.0",
@@ -21,16 +20,17 @@
     "focus-trap": "^8.2.2",
     "lucide-vue-next": "^0.548.0",
     "nanoid": "^6.0.1",
-    "pinia": "^3.0.3",
+    "pinia": "^3.0.4",
     "socket.io-client": "^4.8.1",
     "tailwind-merge": "^3.6.0",
-    "tailwindcss": "^4.1.14",
-    "vue": "^3.5.22"
+    "vue": "^3.5.41"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.1.14",
     "@types/canvas-confetti": "^1.9.0",
-    "@vitejs/plugin-vue": "^6.0.1",
-    "@vue/runtime-dom": "3.5.41",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/runtime-dom": "^3.5.41",
+    "tailwindcss": "^4.1.14",
     "typescript": "^5.9.3",
     "vite": "^7.1.9",
     "vue-tsc": "^3.1.1"
