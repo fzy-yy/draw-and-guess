@@ -33,7 +33,7 @@
 ## 项目结构
 
 ```text
-draw_and_guess/
+draw-and-guess/
 ├── package.json                  # 根工程 scripts（开发/质量 + unit/component/integration/coverage/e2e）
 ├── pnpm-workspace.yaml           # pnpm workspace：apps/* 与 packages/*（勿手改）
 ├── pnpm-lock.yaml                # 依赖锁文件（勿手改）
