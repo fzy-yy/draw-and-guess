@@ -32,9 +32,18 @@ export const useSessionStore = defineStore('session', () => {
   const busy = ref(false)
   const kickedNotice = ref(false)
   const protocolMismatch = ref(false)
+  /**
+   * 会话世代：身份/会话边界的单调计数。在途请求与异步回调（词库迟到响应、
+   * 全量重同步回写，ADR-0025 / vocabulary-request-context）据此作废「旧世代发起、
+   * 新世代才返回」的结果，避免旧身份的响应污染当前 UI。
+   */
   const generation = ref(0)
   let restoreRetryTimer: number | undefined
 
+  /**
+   * 推进世代（注销 / 会话失效重置时调用）：世代一变，所有捕获了旧世代的在途回写
+   * 自动失效——不需要逐个取消请求，只凭世代比对即可拦截迟到结果。
+   */
   function incrementGeneration(): void {
     generation.value += 1
   }

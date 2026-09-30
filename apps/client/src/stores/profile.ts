@@ -5,10 +5,9 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { APP_CONFIG } from '@draw-guess/config'
-import { RecoveryTokenSchema, isAvatarId, type Profile } from '@draw-guess/shared'
+import { EVENTS, RecoveryTokenSchema, isAvatarId, type Profile } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { useGameTransport } from '@/application/game-transport'
-import { EVENTS } from '@draw-guess/shared'
 
 export interface StoredProfile extends Profile {
   /** 只有服务端签发且不会公开的恢复令牌可用于接管既有 UUID 身份。 */

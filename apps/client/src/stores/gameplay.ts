@@ -23,6 +23,13 @@ export const useGameplayStore = defineStore('gameplay', () => {
   const roomStore = useRoomStore()
   const sessionStore = useSessionStore()
 
+  /**
+   * 新权威内容到达即不可逆地丢弃撤销历史（与服务端 drawing-service 的 discardUndone 同规则）：
+   * 线性历史模型下，被撤销的命令一旦有新命令压在其后就永远无法合法 redo——镜像若继续保留，
+   * 会让「复活已被覆盖的像素」成为可能，并使本地历史与权威历史逐条错位（整块重放结果不一致）；
+   * 丢弃同时释放历史上限名额，「撤销/清空后可继续画」的恢复路径据此成立，
+   * 见 docs/adr/0010-drawing-history-cap.md。
+   */
   function purgeUndone(game: NonNullable<RoomSnapshot['game']>): void {
     if (game.undoneStrokeIds.length) {
       const undoneSet = new Set(game.undoneStrokeIds)
@@ -161,6 +168,8 @@ export const useGameplayStore = defineStore('gameplay', () => {
       existing.sequence = Math.max(existing.sequence, stroke.sequence)
       game.undoneStrokeIds = game.undoneStrokeIds.filter((id) => id !== existing.id)
     } else {
+      // 新命令追加前按与服务端同一规则丢弃撤销历史：镜像与权威历史逐条一致是增量/整帧
+      // 重放正确的前提（为什么不保留可 redo 的尾巴见上方 purgeUndone 注释与 ADR-0010）。
       purgeUndone(game)
       // 画布历史只由服务端权威裁决：达到上限时服务端会拒绝新命令（DRAW_HISTORY_LIMIT_REACHED），
       // 客户端绝不自行裁剪——静默丢弃最旧命令会让早期封闭边界从重放历史里消失，

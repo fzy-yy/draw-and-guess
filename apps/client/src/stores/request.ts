@@ -29,7 +29,10 @@ export interface RequestOptions {
    * 需要提示的错误码由调用方选择性补弹（见 gameplay 的容量类拒绝）。
    */
   notify?: 'always' | 'silent'
-  /** 网络超时后的重试必须复用同一 ID，保证服务端幂等缓存仍能返回原始 ack。 */
+  /**
+   * 显式指定幂等 ID——测试观测接缝：生产调用方一律不传，由请求层内部生成并在传输重试时
+   * 复用同一 ID（服务端幂等缓存据此回原始 ack）；测试用它钉死重发载荷的 ID 断言。
+   */
   requestId?: string
 }
 
@@ -43,7 +46,9 @@ export type NotifyFn = (text: string, type?: 'success' | 'warning' | 'error') =>
 
 /**
  * 可失败请求的可判别结果：调用方用 `result.ok` 明确区分成功与失败，
- * 不再依赖“失败抛错”的隐式约定。timeout 用于标记请求是否因超时失败。
+ * 不再依赖“失败抛错”的隐式约定。生产行为分支一律以 ok 与 failureKind 判定；
+ * `timeout` / `cancelled` 只是诊断/测试观测接缝——标记失败细分成因（超时哨兵命中 /
+ * 主动取消）供日志与测试断言，调用方不得据此做行为分叉。
  * `protocol` 表示 ack 未通过运行时 Schema（响应损坏/协议不匹配），既不是业务拒绝也不会重试。
  */
 export type RequestResult<T> =

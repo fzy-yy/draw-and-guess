@@ -53,11 +53,15 @@ export function decodeClientResponse<E extends ClientRequestEvent>(
   return { status: 'valid', ack: result.data as ClientResponseAck<E> }
 }
 
-/** 只暴露副本，避免诊断 UI 或测试修改内部记录。 */
+/**
+ * 诊断读取接缝：供测试断言与未来诊断 UI 预留，生产暂无消费者。
+ * 只暴露副本，避免诊断 UI 或测试修改内部记录；请勿因「看不到调用方」而删除。
+ */
 export function getResponseDiagnostics(): readonly ResponseDiagnostic[] {
   return diagnostics.list()
 }
 
+/** 与 getResponseDiagnostics 配对：测试用例间重置全局诊断列表的唯一入口。 */
 export function clearResponseDiagnostics(): void {
   diagnostics.clear()
 }

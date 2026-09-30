@@ -1,7 +1,9 @@
 /**
-  全局组合 Store（Facade）与 Socket 网关。
+  全局组合 Store（Facade）：视图层的统一动作入口与跨领域编排点。
   组合各领域子 Store（Profile / Settings / Session / Lobby / Room / Gameplay / Vocabulary），
   保持对视图层完全向后兼容的统一调用接口。
+  Socket 网关不在本文件——连接装配归 application/game-transport.ts 与 useAppBootstrap
+  （ADR-0019/0020），Facade 只是经 useGameTransport 取 notify/request 的转接消费者。
 */
 import { defineStore, storeToRefs } from 'pinia'
 import { PUBLIC_CONFIG } from '@draw-guess/config'

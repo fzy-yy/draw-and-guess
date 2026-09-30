@@ -48,11 +48,15 @@ export function decodeServerPush<E extends ServerPushEventName>(
   return { ok: false, reason }
 }
 
-/** 只暴露副本，避免诊断 UI 或测试修改内部记录。 */
+/**
+ * 诊断读取接缝：供测试断言与未来诊断 UI 预留，生产暂无消费者。
+ * 只暴露副本，避免诊断 UI 或测试修改内部记录；请勿因「看不到调用方」而删除。
+ */
 export function getProtocolDiagnostics(): readonly ProtocolDiagnostic[] {
   return diagnostics.list()
 }
 
+/** 与 getProtocolDiagnostics 配对：测试用例间重置全局诊断列表的唯一入口。 */
 export function clearProtocolDiagnostics(): void {
   diagnostics.clear()
 }

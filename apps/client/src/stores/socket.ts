@@ -123,8 +123,9 @@ function bindPushEvent<E extends ServerPushEventName>(
  * 注册全部服务端事件监听（全局唯一的连接生命周期）。
  *
  * 生命周期事件（connect/disconnect/Manager 通道）与协议无关，保持显式绑定；
- * 11 个推送事件的注册闭包、注册与解绑清单全部由 `SERVER_PUSH_EVENT_NAMES` 派生
- * （ADR-0020 单注册表）——新增协议事件只需登记注册表条目，此处零改动。
+ * 全部推送事件（清单由 `SERVER_PUSH_EVENT_NAMES` 派生，不写死数量以防协议演进的腐化）
+ * 的注册闭包与注册/解绑清单同样由该派生清单驱动（ADR-0020 单注册表）——
+ * 新增协议事件只需登记注册表条目，此处零改动。
  */
 export function attachSocketListeners(
   handlers: SocketHandlers,

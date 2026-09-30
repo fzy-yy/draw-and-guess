@@ -7,6 +7,7 @@ import { defineStore } from 'pinia'
 import { EVENTS, type VocabularySnapshot } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { useGameTransport } from '@/application/game-transport'
+import type { RequestResult } from './request.ts'
 import { useRoomStore } from './room.ts'
 import { useSessionStore } from './session.ts'
 import { VocabularyRequestGuard } from './vocabulary-request-context.ts'
@@ -40,34 +41,51 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
       vocabulary.value = snapshot.data
   }
 
-  async function saveVocabulary(ids: string[]): Promise<boolean> {
-    if (!roomStore.room) return false
-    const context = requestGuard.begin(state(), roomStore.room.vocabularyPackageId)
+  /**
+   * 词库提交骨架：saveVocabulary 与 selectVocabularyPackage 的同形五段
+   * （begin→request→`!ok || !accepts`→写回→notify→true）。两者仅有的差异——
+   * 请求事件/载荷、守卫绑定的包 ID、成功文案——由调用方以 send 闭包与参数传入，
+   * 保证流程（含 expectedVersion 的读取时机与幂等序号推进）只有一份实现。
+   */
+  async function commitVocabulary(
+    send: () => Promise<RequestResult<VocabularySnapshot>>,
+    guardPackageId: string | undefined,
+    successText: string,
+  ): Promise<boolean> {
+    // 无房间时 begin 返回 undefined（context 缺 roomId），与原先显式的房空检查同义，
+    // 因此房存在性守卫收敛在骨架一处即可。
+    const context = requestGuard.begin(state(), guardPackageId)
     if (!context) return false
-    const snapshot = await request(EVENTS.roomUpdateVocabulary, {
-      ids,
-      expectedVersion: roomStore.room.stateVersion,
-    })
+    const snapshot = await send()
     if (!snapshot.ok || !requestGuard.accepts(context, state(), snapshot.data.packageId))
       return false
     vocabulary.value = snapshot.data
-    notify(strings.store.vocabularyUpdated)
+    notify(successText)
     return true
   }
 
+  async function saveVocabulary(ids: string[]): Promise<boolean> {
+    const room = roomStore.room
+    if (!room) return false
+    return commitVocabulary(
+      () => request(EVENTS.roomUpdateVocabulary, { ids, expectedVersion: room.stateVersion }),
+      room.vocabularyPackageId,
+      strings.store.vocabularyUpdated,
+    )
+  }
+
   async function selectVocabularyPackage(packageId: string): Promise<boolean> {
-    if (!roomStore.room) return false
-    const context = requestGuard.begin(state(), packageId)
-    if (!context) return false
-    const snapshot = await request(EVENTS.roomSelectVocabularyPackage, {
+    const room = roomStore.room
+    if (!room) return false
+    return commitVocabulary(
+      () =>
+        request(EVENTS.roomSelectVocabularyPackage, {
+          packageId,
+          expectedVersion: room.stateVersion,
+        }),
       packageId,
-      expectedVersion: roomStore.room.stateVersion,
-    })
-    if (!snapshot.ok || !requestGuard.accepts(context, state(), snapshot.data.packageId))
-      return false
-    vocabulary.value = snapshot.data
-    notify(strings.room.vocabPackageSwitched)
-    return true
+      strings.room.vocabPackageSwitched,
+    )
   }
 
   return {
