@@ -2,7 +2,8 @@
   自替换 vue-sonner 的 Toast 堆栈渲染组件（配合 composables/useToasts.ts 使用）。
 
   设计目标（可扩展 / 灵活 / 全部约束在画框内）：
-  - 只负责「渲染 + 动画」，队列状态、去重、超时、配色在 useToasts；
+  - 只负责「渲染 + 动画」：队列状态、去重、超时在 useToasts；Toast 视觉（含小条的
+    橙色派生配色）全部行内写在本组件模板，useToasts 不持有任何配色；
   - 以 .game-stage（position:relative + overflow-hidden）为定位与裁剪上下文：
     用 absolute 右上角堆叠，天然不会越出画框，无需任何第三方 fixed 覆盖 hack；
   - 外观：白色长条 + 方角 + 最左一条主题色小条 + 加粗文字，通过具名关闭按钮消失；

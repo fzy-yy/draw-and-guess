@@ -38,7 +38,9 @@ export function useAppBootstrap(transport: GameTransport = useGameTransport()) {
   }
 
   function onMemberConnectionChanged(change: MemberConnectionChange): void {
-    if (change.playerId === sessionStore.playerId || change.playerId === '') return
+    // payload 已整体经 MemberConnectionChangeSchema（playerId 为 z.string().uuid()）解码，
+    // 空串不可达；只需过滤本人——自己的连/断由页面状态体现，不做成员播报。
+    if (change.playerId === sessionStore.playerId) return
     if (change.connection === 'left') {
       notify(strings.store.memberLeftGame(change.nickname), 'warning')
       return
@@ -196,6 +198,11 @@ export function useAppBootstrap(transport: GameTransport = useGameTransport()) {
     // 所有具名监听器注册完成后才允许连接，快速 connect/push 不会越过初始化窗口。
     if (transport.socket.connected) handleConnect()
     else transport.connect()
+    // 连接建立即落一次本地设置：loadSettings 校验后的规范化值写回 localStorage，
+    // 并同步动效开关的 DOM 类（motion-disabled），保证首屏动画偏好生效。
+    // 传入 playerId 是为覆盖「身份已建立后再次 start」的补推路径（saveSettings 内部
+    // 仅在有身份时才推送偏好）；首连场景此处 playerId 恒为空串，偏好随 sessionRegister
+    // 载荷一并送达（见 stores/session.ts 的 preferences），不依赖这里补推。
     settingsStore.saveSettings(sessionStore.playerId)
     pingTimer = window.setInterval(
       () => void sessionStore.measureLatency(),

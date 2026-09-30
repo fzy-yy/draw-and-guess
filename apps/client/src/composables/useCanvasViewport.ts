@@ -57,5 +57,8 @@ export function useCanvasViewport(
   })
   onBeforeUnmount(() => observer?.disconnect())
 
+  // resizeCanvas 对外为测试观测出口：生产只由 ResizeObserver 与 onMounted 驱动
+  // （GameCanvas 仅消费 resizeTick）；ClientComposables.spec 直接调用它验证
+  // 「显式缩放 → 逻辑尺寸交机器 / 同尺寸只重投影」两条分支。保留并显式导出。
   return { resizeTick, resizeCanvas }
 }

@@ -26,11 +26,13 @@ export function useAudioFeedback(): void {
     applySfx(phaseToAudio(phase))
   }
 
-  // 房间阶段变化：进入时播放入场 SFX；进入作画时复位「末位秒数」
+  // 房间阶段变化：进入时播放入场 SFX；进入作画时复位「末位秒数」。
+  // 只保留空阶段守卫：watch 源是原始枚举 getter，Vue 仅在值真正变化时回调，
+  // 同值分支不可达（原先的 `phase === previous` 比较为死分支，已删）。
   watch(
     () => store.room?.phase,
-    (phase, previous) => {
-      if (!phase || phase === previous) return
+    (phase) => {
+      if (!phase) return
       applyPhase(phase)
       if (phase === 'drawing') lastWarningSecond = -1
     },

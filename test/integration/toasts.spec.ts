@@ -18,7 +18,9 @@ describe('Toast 状态层集成', () => {
     notify('保存成功')
 
     expect(useToasts().toasts).toHaveLength(1)
-    expect(first?.bumpTick).toBe(1)
+    // 去重命中恰好广播一次弹跳（等价于旧 bumpTick===1 的「只自增一次」语义：
+    // 既证明回调触发过，也约束次数不超发）。
+    expect(bump).toHaveBeenCalledTimes(1)
     expect(bump).toHaveBeenCalledWith(first?.id)
     stop()
   })

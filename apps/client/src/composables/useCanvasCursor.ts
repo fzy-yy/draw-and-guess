@@ -1,3 +1,9 @@
+/**
+ * 画布光标组合式逻辑（画布四件套之一）：按工具 / 权限 / 画布显示缩放派生
+ * 跟随光标的圆点预览（位置、直径、颜色与可见性）。直径与落笔线宽共用
+ * canvas/geometry 同一口径（ADR-0022），保证「看到的圈 = 画出的线」；
+ * 只做 DOM 坐标换算与展示派生，不参与任何笔画提交与游戏裁决。
+ */
 import { computed, ref, type Ref } from 'vue'
 import { APP_CONFIG } from '@draw-guess/config'
 import type { ToolKind } from '@draw-guess/shared'
@@ -36,6 +42,9 @@ export function useCanvasCursor(options: {
   }
 
   return {
+    // cursorVisible 对外为测试观测出口：内部已折算进 showCursorDot 供模板消费，
+    // 生产组件不再单独读取该原始状态（GameCanvas 只用 showCursorDot 等派生值）；
+    // ClientComposables.spec 借它验证 cursorEnter/cursorLeave 的落点。保留并显式导出。
     cursorVisible,
     cursorPos,
     cursorDiameter,

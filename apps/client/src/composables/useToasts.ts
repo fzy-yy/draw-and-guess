@@ -7,11 +7,11 @@
  * - 队列为模块级单例（reactive），无论多少个组件调用 useToasts，读到的都是同一份队列。
  *
  * 去重语义：以 `type:text` 作为稳定 key，同一条提示在未消失时再次触发，
- * 不复用堆叠，而是「重置消失计时 + 触发一次左弹跳提示」（bumpTick 单调递增，
- * 由 AppToaster 监听并播放弹跳动画），保持提示不刷屏。
+ * 不复用堆叠，而是「重置消失计时 + 同步通知 onBump 订阅者」，由 AppToaster
+ * 对现有元素播放一次左弹跳，保持提示不刷屏。
  *
- * 配色：Toast 视觉统一走 AppToaster.vue 的 .toast-bar（橙色由 index.css 统一给出），
- * 本状态层不再持有每颗 toast 的配色，因此无需随机取色。
+ * 配色：Toast 视觉（含小条的橙色派生配色）全部行内写在 AppToaster.vue 组件内，
+ * 本状态层只持有队列状态、不持有任何配色，因此无需随机取色。
  */
 import { reactive } from 'vue'
 import { nanoid } from 'nanoid'
@@ -27,18 +27,13 @@ export interface ToastItem {
   type: ToastType
   /** 展示文案 */
   text: string
-  /**
-   * 弹跳播放计数：同一条再次触发时自增，供 AppToaster 每次检测到自增即重放左弹跳动画。
-   * 只增不减，因此无需重置也能对「重复触发」逐次响应。
-   */
-  bumpTick: number
 }
 
 /** 模块级单例队列：最新一条在前（顶部）。 */
 const toasts = reactive<ToastItem[]>([])
 /** 每条 toast 的自动消失计时器（存 window id，便于重置/清理）。 */
 const timers = new Map<string, number>()
-/** 供 AppToaster 注册弹跳动画触发器（解耦：状态层只管计分，播放交给渲染层）。 */
+/** 供 AppToaster 注册弹跳动画触发器（解耦：状态层只在去重命中时广播「该重放弹跳」的时机，播放交给渲染层）。 */
 const bumpListeners = new Set<(id: string) => void>()
 
 /** 取消并移除一条 toast；幂等（不论是否已消失都能安全调用）。 */
@@ -70,14 +65,13 @@ function scheduleDismiss(id: string, duration: number): void {
 export function notify(text: string, type: ToastType = 'success'): void {
   const key = `${type}:${text}`
   const existing = toasts.find((toast) => toast.key === key)
-  // 同一条已有且未消失：重置计时 + 触发左弹跳，不再新建堆叠。
+  // 同一条已有且未消失：重置计时 + 通知订阅者重放左弹跳，不再新建堆叠。
   if (existing) {
-    existing.bumpTick += 1
     for (const listener of bumpListeners) listener(existing.id)
     scheduleDismiss(existing.id, APP_CONFIG.ui.toastDurationMs)
     return
   }
-  const item: ToastItem = { id: nanoid(), key, type, text, bumpTick: 0 }
+  const item: ToastItem = { id: nanoid(), key, type, text }
   toasts.unshift(item)
   scheduleDismiss(item.id, APP_CONFIG.ui.toastDurationMs)
 }

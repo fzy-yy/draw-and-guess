@@ -6,8 +6,14 @@ import {
   type VocabularyWord,
 } from '@draw-guess/shared'
 import type { DataTableColumn } from '@/components/common/data-table.types'
-import { useTableSort } from './useTableSort'
+import { applySortDir, compareValues, useTableSort } from './useTableSort'
 
+/**
+ * 多词面（text + aliases）拼接的分隔符（NUL）：选它而非普通字符，是因为 `\u0000`
+ * 不可能出现在用户输入或词面中——用普通字符做分隔时，跨拼接边界的关键词（如词条
+ * 正文的尾段 + 别名的首段连成一个词）会意外命中；NUL 保证匹配只发生在单个真实
+ * 词面内部。
+ */
 const SEARCH_SEPARATOR = String.fromCharCode(0)
 
 /** 词库词条/包的搜索、筛选和排序状态。 */
@@ -61,14 +67,11 @@ export function useVocabularyQuery(options: {
     if (!column) return filteredWords.value
     const value = (word: VocabularyWord): string | number =>
       column.sortValue ? column.sortValue(word) : String(word[column.key])
-    const sorted = [...filteredWords.value].sort((left, right) => {
-      const leftValue = value(left)
-      const rightValue = value(right)
-      if (typeof leftValue === 'number' && typeof rightValue === 'number')
-        return leftValue - rightValue
-      return String(leftValue).localeCompare(String(rightValue), 'zh-Hans-CN')
-    })
-    return wordSort.sortDir.value === 'desc' ? sorted.reverse() : sorted
+    // 比较与方向应用与词库包表共用 useTableSort 导出的同构实现（单口径）。
+    const sorted = [...filteredWords.value].sort((left, right) =>
+      compareValues(value(left), value(right)),
+    )
+    return applySortDir(sorted, wordSort.sortDir.value === 'desc')
   })
   const filteredPackages = computed(() => {
     const keyword = normalizeAnswer(searchKeyword.value)
@@ -88,13 +91,6 @@ export function useVocabularyQuery(options: {
     filterSelections.value = { ...filterSelections.value, [key]: values }
   }
 
-  function reset(): void {
-    debouncedSearch.cancel()
-    search.value = ''
-    searchKeyword.value = ''
-    filterSelections.value = { category: [], difficulty: [], drawability: [] }
-  }
-
   function clearSearch(): void {
     debouncedSearch.cancel()
     search.value = ''
@@ -112,7 +108,6 @@ export function useVocabularyQuery(options: {
     sortDir: wordSort.sortDir,
     handleSort: wordSort.handleSort,
     updateFilter,
-    reset,
     clearSearch,
     cancel: () => debouncedSearch.cancel(),
   }

@@ -1,6 +1,6 @@
 # 05 composables 杂项：死分支、bumpTick 删除、邀请修复①、比较器合并
 
-Status: ready-for-agent
+Status: resolved
 
 ## 背景
 

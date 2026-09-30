@@ -6,6 +6,8 @@ export function useVirtualTableRows<T>(
   rows: Ref<readonly T[]>,
   scrollContainer: Ref<HTMLElement | undefined>,
 ) {
+  // 默认行高兜底估算：首帧实测校准（updateRowHeight）前的初始值，只影响首次渲染的
+  // 虚拟窗口数量与占位高，挂载后即刻被真实行高替换。
   const measuredRowHeight = ref(28)
   const { virtualizer } = useVirtualRows({
     scrollElement: scrollContainer,
@@ -17,11 +19,9 @@ export function useVirtualTableRows<T>(
 
   function scrollToIndex(index: number): void {
     const safeIndex = Math.max(0, Math.min(index, Math.max(0, rows.value.length - 1)))
-    const instance = virtualizer.value as unknown as {
-      scrollToIndex(index: number, options?: { align: 'start' | 'center' | 'end' | 'auto' }): void
-      scrollToOffset(offset: number): void
-      measure(): void
-    }
+    // @tanstack Virtualizer 实例直连即可：scrollToIndex/scrollToOffset/measure 都是公开
+    // API（曾经的 `as unknown as` 双断言经 vue-tsc 实测为不必要的防御，已移除）。
+    const instance = virtualizer.value
     if (safeIndex !== 0) {
       instance.scrollToIndex(safeIndex, { align: 'start' })
       return

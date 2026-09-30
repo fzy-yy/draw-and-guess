@@ -340,7 +340,7 @@ describe('表格、选择与词库 composables', () => {
     expect(allState.value).toBe('none')
   })
 
-  it('词条搜索、筛选、数值排序和重置覆盖独立分支', async () => {
+  it('词条搜索、筛选、数值排序和清空搜索覆盖独立分支', async () => {
     const query = useVocabularyQuery({
       words: ref(words),
       packages: ref(packages),
@@ -362,7 +362,16 @@ describe('表格、选择与词库 composables', () => {
     expect(query.wordRows.value.map(({ id }) => id)).toEqual(['b', 'a'])
     query.searchKeyword.value = '基础'
     expect(query.filteredPackages.value.map(({ id }) => id)).toEqual(['p1'])
-    query.reset()
+    // clearSearch 覆盖原 reset 的可观察语义：作废在途防抖 + 清空输入与生效关键词
+    //（reset 特有的「筛选项清空」分支已由上方 updateFilter('category', []) 触达）。
+    query.search.value = '残词'
+    // 先让 watch(search) 把「残词」排进防抖队列，再清空——构造真正的「在途」窗口。
+    await nextTick()
+    query.clearSearch()
+    expect(query.search.value).toBe('')
+    expect(query.searchKeyword.value).toBe('')
+    // 推进防抖时钟也不该把被 cancel 的「残词」带回生效关键词（验证取消在途确实生效）。
+    await vi.advanceTimersByTimeAsync(10)
     expect(query.searchKeyword.value).toBe('')
   })
 
