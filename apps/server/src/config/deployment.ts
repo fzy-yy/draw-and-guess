@@ -139,11 +139,19 @@ export function getDeploymentConfig(env: NodeJS.ProcessEnv = process.env): Deplo
     true,
   )
   // 日志文件保留条数：默认 10，限定 1～100。
+  // 与 PORT 共用同一写法闸（parseDecimalIntegerOrNull）：`1e1`/`0x0a`/`+10` 这类写法
+  // 此前会被 Number() 静默接受，与 ADR-0035「写法不对即中止」的承诺不一致。
   const rawMaxFiles = env.LOG_MAX_FILES?.trim() || '10'
-  const logMaxFiles = Number(rawMaxFiles)
-  if (!Number.isInteger(logMaxFiles) || logMaxFiles < 1 || logMaxFiles > 100) {
+  const parsedMaxFiles = parseDecimalIntegerOrNull(rawMaxFiles)
+  if (parsedMaxFiles === null) {
+    throw new Error(
+      `LOG_MAX_FILES 必须是纯十进制正整数（不支持十六进制、科学计数法、前导正号与小数），当前值：${rawMaxFiles}`,
+    )
+  }
+  if (parsedMaxFiles < 1 || parsedMaxFiles > 100) {
     throw new Error(`LOG_MAX_FILES 必须是 1～100 的整数，当前值：${rawMaxFiles}`)
   }
+  const logMaxFiles = parsedMaxFiles
   if (!isLogLevel(candidateLevel)) {
     throw new Error(`LOG_LEVEL 仅支持 ${levels.join('、')}`)
   }

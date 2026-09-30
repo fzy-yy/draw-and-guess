@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { APP_CONFIG } from '@draw-guess/config'
-import { EVENTS, RequestSchema } from '@draw-guess/shared'
+import { EVENTS } from '@draw-guess/shared'
 import { createRequester } from '../../apps/client/src/stores/request.ts'
 import { bindRequest } from '../../apps/server/src/protocol/binder.ts'
 import { GameError } from '../../apps/server/src/errors.ts'
@@ -114,7 +114,7 @@ describe('幂等请求重试', () => {
           listener = callback
         },
       } as unknown as BinderSocket
-      bindRequest(socket, EVENTS.sessionLogout, RequestSchema, () => {
+      bindRequest(socket, EVENTS.sessionLogout, () => {
         handlerCalls += 1
         return { success: true }
       })
@@ -154,7 +154,7 @@ describe('幂等请求重试', () => {
       },
       on: (_event: string, callback: typeof listener) => (listener = callback),
     } as unknown as BinderSocket
-    bindRequest(socket, EVENTS.sessionLogout, RequestSchema, () => {
+    bindRequest(socket, EVENTS.sessionLogout, () => {
       calls += 1
       if (calls === 1) throw new GameError('VERSION_CONFLICT', '版本冲突')
       return { success: true }

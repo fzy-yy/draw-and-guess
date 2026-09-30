@@ -5,7 +5,6 @@
  * 领域服务调用仍由 GameService 承载，本层不裁决任何游戏状态。
  */
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
-import { isIPv4 } from 'node:net'
 import path from 'node:path'
 import compression from 'compression'
 import cors from 'cors'
@@ -18,7 +17,7 @@ import { GameService } from './game-service.ts'
 import type { RuntimeLogger } from './errors.ts'
 import type { AppServer, AppSocket, AppSocketData, InterServerEvents } from './socket-types.ts'
 import { loadVocabulary, type VocabularyRegistry } from './vocabulary/index.ts'
-import { isPrivateIpv4 } from './startup/lan-addresses.ts'
+import { isPrivateIpv4Literal } from './startup/lan-addresses.ts'
 import { findLocalHostnames } from './startup/local-hostnames.ts'
 import { registerSessionHandlers } from './handlers/session.ts'
 import { registerRoomHandlers } from './handlers/room.ts'
@@ -41,17 +40,14 @@ export function isAllowedOrigin(
     if (!['http:', 'https:'].includes(url.protocol)) return false
     // URL 对 IPv6 字面量会保留方括号（"[::1]"），先剥掉再做比较，否则 ::1 分支永远不命中。
     const hostname = url.hostname.replace(/^\[|\]$/gu, '')
-    // 开发代理与局域网部署都需要跨端口访问，但只允许本地/私网浏览器来源；
-    // 私网判定与 findLanAddresses 播报共用 isPrivateIpv4，避免「播报的地址」被 CORS 拒绝。
-    // 私网来源必须先过 isIPv4 **字面量闸**：isPrivateIpv4 只按前缀匹配，单看前缀会把
-    // `10.attacker.com`、`192.168.evil.com` 这类**域名**当成私网放行——恶意页面可用 DNS
-    // rebinding 把自己的域名解析到受害者内网 IP，等于把局域网服务交给任意网页
-    //（域名前缀像私网 ≠ 地址在私网）。取舍与完整论证见 docs/adr/0036-origin-private-ip-literal.md。
+    // 开发代理与局域网部署都需要跨端口访问，但只允许本地/私网浏览器来源。
+    // 私网判定走 isPrivateIpv4Literal（内含 IPv4 字面量闸）：单看前缀会把 `10.attacker.com`
+    // 这类域名当成私网放行（DNS rebinding），论证见 docs/adr/0036-origin-private-ip-literal.md。
     if (
       hostname === 'localhost' ||
       hostname === '127.0.0.1' ||
       hostname === '::1' ||
-      (isIPv4(hostname) && isPrivateIpv4(hostname))
+      isPrivateIpv4Literal(hostname)
     ) {
       return true
     }
@@ -96,31 +92,34 @@ function registerSocketHandlers(socket: AppSocket, service: GameService): void {
 /**
  * 创建完整应用，并允许启动入口按部署环境注入公开地址、日志器、数据库路径与前端产物目录。
  *
- * 注入项均为「基础设施」参数：dbFile / clientDist 仅供测试或嵌入场景指向隔离目录，
- * 生产路径保持默认（apps/server/data/game.db 与 ../client/dist）；本文件不承载任何业务规则，
+ * 注入项均为「基础设施」参数：clientDist 必填（生产由 index.ts 注入运行布局，测试注入临时目录）；
+ * dbFile 缺省指向源码布局的数据文件（apps/server/data/game.db）；本文件不承载任何业务规则，
  * 业务规则读取公开配置包与服务端私有配置的组合视图（快照按观看者角色裁剪，计分级纯函数裁决）。
  */
-export async function createApplication(
-  options: {
-    vocabulary?: VocabularyRegistry
-    publicBaseUrl?: () => string
-    logger?: RuntimeLogger
-    /** 测试隔离用：把 SQLite 数据文件指向临时目录，避免污染真实 game.db。 */
-    dbFile?: string
-    /** 测试隔离用：托管前端构建产物的目录，避免依赖恰好存在的 dist。 */
-    clientDist?: string
-    /** 显式开启后仍只允许回环请求读取详细指标；默认仅返回安全摘要。 */
-    healthMetricsEnabled?: boolean
-    /**
-     * 来源放行面里的「服务器自己的名字」（含 `.local` 形态）：缺省取操作系统报告的本机名，
-     * 测试或用其它方式确定名字的嵌入场景可注入固定名单（见 startup/local-hostnames.ts）。
-     */
-    localHostnames?: readonly string[]
-  } = {},
-): Promise<RunningApplication> {
+export async function createApplication(options: {
+  vocabulary?: VocabularyRegistry
+  publicBaseUrl?: () => string
+  logger?: RuntimeLogger
+  /** 测试隔离用：把 SQLite 数据文件指向临时目录，避免污染真实 game.db。 */
+  dbFile?: string
+  /**
+   * 前端构建产物目录：生产由启动入口注入 layout.clientDist（源码/产物两种布局），
+   * 测试注入临时目录。没有可靠默认值（cwd 依赖在产物模式下会指错），故必填。
+   */
+  clientDist: string
+  /** 显式开启后仍只允许回环请求读取详细指标；默认仅返回安全摘要。 */
+  healthMetricsEnabled?: boolean
+  /**
+   * 来源放行面里的「服务器自己的名字」（含 `.local` 形态）：缺省取操作系统报告的本机名，
+   * 测试或用其它方式确定名字的嵌入场景可注入固定名单（见 startup/local-hostnames.ts）。
+   */
+  localHostnames?: readonly string[]
+}): Promise<RunningApplication> {
   const vocabulary = options.vocabulary ?? (await loadVocabulary())
   // 每个应用实例拥有独立数据库上下文；迁移、仓储和事务都绑定到这一连接。
   const database = createDatabase(options.dbFile)
+  // 迁移失败即关闭连接；其后装配阶段（Socket.IO / 领域服务构造）的异常属「配置损坏即启动终止」
+  // 路径，进程退出由操作系统回收文件句柄——不为罕见路径增加控制流噪音（不过度防御）。
   try {
     runMigrations(database)
   } catch (error) {
@@ -147,7 +146,7 @@ export async function createApplication(
       origin: (origin, callback) => callback(null, isAllowedOrigin(origin, localHostnames)),
       credentials: false,
     },
-    maxHttpBufferSize: 128 * 1024,
+    maxHttpBufferSize: APP_CONFIG.network.maxHttpBufferBytes,
     pingInterval: APP_CONFIG.network.pingIntervalMs,
   })
   const baseUrl = options.publicBaseUrl ?? (() => `http://localhost:${APP_CONFIG.network.port}`)
@@ -190,7 +189,6 @@ export async function createApplication(
   app.use(
     cors({ origin: (origin, callback) => callback(null, isAllowedOrigin(origin, localHostnames)) }),
   )
-  app.use(express.json({ limit: '32kb' }))
   // 静态资源 gzip 压缩：JS/CSS/SVG 经 compression 减小传输体积，对局域网也有明显收益。
   // 放在静态托管前，仅对可压缩内容（text/javascript/css/svg 等）生效。
   app.use(compression())
@@ -228,7 +226,7 @@ export async function createApplication(
   // - 其余文件（index.html 等）用 no-cache，保证入口 HTML 每次校验，
   //   否则发新版本后浏览器会继续拿旧 HTML、引用已删除的旧哈希产物。
   const hashedAssetPattern = /\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/u
-  const clientDist = options.clientDist ?? path.resolve(process.cwd(), '../client/dist')
+  const clientDist = options.clientDist
   app.use(
     express.static(clientDist, {
       setHeaders: (response, filePath) => {
@@ -261,7 +259,7 @@ export async function createApplication(
   const close = (): Promise<void> => {
     closePromise ??= (async () => {
       try {
-        io.disconnectSockets(true)
+        // io.close() 自身会断开全部连接并关闭底层 server，无需再显式 disconnectSockets。
         await new Promise<void>((resolve) => io.close(() => resolve()))
         if (httpServer.listening) {
           await new Promise<void>((resolve, reject) =>

@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CLIENT_REQUEST_SCHEMAS, EVENTS, StateResyncSchema, type Ack } from '@draw-guess/shared'
+import { EVENTS, type Ack } from '@draw-guess/shared'
 import { createApplication, isLoopbackAddress } from '../../apps/server/src/app.ts'
 import { getDeploymentConfig } from '../../apps/server/src/config/index.ts'
 import { GameError, SILENT_LOGGER, type RuntimeLogger } from '../../apps/server/src/errors.ts'
@@ -210,14 +210,13 @@ describe('有界进程指标', () => {
       on: (event: string, listener: Listener) => void listeners.set(event, listener),
     } as unknown as BinderSocket
 
-    bindRequest(socket, EVENTS.stateResync, StateResyncSchema, () => {
+    bindRequest(socket, EVENTS.stateResync, () => {
       now += 10
       return undefined
     })
     bindRequest(
       socket,
       EVENTS.drawClear,
-      CLIENT_REQUEST_SCHEMAS[EVENTS.drawClear],
       () => {
         now += 30
         throw new GameError('DRAW_BUDGET_EXCEEDED')

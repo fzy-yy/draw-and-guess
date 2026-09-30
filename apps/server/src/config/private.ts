@@ -20,6 +20,11 @@ export const serverPrivateConfig = {
     /** 猜词/绘图等事件级滑动窗口的宽度（原硬编码 1 秒，与请求级窗口分列可调）。 */
     eventRateWindowMs: 1_000,
     idempotencyCacheMax: 100,
+    /**
+     * Socket.IO 单条消息载荷上限：客户端请求均为小 JSON（笔画批次/词库勾选），
+     * 128 KiB 足以覆盖最大合法请求，同时限制恶意超大帧的内存占用。
+     */
+    maxHttpBufferBytes: 128 * 1024,
   },
   room: {
     privateJoinWindowMs: 10_000,

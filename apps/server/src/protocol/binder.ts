@@ -11,16 +11,14 @@ import type {
   ClientRequestPayload,
   ClientResponse,
 } from '@draw-guess/shared'
-import { EVENTS } from '@draw-guess/shared'
+import { CLIENT_REQUEST_SCHEMAS, EVENTS } from '@draw-guess/shared'
 import { failure, GameError, success } from '../errors.ts'
 import { slidingWindowAllow } from '../rate-limit.ts'
 import type { AppSocket } from '../socket-types.ts'
 
 /** 把校验错误归一化为稳定业务错误，其余异常交给统一失败响应隐藏内部细节。 */
 function normalizeRequestError(error: unknown): unknown {
-  return error instanceof z.ZodError
-    ? new GameError('INVALID_PAYLOAD', serverStrings.errors.INVALID_PAYLOAD)
-    : error
+  return error instanceof z.ZodError ? new GameError('INVALID_PAYLOAD') : error
 }
 
 /** 仅记录未预期异常的脱敏上下文；业务错误不污染错误日志。 */
@@ -35,18 +33,28 @@ function logUnexpected(
 }
 
 /**
+ * 事件名 → 事件级 Schema。注册表结构保证「事件 ↔ Schema」配对，
+ * 但 TS 对泛型索引的延迟类型无法证明联合成员的输入/输出收窄，
+ * 因此在这里收口唯一一次 unknown 中转断言（与下方 on() 绑定同一适配手法）。
+ */
+function schemaOf<E extends ClientRequestEvent>(event: E): ZodType<ClientRequestPayload<E>> {
+  return CLIENT_REQUEST_SCHEMAS[event] as unknown as ZodType<ClientRequestPayload<E>>
+}
+
+/**
  * 统一请求包装器：所有失败都以结构化 ack 返回，避免未捕获异常断开 Socket。
  * 幂等键由“事件名 + requestId”组成，并缓存完整 ack；并发重试共享同一个执行 Promise。
  */
 export function bindRequest<E extends ClientRequestEvent>(
   socket: AppSocket,
   event: E,
-  schema: ZodType<ClientRequestPayload<E>>,
   handler: (
     input: ClientRequestPayload<E>,
     playerId: string,
   ) => ClientResponse<E> | Promise<ClientResponse<E>>,
   options: { registration?: boolean; rateLimit?: boolean } = {},
+  /** 仅供测试覆盖：生产调用一律省略，schema 由事件名从注册表推导。 */
+  schema: ZodType<ClientRequestPayload<E>> = schemaOf(event),
 ): void {
   // binder 的 Schema-first 设计刻意以 unknown 接收原始 payload、再交 schema.parse 校验；
   // Socket.IO 的 EventParams 对泛型事件名是延迟条件类型，TS 无法证明监听器签名匹配，
@@ -64,16 +72,16 @@ export function bindRequest<E extends ClientRequestEvent>(
       typeof raw === 'object' && raw && 'requestId' in raw
         ? String(raw.requestId)
         : 'invalid-request'
-    let metricsRecorded = false
+    let responded = false
+    // 一次请求恰好一个 ack：短路同时承担「指标只记一次」与「回调异常不触发二次 respond」。
     const respond = (ack: Ack<ClientResponse<E>>): void => {
-      if (!metricsRecorded) {
-        metricsRecorded = true
-        service.metrics.recordAcknowledgement(
-          event,
-          service.clock.now() - startedAt,
-          ack.ok ? undefined : ack.error.code,
-        )
-      }
+      if (responded) return
+      responded = true
+      service.metrics.recordAcknowledgement(
+        event,
+        service.clock.now() - startedAt,
+        ack.ok ? undefined : ack.error.code,
+      )
       if (typeof callback === 'function') callback(ack)
     }
 
@@ -114,12 +122,7 @@ export function bindRequest<E extends ClientRequestEvent>(
         // 无论放行与否都回写过滤后的队列：窗口必须随时间前滚，拒绝记录同样受益。
         socket.data.eventTimes = decision.times
         if (!decision.allowed) {
-          respond(
-            failure(
-              new GameError('RATE_LIMITED', serverStrings.errors.RATE_LIMITED),
-              input.requestId,
-            ),
-          )
+          respond(failure(new GameError('RATE_LIMITED'), input.requestId))
           return
         }
       }

@@ -34,6 +34,19 @@ describe('部署配置解析', () => {
     expect(getDeploymentConfig({ PORT: ' 5174 ' }).port).toBe(5174)
   })
 
+  it('LOG_MAX_FILES 与 PORT 共用同一写法闸：科学计数法与十六进制不再被静默接受', () => {
+    // 此前用 Number() 解析：`1e1` 会被静默当成 10——与 ADR-0035「写法不对即中止」相悖。
+    for (const invalid of ['1e1', '0x0a', '+10', '10.0']) {
+      expect(() => getDeploymentConfig({ LOG_MAX_FILES: invalid }), invalid).toThrow(
+        /LOG_MAX_FILES/u,
+      )
+    }
+    // 越界与写法不对是两种可读成因（前导零写法 `005` 同口径接受）。
+    expect(() => getDeploymentConfig({ LOG_MAX_FILES: '0' })).toThrow(/1～100/u)
+    expect(() => getDeploymentConfig({ LOG_MAX_FILES: '101' })).toThrow(/1～100/u)
+    expect(getDeploymentConfig({ LOG_MAX_FILES: '005' }).logMaxFiles).toBe(5)
+  })
+
   it('HOST 非法形态在解析期中止，错误信息含实际取值', () => {
     const invalidHosts = [
       // 形态上明显在写 IP：越界、缺段、前导零、端口混入、缺方括号
