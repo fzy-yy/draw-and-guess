@@ -1,6 +1,6 @@
 # 01 stores 注释修正、观测接缝定性与同形合并
 
-Status: ready-for-agent
+Status: resolved
 
 ## 背景
 

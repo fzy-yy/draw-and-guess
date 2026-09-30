@@ -72,6 +72,15 @@ export function applyFloodFillMeasured(
 
   // 扫描线只压入相邻行的连续 span 种子。常见空白画布的栈深接近 1；复杂图形按需扩容，
   // 避免旧 BFS 固定分配 width*height 个 Int32（720p 约 3.5 MiB）。
+  //
+  // 容量以 pixelCount 封顶（下方两处 Math.min）的安全性论证【待人工确认】：纸面推导
+  // 不能证明「压入次数 ≤ 像素数」——每个未填充像素可分别被上、下相邻行的 span 各作为
+  // run 起点压入一次（同一行被弹出的 run 互相不重叠、填充后不再满足 target），两份
+  // 重复种子可同时悬空；且 blendAntialiasPixel 垫底在极端取值下理论上能把边缘像素
+  // 带回 target 容差内，run 起点并非严格一次性消费。「瞬时栈深 ≤ pixelCount」依赖
+  // LIFO 弹出与重复压入的交错顺序，无简单不变量可证。现状保留封顶、不加运行时断言
+  // （热点循环成本零变化）：若真超限，越界写入被 TypedArray 静默忽略、丢种子的后果
+  // 是漏填而非崩溃，观测口径可由 peakWorkingBytes 与基准脚本（scripts/benchmark-flood-fill.mts）核对。
   const pixelCount = width * height
   let stack = new Int32Array(Math.min(pixelCount, Math.max(64, width * 2)))
   let stackSize = 0
@@ -87,6 +96,16 @@ export function applyFloodFillMeasured(
     stackSize += 1
   }
 
+  /**
+   * 抗锯齿边界垫底：只处理「与填充区相邻的边界带像素」——它们是边界线与底色的
+   * 半透明混合中间态，不满足 target 判等（不能直接吞进填充区），却又在填充区
+   * 被替换后成为悬在半透明态的边缘。
+   * 处理方式：按像素自身 alpha 作权重，与替换色混合后强制 alpha=255——
+   * - 消掉抗锯齿过渡色滞留造成的白边 fringe（这类像素若原样保留，会在填充区
+   *   与边界线之间留下一圈偏向底色的半透明过渡带）；
+   * - 强制不透明，避免半透明像素在纸底色上留下透明洞。
+   * alpha<=0（全透明，无混合价值）与 alpha>=255（真实边界线像素，不得改色）跳过。
+   */
   const blendAntialiasPixel = (pixelX: number, pixelY: number): void => {
     if (pixelX < 0 || pixelX >= width || pixelY < 0 || pixelY >= height) return
     const offset = (pixelY * width + pixelX) * 4

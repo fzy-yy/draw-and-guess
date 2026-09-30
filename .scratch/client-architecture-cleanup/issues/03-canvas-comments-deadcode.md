@@ -1,6 +1,6 @@
 # 03 canvas 注释修正/补全 + 冗余守卫清理 + 笔画样式单源
 
-Status: ready-for-agent
+Status: resolved
 
 ## 背景
 

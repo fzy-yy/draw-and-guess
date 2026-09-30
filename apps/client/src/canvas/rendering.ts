@@ -20,6 +20,9 @@ export function renderStroke(
   context.lineCap = 'round'
   context.lineJoin = 'round'
   context.beginPath()
+  // 增量描边必须回退到上一个已画点起笔（fromIndex - 1）：新增首段要与已画折线的尾点
+  // 共享端点才能物理相连；直接从 fromIndex 起笔会让第一段悬空，新旧线段断开——
+  // 这正是历史白边/断线缺陷的防回潮点（ADR-0018 尾部增量补画依赖此口径）。
   const start = Math.max(0, fromIndex - 1)
   const first = stroke.points[start]
   if (!first) {

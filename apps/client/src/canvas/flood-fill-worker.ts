@@ -31,7 +31,9 @@ export type FloodFillExecutionMode = 'worker' | 'main_thread'
 export interface FloodFillJobResult {
   image: ImageData
   filledPixels: number
+  /** 观测/测试接缝：栈峰值字节仅供基准脚本与 spec 断言消费；生产渲染路径（replay-machine 的端口契约）不读取。 */
   peakWorkingBytes: number
+  /** 观测/测试接缝：实际执行路径留痕（spec 并发与降级断言用），同样不进生产渲染决策。 */
   execution: FloodFillExecutionMode
   /** Worker 失败后由主线程对同一 ImageData 降级完成：结果正确，但线程已终止重建。 */
   degraded: boolean

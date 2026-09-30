@@ -36,10 +36,11 @@ export function presentLogicalCanvas(
 ): void {
   const context = displayCanvas.getContext('2d')
   if (!context) return
+  // 展示层 2D 上下文全仓仅本函数取用：clearRect/drawImage 不改变任何上下文状态，
+  // 无需 save/restore 包裹与前后双写兜底。唯一会重置状态（含平滑开关）的事件是
+  // 画布元素 width/height 赋值——useCanvasViewport 在尺寸/DPR 变化时正会写入它，
+  // 因此每次投影前显式关闭一次平滑即可保证语义完整。
   context.imageSmoothingEnabled = false
-  context.save()
   context.clearRect(0, 0, displayCanvas.width, displayCanvas.height)
   context.drawImage(logicalCanvas, 0, 0, displayCanvas.width, displayCanvas.height)
-  context.restore()
-  context.imageSmoothingEnabled = false
 }

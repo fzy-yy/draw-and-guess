@@ -8,7 +8,8 @@
  *
  * seam 约定（调用方必须知道的全部）：
  * 1. 状态入口只有 `sync()`：任何权威历史变化都原样递进来，**外部不得自行决定重放方式**；
- * 2. 渲染只发生在三个入口：`sync`、`resize`、预览方法。一切绘制先画进后备缓冲，
+ * 2. 渲染只发生在四个入口：`sync`、`resize`、`replay`（公开入口：useStrokeSession 在批次
+ *    全部 ack 合并后直调规范化）、预览方法。一切绘制先画进后备缓冲，
  *    整帧成功后一次性换入逻辑画布——逻辑层永远不暴露半成品；
  * 3. 填充计算经端口注入（生产适配器 = FloodFillWorkerClient）：机器不关心它是 Worker、
  *    主线程降级还是测试里的假实现；
@@ -32,12 +33,11 @@ export interface ReplaySnapshot {
   roundId: string
 }
 
-/** 预览笔画样式（与 useStrokeSession 的落笔样式同形）。 */
-export interface PreviewStyle {
-  tool: 'pen' | 'eraser'
-  color: string
-  width: number
-}
+/**
+ * 预览笔画样式：由 shared `Stroke` 的落笔字段子集派生（笔画样式单源，
+ * 与 useStrokeSession 的 StrokeStyle 同口径，不再各自手抄字段）。
+ */
+export type PreviewStyle = Pick<Stroke, 'tool' | 'color' | 'width'>
 
 /** 填充计算端口：FloodFillWorkerClient 结构上直接满足；测试注入可编程假实现。 */
 export interface FillComputePort {
@@ -115,12 +115,22 @@ export class DrawingReplayMachine {
     const missingFill = visible.some(
       (command) => command.kind === 'fill' && !this.drawn.has(command.id),
     )
+    // 整帧重放的触发条件分两类，缺一都可能让逻辑栅格与「权威历史 + 在途预览」错位：
+    // ① 可见集发生变化：roundChanged（换回合清空历史）、hasRemovedCommand（撤销/回滚抹掉
+    //    已画笔画）、undoChanged（undone 集合增减改变可见性）——增量路径只会补画，删不掉幽灵像素；
+    // ② 镜像本身回退：commands.length < committedCount（权威历史比已提交快照更短，即本地镜像
+    //    与权威错位，只能原子重建收回）、commands 为空但 drawn 非空（见下一条注释）。
+    // 收窄任何一条的风险都大于收益，改动前务必对照 ADR-0018 的提交段语义。
     if (
       roundChanged ||
       hasRemovedCommand ||
       missingFill ||
       undoChanged ||
       snapshot.commands.length < this.committedCount ||
+      // 权威列表为空但簿记非空（其余触发条件均未命中时，drawn 里只剩在途预览，
+      // 已簿记的权威笔画会先被 hasRemovedCommand 捕获）：典型场景是新回合首笔
+      // 预览期间的 revision 抖动。此时增量路径是空操作、无法证明栅格已对齐
+      // 「空历史 + 预览」，强制一次原子重建。保留此分支，不做收窄。
       (snapshot.commands.length === 0 && this.drawn.size > 0)
     ) {
       this.replay()
@@ -133,14 +143,20 @@ export class DrawingReplayMachine {
    * 视口在 CSS 尺寸变化时交付新逻辑定标；尺寸写入会隐式清空画布，
    * 因此清空只发生在提交段内——present() 之前展示层继续显示旧帧，无白闪窗口。
    * 首次调用同时点亮 sized：挂载前登记的快照在此完成首帧。
+   *
+   * 浏览器语义：对 canvas.width/height 的赋值即使尺寸不变也会重置位图。因此同尺寸
+   * 调用必须在写入前直接返回——若先写再靠 unchanged 跳过重放，赋值本身的清空会留下
+   * 「栅格被清而无人重建」的空窗（调用方 useCanvasViewport 虽有 logicalChanged 预筛，
+   * 本方法仍须自守这条不变量，不依赖调用方纪律）。
    */
   resize(width: number, height: number): void {
     const unchanged =
       this.sized && this.logicalCanvas.width === width && this.logicalCanvas.height === height
+    if (unchanged) return
     this.logicalCanvas.width = width
     this.logicalCanvas.height = height
     this.sized = true
-    if (!unchanged) this.replay()
+    this.replay()
   }
 
   /** 强制整帧重放当前快照（ack 合并后消除分批抗锯齿像素差异等场景）。 */
@@ -167,7 +183,8 @@ export class DrawingReplayMachine {
     preview.points.push(point)
     this.drawn.set(preview.id, preview.points.length)
     if (context) {
-      // 单点预览由 drawPreviewStroke 的 +0.01 补偿渲染成圆点（见 ADR-0003 坐标约定）。
+      // 单点预览由 renderStroke 内的 SINGLE_POINT_DOT_EPSILON 补偿渲染成圆点
+      // （常量源自 geometry，见 ADR-0003 坐标约定）。
       this.drawPreviewStroke(context, preview, preview.points, fromIndex)
       this.ports.present(this.logicalCanvas)
     }
@@ -312,9 +329,10 @@ export class DrawingReplayMachine {
     generation: number,
     roundId: string,
   ): Promise<boolean> {
+    // 尺寸非零无需在此重复校验：runReplay 入口守卫已对同一后备缓冲检查过一次，
+    // 且逻辑层/后备层只会被写入 Math.max(1, …) 定标出的尺寸（单线程内不可能变 0）。
     const canvasWidth = context.canvas.width
     const canvasHeight = context.canvas.height
-    if (!canvasWidth || !canvasHeight) return false
     // 归一化种子点 → 栅格索引：round + clamp 口径单源（geometry，ADR-0003/0022）。
     const startX = normalizedToPixelIndex(command.point.x, canvasWidth)
     const startY = normalizedToPixelIndex(command.point.y, canvasHeight)
@@ -345,7 +363,8 @@ export class DrawingReplayMachine {
       return false
     } finally {
       // 成功、失败、取消一律释放渲染态：渲染锁不得跨越任务生命周期。
-      this.setRenderTasks(Math.max(0, this.renderTasks - 1))
+      // 本 -1 与 try 之前的 +1 严格配对（且每个 applyFill 恰好各执行一次），计数不可能为负。
+      this.setRenderTasks(this.renderTasks - 1)
     }
   }
 

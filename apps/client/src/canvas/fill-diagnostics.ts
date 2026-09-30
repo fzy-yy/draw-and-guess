@@ -22,7 +22,7 @@ export function recordFillDiagnostic(reason: FillDiagnosticReason): void {
   diagnostics.record({ reason, receivedAt: Date.now() })
 }
 
-/** 只暴露副本，避免诊断 UI 或测试修改内部记录。 */
+/** 只暴露副本：当前供测试消费（client-boundaries / canvas-replay-machine / GameCanvas spec），为未来诊断 UI 预留，任一消费者都不得改写内部记录。 */
 export function getFillDiagnostics(): readonly FillDiagnostic[] {
   return diagnostics.list()
 }

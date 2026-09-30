@@ -5,7 +5,11 @@ import type { DrawPoint, FillCommand, Stroke, StrokeAck, ToolKind } from '@draw-
 import { createUuid } from '@/utils/create-uuid'
 import type { RequestFailure, RequestResult } from '@/stores/request'
 
-type StrokeStyle = { tool: 'pen' | 'eraser'; color: string; width: number }
+/**
+ * 落笔样式：由 shared `Stroke` 的落笔字段子集派生（笔画样式单源，
+ * 与 replay-machine 的 PreviewStyle 同口径，不再各自手抄字段）。
+ */
+type StrokeStyle = Pick<Stroke, 'tool' | 'color' | 'width'>
 
 /**
  * 笔画会话所需的画布渲染端口（DrawingReplayMachine 结构上满足；测试注入可编程替身）。
@@ -70,7 +74,8 @@ export function useStrokeSession(options: {
   function nextSequence(): number {
     // 本地单调计数 + 服务端已接受的最大序号。历史命令的 sequence 必然 ≤ lastSequence，
     // 因此无需每批扫描全部历史（O(n)），本地乐观批次由本计数器覆盖。
-    sequence = Math.max(sequence + 1, options.lastSequence() + 1, 0)
+    // sequence 自 0 起严格递增，候选值 sequence + 1 恒 ≥ 1，对 0 取下界钳位不可达（已删）。
+    sequence = Math.max(sequence + 1, options.lastSequence() + 1)
     return sequence
   }
 
@@ -241,6 +246,8 @@ export function useStrokeSession(options: {
   })
 
   return {
+    // pendingBatches / activeStrokeId：测试观测出口（StrokeSession.spec 与
+    // app-runtime-boundaries.spec 据此断言乐观批次与在途笔画），生产渲染路径不消费。
     pendingBatches,
     get activeStrokeId() {
       return activeStrokeId

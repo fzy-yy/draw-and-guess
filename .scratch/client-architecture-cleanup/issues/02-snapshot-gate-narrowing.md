@@ -1,6 +1,6 @@
 # 02 snapshot-gate 返回类型收窄与 useRoomSync 死分支回收（行为修复③）
 
-Status: ready-for-agent
+Status: resolved
 
 ## 背景
 
