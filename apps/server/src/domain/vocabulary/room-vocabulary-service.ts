@@ -3,14 +3,18 @@ import { MIN_SELECTED_VOCABULARY_WORDS, type VocabularySnapshot } from '@draw-gu
 import { GameError } from '../../errors.ts'
 import type { RoomSecret } from '../../models.ts'
 import type { VocabularyRegistry, VocabularyStore } from '../../vocabulary/index.ts'
+import type { RoomEventPorts } from '../shared-ports.ts'
 
-export interface RoomVocabularyContext {
+/**
+ * 房间词库用例端口：房间推送出口复用共享接口（见 domain/shared-ports.ts），
+ * 其余为本用例特有成员。
+ */
+export interface RoomVocabularyContext extends RoomEventPorts {
   registry: VocabularyRegistry
   getMembership(playerId: string): { room: RoomSecret }
   getHostRoom(playerId: string): RoomSecret
   getStore(room: RoomSecret): VocabularyStore
   addNotice(room: RoomSecret, text: string): void
-  emitRoom(roomId: string): void
 }
 
 /** 房间词库的读取、包切换与词条选择用例。 */

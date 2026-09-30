@@ -20,20 +20,11 @@ import type { PlayerSecret, RoomSecret } from '../../models.ts'
 import { phaseEquivalent } from '../room/room-facts.ts'
 import type { PlayerRecord, PlayerRepository } from '../../repositories/index.ts'
 import type { AppSocket } from '../../socket-types.ts'
-import { type RuntimeDependencies } from '../../runtime.ts'
 import { digestRecoveryToken } from '../../security/recovery-token.ts'
+import type { PlayerLookupPorts, RoomEventPorts, RuntimePorts } from '../shared-ports.ts'
 
-/** 仅暴露本用例需要的数据与副作用端口；由应用层连接跨用例动作。 */
-export interface SessionServiceContext {
-  broadcastPresence(): void
-  clock: RuntimeDependencies['clock']
-  emitRoom(roomId: string): void
-  /** 向房间广播推送事件：事件名与信封在编译期配对（信封由 createServerPush 生成）。 */
-  emitRoomEvent<E extends ServerPushEventName>(
-    roomId: string,
-    event: E,
-    envelope: ServerPushEnvelope<E>,
-  ): void
+/** 仅暴露本用例需要的数据与副作用端口；共享出口见 domain/shared-ports.ts，由应用层连接跨用例动作。 */
+export interface SessionServiceContext extends RuntimePorts, RoomEventPorts, PlayerLookupPorts {
   /** 向房间广播推送事件但排除指定连接：本人由连接恢复模态框反馈，无需重复通知。 */
   emitRoomEventExcept<E extends ServerPushEventName>(
     roomId: string,
@@ -47,7 +38,6 @@ export interface SessionServiceContext {
   persistPlayer(player: PlayerSecret): void
   players: Map<string, PlayerSecret>
   playersByTokenDigest: Map<string, PlayerSecret>
-  random: RuntimeDependencies['random']
   repositories: {
     players: Pick<
       PlayerRepository,
@@ -58,11 +48,9 @@ export interface SessionServiceContext {
       | 'setConnection'
     >
   }
-  requirePlayer(playerId: string): PlayerSecret
   rooms: Map<string, RoomSecret>
   transferDisconnectedHost(room: RoomSecret, playerId: string): void
   safeRun(label: string, fn: () => void): void
-  scheduler: RuntimeDependencies['scheduler']
   toPublicPlayer(player: PlayerSecret): PublicPlayer
 }
 
@@ -219,7 +207,8 @@ export class SessionService {
     this.context.repositories.players.deleteStaleDisconnected(
       this.context.clock.now() - APP_CONFIG.network.reconnectGraceMs,
     )
-    // 房间从不跨进程恢复；全部玩家视为断线并清除旧版 room_id，开始新的身份宽限计时。
+    // 房间从不跨进程恢复；全部玩家视为断线，开始新的身份宽限计时
+    //（旧版 room_id 兼容列已随迁移 v7 删除，此处不再涉及）。
     this.context.repositories.players.markAllDisconnected(this.context.clock.now())
   }
 

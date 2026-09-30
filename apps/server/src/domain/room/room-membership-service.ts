@@ -15,8 +15,8 @@ import { APP_CONFIG } from '../../config/index.ts'
 import { serverStrings } from '@draw-guess/strings'
 import { GameError, type RuntimeLogger } from '../../errors.ts'
 import type { GameSecret, MemberState, PlayerSecret, RoomSecret } from '../../models.ts'
-import { type RuntimeDependencies } from '../../runtime.ts'
 import { slidingWindowAllow } from '../../rate-limit.ts'
+import type { PlayerLookupPorts, RoomEventPorts, RuntimePorts } from '../shared-ports.ts'
 import type { VocabularyRegistry, VocabularyStore } from '../../vocabulary/index.ts'
 import {
   countOnlinePlayers,
@@ -30,20 +30,12 @@ import {
 } from './member-facts.ts'
 import { phaseEquivalent, reseatMembers } from './room-facts.ts'
 
-/** 仅暴露本用例需要的数据与副作用端口；由应用层连接跨用例动作。 */
-export interface RoomMembershipServiceContext {
+/** 仅暴露本用例需要的数据与副作用端口；共享出口见 domain/shared-ports.ts，由应用层连接跨用例动作。 */
+export interface RoomMembershipServiceContext
+  extends RuntimePorts, RoomEventPorts, PlayerLookupPorts {
   abandonChoosing(room: RoomSecret, notice: string): void
   addSystemNotice(room: RoomSecret, text: string): void
-  broadcastPresence(): void
   clearHintTimers(game: GameSecret): void
-  clock: RuntimeDependencies['clock']
-  emitRoom(roomId: string): void
-  /** 向房间广播推送事件：事件名与信封编译期配对（信封由 createServerPush 生成）。 */
-  emitRoomEvent<E extends ServerPushEventName>(
-    roomId: string,
-    event: E,
-    envelope: ServerPushEnvelope<E>,
-  ): void
   /** 向单个玩家推送事件：事件名与信封编译期配对。 */
   emitToPlayer<E extends ServerPushEventName>(
     playerId: string,
@@ -57,11 +49,8 @@ export interface RoomMembershipServiceContext {
   logger: RuntimeLogger
   pauseRoomInternal(room: RoomSecret, reason: string): void
   players: Map<string, PlayerSecret>
-  random: RuntimeDependencies['random']
-  requirePlayer(playerId: string): PlayerSecret
   rooms: Map<string, RoomSecret>
   roomsByPrivateCode: Map<string, string>
-  scheduler: RuntimeDependencies['scheduler']
   setWaiting(room: RoomSecret, notice: string, resetReady?: boolean): void
   snapshot(room: RoomSecret, playerId: string): RoomSnapshot
   transition(room: RoomSecret, next: RoomPhase): void

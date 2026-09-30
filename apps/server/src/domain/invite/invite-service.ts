@@ -3,15 +3,16 @@ import { serverStrings } from '@draw-guess/strings'
 import type { Invite, RoomSnapshot } from '@draw-guess/shared'
 import { GameError } from '../../errors.ts'
 import type { InviteSecret, PlayerSecret, RoomSecret } from '../../models.ts'
-import type { RuntimeDependencies } from '../../runtime.ts'
+import type { RuntimePorts } from '../shared-ports.ts'
 
 type InviteStatus = 'accepted' | 'declined' | 'expired'
 
-export interface InviteContext {
+/**
+ * 仅暴露本用例需要的数据与副作用端口；运行时出口复用共享接口（见 domain/shared-ports.ts），
+ * 由应用层连接跨用例动作。
+ */
+export interface InviteContext extends RuntimePorts {
   invites: Map<string, InviteSecret>
-  clock: RuntimeDependencies['clock']
-  scheduler: RuntimeDependencies['scheduler']
-  random: RuntimeDependencies['random']
   getMembership(playerId: string): { room: RoomSecret }
   getPlayer(playerId: string): PlayerSecret
   getRoom(roomId: string): RoomSecret | undefined

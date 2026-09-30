@@ -13,10 +13,13 @@ import { GameError } from '../../errors.ts'
 import type { GameSecret, PlayerSecret, RoomSecret } from '../../models.ts'
 import { enforceEventRate } from '../../rate-limit.ts'
 import { markAllSynced } from './canvas-sync.ts'
-import type { Clock } from '../../runtime.ts'
+import type { RoomEventPorts, RuntimePorts } from '../shared-ports.ts'
 
-export interface DrawingContext {
-  clock: Clock
+/**
+ * 绘图用例端口：时钟与房间推送出口复用共享接口（见 domain/shared-ports.ts），
+ * 其余为本用例特有成员。
+ */
+export interface DrawingContext extends RuntimePorts, RoomEventPorts {
   getSession(
     playerId: string,
     roundId: string,
@@ -25,7 +28,6 @@ export interface DrawingContext {
     room: RoomSecret
     game: GameSecret
   }
-  emitRoom(roomId: string): void
   publishStroke(payload: StrokePush): void
   publishFill(payload: FillPush): void
 }

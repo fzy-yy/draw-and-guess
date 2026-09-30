@@ -35,6 +35,7 @@ import { DomainContext } from './domain/domain-context.ts'
 import { DrawingService } from './domain/drawing/drawing-service.ts'
 import { InviteService } from './domain/invite/invite-service.ts'
 import { RoomVocabularyService } from './domain/vocabulary/room-vocabulary-service.ts'
+import type { PlayerLookupPorts, RoomEventPorts, RuntimePorts } from './domain/shared-ports.ts'
 import {
   activePlayers,
   createOnlineLookup,
@@ -187,6 +188,16 @@ export class GameService {
       },
       isPlaying: (phase) => isInMatchPhase(phase),
     }
+    // 共享端口对象：同一出口只在装配层构造一次，各 Context 用对象展开复用（见 domain/shared-ports.ts）。
+    // roomEventPorts 依赖 publisher，故在 publisher 之后构造（依赖驱动装配）。
+    const runtimePorts: RuntimePorts = {
+      clock: this.clock,
+      random: this.random,
+      scheduler: this.scheduler,
+    }
+    const playerLookupPorts: PlayerLookupPorts = {
+      requirePlayer: this.ports.requirePlayer,
+    }
     this.persistence = new RoomPersistenceCoordinator({
       clock: this.clock,
       repositories: this.repositories,
@@ -208,6 +219,11 @@ export class GameService {
       toPublicRoom: (room) => this.snapshotter.toPublicRoom(room),
       logError: (error, context) => this.logUnexpectedError(error, context),
     })
+    const roomEventPorts: RoomEventPorts = {
+      broadcastPresence: () => this.publisher.broadcastPresence(),
+      emitRoom: (roomId) => this.publisher.emitRoom(roomId),
+      emitRoomEvent: this.ports.emitRoomEvent,
+    }
     this.round = new RoundMachine({
       players: this.players,
       logger: this.logger,
@@ -223,13 +239,12 @@ export class GameService {
       safeRun: this.ports.safeRun,
     })
     this.membership = new RoomMembershipService({
+      ...runtimePorts,
+      ...roomEventPorts,
+      ...playerLookupPorts,
       abandonChoosing: (room, notice) => this.round.abandonChoosing(room, notice),
       addSystemNotice: (room, text) => this.round.addSystemNotice(room, text),
-      broadcastPresence: () => this.publisher.broadcastPresence(),
       clearHintTimers: (game) => this.round.clearHintTimers(game),
-      clock: this.clock,
-      emitRoom: (roomId) => this.publisher.emitRoom(roomId),
-      emitRoomEvent: this.ports.emitRoomEvent,
       emitToPlayer: this.ports.emitToPlayer,
       evaluateRematch: (room) => this.round.evaluateRematch(room),
       finishRound: (room, drawerAbandoned) => this.round.finishRound(room, drawerAbandoned),
@@ -238,21 +253,17 @@ export class GameService {
       logger: this.logger,
       pauseRoomInternal: (room, reason) => this.round.pauseRoomInternal(room, reason),
       players: this.players,
-      random: this.random,
-      requirePlayer: this.ports.requirePlayer,
       rooms: this.rooms,
       roomsByPrivateCode: this.roomsByPrivateCode,
-      scheduler: this.scheduler,
       setWaiting: (room, notice, resetReady) => this.round.setWaiting(room, notice, resetReady),
       snapshot: (room, playerId) => this.snapshotter.snapshot(room, playerId),
       transition: (room, next) => this.round.transition(room, next),
       vocabulary: this.vocabulary,
     })
     this.session = new SessionService({
-      broadcastPresence: () => this.publisher.broadcastPresence(),
-      clock: this.clock,
-      emitRoom: (roomId) => this.publisher.emitRoom(roomId),
-      emitRoomEvent: this.ports.emitRoomEvent,
+      ...runtimePorts,
+      ...roomEventPorts,
+      ...playerLookupPorts,
       emitRoomEventExcept: this.ports.emitRoomEventExcept,
       finishRound: (room, drawerAbandoned) => this.round.finishRound(room, drawerAbandoned),
       leaveRoom: (playerId, reason) => this.membership.leaveRoom(playerId, reason),
@@ -260,20 +271,17 @@ export class GameService {
       persistPlayer: (player) => this.persistence.persistPlayer(player),
       players: this.players,
       playersByTokenDigest: this.playersByTokenDigest,
-      random: this.random,
       repositories: this.repositories,
-      requirePlayer: this.ports.requirePlayer,
       rooms: this.rooms,
       transferDisconnectedHost: (room, playerId) =>
         this.membership.transferDisconnectedHost(room, playerId),
       safeRun: this.ports.safeRun,
-      scheduler: this.scheduler,
       toPublicPlayer: (player) => this.snapshotter.toPublicPlayer(player),
     })
     this.drawing = new DrawingService({
-      clock: this.clock,
+      ...runtimePorts,
+      ...roomEventPorts,
       getSession: (playerId, roundId) => this.getDrawingSession(playerId, roundId),
-      emitRoom: (roomId) => this.publisher.emitRoom(roomId),
       publishStroke: (payload) =>
         this.io
           .to(payload.roomId)
@@ -284,10 +292,8 @@ export class GameService {
           .emit(EVENTS.drawFillCommit, createServerPush(EVENTS.drawFillCommit, payload)),
     })
     this.invitation = new InviteService({
+      ...runtimePorts,
       invites: this.invites,
-      clock: this.clock,
-      scheduler: this.scheduler,
-      random: this.random,
       getMembership: (playerId) => this.membership.requireMembership(playerId),
       getPlayer: this.ports.requirePlayer,
       getRoom: (roomId) => this.rooms.get(roomId),
@@ -308,12 +314,12 @@ export class GameService {
       safeRun: this.ports.safeRun,
     })
     this.roomVocabulary = new RoomVocabularyService({
+      ...roomEventPorts,
       registry: this.vocabulary,
       getMembership: (playerId) => this.membership.requireMembership(playerId),
       getHostRoom: (playerId) => this.membership.requireHostRoom(playerId),
       getStore: this.ports.getRoomVocabularyStore,
       addNotice: (room, text) => this.round.addSystemNotice(room, text),
-      emitRoom: (roomId) => this.publisher.emitRoom(roomId),
     })
   }
 
@@ -721,6 +727,11 @@ export class GameService {
   /** 大厅在线状态快照：只包含可发现玩家与全部未关闭房间。 */
   presenceSnapshot(): PresenceSnapshot {
     return this.publisher.presenceSnapshot()
+  }
+
+  /** 大厅公开房间列表：room:list 专用，与 presenceSnapshot 的房间部分同源同口径。 */
+  publicRooms(): PresenceSnapshot['rooms'] {
+    return this.publisher.publicRooms()
   }
 
   /** 取指定玩家的当前房间快照（用于断线恢复/重同步），不要求玩家在线。 */
