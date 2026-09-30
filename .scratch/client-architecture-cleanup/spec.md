@@ -35,16 +35,16 @@
 
 ## 工单索引（文件归属互不重叠，按编号顺序串行执行）
 
-| 编号 | 工单 | 域 |
-| --- | --- | --- |
-| 01 | issues/01-stores-comments-seams.md | stores 注释修正 + 观测接缝定性 + vocabulary.ts 同形合并 |
-| 02 | issues/02-snapshot-gate-narrowing.md | 修复③：门禁类型收窄 + useRoomSync 死分支/死成员回收 |
-| 03 | issues/03-canvas-comments-deadcode.md | canvas 注释修正/补全 + replay-machine 死守卫清理 + useStrokeSession 样式单源 |
-| 04 | issues/04-audio-surface-trim.md | audio 死表面删除（dispose 链等）+ 注释修正 + 不变量硬化 |
-| 05 | issues/05-composables-misc.md | composables 杂项：死分支、bumpTick 删除、修复①、比较器合并 |
-| 06 | issues/06-views-comments-simplify.md | views/App/入口：错误注释 + 不可达防御精简 |
-| 07 | issues/07-common-components-comments.md | components/common + 词库表格：scrollToIndex 链、类型单源、注释修正 |
-| 08 | issues/08-game-room-components.md | components/game + room：修复②、GameHud 接缝消费、MultiSelect 分支回收 |
+| 编号 | 工单                                    | 域                                                                           |
+| ---- | --------------------------------------- | ---------------------------------------------------------------------------- |
+| 01   | issues/01-stores-comments-seams.md      | stores 注释修正 + 观测接缝定性 + vocabulary.ts 同形合并                      |
+| 02   | issues/02-snapshot-gate-narrowing.md    | 修复③：门禁类型收窄 + useRoomSync 死分支/死成员回收                          |
+| 03   | issues/03-canvas-comments-deadcode.md   | canvas 注释修正/补全 + replay-machine 死守卫清理 + useStrokeSession 样式单源 |
+| 04   | issues/04-audio-surface-trim.md         | audio 死表面删除（dispose 链等）+ 注释修正 + 不变量硬化                      |
+| 05   | issues/05-composables-misc.md           | composables 杂项：死分支、bumpTick 删除、修复①、比较器合并                   |
+| 06   | issues/06-views-comments-simplify.md    | views/App/入口：错误注释 + 不可达防御精简                                    |
+| 07   | issues/07-common-components-comments.md | components/common + 词库表格：scrollToIndex 链、类型单源、注释修正           |
+| 08   | issues/08-game-room-components.md       | components/game + room：修复②、GameHud 接缝消费、MultiSelect 分支回收        |
 
 ## 审查结论摘要（供各工单对照）
 

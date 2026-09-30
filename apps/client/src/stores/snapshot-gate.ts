@@ -13,7 +13,8 @@
  *   （useRoomSync）须发起一次受限全量重同步。resync 仅由 acceptDrawingIncrement 的
  *   修订缺口/快照滞后类场景产生；acceptRoomSnapshot 不产生 resync——快照自带全量
  *   stateVersion，倒退包 ignore 即可，「本地无房间快照」时重同步入口也无从发起
- *   （需要 roomId），因此其返回类型收窄为 RoomSnapshotDecision（行为修复③）。
+ *   （需要 roomId），因此其返回类型收窄为 RoomSnapshotDecision
+ *   （见 docs/adr/0041-snapshot-gate-decision-narrowing.md）。
  */
 import type { RoomSnapshot } from '@draw-guess/shared'
 
@@ -22,7 +23,7 @@ export type PushDecision = 'accept' | 'ignore' | 'resync'
 /**
  * 房间快照门禁的决策子集：快照的新旧裁决只有「采纳 / 丢弃」两种结果。
  * 曾声明为完整 PushDecision，导致消费侧 useRoomSync 存在一个永不可达的 resync 分支
- * （行为修复③：类型收窄后编译即强制删除该死分支）。
+ * （类型收窄后编译即强制删除该死分支，取舍见 docs/adr/0041-snapshot-gate-decision-narrowing.md）。
  */
 export type RoomSnapshotDecision = Extract<PushDecision, 'accept' | 'ignore'>
 

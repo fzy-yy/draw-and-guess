@@ -129,7 +129,8 @@ describe('推送协议与版本门禁', () => {
         drawingRevision: 4,
       }),
     ).toBe('resync')
-    // 行为修复③：本地无房间快照时重同步入口无从发起（需 roomId），改判 ignore 丢弃。
+    // 门禁裁决：本地无房间快照时重同步入口无从发起（需 roomId），改判 ignore 丢弃
+    // （见 docs/adr/0041-snapshot-gate-decision-narrowing.md）。
     expect(
       acceptDrawingIncrement(undefined, {
         roomId: ROOM_ID,

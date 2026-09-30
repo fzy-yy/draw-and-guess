@@ -104,7 +104,7 @@ watch(
       :class="[
         // 弹出方向：top 从按钮上方弹出，bottom 从按钮下方弹出（见 placement 说明）
         placement === 'top' ? 'bottom-[calc(100%+0.8cqh)]' : 'top-[calc(100%+0.8cqh)]',
-        // 水平锚定固定左对齐触发按钮：'end' 右对齐分支曾服务词库筛选文字态，已随死面回收删除
+        // 水平锚定固定左对齐触发按钮：全部消费点均以此形态出现，不提供右对齐变体。
         'absolute left-0 z-50 max-h-[42cqh] w-max max-w-[18cqw] overflow-y-auto overscroll-contain rounded-[0.7em] border-[0.18cqh] border-line bg-white p-[0.65em] shadow-float',
         panelClass,
       ]"

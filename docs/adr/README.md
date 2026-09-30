@@ -70,6 +70,7 @@
 | [0027](0027-vocabulary-dialog-session.md)          | 词库弹窗会话生命周期独立成 composable          | 已采纳 |
 | [0028](0028-client-room-facts.md)                  | 客户端房间事实单一口径：阶段文案与可玩成员     | 已采纳 |
 | [0029](0029-shallow-wrappers-kept.md)              | 客户端浅层包装保持现状：删除测试判定不复用折叠 | 已采纳 |
+| [0041](0041-snapshot-gate-decision-narrowing.md)   | 快照门禁决策类型按裁决能力收窄                 | 已采纳 |
 
 ### 词汇与提示
 

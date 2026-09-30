@@ -74,7 +74,7 @@ export function useStrokeSession(options: {
   function nextSequence(): number {
     // 本地单调计数 + 服务端已接受的最大序号。历史命令的 sequence 必然 ≤ lastSequence，
     // 因此无需每批扫描全部历史（O(n)），本地乐观批次由本计数器覆盖。
-    // sequence 自 0 起严格递增，候选值 sequence + 1 恒 ≥ 1，对 0 取下界钳位不可达（已删）。
+    // sequence 自 0 起严格递增，候选值 sequence + 1 恒 ≥ 1，无需再对 0 取下界钳位。
     sequence = Math.max(sequence + 1, options.lastSequence() + 1)
     return sequence
   }

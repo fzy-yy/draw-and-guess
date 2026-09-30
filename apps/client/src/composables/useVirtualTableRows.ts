@@ -19,13 +19,14 @@ export function useVirtualTableRows<T>(
 
   /**
    * 滚动到指定行（越界钳制）。刻意**不**对外暴露：当前唯一用途是下方
-   * watch(rows) 的数据变化归零与 scrollToTop 复用；「搜索定位跳转」预留未兑现，
-   * 对外链路（DataTable expose / Vocab*TableView 转发 / ScrollableTable 契约）已整体回收。
+   * watch(rows) 的数据变化归零与 scrollToTop 复用；「搜索定位跳转」属未兑现的
+   * 预留，对外滚动能力只有归零一项（DataTable / Vocab*TableView / ScrollableTable
+   * 契约同此口径）。
    */
   function scrollToIndex(index: number): void {
     const safeIndex = Math.max(0, Math.min(index, Math.max(0, rows.value.length - 1)))
-    // @tanstack Virtualizer 实例直连即可：scrollToIndex/scrollToOffset/measure 都是公开
-    // API（曾经的 `as unknown as` 双断言经 vue-tsc 实测为不必要的防御，已移除）。
+    // @tanstack Virtualizer 实例直连即可：scrollToIndex/scrollToOffset/measure
+    // 都是其实例公开 API，无需类型断言中转。
     const instance = virtualizer.value
     if (safeIndex !== 0) {
       instance.scrollToIndex(safeIndex, { align: 'start' })
