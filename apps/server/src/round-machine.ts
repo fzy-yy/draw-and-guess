@@ -8,14 +8,14 @@ import { createHintSchedule } from './hint-scheduler.ts'
 import { serverStrings } from '@draw-guess/strings'
 import {
   canTransition,
+  isPunctuationOrSpace,
   type ChatMessage,
-  type FinalRankingEntry,
   type RoomPhase,
   type RoundResult,
   type VocabularyWord,
 } from '@draw-guess/shared'
 import type { GameSecret, MemberState, RoomSecret } from './models.ts'
-import { buildDrawerScore, buildGuessDetail } from './scoring.ts'
+import { buildDrawerScore, buildGuessDetail, freezeFinalRanking } from './scoring.ts'
 import type { TimerHandle } from './runtime.ts'
 import type { RoundContext } from './domain/game/round-context.ts'
 import { selectDiverseCandidates } from './domain/vocabulary/candidate-selector.ts'
@@ -27,7 +27,6 @@ import {
   nicknameOf,
   nominalPhaseDurationMs,
   onlineGuessers,
-  rankedMembers,
   rematchEligibleMembers,
   type OnlineLookup,
 } from './domain/room/member-facts.ts'
@@ -94,8 +93,6 @@ export class RoundMachine {
       correctOrder: [],
       correctDetails: [],
       revealedIndices: new Set(),
-      hintOrder: [],
-      revealedHintCount: 0,
     }
     room.game = game
     game.timer = this.service.scheduler.set(countdownMs, () =>
@@ -146,9 +143,7 @@ export class RoundMachine {
     game.timer = this.service.scheduler.set(room.settings.chooseSeconds * 1_000, () =>
       this.service.safeRun('choosingTimeout', () => {
         if (room.phase !== 'choosing_word') return
-        const candidate = game.candidates.length
-          ? game.candidates[this.service.random.integer(game.candidates.length)]
-          : undefined
+        const candidate = this.autoPickCandidate(game)
         if (candidate) this.beginDrawing(room, candidate)
         else this.abandonChoosing(room, serverStrings.notices.candidatesExhausted)
       }),
@@ -172,8 +167,9 @@ export class RoundMachine {
     game.correctOrder = []
     game.correctDetails = [] // 新回合重置得分明细
     game.revealedIndices = new Set()
-    game.hintOrder = [] // 占位清空；真正的揭示槽位在 beginDrawing（答案确定后）按 hint/分类置为 [0] 或空
-    game.revealedHintCount = 0
+    // 结构化提示清空；真正的文案在 beginDrawing（答案确定后）按 hint/分类写入
+    delete game.structuredHint
+    delete game.structuredHintRevealed
     game.roundResult = undefined
     room.members.forEach((member) => (member.guessedAt = undefined))
     // 新回合从空画布开始：重置全员绘图差分游标，保证本回合首份快照始终携带完整（空）画布，
@@ -209,8 +205,9 @@ export class RoundMachine {
     game.phaseEndsAt = this.service.clock.now() + game.roundDurationMs
     // 结构化提示：词库重建后每个答案带一条 hint 提示文案，优先揭示它；
     // hint 为空时回退揭示分类（旧语义保底），两者皆空则不开启提示。
-    // 仍是单一揭示槽位（0 号），对全体猜词者一致（随快照下发）。
-    game.hintOrder = richAnswer.hint || richAnswer.category ? [0] : []
+    // 单一提示槽位、对全体猜词者一致（揭示后随快照下发一条）。
+    const structuredHint = richAnswer.hint || richAnswer.category
+    if (structuredHint) game.structuredHint = structuredHint
     // 作画倒计时结束进入回合结算
     game.timer = this.service.scheduler.set(game.roundDurationMs, () =>
       this.service.safeRun('drawingTimeout', () => this.finishRound(room, false)),
@@ -293,36 +290,8 @@ export class RoundMachine {
     const game = this.service.requireGame(room)
     this.clearHintTimers(game)
     this.service.scheduler.clear(game.timer)
-    // 排行必须在首次进入最终结算时一次性冻结。之后 leaveRoom 会从 room.members 移除成员，
-    // 但已公布的成绩属于本局历史，不能跟随当前房间席位继续变化。
-    if (!game.finalRanking) {
-      const ranked = rankedMembers(room).sort(
-        (left, right) => right.score - left.score || left.joinedAt - right.joinedAt,
-      )
-      let previousScore: number | undefined
-      let emittedCount = 0
-      let rank = 0
-      // 排名按实际产出的条目数递增，而不是用被 flatMap 丢弃成员后的 index+1，
-      // 避免「成员无 profile 被丢弃」时后续名次跳号（见 docs/adr/0002-final-ranking-no-gaps.md）。
-      game.finalRanking = ranked.flatMap<FinalRankingEntry>((member) => {
-        const player = this.service.players.get(member.playerId)
-        const profile = member.leftProfile ?? player?.profile
-        if (!profile) return []
-        emittedCount += 1
-        if (member.score !== previousScore) rank = emittedCount
-        previousScore = member.score
-        return [
-          {
-            id: member.playerId,
-            nickname: profile.nickname,
-            avatarId: profile.avatarId,
-            rank,
-            score: member.score,
-            stats: { ...member.stats },
-          },
-        ]
-      })
-    }
+    // 排行必须在首次进入最终结算时一次性冻结；冻结规则见 scoring.freezeFinalRanking。
+    if (!game.finalRanking) game.finalRanking = freezeFinalRanking(room, this.service.players)
     // paused → game_result 是领域允许的真实转换；直接结算并清理暂停现场。
     if (room.phase === 'paused') delete game.pauseState
     if (room.phase !== 'game_result') this.transition(room, 'game_result')
@@ -416,10 +385,11 @@ export class RoundMachine {
     const delay = Math.max(0, game.phaseEndsAt - this.service.clock.now())
     this.service.scheduler.clear(game.timer)
     if (room.phase === 'choosing_word') {
-      // 恢复选词阶段：超时后取第一个候选词自动开画；候选池为空时与超时路径同构作废本回合
+      // 恢复选词阶段：超时后随机取一个候选词自动开画——与首轮超时同构，暂停恢复不改变自动选词行为；
+      // 候选池为空时同样作废本回合
       game.timer = this.service.scheduler.set(delay, () =>
         this.service.safeRun('resumeChoosing', () => {
-          const candidate = game.candidates[0]
+          const candidate = this.autoPickCandidate(game)
           if (candidate) this.beginDrawing(room, candidate)
           else this.abandonChoosing(room, serverStrings.notices.candidatesExhausted)
         }),
@@ -513,9 +483,7 @@ export class RoundMachine {
       wordText: game.answer.text,
       revealedCount: game.revealedIndices.size,
       structuredHintsEnabled: room.settings.structuredHintsEnabled,
-      hasStructuredHint:
-        game.hintOrder.length > 0 && game.revealedHintCount < game.hintOrder.length,
-      revealedHintCount: game.revealedHintCount,
+      structuredHintPending: Boolean(game.structuredHint) && !game.structuredHintRevealed,
       hintStartRatio: room.settings.hintStartRatio,
     })
 
@@ -542,8 +510,8 @@ export class RoundMachine {
     const game = room.game
     if (!game?.answer || room.phase !== 'drawing') return
     if (!room.settings.structuredHintsEnabled) return
-    if (game.revealedHintCount >= game.hintOrder.length) return
-    game.revealedHintCount += 1
+    if (!game.structuredHint || game.structuredHintRevealed) return
+    game.structuredHintRevealed = true
     this.service.emitRoom(room.id)
   }
   private revealHint(room: RoomSecret): void {
@@ -554,7 +522,7 @@ export class RoundMachine {
       .map((character, index) => ({ character, index }))
       .filter(
         ({ character, index }) =>
-          !/^[\p{P}\p{Z}\s]$/u.test(character) && !game.revealedIndices.has(index),
+          !isPunctuationOrSpace(character) && !game.revealedIndices.has(index),
       )
     // 只剩一个字符时不再揭示，避免答案被完全泄露
     if (candidates.length <= 1) return
@@ -610,6 +578,17 @@ export class RoundMachine {
     const picked = this.sampleDiverseCandidates(pool, room.settings.optionCount)
     picked.forEach((word) => game.offeredWordIds.add(word.id))
     return picked
+  }
+
+  /**
+   * 选词超时自动开画：从当前候选池随机取一个。
+   * 首轮超时与暂停恢复后的超时共用本方法（暂停恢复不改变自动选词行为）；
+   * 空池返回 undefined，由调用方走 abandonChoosing 作废本回合（正常不会发生，见 beginChoosing）。
+   */
+  private autoPickCandidate(game: GameSecret): VocabularyWord | undefined {
+    return game.candidates.length
+      ? game.candidates[this.service.random.integer(game.candidates.length)]
+      : undefined
   }
 
   /** 从当前回合序号起，按开局洗牌顺序寻找第一位仍在房间、在线的可玩成员任画家（观战者跳过）。 */

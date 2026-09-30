@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createGameHarness, startTwoPlayerGame } from './helpers/game-harness.ts'
+import { freezeFinalRanking } from '../../apps/server/src/scoring.ts'
+import type { MemberState, PlayerSecret } from '../../apps/server/src/models.ts'
 
 /**
  * 最终榜单的成员口径回归：`round-machine.finishGame` 用 `rankedMembers`（内部即 `isRankedMember`，
@@ -21,5 +23,88 @@ describe('最终榜单成员口径', () => {
     harness.service.endEarly(host.playerId)
     const view = harness.service.snapshotter.snapshot(room, host.playerId)
     expect(view.game?.finalRanking?.map((entry) => entry.id)).toContain(guest.playerId)
+  })
+})
+
+/** 直接单测用的最小成员：只填排名冻结会读取的字段。 */
+function makeMember(
+  playerId: string,
+  score: number,
+  patch: Partial<MemberState> = {},
+): MemberState {
+  return {
+    playerId,
+    seatIndex: 0,
+    ready: true,
+    score,
+    joinedAt: 1_700_000_000_000,
+    stats: { correctCount: 0, totalGuessMs: 0, drawingCorrectCount: 0 },
+    ...patch,
+  }
+}
+
+/** 直接单测用的最小玩家册：只暴露资料字段。 */
+function makePlayers(entries: Array<[string, string]>): Map<string, Pick<PlayerSecret, 'profile'>> {
+  const players = new Map<string, Pick<PlayerSecret, 'profile'>>()
+  for (const [playerId, nickname] of entries)
+    players.set(playerId, { profile: { nickname, avatarId: '01' } })
+  return players
+}
+
+/**
+ * freezeFinalRanking 的直接用例：把排名冻结从整局流程中剥离后，
+ * 「无资料成员被丢弃且名次不跳号」「同分并列同名次」这两条规则可以不经对局 harness 固定下来
+ *（见 docs/adr/0002-final-ranking-no-gaps.md）。
+ */
+describe('freezeFinalRanking 直接用例', () => {
+  it('无资料成员被丢弃，但后续名次按实际产出条目递增，不跳号', () => {
+    const room = {
+      members: [
+        makeMember('a', 100, { joinedAt: 1 }),
+        makeMember('b', 90, { joinedAt: 2 }), // 玩家册与 leftProfile 皆无资料 → 丢弃
+        makeMember('c', 80, { joinedAt: 3 }),
+      ],
+    }
+    const ranking = freezeFinalRanking(
+      room,
+      makePlayers([
+        ['a', '甲'],
+        ['c', '丙'],
+      ]),
+    )
+
+    expect(ranking.map((entry) => [entry.id, entry.rank])).toEqual([
+      ['a', 1],
+      ['c', 2], // 旧实现用 index+1 会得到 3
+    ])
+  })
+
+  it('同分并列同名次，后一名次按产出条目数递增；离局者用冻结的 leftProfile', () => {
+    const room = {
+      members: [
+        makeMember('a', 100, { joinedAt: 1 }),
+        makeMember('b', 100, { joinedAt: 2 }),
+        makeMember('c', 50, {
+          joinedAt: 3,
+          leftGame: true,
+          leftProfile: { nickname: '已离局', avatarId: '02' },
+        }),
+        makeMember('d', 10, { joinedAt: 4, spectating: true }), // 观战不进榜
+      ],
+    }
+    const ranking = freezeFinalRanking(
+      room,
+      makePlayers([
+        ['a', '甲'],
+        ['b', '乙'],
+      ]),
+    )
+
+    expect(ranking.map((entry) => [entry.id, entry.rank])).toEqual([
+      ['a', 1],
+      ['b', 1],
+      ['c', 3],
+    ])
+    expect(ranking[2]?.nickname).toBe('已离局')
   })
 })

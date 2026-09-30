@@ -1,4 +1,5 @@
 import { APP_CONFIG } from './config/index.ts'
+import { isPunctuationOrSpace } from '@draw-guess/shared'
 
 /** 回合提示调度的纯计算层：不创建定时器、不修改房间状态，便于独立测试。 */
 export interface HintScheduleInput {
@@ -8,8 +9,8 @@ export interface HintScheduleInput {
   wordText: string
   revealedCount: number
   structuredHintsEnabled: boolean
-  hasStructuredHint: boolean
-  revealedHintCount: number
+  /** 是否存在尚未揭示的结构化提示：由调用方从答案 hint/分类与揭示状态判定后传入。 */
+  structuredHintPending: boolean
   hintStartRatio: number
 }
 
@@ -25,7 +26,7 @@ export function createHintSchedule(input: HintScheduleInput): HintSchedule {
     // 故最多能揭示 nonPunctCount-1 个；含大量标点的答案以此封顶，避免调度出空转计时器
     // （取舍属提示揭示节奏设计，见 docs/adr/0001-progressive-hint-interval.md）。
     const chars = Array.from(input.wordText)
-    const nonPunctCount = chars.filter((char) => !/^[\p{P}\p{Z}\s]$/u.test(char)).length
+    const nonPunctCount = chars.filter((char) => !isPunctuationOrSpace(char)).length
     const maxReveals = Math.max(0, nonPunctCount - 1)
     const hintCount = Math.min(Math.floor(chars.length / 2), maxReveals)
     if (hintCount > 0) {
@@ -42,7 +43,7 @@ export function createHintSchedule(input: HintScheduleInput): HintSchedule {
   }
 
   let structuredDelay: number | undefined
-  if (input.structuredHintsEnabled && input.hasStructuredHint && input.revealedHintCount === 0) {
+  if (input.structuredHintsEnabled && input.structuredHintPending) {
     const targetRemainingMs = Math.round(input.totalMs * input.hintStartRatio)
     structuredDelay = Math.max(0, input.currentRemainingMs - targetRemainingMs)
   }

@@ -50,8 +50,7 @@ describe('审查缺陷回归：共享规则与限频', () => {
       wordText: '测试词语',
       revealedCount: 1,
       structuredHintsEnabled: true,
-      hasStructuredHint: true,
-      revealedHintCount: 0,
+      structuredHintPending: true,
       hintStartRatio: 0.35,
     })
     expect(schedule.structuredDelay).toBe(25_000)
@@ -64,8 +63,7 @@ describe('审查缺陷回归：共享规则与限频', () => {
         wordText: '测试词语',
         revealedCount: 1,
         structuredHintsEnabled: true,
-        hasStructuredHint: true,
-        revealedHintCount: 1,
+        structuredHintPending: false,
         hintStartRatio: 0.35,
       }).structuredDelay,
     ).toBeUndefined()

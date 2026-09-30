@@ -1,11 +1,11 @@
 /**
- * 回合计分纯函数：猜中者得分明细与画家得分计算。
+ * 回合计分与排名纯函数：猜中者得分明细、画家得分与最终排名冻结。
  * 独立成模块便于单元测试；同类规则必须保证 markCorrect 与 finishRound 用同口径。
  */
 import { APP_CONFIG } from './config/index.ts'
-import { calculateGuessScore, type ScoreDetail } from '@draw-guess/shared'
-import type { GameSecret, RoomSecret } from './models.ts'
-import { activeGuessers, countActivePlayers } from './domain/room/member-facts.ts'
+import { calculateGuessScore, type FinalRankingEntry, type ScoreDetail } from '@draw-guess/shared'
+import type { GameSecret, PlayerSecret, RoomSecret } from './models.ts'
+import { activeGuessers, countActivePlayers, rankedMembers } from './domain/room/member-facts.ts'
 
 /** 为单个猜中者构造得分明细（与猜中时同规则、同口径）。 */
 export function buildGuessDetail(input: {
@@ -57,4 +57,44 @@ export function buildDrawerScore(input: {
     ? 0
     : game.correctOrder.length * APP_CONFIG.game.score.drawerPerCorrect +
         (allCorrect ? APP_CONFIG.game.score.drawerAllCorrectBonus : 0)
+}
+
+/**
+ * 冻结最终排名（纯函数：不读时钟、不写状态，可脱离整局流程独立单测）。
+ *
+ * 排名必须在首次进入最终结算时一次性冻结：之后 leaveRoom 会从 room.members 移除成员，
+ * 但已公布的成绩属于本局历史，不能跟随当前房间席位继续变化。
+ * 成员口径走 member-facts 的 rankedMembers（排除观战、保留离局者）；
+ * 资料取 leftProfile 优先、玩家身份兜底，两者皆无（身份被删除且未冻结）的成员不产出条目。
+ * 名次按实际产出的条目数递增，而不是用被丢弃成员后的 index+1，避免「成员无资料被丢弃」时
+ * 后续名次跳号（见 docs/adr/0002-final-ranking-no-gaps.md）；同分并列同名次。
+ */
+export function freezeFinalRanking(
+  room: Pick<RoomSecret, 'members'>,
+  players: ReadonlyMap<string, Pick<PlayerSecret, 'profile'>>,
+): FinalRankingEntry[] {
+  const ranked = rankedMembers(room).sort(
+    (left, right) => right.score - left.score || left.joinedAt - right.joinedAt,
+  )
+  let previousScore: number | undefined
+  let emittedCount = 0
+  let rank = 0
+  return ranked.flatMap<FinalRankingEntry>((member) => {
+    const player = players.get(member.playerId)
+    const profile = member.leftProfile ?? player?.profile
+    if (!profile) return []
+    emittedCount += 1
+    if (member.score !== previousScore) rank = emittedCount
+    previousScore = member.score
+    return [
+      {
+        id: member.playerId,
+        nickname: profile.nickname,
+        avatarId: profile.avatarId,
+        rank,
+        score: member.score,
+        stats: { ...member.stats },
+      },
+    ]
+  })
 }

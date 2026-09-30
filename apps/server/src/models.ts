@@ -115,10 +115,13 @@ export interface GameSecret {
    */
   correctDetails: ScoreDetail[]
   revealedIndices: Set<number> // 逐步提示已揭示的字符下标
-  /** 结构化提示的揭示槽位：beginDrawing 答案确定后置为 [0]（hint 优先、空回退 category）；两者皆空时为空数组 */
-  hintOrder: number[]
-  /** 已揭示的结构化提示条数（snapshot 据此切片下发 revealedHints，至多 1） */
-  revealedHintCount: number
+  /**
+   * 结构化提示文案：beginDrawing 答案确定后写入（hint 优先、空回退 category），两者皆空则不设。
+   * 未揭示前属于服务端秘密，绝不进快照；揭示后由 snapshot 以 revealedHints 单条下发。
+   */
+  structuredHint?: string
+  /** 结构化提示是否已揭示（只可能由 false/未设 变为 true，同一回合只揭示一次） */
+  structuredHintRevealed?: boolean
   drawingRevision: number // 画布修订代次，增量操作单调递增
   // 战报防重不设标志位：finishGame 以 finalRanking 是否已置 + 仓储幂等 upsert 兜底。
   roundResult?: RoundResult // 回合结算数据

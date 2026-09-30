@@ -58,6 +58,15 @@ export function truncateGraphemes(value: string, maxLength: number): string {
   return Array.from(value).slice(0, maxLength).join('')
 }
 
+/**
+ * 是否为标点或空白字符（按单个 Unicode 码点判断）。
+ * 遮罩保留的字符与提示可揭示的字符必须共用这一份分类：三处各写一份正则时，
+ * 任何一处漂移都会造成「调度了永远揭示不了的计时器」或「提前泄露答案」。
+ */
+export function isPunctuationOrSpace(character: string): boolean {
+  return /^[\p{P}\p{Z}\s]$/u.test(character)
+}
+
 /** 按 Unicode 码点生成遮罩，标点和空白保留，避免中文代理对被拆开。 */
 export function createAnswerMask(
   answer: string,
@@ -65,7 +74,7 @@ export function createAnswerMask(
 ): string {
   return Array.from(answer)
     .map((character, index) =>
-      /^[\p{P}\p{Z}\s]$/u.test(character) || revealed.has(index) ? character : '＿',
+      isPunctuationOrSpace(character) || revealed.has(index) ? character : '＿',
     )
     .join('')
 }

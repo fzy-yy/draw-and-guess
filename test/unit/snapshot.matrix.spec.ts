@@ -70,8 +70,9 @@ const FORBIDDEN_KEYS = [
   'correctOrder',
   'correctDetails',
   'revealedIndices',
-  'hintOrder',
-  'revealedHintCount',
+  // 未揭示的结构化提示是秘密文案，键与值都不得进快照（揭示后只经 revealedHints 单条下发）
+  'structuredHint',
+  'structuredHintRevealed',
   'hostReturnRequested',
   'timer',
   'rematchTimer',
@@ -169,8 +170,8 @@ function makeGame(phase: RoomPhase, drawerId: string): GameSecret {
     correctOrder: [GUESSER_ID],
     correctDetails: [],
     revealedIndices: new Set([1]),
-    hintOrder: [0],
-    revealedHintCount: 1,
+    structuredHint: '提示',
+    structuredHintRevealed: true,
     drawingRevision: 2,
     // 结算阶段补全结算数据，覆盖更多裁剪分支
     ...(settled
@@ -393,6 +394,24 @@ describe('角色裁剪快照穷举矩阵', () => {
       expect(builder.snapshot(room, HOST_ID).privateJoinCode).toBe(PRIVATE_CODE)
       expect(builder.snapshot(room, DRAWER_ID).privateJoinCode).toBeUndefined()
       expect(builder.snapshot(room, SPECTATOR_ID).privateJoinCode).toBeUndefined()
+    })
+
+    it('结构化提示未揭示时是秘密，揭示后才以 revealedHints 单条下发', () => {
+      const { room, players } = makeRoom('drawing', DRAWER_ID)
+      const game = room.game!
+      // 未揭示：秘密文案既不下发 revealedHints，也不出现在序列化结果中
+      game.structuredHint = 'SENTINEL-未揭示提示'
+      delete game.structuredHintRevealed
+      const builder = new SnapshotBuilder(makePort(players, room))
+      const hidden = builder.snapshot(room, HOST_ID)
+      expect(hidden.game?.revealedHints).toBeUndefined()
+      expect(JSON.stringify(hidden)).not.toContain('SENTINEL-未揭示提示')
+
+      // 揭示后：同一文案经 revealedHints 下发，内部键名 structuredHint 仍不得出现
+      game.structuredHintRevealed = true
+      const revealed = builder.snapshot(room, HOST_ID)
+      expect(revealed.game?.revealedHints).toEqual(['SENTINEL-未揭示提示'])
+      expect(JSON.stringify(revealed)).not.toContain('"structuredHint"')
     })
 
     it('canReturnWaiting 需要「房主 + game_result + 最短展示期已过」同时成立', () => {

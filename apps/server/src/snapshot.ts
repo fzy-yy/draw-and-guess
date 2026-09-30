@@ -119,17 +119,10 @@ export class SnapshotBuilder {
                 })),
               }
             : {}),
-          // 已揭示的结构化提示：词库重建后优先揭示词条 hint（hint 为空回退分类）；
-          // 客户端只渲染首值，且对全体猜词者一致。
-          ...(game.answer && game.revealedHintCount > 0
-            ? {
-                revealedHints: game.hintOrder
-                  .slice(0, game.revealedHintCount)
-                  // 回调边界内 game.answer 的收窄会丢失；用可选链 + 空串兜底替代 `!` 断言，
-                  // hint 为空回退 category，两者皆空得 '' 并被下方 filter 剔除。
-                  .map(() => (game.answer?.hint || game.answer?.category) ?? '')
-                  .filter((hint): hint is string => hint !== ''),
-              }
+          // 已揭示的结构化提示：词条 hint（hint 为空回退分类）只在揭示后下发一条，
+          // 客户端只渲染首值，且对全体猜词者一致；未揭示前该文案是服务端秘密，绝不出现。
+          ...(game.answer && game.structuredHintRevealed && game.structuredHint
+            ? { revealedHints: [game.structuredHint] }
             : {}),
           strokes: canOmitStrokes ? [] : game.strokes,
           ...(canOmitStrokes ? { strokesOmitted: true } : {}),

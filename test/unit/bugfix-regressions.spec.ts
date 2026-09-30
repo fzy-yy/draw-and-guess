@@ -25,8 +25,7 @@ describe('缺陷修复回归：逐步提示间隔不再坍缩为零', () => {
       wordText: '长'.repeat(120),
       revealedCount: 0,
       structuredHintsEnabled: false,
-      hasStructuredHint: false,
-      revealedHintCount: 0,
+      structuredHintPending: false,
       hintStartRatio: 0.35,
     })
     expect(schedule.progressiveDelays.length).toBe(60)
@@ -46,8 +45,7 @@ describe('缺陷修复回归：逐步提示间隔不再坍缩为零', () => {
       wordText: 'a，b，c，d',
       revealedCount: 0,
       structuredHintsEnabled: false,
-      hasStructuredHint: false,
-      revealedHintCount: 0,
+      structuredHintPending: false,
       hintStartRatio: 0.35,
     })
     expect(schedule.progressiveDelays.length).toBe(3)
@@ -61,8 +59,7 @@ describe('缺陷修复回归：逐步提示间隔不再坍缩为零', () => {
       wordText: '词',
       revealedCount: 0,
       structuredHintsEnabled: true,
-      hasStructuredHint: true,
-      revealedHintCount: 0,
+      structuredHintPending: true,
       hintStartRatio: 0.35,
     })
     expect(schedule.structuredDelay).toBe(0)
