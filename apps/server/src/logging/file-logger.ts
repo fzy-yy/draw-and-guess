@@ -12,7 +12,9 @@ import {
 
 const LOG_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../log')
 
-export function logFileName(date: Date = new Date()): string {
+/** 生成当前秒级时间戳文件名；同秒重复启动的冲突由 prepareLogDir 追加数值后缀消解。 */
+export function logFileName(): string {
+  const date = new Date()
   const pad = (value: number): string => String(value).padStart(2, '0')
   const stamp = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(
     date.getHours(),
@@ -39,10 +41,20 @@ export function prepareLogDir(maxFiles: number, logDir: string = LOG_DIR): strin
     .sort((left, right) => fileAge(left) - fileAge(right))
   const excess = logs.length + 1 - maxFiles
   // excess ∈ [0, logs.length]（maxFiles ≥ 1），slice 取最旧 excess 个删除，避免 `logs[index]!` 断言
-  for (const stale of logs.slice(0, Math.max(0, excess))) unlinkSync(join(logDir, stale))
+  for (const stale of logs.slice(0, Math.max(0, excess))) {
+    try {
+      unlinkSync(join(logDir, stale))
+    } catch {
+      // 删除失败（Windows 上另一实例占用会抛 EBUSY/EPERM）不阻断启动：
+      // 宁可多留一个旧日志，也不让日志保留策略把服务挡在启动门外。
+    }
+  }
   return newPath
 }
 
+// 纵深防御的第二层：所有日志上下文在写入前都先经 sanitizeContext 剥离非白名单键，
+// 因此这些 redact 路径在正常情况下不会命中；保留它是为防止 sanitize 被绕过、
+// 或未来新增不经 sanitizeContext 的直写路径时仍有一道兜底（主防线是白名单，不是 redact）。
 const REDACTED_LOG_PATHS = [
   'answer',
   'chat',
@@ -55,29 +67,36 @@ const REDACTED_LOG_PATHS = [
   'tokenDigest',
 ] as const
 
-const SAFE_CONTEXT_KEYS = [
-  'errorType',
-  'event',
-  'from',
-  'host',
-  'label',
-  'lanAddressCount',
-  'logPath',
-  'playerId',
-  'port',
-  'reason',
-  'retainedSeat',
-  'roomId',
-  'scope',
-  'signal',
-  'source',
-  'to',
-  'visibility',
-] as const satisfies readonly (keyof RuntimeLogContext)[]
+/**
+ * 白名单上下文字段的穷尽登记：`satisfies Record<keyof RuntimeLogContext, true>` 让
+ * 「漏登记一个字段」与「登记不存在的字段」都在编译期失败，杜绝新增日志字段被静默丢弃
+ * （曾发生 memberId 被丢的事故）。新增 RuntimeLogContext 字段必须同步在此登记。
+ */
+const SAFE_CONTEXT_KEYS = {
+  errorType: true,
+  event: true,
+  from: true,
+  host: true,
+  label: true,
+  lanAddressCount: true,
+  logPath: true,
+  playerId: true,
+  port: true,
+  reason: true,
+  retainedSeat: true,
+  roomId: true,
+  scope: true,
+  signal: true,
+  source: true,
+  to: true,
+  visibility: true,
+} satisfies Record<keyof RuntimeLogContext, true>
 
 function sanitizeContext(context: RuntimeLogContext): RuntimeLogContext {
   const safe: RuntimeLogContext = {}
-  for (const key of SAFE_CONTEXT_KEYS) {
+  // Object.keys 只能推导出 string[]；键集合已由 satisfies 穷尽约束（多键/漏键都会编译失败），
+  // 因此这里的断言是安全的。
+  for (const key of Object.keys(SAFE_CONTEXT_KEYS) as Array<keyof RuntimeLogContext>) {
     const value = context[key]
     if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
       Object.assign(safe, { [key]: value })
@@ -98,6 +117,17 @@ export function makeLogger(
     sync: false,
     minLength: 4_096,
     periodicFlush: 1_000,
+  })
+  // 常驻 error 监听是「日志系统自身故障」的最后手段：业务日志刻意不写控制台
+  // （规避 Windows 控制台 GBK 解码 UTF-8 中文乱码），但 destination 运行期写失败
+  // （磁盘满、文件被删）时 SonicBoom 会 emit('error')，无监听器时 EventEmitter
+  // 会把它升级成 uncaughtException 直接拖垮服务。这里只把第一次故障以 ASCII 告警
+  // 写 stderr（ASCII 不涉及中文，避免乱码），避免磁盘满时每次写失败都刷屏。
+  let destinationErrorReported = false
+  destination.on('error', () => {
+    if (destinationErrorReported) return
+    destinationErrorReported = true
+    process.stderr.write('[logger] log destination error\n')
   })
   const logger = pino(
     {
