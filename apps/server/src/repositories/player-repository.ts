@@ -7,7 +7,6 @@
  * 重启后由 GameService 重建（注册时重新绑定 socket、缓存清空）。
  * 接口与行类型放在本文件，SQLite 实现用 better-sqlite3 同步适配。
  */
-import type { Database } from 'better-sqlite3'
 import type { DatabaseContext } from '../db/index.ts'
 
 /** 玩家可存档行：与 players 表字段一一对应。 */
@@ -35,7 +34,10 @@ export interface PlayerRepository {
   /** 更新连接状态与宽限时间戳（断线/上线时调用）。 */
   setConnection(id: string, connected: boolean, disconnectedAt?: number): void
   remove(id: string): void
-  /** 启动恢复：把全部玩家标记为断线，并清空旧版 room_id，身份保留供宽限恢复。 */
+  /**
+   * 启动恢复：把全部玩家标记为断线；room_id 兼容列仅在此写一次 NULL，此后不读该列。
+   * 身份保留供宽限恢复。
+   */
   markAllDisconnected(disconnectedAt: number): void
   /** 删除「断线时间早于 before」的过期身份记录（启动恢复时清理历史残留，防止表无限增长）。 */
   deleteStaleDisconnected(before: number): void
@@ -43,14 +45,10 @@ export interface PlayerRepository {
 
 /** better-sqlite3 实现。行对象命名遵循表列（蛇形），接口层再转驼峰。 */
 export class SqlitePlayerRepository implements PlayerRepository {
-  private readonly db: Database
-
-  constructor(database: DatabaseContext) {
-    this.db = database.connection
-  }
+  constructor(private readonly database: DatabaseContext) {}
 
   upsert(record: PlayerRecord): void {
-    this.db
+    this.database.connection
       .prepare(
         `INSERT INTO players(id, token_digest, nickname, avatar_id, discoverable, accepts_invites, connected, joined_at, disconnected_at)
          VALUES (@id, @token_digest, @nickname, @avatar_id, @discoverable, @accepts_invites, @connected, @joined_at, @disconnected_at)
@@ -72,45 +70,50 @@ export class SqlitePlayerRepository implements PlayerRepository {
     nextTokenDigest: string,
     disconnectedAfter?: number,
   ): PlayerRecord | undefined {
-    const consume = this.db.transaction(() => {
+    // 令牌消费是「比较并交换」：只有摘要仍等于旧值的请求才能换成新摘要，并发恢复请求会因 changes !== 1 失败；
+    // 更新与回读必须在同一事务内，避免检查与更新之间被其它写操作插入。
+    return this.database.withTransaction(() => {
+      const connection = this.database.connection
+      // 宽限窗口：只有断线时间不早于 disconnectedAfter 的记录才允许消费恢复令牌，
+      // 即令牌必须在断线宽限期内使用，超期旧令牌无法再接管身份。
       const result =
         disconnectedAfter === undefined
-          ? this.db
+          ? connection
               .prepare('UPDATE players SET token_digest = ? WHERE token_digest = ?')
               .run(nextTokenDigest, tokenDigest)
-          : this.db
+          : connection
               .prepare(
                 `UPDATE players SET token_digest = ?
                  WHERE token_digest = ? AND disconnected_at IS NOT NULL AND disconnected_at >= ?`,
               )
               .run(nextTokenDigest, tokenDigest, disconnectedAfter)
       if (result.changes !== 1) return undefined
-      const row = this.db
+      const row = connection
         .prepare('SELECT * FROM players WHERE token_digest = ?')
         .get(nextTokenDigest) as PlayerRow | undefined
       return row ? this.fromRow(row) : undefined
     })
-    return consume()
   }
 
   setConnection(id: string, connected: boolean, disconnectedAt?: number): void {
-    this.db
+    this.database.connection
       .prepare('UPDATE players SET connected = ?, disconnected_at = ? WHERE id = ?')
       .run(connected ? 1 : 0, disconnectedAt ?? null, id)
   }
 
   remove(id: string): void {
-    this.db.prepare('DELETE FROM players WHERE id = ?').run(id)
+    this.database.connection.prepare('DELETE FROM players WHERE id = ?').run(id)
   }
 
   markAllDisconnected(disconnectedAt: number): void {
-    this.db
+    // room_id 为历史兼容列：仅启动恢复写一次 NULL，此后不读该列（房间不再写穿数据库）。
+    this.database.connection
       .prepare('UPDATE players SET connected = 0, disconnected_at = ?, room_id = NULL')
       .run(disconnectedAt)
   }
 
   deleteStaleDisconnected(before: number): void {
-    this.db
+    this.database.connection
       .prepare('DELETE FROM players WHERE disconnected_at IS NOT NULL AND disconnected_at < ?')
       .run(before)
   }

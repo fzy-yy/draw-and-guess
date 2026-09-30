@@ -13,7 +13,14 @@ const DEFAULT_DATABASE_FILE = path.join(
 
 export interface DatabaseContext {
   readonly connection: Database.Database
-  withTransaction<T>(action: () => T): T
+  /**
+   * 在 BEGIN IMMEDIATE 事务内同步执行 action：action 抛错或 COMMIT 失败都回滚并抛出原始错误。
+   *
+   * action 的返回值经条件类型闸门过滤——返回 Promise 的 action 会被映射为 never 而无法通过编译。
+   * 原因：better-sqlite3 是同步驱动，异步 action 的 Promise 在 COMMIT 之后才 settle，
+   * 业务失败时事务早已提交，形成「看似回滚、实则写入」的静默数据错误，故在类型层面直接拒绝。
+   */
+  withTransaction<T>(action: () => T extends PromiseLike<unknown> ? never : T): T
   close(): void
 }
 
@@ -27,14 +34,22 @@ export function createDatabase(filePath: string = DEFAULT_DATABASE_FILE): Databa
   let closed = false
   return {
     connection,
-    withTransaction<T>(action: () => T): T {
+    withTransaction<T>(action: () => T extends PromiseLike<unknown> ? never : T): T {
       connection.exec('BEGIN IMMEDIATE')
       try {
-        const result = action()
+        // 条件类型无法在实现侧还原为 T：这里的断言只表达「闸门已保证 action 返回同步值」。
+        const result = action() as T
         connection.exec('COMMIT')
         return result
       } catch (error) {
-        connection.exec('ROLLBACK')
+        // 无论 action 抛错还是 COMMIT 失败，都要把连接拉回空闲态：COMMIT 失败（如磁盘 I/O 错误）
+        // 时事务可能仍未结束，必须补一次保护性 ROLLBACK；而 SQLite 在部分失败路径上会自行回滚，
+        // 此时 ROLLBACK 会再报「无活动事务」，忽略它并保留原始错误，避免掩盖真正的失败原因。
+        try {
+          connection.exec('ROLLBACK')
+        } catch {
+          // 忽略：SQLite 可能已自动回滚，原始错误优先。
+        }
         throw error
       }
     },

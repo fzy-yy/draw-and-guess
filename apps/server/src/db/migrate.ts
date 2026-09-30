@@ -20,7 +20,7 @@ interface Migration {
   up: string | ((database: Database) => void)
 }
 
-export const MIGRATIONS: Migration[] = [
+export const MIGRATIONS: readonly Migration[] = [
   {
     version: 1,
     name: 'create-players',
@@ -129,7 +129,8 @@ export const MIGRATIONS: Migration[] = [
     version: 5,
     name: 'remove-transient-room-storage',
     // 旧版曾写入房间聚合，但启动时只会整表作废且从未恢复；删除瞬态表不触碰完成局战报。
-    // players.room_id 暂留为兼容列，统一清空后不再读写，避免 SQLite 版本差异影响升级。
+    // players.room_id 暂留为兼容列（避免 SQLite 版本差异影响升级）：本迁移清空一次后，
+    // 此后仅由启动恢复的 markAllDisconnected 再写一次 NULL，全程不读取该列。
     up: `
       UPDATE players SET room_id = NULL;
       DROP TABLE IF EXISTS room_members;
@@ -201,6 +202,10 @@ export const MIGRATIONS: Migration[] = [
  * - 幂等：已应用的版本跳过，未应用的按 version 升序依次执行；
  * - 每个迁移在独立事务内执行，失败即回滚该条，不污染既有数据。
  * 首次启动会创建 schema_version 并跑完全部迁移；升级时新增迁移会被自动应用。
+ *
+ * 事务统一走 DatabaseContext.withTransaction（与仓储写路径共用同一 seam）：
+ * 迁移在服务监听前串行执行、无并发写者，BEGIN IMMEDIATE 的锁时机差异不产生行为变化；
+ * 已应用版本的幂等判断仍在事务之外完成，不受事务实现影响。
  */
 export function runMigrations(context: DatabaseContext): void {
   const database: Database = context.connection
@@ -220,13 +225,12 @@ export function runMigrations(context: DatabaseContext): void {
   for (const migration of MIGRATIONS) {
     if (applied.has(migration.version)) continue
     // 每条迁移独立事务：失败回滚，避免半成品表结构。
-    const apply = database.transaction(() => {
+    context.withTransaction(() => {
       if (typeof migration.up === 'string') database.exec(migration.up)
       else migration.up(database)
       database
         .prepare('INSERT INTO schema_version(version, name, applied_at) VALUES (?, ?, ?)')
         .run(migration.version, migration.name, Date.now())
     })
-    apply()
   }
 }
