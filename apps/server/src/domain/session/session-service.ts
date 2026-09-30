@@ -34,6 +34,13 @@ export interface SessionServiceContext {
     event: E,
     envelope: ServerPushEnvelope<E>,
   ): void
+  /** 向房间广播推送事件但排除指定连接：本人由连接恢复模态框反馈，无需重复通知。 */
+  emitRoomEventExcept<E extends ServerPushEventName>(
+    roomId: string,
+    exceptSocketId: string,
+    event: E,
+    envelope: ServerPushEnvelope<E>,
+  ): void
   finishRound(room: RoomSecret, drawerAbandoned: boolean): void
   leaveRoom(playerId: string, reason?: string): void
   logger: RuntimeLogger
@@ -142,7 +149,7 @@ export class SessionService {
     }
     // 身份持久化：准备变更后先落盘，保证跨重启仍可按令牌恢复同一 UUID；失败则不污染内存与 socket。
     this.context.persistPlayer(player)
-    socket.data.playerId = player.id
+    this.bindSocketSession(socket, player)
     this.context.players.set(player.id, player)
     this.context.playersByTokenDigest.set(player.tokenDigest, player)
     this.context.logger.info({ playerId: player.id }, '玩家会话已注册')
@@ -231,7 +238,7 @@ export class SessionService {
     if (previousSocket && previousSocket.id !== socket.id) previousSocket.disconnect(true)
     delete player.disconnectedAt
     delete player.disconnectTimer
-    socket.data.playerId = player.id
+    this.bindSocketSession(socket, player)
     // Socket.IO 可能恢复了旧传输会话的业务房间；先按领域权威状态清空，再只加入当前 roomId，
     // 避免「服务端已离房，但新 socket 仍订阅旧房间广播」的跨房间信息泄露。
     for (const joinedRoomId of socket.rooms) {
@@ -252,12 +259,13 @@ export class SessionService {
         nickname: player.profile.nickname,
         connection: 'online',
       }
-      socket
-        .to(room.id)
-        .emit(
-          EVENTS.roomMemberConnectionChanged,
-          createServerPush(EVENTS.roomMemberConnectionChanged, payload),
-        )
+      // 经端口广播给房间其他成员（排除本人连接）：模块不再伸手到传输层 socket.to。
+      this.context.emitRoomEventExcept(
+        room.id,
+        socket.id,
+        EVENTS.roomMemberConnectionChanged,
+        createServerPush(EVENTS.roomMemberConnectionChanged, payload),
+      )
     }
     delete player.drawingDisconnectRoomId
     // 重新上线：只持久化连接状态；房间归属始终由当前进程内模型维护。
@@ -314,6 +322,15 @@ export class SessionService {
     this.detachSocket(socket)
   }
 
+  /**
+   * 绑定 socket 会话：写入身份并把幂等缓存切换为该玩家的玩家级缓存。
+   * 缓存归属由本服务唯一管理（此前由 handler 越过 GameService 接口直读玩家册再挂到 socket.data）。
+   */
+  private bindSocketSession(socket: AppSocket, player: PlayerSecret): void {
+    socket.data.playerId = player.id
+    socket.data.requestCache = player.requestCache
+  }
+
   /** 解绑当前 Socket 的会话引用：清空玩家绑定与请求缓存，并广播一次在线状态。 */
   private detachSocket(socket: AppSocket): void {
     delete socket.data.playerId
@@ -349,6 +366,12 @@ export class SessionService {
   }
 
   handleDisconnect(socket: AppSocket): void {
+    // 断线编排（离房/结算/阶段转换/计时器）没有 ack 承载错误：任何抛出都会成为未捕获异常
+    // 打断进程并丢失全部内存态；统一经 safeRun 降级为白名单日志（与计时器回调同一纪律）。
+    this.context.safeRun('handleDisconnect', () => this.handleDisconnectInternal(socket))
+  }
+
+  private handleDisconnectInternal(socket: AppSocket): void {
     const playerId = socket.data.playerId
     if (!playerId) return
     // 只处理当前连接对应的身份，防止被新连接接管后的旧 socket 迟到断开误伤当前会话。
@@ -358,79 +381,21 @@ export class SessionService {
     // 暂停中的作画仍是同一未完成回合；只有暂停前阶段确为 drawing 才保留席位。
     const retainDrawingSeat = phaseEquivalent(room, 'drawing')
     player.disconnectGeneration += 1
-    const disconnectGeneration = player.disconnectGeneration
+    const generation = player.disconnectGeneration
 
     player.connected = false
     player.socket = undefined
     player.socketId = undefined
-    player.disconnectedAt = this.context.clock.now()
-    // 持久化连接状态与断线时间：跨重启宽限判断依赖它（宽限内可凭令牌恢复）。
-    try {
-      this.context.repositories.players.setConnection(player.id, false, player.disconnectedAt)
-    } catch (err) {
-      this.context.logger.error(
-        { errorType: runtimeErrorType(err), playerId: player.id },
-        '断线状态持久化异常',
-      )
-    }
+    const disconnectedAt = this.context.clock.now()
+    player.disconnectedAt = disconnectedAt
+    this.persistDisconnectState(player, disconnectedAt)
     this.context.logger.info(
       { playerId, roomId: player.roomId, retainedSeat: retainDrawingSeat },
       retainDrawingSeat ? '玩家作画阶段断线并保留席位' : '玩家断线并进入身份恢复宽限',
     )
 
-    if (room && retainDrawingSeat) {
-      player.drawingDisconnectRoomId = room.id
-      // 断线期间可能丢失增量广播，重连后的首份快照必须携带完整画布历史。
-      const member = room.members.find((item) => item.playerId === playerId)
-      if (member) invalidateMemberCanvasSync(member)
-      const payload: MemberConnectionChange = {
-        playerId,
-        nickname: player.profile.nickname,
-        connection: 'reconnecting',
-      }
-      this.context.emitRoomEvent(
-        room.id,
-        EVENTS.roomMemberConnectionChanged,
-        createServerPush(EVENTS.roomMemberConnectionChanged, payload),
-      )
-
-      // 当前画家断线：保留短宽限；超时仍未恢复则由权威状态机废弃本回合。
-      // 宽限期间房间可能被暂停（保留席位语义仍指向作画），因此暂停中同样认定「本回合未完成」：
-      // 否则超时回调因阶段不是 drawing 而静默跳过，恢复后回合将无人作画直至自然超时。
-      if (room.game?.drawerId === playerId) {
-        this.context.scheduler.set(APP_CONFIG.network.drawerReconnectGraceMs, () =>
-          this.context.safeRun('drawerReconnectTimeout', () => {
-            const phaseIsRoundDrawing = phaseEquivalent(room, 'drawing')
-            if (
-              !player.connected &&
-              player.disconnectGeneration === disconnectGeneration &&
-              player.roomId === room.id &&
-              room.game?.drawerId === playerId &&
-              phaseIsRoundDrawing
-            )
-              this.context.finishRound(room, true)
-          }),
-        )
-      }
-      // 作画期房主掉线时暂留控制权；短宽限后仍未恢复才迁移给在线可玩成员。
-      if (room.hostId === playerId) {
-        this.context.scheduler.set(APP_CONFIG.network.drawerReconnectGraceMs, () =>
-          this.context.safeRun('hostReconnectTimeout', () => {
-            if (
-              player.connected ||
-              player.disconnectGeneration !== disconnectGeneration ||
-              player.roomId !== room.id ||
-              room.hostId !== playerId ||
-              // 房主迁移前按原始成员数（含离局占位）判断是否还有其它成员：仅剩占位也保持现状。
-              room.members.length <= 1
-            )
-              return
-            this.context.transferDisconnectedHost(room, playerId)
-          }),
-        )
-      }
-      this.context.emitRoom(room.id)
-    } else {
+    if (room && retainDrawingSeat) this.retainDrawingSeat(player, room, generation)
+    else {
       delete player.drawingDisconnectRoomId
       // 非作画阶段不保留房间席位：统一走标准离房流程，确保准备、房主迁移、选词画家离开
       // 与空房关闭等所有领域副作用完整执行；身份和秘密恢复令牌仍保留到玩家级宽限结束。
@@ -441,13 +406,95 @@ export class SessionService {
         )
     }
 
-    // 身份级宽限与房间席位分离：非作画阶段虽已离房，仍可凭令牌恢复同一 UUID 后进入大厅。
+    this.scheduleIdentityGrace(playerId)
+    this.context.broadcastPresence()
+  }
+
+  /** 持久化连接状态与断线时间：跨重启宽限判断依赖它（宽限内可凭令牌恢复）。失败只记日志。 */
+  private persistDisconnectState(player: PlayerSecret, disconnectedAt: number): void {
+    try {
+      this.context.repositories.players.setConnection(player.id, false, disconnectedAt)
+    } catch (err) {
+      this.context.logger.error(
+        { errorType: runtimeErrorType(err), playerId: player.id },
+        '断线状态持久化异常',
+      )
+    }
+  }
+
+  /**
+   * 作画阶段断线保席：作废画布游标、广播重连提示，并为画家/房主安排短宽限计时器。
+   * 宽限期间房间可能被暂停（保留席位语义仍指向作画），因此暂停中同样认定「本回合未完成」：
+   * 否则超时回调因阶段不是 drawing 而静默跳过，恢复后回合将无人作画直至自然超时。
+   */
+  private retainDrawingSeat(player: PlayerSecret, room: RoomSecret, generation: number): void {
+    const playerId = player.id
+    player.drawingDisconnectRoomId = room.id
+    // 断线期间可能丢失增量广播，重连后的首份快照必须携带完整画布历史。
+    const member = room.members.find((item) => item.playerId === playerId)
+    if (member) invalidateMemberCanvasSync(member)
+    const payload: MemberConnectionChange = {
+      playerId,
+      nickname: player.profile.nickname,
+      connection: 'reconnecting',
+    }
+    this.context.emitRoomEvent(
+      room.id,
+      EVENTS.roomMemberConnectionChanged,
+      createServerPush(EVENTS.roomMemberConnectionChanged, payload),
+    )
+
+    // 当前画家断线：保留短宽限；超时仍未恢复则由权威状态机废弃本回合。
+    if (room.game?.drawerId === playerId) {
+      this.context.scheduler.set(APP_CONFIG.network.drawerReconnectGraceMs, () =>
+        this.context.safeRun('drawerReconnectTimeout', () => {
+          if (
+            this.isSameDisconnectEpisode(player, generation, room.id) &&
+            room.game?.drawerId === playerId &&
+            phaseEquivalent(room, 'drawing')
+          )
+            this.context.finishRound(room, true)
+        }),
+      )
+    }
+    // 作画期房主掉线时暂留控制权；短宽限后仍未恢复才迁移给在线可玩成员。
+    if (room.hostId === playerId) {
+      this.context.scheduler.set(APP_CONFIG.network.drawerReconnectGraceMs, () =>
+        this.context.safeRun('hostReconnectTimeout', () => {
+          if (
+            !this.isSameDisconnectEpisode(player, generation, room.id) ||
+            room.hostId !== playerId ||
+            // 房主迁移前按原始成员数（含离局占位）判断是否还有其它成员：仅剩占位也保持现状。
+            room.members.length <= 1
+          )
+            return
+          this.context.transferDisconnectedHost(room, playerId)
+        }),
+      )
+    }
+    this.context.emitRoom(room.id)
+  }
+
+  /** 身份级宽限与房间席位分离：非作画阶段虽已离房，仍可凭令牌恢复同一 UUID 后进入大厅。 */
+  private scheduleIdentityGrace(playerId: string): void {
+    const player = this.context.players.get(playerId)
+    if (!player) return
     player.disconnectTimer = this.context.scheduler.set(APP_CONFIG.network.reconnectGraceMs, () =>
       this.context.safeRun('expireDisconnectedPlayer', () =>
         this.expireDisconnectedPlayer(playerId),
       ),
     )
-    this.context.broadcastPresence()
+  }
+
+  /** 同一断线事件的判定：generation 未变、仍在同一房间、且仍未重连。 */
+  private isSameDisconnectEpisode(
+    player: PlayerSecret,
+    generation: number,
+    roomId: string,
+  ): boolean {
+    return (
+      !player.connected && player.disconnectGeneration === generation && player.roomId === roomId
+    )
   }
 
   private expireDisconnectedPlayer(playerId: string): void {

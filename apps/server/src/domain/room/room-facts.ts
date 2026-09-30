@@ -15,13 +15,14 @@ import type { RoomSecret } from '../../models.ts'
  */
 export function phaseEquivalent(room: RoomSecret | undefined, phase: RoomPhase): boolean {
   if (!room) return false
-  return room.phase === phase || (room.phase === 'paused' && room.game?.phaseBeforePause === phase)
+  return room.phase === phase || (room.phase === 'paused' && room.game?.pauseState?.phase === phase)
 }
 
 /**
  * 席位重排：seatIndex 与成员数组顺序保持紧凑一致。
  * 任何「成员数组变化且房间在等待阶段」的现场（离房、规则改人数、开局清理）都调用本函数，
  * 席位编号不得出现空洞或与数组顺序漂移。
+ * 前置条件：仅 waiting 阶段调用——对局中重排会让席位颜色/条带与玩家身份错位。
  */
 export function reseatMembers(room: RoomSecret): void {
   room.members.forEach((member, index) => {

@@ -20,6 +20,7 @@ import { slidingWindowAllow } from '../../rate-limit.ts'
 import type { VocabularyRegistry, VocabularyStore } from '../../vocabulary/index.ts'
 import {
   countOnlinePlayers,
+  createEmptyMemberStats,
   createOnlineLookup,
   isActivePlayer,
   isOnlinePlayer,
@@ -81,16 +82,15 @@ export class RoomMembershipService {
       (member) => member.playerId !== playerId && isOnlinePlayer(member, this.isOnline),
     )
     if (!candidate) return
-    room.hostId = candidate.playerId
-    this.rotatePrivateJoinCode(room)
-    room.stateVersion += 1
-    this.context.addSystemNotice(
+    this.applyHostChange(
       room,
+      candidate.playerId,
       serverStrings.notices.hostMigratedTimeout(
         nicknameOf(this.context.players, candidate.playerId, serverStrings.notices.hostFallback),
       ),
+      // presence 广播由会话侧（handleDisconnect 末尾）统一收尾，此处只推房间快照。
+      { bumpVersion: true, emitRoom: true, broadcastPresence: false },
     )
-    this.context.emitRoom(room.id)
   }
   createRoom(
     playerId: string,
@@ -345,18 +345,15 @@ export class RoomMembershipService {
     if (!targetMember) throw new GameError('NOT_IN_ROOM', serverStrings.errors.NOT_IN_ROOM_TRANSFER)
     if (targetMember.spectating)
       throw new GameError('INVALID_TARGET', serverStrings.errors.SPECTATOR_CANNOT_HOST)
-    room.hostId = targetId
-    this.rotatePrivateJoinCode(room)
-    room.stateVersion += 1
-    this.context.addSystemNotice(
+    this.applyHostChange(
       room,
+      targetId,
       serverStrings.notices.hostTransferred(
-        this.context.players.get(targetId)?.profile.nickname ?? serverStrings.notices.hostFallback,
+        nicknameOf(this.context.players, targetId, serverStrings.notices.hostFallback),
       ),
+      // hostName 会显示在大厅房间行中，房主迁移后需同步广播大厅快照，避免列表展示陈旧房主名。
+      { bumpVersion: true, emitRoom: true, broadcastPresence: true },
     )
-    this.context.emitRoom(room.id)
-    // hostName 会显示在大厅房间行中，房主迁移后需同步广播大厅快照，避免列表展示陈旧房主名。
-    this.context.broadcastPresence()
   }
 
   private closeRoom(room: RoomSecret, reason: string, code: RoomCloseCode): void {
@@ -391,15 +388,35 @@ export class RoomMembershipService {
       room.members.find((member) => isOnlinePlayer(member, this.isOnline)) ??
       room.members.find(isActivePlayer)
     if (!candidate) return false
-    room.hostId = candidate.playerId
-    this.rotatePrivateJoinCode(room)
-    this.context.addSystemNotice(
+    this.applyHostChange(
       room,
+      candidate.playerId,
       serverStrings.notices.hostMigrated(
         nicknameOf(this.context.players, candidate.playerId, serverStrings.notices.hostFallback),
       ),
+      // 版本号由调用方（leaveRoom）统一递增，快照与在线广播由离场收尾统一发出。
+      { bumpVersion: false, emitRoom: false, broadcastPresence: false },
     )
     return true
+  }
+
+  /**
+   * 房主变更单点：改 hostId、轮换私密房码，并按调用点声明的差异处理版本号 / 快照 / 广播。
+   * 三处迁移路径（主动移交 / 断线兜底 / 离场兜底）此前各写一份实现，版本与广播归属
+   * 全靠调用点约定；现在差异只在参数里显式声明。
+   */
+  private applyHostChange(
+    room: RoomSecret,
+    nextHostId: string,
+    notice: string,
+    options: { bumpVersion: boolean; emitRoom: boolean; broadcastPresence: boolean },
+  ): void {
+    room.hostId = nextHostId
+    this.rotatePrivateJoinCode(room)
+    if (options.bumpVersion) room.stateVersion += 1
+    this.context.addSystemNotice(room, notice)
+    if (options.emitRoom) this.context.emitRoom(room.id)
+    if (options.broadcastPresence) this.context.broadcastPresence()
   }
 
   private generatePrivateJoinCode(): string {
@@ -439,7 +456,7 @@ export class RoomMembershipService {
       ready: false,
       score: 0,
       joinedAt: this.context.clock.now(),
-      stats: { correctCount: 0, totalGuessMs: 0, drawingCorrectCount: 0 },
+      stats: createEmptyMemberStats(),
     }
   }
 

@@ -39,8 +39,8 @@ export interface AppSocketData {
   service: SocketServiceAccess
   /**
    * 幂等 ack 缓存（事件名 + requestId → 成功 ack）。
-   * 建连时即为连接级 Map；注册 handler 会把它切换为玩家级共享引用（见 handlers/session.ts），
-   * 使同一玩家换连接后仍能命中旧请求的结果。
+   * 建连时即为连接级 Map；注册/恢复成功时由 SessionService 的会话绑定切换为
+   * 玩家级共享引用，使同一玩家换连接后仍能命中旧请求的结果。
    */
   requestCache: Map<string, Ack<unknown>>
   /** 执行中的同 requestId 请求：并发重复请求共享同一个执行 Promise。建连时即创建。 */

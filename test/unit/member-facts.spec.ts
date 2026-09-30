@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
 import {
   activeGuessers,
   activePlayers,
   connectionStatus,
   countActivePlayers,
   countOnlinePlayers,
+  createEmptyMemberStats,
   createOnlineLookup,
   isActivePlayer,
   isOnlinePlayer,
@@ -147,11 +149,26 @@ describe('nominalPhaseDurationMs 契约', () => {
     expect(nominalPhaseDurationMs('choosing_word', game, settings)).toBe(12_000)
   })
 
-  it('无独立标称时长的阶段返回 undefined，由调用方兜底', () => {
-    expect(nominalPhaseDurationMs('round_result', game, settings)).toBeUndefined()
+  it('round_result 返回全局结算展示时长（暂停快照按它换算进度，防进度条钉死）', () => {
+    expect(nominalPhaseDurationMs('round_result', game, settings)).toBe(
+      APP_CONFIG.game.roundResultSeconds * 1_000,
+    )
+  })
+
+  it('不可暂停阶段与阶段缺失返回 undefined', () => {
     expect(nominalPhaseDurationMs('game_result', game, settings)).toBeUndefined()
-    // 暂停前阶段缺失（phaseBeforePause 为 undefined）同样走调用方兜底
+    expect(nominalPhaseDurationMs('starting', game, settings)).toBeUndefined()
+    // 暂停现场缺失（pauseState 为 undefined）同样返回 undefined
     expect(nominalPhaseDurationMs(undefined, game, settings)).toBeUndefined()
+  })
+})
+
+describe('createEmptyMemberStats 契约', () => {
+  it('返回全零统计，且每次调用返回独立对象（防共享可变状态）', () => {
+    const first = createEmptyMemberStats()
+    const second = createEmptyMemberStats()
+    expect(first).toEqual({ correctCount: 0, totalGuessMs: 0, drawingCorrectCount: 0 })
+    expect(first).not.toBe(second)
   })
 })
 

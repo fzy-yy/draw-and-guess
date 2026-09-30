@@ -10,6 +10,7 @@
  * 因此模块自身保持纯函数、可脱离房间与 Socket 独立单测。
  */
 import type { RoomPhase, RoomSettings } from '@draw-guess/shared'
+import { APP_CONFIG } from '../../config/index.ts'
 import type { GameSecret, MemberState, PlayerSecret, RoomSecret } from '../../models.ts'
 
 /** 只依赖成员列表的窄入参：房间级选择器与计数只需要这一项。 */
@@ -120,13 +121,16 @@ export function rankedMembers(room: MemberList): MemberState[] {
 
 /**
  * 本回合猜词者全集：可玩且非画家。
- * 计分与满员奖励用它——含已掉线者，只认「是否猜中」，因此猜中后掉线不取消奖励。
+ * 计分与满员奖励用它——含已掉线者，只认「是否猜中」，因此猜中后掉线不取消奖励；
+ * 回合结束判定用 onlineGuessers（掉线者不阻塞收回合），两者不要互换。
  */
 export function activeGuessers(room: MemberList, drawerId: string): MemberState[] {
   return room.members.filter((member) => isActivePlayer(member) && member.playerId !== drawerId)
 }
 
-/** 本回合在线猜词者：在线可玩且非画家，用于判「有效猜词者全部猜中即结束回合」。 */
+/** 本回合在线猜词者：在线可玩且非画家，用于判「有效猜词者全部猜中即结束回合」。
+ * 与 activeGuessers 的差别是刻意保留的：计分/满员奖励认「是否猜中」（掉线不取消），
+ * 回合结束判定认「在线」（掉线者不会让回合卡死）——不要在两处互换使用。 */
 export function onlineGuessers(
   room: MemberList,
   drawerId: string,
@@ -148,9 +152,11 @@ export function countOnlinePlayers(room: MemberList, isOnline: OnlineLookup): nu
 }
 
 /**
- * 阶段标称总时长（毫秒）：暂停/恢复需按原阶段总时长重建截止时间。
- * 只对 drawing（用本回合实际作画时长）与 choosing_word（用房间选词秒数）有确定标称值；
- * 其余阶段（如 round_result）没有独立总时长，返回 undefined，由调用方以各自兜底处理。
+ * 阶段标称总时长（毫秒）：暂停/恢复与暂停快照需按原阶段总时长重建截止时间。
+ * 覆盖全部可暂停阶段：drawing（本回合实际作画时长）、choosing_word（房间选词秒数）、
+ * round_result（全局结算展示时长）。round_result 若缺标称值，暂停快照会把总时长误算为
+ * 冻结剩余量，使客户端进度条被钉死在 100%。其余阶段（starting/game_result 等）不可暂停，
+ * 无标称值，返回 undefined。
  */
 export function nominalPhaseDurationMs(
   phase: RoomPhase | undefined,
@@ -159,5 +165,15 @@ export function nominalPhaseDurationMs(
 ): number | undefined {
   if (phase === 'drawing') return game.roundDurationMs
   if (phase === 'choosing_word') return settings.chooseSeconds * 1_000
+  if (phase === 'round_result') return APP_CONFIG.game.roundResultSeconds * 1_000
   return undefined
+}
+
+/**
+ * 空成员统计的构造口径：新局与回到等待阶段的重置都从这里取值。
+ * 此前同一结构字面量在 round-machine（beginGame/setWaiting）与 room-membership-service
+ * 各写一份，新增统计字段时漏改任一处就会产生跨局脏数据。
+ */
+export function createEmptyMemberStats(): MemberState['stats'] {
+  return { correctCount: 0, totalGuessMs: 0, drawingCorrectCount: 0 }
 }

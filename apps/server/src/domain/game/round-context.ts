@@ -10,7 +10,8 @@ import type { VocabularyStore } from '../../vocabulary/index.ts'
  * 这里只保留运行时、地图读取与跨模块副作用出口（传输 / 持久化 / 安全执行）。
  */
 export interface RoundContext {
-  players: Map<string, PlayerSecret>
+  /** 玩家册只读视图：RoundMachine 只做连通性/昵称查询，写路径归领域所有者（ADR-0023/0024）。 */
+  players: ReadonlyMap<string, PlayerSecret>
   logger: RuntimeLogger
   clock: RuntimeDependencies['clock']
   scheduler: RuntimeDependencies['scheduler']

@@ -22,7 +22,7 @@ describe('统一假运行时驱动完整回合生命周期', () => {
     const remainingBeforePause = game.phaseEndsAt - harness.runtime.now()
     harness.service.pause(host.playerId, '测试暂停')
     expect(room.phase).toBe('paused')
-    expect(game.pausedRemainingMs).toBe(remainingBeforePause)
+    expect(game.pauseState?.remainingMs).toBe(remainingBeforePause)
     harness.runtime.advance(30_000)
     expect(room.phase).toBe('paused')
 

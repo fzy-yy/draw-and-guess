@@ -19,6 +19,7 @@ import { GameError } from './errors.ts'
 import type { InviteSecret, PlayerSecret, RoomSecret } from './models.ts'
 import type { Clock } from './runtime.ts'
 import type { VocabularyStore } from './vocabulary/index.ts'
+import { invalidateMemberCanvasSync } from './domain/drawing/canvas-sync.ts'
 import {
   connectionStatus,
   nicknameOf,
@@ -46,7 +47,11 @@ export class SnapshotBuilder {
   constructor(private readonly port: SnapshotViewPort) {}
 
   /** 为指定观看者生成裁剪后的房间快照（画家可见答案与候选词，结算阶段全员可见答案）。 */
-  snapshot(room: RoomSecret, viewerId: string): RoomSnapshot {
+  snapshot(
+    room: RoomSecret,
+    viewerId: string,
+    options: { forceFull?: boolean } = {},
+  ): RoomSnapshot {
     const game = room.game
     // 快照差分：若观看者已在线同步全部绘图增量（lastSyncedSeq 追平 lastSequence），
     // 快照用空数组 + strokesOmitted 标记省略画布历史，由客户端沿用本地已有笔画，降低序列化开销。
@@ -54,6 +59,9 @@ export class SnapshotBuilder {
     // 本守卫对现有调用方不可达（publisher 循环节点 / requireMembership 之后 / 入房刚占席），
     // 但它是隐私 fail-safe 且被快照穷举矩阵显式断言（非成员必须被拒绝而非降级为观众视角）——保留。
     if (!viewerMember) throw new GameError('NOT_IN_ROOM', serverStrings.errors.NOT_IN_ROOM)
+    // 强制全量：作废观看者的差分游标，使本次快照必须携带完整画布历史。
+    // 游标语义归本构建器所有（重连恢复 / 客户端自检修复通道），调用方不再直接改写领域状态。
+    if (options.forceFull) invalidateMemberCanvasSync(viewerMember)
     // 候场/观战身份永远不能获得画家答案权限；即使异常状态下 ID 碰巧与 drawerId 相同也要裁剪。
     const viewerIsDrawer = !viewerMember.spectating && game?.drawerId === viewerId
     // game && 直接参与条件让 TS 收窄（Boolean(game) 不产生收窄，曾迫使下游写 game!）
@@ -63,27 +71,29 @@ export class SnapshotBuilder {
       viewerMember.lastSyncedSeq !== undefined &&
       viewerMember.lastSyncedSeq >= game.lastSequence &&
       Boolean(this.port.players.get(viewerId)?.connected)
+    // 暂停现场（pauseState）由 RoundMachine 成对写入：暂停态下快照按它换算冻结的截止时间
+    // 与剩余毫秒；非暂停态为 undefined，直接下发权威 phaseEndsAt。
+    const pauseState = room.phase === 'paused' ? game?.pauseState : undefined
     // 按观看者角色裁剪对局视图的敏感字段
     const gameView: GameView | undefined = game
       ? {
           gameId: game.id,
           roundId: game.roundId,
-          ...(game.phaseBeforePause ? { phaseBeforePause: game.phaseBeforePause } : {}),
+          ...(pauseState ? { phaseBeforePause: pauseState.phase } : {}),
           currentRound: game.currentRound,
           totalRounds: game.totalRounds,
           drawerId: game.drawerId,
           phaseStartedAt: game.phaseStartedAt,
-          // 暂停阶段：下发冻结的剩余毫秒 pausedRemainingMs，并换算阶段总时长维持稳定的截止时间，
-          // 供客户端将倒计时与进度条准确冻结在暂停时刻的数值上（而非扣减至 0）。
-          // 标称总时长只由 member-facts 单一口径给出；无标称值的阶段退回冻结剩余量。
-          phaseEndsAt:
-            room.phase === 'paused'
-              ? game.phaseStartedAt +
-                (nominalPhaseDurationMs(game.phaseBeforePause, game, room.settings) ??
-                  game.pausedRemainingMs ??
-                  0)
-              : game.phaseEndsAt,
-          ...(room.phase === 'paused' ? { pausedRemainingMs: game.pausedRemainingMs ?? 0 } : {}),
+          // 暂停阶段：下发冻结的剩余毫秒 pausedRemainingMs，并按原阶段标称总时长换算截止时间，
+          // 供客户端把倒计时与进度条准确冻结在暂停时刻的数值上。标称总时长由 member-facts
+          // 单一口径给出且覆盖全部可暂停阶段（含 round_result）；若缺值，总时长会被误算为
+          // 冻结剩余量，使进度条被钉死在 100%。
+          phaseEndsAt: pauseState
+            ? game.phaseStartedAt +
+              (nominalPhaseDurationMs(pauseState.phase, game, room.settings) ??
+                pauseState.remainingMs)
+            : game.phaseEndsAt,
+          ...(pauseState ? { pausedRemainingMs: pauseState.remainingMs } : {}),
           // 答案展示规则：结算阶段公开全文；否则按设置显示遮罩或隐藏字数
           answerMask: game.answer
             ? room.phase === 'round_result' || room.phase === 'game_result'
@@ -155,8 +165,8 @@ export class SnapshotBuilder {
       // 成员视图：公开身份 + 局内状态，注意不包含服务端秘密字段
       members: room.members.map((member) => {
         const player = this.port.players.get(member.playerId)
-        if (!member.leftGame && !player)
-          throw new GameError('UNAUTHORIZED', serverStrings.errors.UNAUTHORIZED)
+        // 在席成员资料来自玩家身份，离局成员来自冻结的 leftProfile；两者皆缺说明成员记录
+        // 已损坏（身份被删除且未冻结），显式拒绝而不是下发空资料（单一守卫，等价于原双守卫）。
         const profile = member.leftProfile ?? player?.profile
         if (!profile) throw new GameError('UNAUTHORIZED', serverStrings.errors.UNAUTHORIZED)
         // 「未离开对局且身份存在」才走完整公开视图；其余用席位快照字段兜底。
@@ -198,7 +208,10 @@ export class SnapshotBuilder {
     }
   }
 
-  /** 公开玩家视图：根据连接状态与所在房间计算在场状态。 */
+  /**
+   * 公开玩家视图：根据连接状态与所在房间计算在场状态。
+   * isPlaying 含暂停（phase-facts 单一口径）：暂停中的房间成员在大厅显示为「游戏中」。
+   */
   toPublicPlayer(player: PlayerSecret): PublicPlayer {
     const room = player.roomId ? this.port.rooms.get(player.roomId) : undefined
     const status = !player.connected

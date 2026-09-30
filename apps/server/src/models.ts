@@ -83,8 +83,11 @@ export interface GameSecret {
   roundId: string // 当前回合 ID（每回合重新生成）
   phaseStartedAt: number // 当前阶段开始时间
   phaseEndsAt: number // 当前阶段权威结束时间
-  phaseBeforePause?: RoomPhase // 暂停前的阶段
-  pausedRemainingMs?: number // 暂停时冻结的剩余毫秒
+  /**
+   * 暂停现场：暂停前阶段与冻结的剩余毫秒成对存在（半状态由类型消除，恢复时无需兜底）。
+   * 恢复/结算/清场时整体删除；只有可暂停阶段（choosing_word/drawing/round_result）会写入。
+   */
+  pauseState?: { phase: RoomPhase; remainingMs: number }
   currentRound: number // 当前回合序号（从 1 开始）
   totalRounds: number // 总回合数 = 人数 × 每人轮数
   /** 当前回合实际作画时长（毫秒）：难度级派生时限（level_config）或房间设置，计分与提示调度统一用它 */
@@ -117,7 +120,6 @@ export interface GameSecret {
   /** 已揭示的结构化提示条数（snapshot 据此切片下发 revealedHints，至多 1） */
   revealedHintCount: number
   drawingRevision: number // 画布修订代次，增量操作单调递增
-  roundSettled?: boolean // 当前回合是否已结算（防止暂停+离房等竞态下重复累计）
   // 战报防重不设标志位：finishGame 以 finalRanking 是否已置 + 仓储幂等 upsert 兜底。
   roundResult?: RoundResult // 回合结算数据
   /** 进入最终结算时冻结；成员随后离房不会改变已公布的排名与统计。 */

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
-import { ERROR_CODES, EVENTS, RequestSchema } from '@draw-guess/shared'
+import { ERROR_CODES, EVENTS } from '@draw-guess/shared'
 import { serverErrorMessages } from '@draw-guess/strings'
 import { SessionService } from '../../apps/server/src/domain/session/session-service.ts'
 import { bindRequest } from '../../apps/server/src/protocol/binder.ts'
@@ -162,7 +162,6 @@ describe('SessionService 与 Facade 契约', () => {
     bindRequest(
       socket,
       EVENTS.sessionLogout,
-      RequestSchema,
       () => {
         harness.service.logout(socket as never)
         return { success: true }

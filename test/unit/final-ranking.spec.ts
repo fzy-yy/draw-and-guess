@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { createGameHarness, startTwoPlayerGame } from './helpers/game-harness.ts'
 
 /**
- * 最终榜单的成员口径回归：`round-machine.finishGame` 用 `isRankedMember`（仅排除观战）而**保留离局者**。
+ * 最终榜单的成员口径回归：`round-machine.finishGame` 用 `rankedMembers`（内部即 `isRankedMember`，
+ * 仅排除观战）而**保留离局者**。
  * 该行为此前无测试固定（既有用例只证明「候场观战者被排除」），一旦有人把口径改成「排除离局」，
  * 离局者的成绩卡会从结算榜消失。见 docs/adr/0023-member-facts-single-source.md。
  */

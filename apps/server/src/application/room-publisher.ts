@@ -5,7 +5,6 @@ import {
   type RoomSnapshot,
 } from '@draw-guess/shared'
 import type { RuntimeLogContext } from '../errors.ts'
-import { invalidateMemberCanvasSync } from '../domain/drawing/canvas-sync.ts'
 import type { PlayerSecret, RoomSecret } from '../models.ts'
 import type { AppServer } from '../socket-types.ts'
 
@@ -13,7 +12,8 @@ export interface RoomPublisherContext {
   io: AppServer
   rooms: Map<string, RoomSecret>
   players: Map<string, PlayerSecret>
-  snapshot(room: RoomSecret, viewerId: string): RoomSnapshot
+  /** 生成观看者视角快照；forceFull 由构建器内部作废差分游标（调用方不触碰领域状态）。 */
+  snapshot(room: RoomSecret, viewerId: string, options?: { forceFull?: boolean }): RoomSnapshot
   toPublicPlayer(player: PlayerSecret): PresenceSnapshot['players'][number]
   toPublicRoom(room: RoomSecret): PresenceSnapshot['rooms'][number]
   /** 日志上下文走静态白名单类型（RuntimeLogContext），拒绝任意键写入。 */
@@ -69,8 +69,7 @@ export class RoomPublisher {
     const player = this.context.players.get(playerId)
     const room = player?.roomId ? this.context.rooms.get(player.roomId) : undefined
     if (!player || !room) return undefined
-    const member = room.members.find((item) => item.playerId === playerId)
-    if (forceFull && member) invalidateMemberCanvasSync(member)
-    return this.context.snapshot(room, playerId)
+    // 强制全量经快照构建器内部作废差分游标（应用层不再直接改写领域绘图状态）。
+    return this.context.snapshot(room, playerId, { forceFull })
   }
 }

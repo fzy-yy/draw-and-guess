@@ -33,8 +33,7 @@ describe('房间阶段转换边界', () => {
 
     expect(room.phase).toBe('round_result')
     expect(room.stateVersion).toBe(pausedVersion + 1)
-    expect(game.phaseBeforePause).toBeUndefined()
-    expect(game.pausedRemainingMs).toBeUndefined()
+    expect(game.pauseState).toBeUndefined()
     expect(harness.runtime.pendingTimerCount()).toBe(1)
     harness.runtime.advance(APP_CONFIG.game.roundResultSeconds * 1_000)
     expect(room.phase).toBe('choosing_word')
@@ -49,8 +48,7 @@ describe('房间阶段转换边界', () => {
 
     expect(room.phase).toBe('game_result')
     expect(room.stateVersion).toBe(pausedVersion + 1)
-    expect(game.phaseBeforePause).toBeUndefined()
-    expect(game.pausedRemainingMs).toBeUndefined()
+    expect(game.pauseState).toBeUndefined()
     expect(harness.runtime.pendingTimerCount()).toBe(2)
     expect(harness.repositories.archive.games).toHaveLength(1)
   })

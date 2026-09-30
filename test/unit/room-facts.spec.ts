@@ -5,10 +5,10 @@ import { slidingWindowAllow } from '../../apps/server/src/rate-limit.ts'
 import type { RoomSecret } from '../../apps/server/src/models.ts'
 
 /** 把房间压成判定所需的最小形状（其余字段与本口径无关）。 */
-function roomOf(phase: RoomPhase, phaseBeforePause?: RoomPhase): RoomSecret {
+function roomOf(phase: RoomPhase, pausedPhase?: RoomPhase): RoomSecret {
   return {
     phase,
-    ...(phaseBeforePause ? { game: { phaseBeforePause } } : {}),
+    ...(pausedPhase ? { game: { pauseState: { phase: pausedPhase, remainingMs: 1_000 } } } : {}),
   } as unknown as RoomSecret
 }
 

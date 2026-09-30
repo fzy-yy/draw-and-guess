@@ -8,6 +8,7 @@ import type {
   RoomSecret,
 } from '../../apps/server/src/models.ts'
 import { GameError } from '../../apps/server/src/errors.ts'
+import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
 import { createMemoryVocabularyRegistry } from './helpers/mini-vocabulary.ts'
 import { testRoomSettings } from './helpers/game-harness.ts'
 
@@ -71,7 +72,6 @@ const FORBIDDEN_KEYS = [
   'revealedIndices',
   'hintOrder',
   'revealedHintCount',
-  'roundSettled',
   'hostReturnRequested',
   'timer',
   'rematchTimer',
@@ -180,7 +180,7 @@ function makeGame(phase: RoomPhase, drawerId: string): GameSecret {
         }
       : {}),
     ...(phase === 'paused'
-      ? { phaseBeforePause: 'drawing' as const, pausedRemainingMs: 20_000 }
+      ? { pauseState: { phase: 'drawing' as const, remainingMs: 20_000 } }
       : {}),
     ...(phase === 'game_result'
       ? {
@@ -273,7 +273,9 @@ function makePort(
     players,
     rooms: new Map([[room.id, room]]),
     clock: { now: () => now },
-    isPlaying: (phase) => ['starting', 'choosing_word', 'drawing', 'round_result'].includes(phase),
+    // 与生产实现（phase-facts 的 isInMatchPhase）一致：暂停也是对局进行中
+    isPlaying: (phase) =>
+      ['starting', 'choosing_word', 'drawing', 'round_result', 'paused'].includes(phase),
     getRoomVocabularyStore: () => createMemoryVocabularyRegistry().getDefault(),
     requirePlayer: (playerId) => {
       const player = players.get(playerId)
@@ -367,6 +369,23 @@ describe('角色裁剪快照穷举矩阵', () => {
   }
 
   describe('私密房与时间轴专项', () => {
+    it('暂停中的 round_result 快照按标称总时长换算 phaseEndsAt，进度条不钉死', () => {
+      const { room, players } = makeRoom('paused', DRAWER_ID)
+      const game = room.game!
+      // 覆盖 fixture 的默认暂停现场：暂停发生在回合结算期，冻结剩余 3 秒。
+      // 修复前 round_result 无标称时长，phaseEndsAt 会退化为「阶段开始时间 + 冻结剩余量」，
+      // 使客户端进度条分母等于剩余量、被钉死在 100%。
+      game.pauseState = { phase: 'round_result', remainingMs: 3_000 }
+      const builder = new SnapshotBuilder(makePort(players, room))
+
+      const view = builder.snapshot(room, HOST_ID).game
+      expect(view?.phaseBeforePause).toBe('round_result')
+      expect(view?.pausedRemainingMs).toBe(3_000)
+      expect((view?.phaseEndsAt ?? 0) - (view?.phaseStartedAt ?? 0)).toBe(
+        APP_CONFIG.game.roundResultSeconds * 1_000,
+      )
+    })
+
     it('私密房码只进当前房主的快照，普通成员与观战拿不到', () => {
       const { room, players } = makeRoom('drawing', DRAWER_ID, { visibility: 'private' })
       const builder = new SnapshotBuilder(makePort(players, room))
