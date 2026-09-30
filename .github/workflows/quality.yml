@@ -1,7 +1,10 @@
 name: quality
 
 on:
+  # push 只跟进 main：其余分支的改动经 PR 校验，避免同一提交被 push 与 pull_request 各跑一遍
+  # （私有库按各 job 时长累加计费）。
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -30,6 +33,9 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Audit dependencies
         # npmmirror 未实现 audit API；默认使用 npm 官方 registry，可用仓库变量 NPM_AUDIT_REGISTRY 覆盖（内网镜像环境）。
+        # 不作为门禁：结论取决于外部 registry，且新披露的漏洞会让与本次改动无关的提交集体变红。
+        # 与工件上传同理——外部环境问题不应误伤代码质量门禁（见 docs/adr/0039-ci-gate-scope-and-trigger.md）。
+        continue-on-error: true
         run: pnpm audit --audit-level=high --registry="${{ vars.NPM_AUDIT_REGISTRY || 'https://registry.npmjs.org' }}"
       - name: Check formatting
         run: pnpm format:check
@@ -95,7 +101,17 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Resolve Playwright version
+        # 缓存键取 Playwright 版本而非锁文件哈希：依赖变动但 Playwright 未升级时仍能命中。
+        id: playwright-version
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $NF}')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
       - name: Install Playwright browsers
+        # 命中缓存时这一步只补系统依赖（apt 不参与缓存），约 300MB 的浏览器下载被跳过。
         run: pnpm exec playwright install --with-deps chromium firefox
       - name: Run Playwright
         run: pnpm test:e2e
@@ -133,4 +149,26 @@ jobs:
       - name: Run unit tests
         run: pnpm test:unit
       - name: Build
+        run: pnpm build
+
+  build-windows:
+    name: Windows build smoke
+    runs-on: windows-latest
+    # 分发包只出 Windows，而其余 job 全在 ubuntu：本 job 用发行平台跑一遍构建，
+    # 覆盖 scripts/with-local-temp.mjs（构建临时目录包装器，ADR-0038）在 Windows 上的
+    # 路径与 shell 行为，以及前端产物的边界扫描。
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Set up Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build (typecheck + client build + bundle boundary scan)
         run: pnpm build

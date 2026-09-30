@@ -580,7 +580,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 - **提交信息**（从 `git log` 可确认的既有规范）：采用 Conventional Commits 格式：
   `type(scope)：subject`，其中 `type` 为 `feat/fix/docs/style/refactor/perf/test/build/ci/chore/revert` 之一，`scope` 为影响模块（可选），`subject` 用**中文**、且不超过 50 字、不以句号结尾。需要补充说明时加空行写 `body` 说明动机与上下文。
   示例（取自近期提交）：`fix(画布)：回退 perfect-freehand 轮廓渲染，彻底修复白边/闪烁/空心`、`feat(server)：日志开关与保留条数改为 .env 配置并使其真正生效`、`feat(server)：引入 SQLite 持久化并重构持久化层`。
-- **分支与 CI**：实际工作分支以 `git branch --show-current` 为准，不在文档中写死当前分支。`.github/workflows/quality.yml` 在 push/PR 上执行格式、Lint、类型、单测、构建及 Chromium/Firefox E2E。
+- **分支与 CI**：实际工作分支以 `git branch --show-current` 为准，不在文档中写死当前分支。`.github/workflows/quality.yml` 在 **push 到 `main`** 与所有 PR 上执行格式、Lint、类型、单测（含组件/集成）、构建、Chromium/Firefox E2E 与 **Windows 构建冒烟**；`pnpm audit` 与洪泛填充基准**不作为门禁**——外部 registry 与机器差异不应误伤质量门禁（见 `docs/adr/0039-ci-gate-scope-and-trigger.md`）。
 - **协作约定**：遵守「修改完成后必须执行」的命令，保持一次提交聚焦一个改动点，涉及协议/接口变更时同步前后端。
 
 ## AI 代理操作指南

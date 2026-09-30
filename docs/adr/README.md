@@ -101,6 +101,7 @@
 | [0030](0030-ci-artifact-quota-and-capacity-test-window.md) | CI 工件配额兜底与容量用例的回合窗口            | 已采纳 |
 | [0034](0034-node-single-file-distribution.md)              | Node 单文件分发与 Windows slim/full 双包交付   | 已采纳 |
 | [0038](0038-repo-local-build-temp-dir.md)                  | 构建临时目录固定到仓库内，规避 %TEMP% 删除拦截 | 已采纳 |
+| [0039](0039-ci-gate-scope-and-trigger.md)                  | CI 触发面收敛、Windows 构建冒烟与审计不作门禁  | 已采纳 |
 
 ### 已废弃
 
