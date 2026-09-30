@@ -129,6 +129,27 @@ describe('推送协议与版本门禁', () => {
         drawingRevision: 4,
       }),
     ).toBe('resync')
+    // 行为修复③：本地无房间快照时重同步入口无从发起（需 roomId），改判 ignore 丢弃。
+    expect(
+      acceptDrawingIncrement(undefined, {
+        roomId: ROOM_ID,
+        gameId: GAME_ID,
+        roundId: ROUND_ID,
+        drawingRevision: 3,
+      }),
+    ).toBe('ignore')
+    // 门禁不放宽：本地快照尚无 game（镜像落后于开局推送）仍须 resync。
+    expect(
+      acceptDrawingIncrement(
+        { ...current, game: undefined },
+        {
+          roomId: ROOM_ID,
+          gameId: GAME_ID,
+          roundId: ROUND_ID,
+          drawingRevision: 3,
+        },
+      ),
+    ).toBe('resync')
   })
 })
 

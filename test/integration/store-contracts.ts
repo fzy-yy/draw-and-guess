@@ -81,7 +81,7 @@ expectTypeOf<keyof ReturnType<typeof useGameHud>>().toEqualTypeOf<
 >()
 
 expectTypeOf<keyof ReturnType<typeof useRoomSync>>().toEqualTypeOf<
-  'requestFullSnapshot' | 'onRoomSnapshot' | 'onStroke' | 'onFill'
+  'onRoomSnapshot' | 'onStroke' | 'onFill'
 >()
 
 expectTypeOf<keyof ReturnType<typeof useToasts>>().toEqualTypeOf<

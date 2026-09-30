@@ -8,7 +8,13 @@ import {
   type DrawingIncrementMeta,
 } from '@/stores/snapshot-gate'
 
-/** 房间快照、绘图增量与受限全量重同步的单一协调器。 */
+/**
+ * 房间快照、绘图增量与受限全量重同步的单一协调器。
+ *
+ * `requestFullSnapshot` 只在协调器内部消费（绘图修订缺口、strokesOmitted 镜像落后两类
+ * 补齐场景）；外部发起方（useAppBootstrap 的非法推送恢复、Facade / GameView 的回滚重同步）
+ * 一律直连 resync store，不经本 composable 转发，因此返回值不暴露该成员。
+ */
 export function useRoomSync() {
   const roomStore = useRoomStore()
   const gameplayStore = useGameplayStore()
@@ -17,12 +23,9 @@ export function useRoomSync() {
 
   function onRoomSnapshot(snapshot: RoomSnapshot): void {
     const current = roomStore.room
-    const decision = acceptRoomSnapshot(current, snapshot)
-    if (decision === 'ignore') return
-    if (decision === 'resync') {
-      void requestFullSnapshot()
-      return
-    }
+    // 快照门禁只可能 accept | ignore（resync 语义归绘图增量，见 snapshot-gate.ts 头注释），
+    // 非 accept 即丢弃，无需重同步分支。
+    if (acceptRoomSnapshot(current, snapshot) !== 'accept') return
     if (snapshot.game?.strokesOmitted) {
       const localGame = current?.game
       if (
@@ -79,5 +82,5 @@ export function useRoomSync() {
     if (roomStore.room?.game) roomStore.room.game.drawingRevision = meta.drawingRevision
   }
 
-  return { requestFullSnapshot, onRoomSnapshot, onStroke, onFill }
+  return { onRoomSnapshot, onStroke, onFill }
 }
