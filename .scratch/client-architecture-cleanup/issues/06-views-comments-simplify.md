@@ -1,6 +1,6 @@
 # 06 views/入口：错误注释修正与不可达防御精简
 
-Status: ready-for-agent
+Status: resolved
 
 ## 背景
 

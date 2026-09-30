@@ -4,10 +4,11 @@
  * strictTemplates 会对「组件未声明的属性/事件」报编译错误，但本项目大量原语组件
  * （AppButton / BaseDialog / ConfirmDialog / IconButton…）的设计就是**透传包装**：
  * `aria-label`、`title`、`role`、`@click`、`@keydown` 等非声明属性经 $attrs 自动落到
- * 根元素，属合法惯用法（见 AGENTS「表单输入原语规范」与 ADR-0008 的浮层透传语义）。
+ * 根元素，属合法惯用法（见 AGENTS「表单输入原语规范」与 ADR-0016 的 strictTemplates
+ * 透传放行裁决）。
  * 这里按 Vue 官方推荐方式扩展 ComponentCustomProps / HTMLAttributes 放行这些语义合法的
  * 透传，同时保留 strictTemplates 对**已声明 props 拼写、v-model 类型、未注册组件**等的
- * 严格校验（本次整改正是靠它抓出了 RulesDialog 的联合类型缺陷）。
+ * 严格校验。
  *
  * 文件必须是模块（含 export {}）：模块文件里的 `declare module 'x' {}` 才是「模块扩展」，
  * 脚本文件里同写法会变成整体替换该模块的「环境模块声明」，会遮蔽 vue 的真实类型。

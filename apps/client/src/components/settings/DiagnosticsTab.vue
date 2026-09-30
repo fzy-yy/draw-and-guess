@@ -1,6 +1,7 @@
 <!--
   资料与诊断设置页：修改大厅资料（头像 + 昵称）、查看并复制诊断信息、恢复默认设置与清除资料。
-  诊断文本（diagnostic）由父层计算后以字符串传入；本组件负责选头像弹窗、改名保存与恢复/清除动作。
+  诊断文本（diagnostic）由父层计算后以字符串传入；本组件负责选头像弹窗（显隐状态也归本组件）、
+  改名保存与恢复/清除动作。
   复制动作上抛给父层（copy 事件），保持权限与提示逻辑集中在父层。
 -->
 <script setup lang="ts">
@@ -14,7 +15,8 @@ import AppInput from '@/components/common/AppInput.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useGameStore } from '@/stores/game'
 
-const showAvatarPicker = defineModel<boolean>('showAvatarPicker', { default: false })
+// 头像选择弹窗显隐：弹窗在本组件模板内渲染、开关也在本组件内触发，显隐状态由本组件自持。
+const showAvatarPicker = ref(false)
 
 defineProps<{
   diagnostic: string

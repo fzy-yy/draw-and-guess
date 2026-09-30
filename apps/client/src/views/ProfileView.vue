@@ -27,7 +27,7 @@ function randomize(): void {
 
 <template>
   <!-- 玩家资料确认页：左侧品牌介绍，右侧头像在上、昵称在下的资料表单。
-       relative：为懒加载弹窗的 loading/error 占位提供定位容器（见 utils/lazy-component.ts）。 -->
+       relative：为头像选择弹窗（AvatarPickerDialog，基于 BaseDialog）的 absolute 遮罩提供定位容器。 -->
   <main class="relative grid h-full grid-cols-[43%_57%]">
     <section
       class="relative flex flex-col items-start justify-center overflow-hidden bg-navy px-[7cqw] py-[8cqh] text-white before:absolute before:right-[-12cqh] before:top-[-10cqh] before:h-[34cqh] before:w-[34cqh] before:rounded-full before:border-[0.5cqh] before:border-white/10 before:content-[''] after:absolute after:bottom-[-7cqh] after:left-[-9cqh] after:h-[22cqh] after:w-[22cqh] after:rounded-full after:border-[0.5cqh] after:border-white/10 after:content-['']"

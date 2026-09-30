@@ -24,7 +24,7 @@ import {
   ContextMenu,
 } from '@/components/common'
 
-// 四个视图组件：对局、房间等待、大厅、资料确认（进入对局的关键链路，保持静态导入）
+// 对局关键链路的四个视图组件：对局、房间等待、大厅、资料确认（与下方设置页合计五个视图，均静态导入）
 import ProfileView from '@/views/ProfileView.vue'
 import LobbyView from '@/views/LobbyView.vue'
 import RoomView from '@/views/RoomView.vue'
@@ -57,7 +57,7 @@ function reloadForProtocolUpdate(): void {
       class="game-stage relative aspect-video h-[min(99vh,calc(99vw*9/16))] w-[min(99vw,calc(99vh*16/9))] overflow-hidden rounded-[clamp(6px,1cqh,14px)] border-[max(1px,0.28cqh)] border-navy bg-paper shadow-float"
       :aria-label="strings.app.stageAriaLabel(store.config.app.name)"
     >
-      <!-- 四个页面视图按状态互斥渲染：对局 > 房间 > 设置 > 大厅 > 资料 -->
+      <!-- 五个页面视图按状态互斥渲染：对局 > 房间 > 设置 > 大厅 > 资料 -->
       <GameView v-if="store.room && store.room.phase !== 'waiting'" />
       <RoomView v-else-if="store.room" />
       <SettingsView v-else-if="store.page === 'settings'" @back="store.page = 'lobby'" />

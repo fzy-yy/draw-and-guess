@@ -50,7 +50,6 @@ const navItems: SideNavItem<typeof tab.value>[] = [
   { key: 'diagnostics', label: strings.settings.tabDiagnostics, icon: SlidersHorizontal },
 ]
 const shortcutError = ref('') // 快捷键错误提示文案
-const showAvatarPicker = ref(false) // 资料页复用的内置 SVG 头像选择弹窗
 
 // 快捷键配置行：设置键、中文名（来自 strings）、说明与图标
 const shortcutRows: Array<{
@@ -139,7 +138,7 @@ function goBack(): void {
 <template>
   <!-- 设置子页骨架：顶栏 + 下方左右两栏（左侧导航 / 右侧正文：声音/显示/快捷键/资料诊断） -->
   <main class="grid h-full grid-rows-[11%_minmax(0,1fr)] bg-sky">
-    <!-- 顶栏：复用 StageHeader 统一步调骨架，返回动作可配置，header-actions 插槽可按使用场景追加按钮。 -->
+    <!-- 顶栏：复用 StageHeader 统一步调骨架，返回动作可配置。 -->
     <StageHeader>
       <template #leading>
         <button
@@ -149,7 +148,6 @@ function goBack(): void {
         >
           <ArrowLeft /> {{ props.backLabel }}
         </button>
-        <slot name="header-actions" />
       </template>
       <template #center>
         <div class="text-center">
@@ -185,7 +183,6 @@ function goBack(): void {
         <!-- 资料与诊断 -->
         <DiagnosticsTab
           v-else
-          v-model:show-avatar-picker="showAvatarPicker"
           :diagnostic="diagnostic"
           :profile-editing-disabled="props.profileEditingDisabled"
           @copy="copyDiagnostics"

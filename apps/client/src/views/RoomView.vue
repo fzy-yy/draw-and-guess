@@ -27,7 +27,7 @@ const showVocabulary = ref(false) // 词库管理弹窗（内容与加载逻辑�
 const showSettings = ref(false) // 规则编辑弹窗（草稿在 settingsDraft，编辑在 RulesDialog）
 const showInvite = ref(false) // 邀请弹窗（可用玩家计算与发送在 InviteDialog）
 const showLeaveConfirm = ref(false) // 退出确认弹窗
-const settingsDraft = ref<RoomSettings>() // 规则编辑草稿（保存前可取消）
+const settingsDraft = ref<RoomSettings>() // 规则编辑草稿：打开弹窗时以当前规则初始化，作为 RulesDialog 本地副本的种子（保存直接用回传的 draft）
 const vocabularyLoading = ref(false) // 词库拉取中（RuleSummary 禁用按钮 + VocabularyDialog v-model）
 
 // 词库弹窗首次打开后才挂载：否则常驻渲染会在进入房间时就把 chunk 拉下来；
@@ -56,7 +56,7 @@ function openVocabulary(): void {
 }
 
 // 复制私密房间码：useCopyWithFeedback 统一处理剪贴板（原生 API + execCommand 降级）
-// 与成功/失败提示；无房间码时直接跳过（服务端仅向房主下发该字段）。
+// 与成功/失败提示；模板 v-if 已保证按钮只在有短码时渲染（服务端仅向当前房主下发该字段）。
 const copyPrivateCode = useCopyWithFeedback({
   text: () => store.room?.privateJoinCode ?? '',
   success: strings.room.privateCodeCopied,
@@ -64,9 +64,8 @@ const copyPrivateCode = useCopyWithFeedback({
   notify: (text, type) => store.notify(text, type),
 })
 
-/** 复制私密房间码（无房间码时静默跳过）。 */
+/** 复制私密房间码：模板 v-if 已挡无短码场景，无需再设运行时守卫。 */
 function handleCopyPrivateCode(): void {
-  if (!store.room?.privateJoinCode) return
   playInteractionSound('activate')
   void copyPrivateCode()
 }
@@ -80,9 +79,7 @@ function openSettings(): void {
 
 /** 保存规则：以 RulesDialog 回传的草稿更新房间规则；失败（版本冲突等已 Toast）时保留弹窗供重试。 */
 async function saveSettings(draft: RoomSettings): Promise<void> {
-  if (!settingsDraft.value) return
-  settingsDraft.value = draft
-  const ok = await store.updateRoomSettings(settingsDraft.value)
+  const ok = await store.updateRoomSettings(draft)
   if (ok) showSettings.value = false
 }
 </script>
@@ -225,7 +222,6 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
       v-if="vocabularyMounted"
       v-model:open="showVocabulary"
       v-model:loading="vocabularyLoading"
-      @close="showVocabulary = false"
     />
 
     <!-- 弹窗二：房间规则编辑（房主）——滑块与开关修改规则（动画由 BaseDialog 内部负责） -->
