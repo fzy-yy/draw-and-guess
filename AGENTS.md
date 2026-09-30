@@ -21,7 +21,7 @@
 
 ### 技术栈与运行环境
 
-- Node.js 当前维护中的 LTS（建议 22 或 24）、pnpm 10+、pnpm workspace 单仓库。
+- Node.js 当前维护中的 LTS（建议 22 或 24）、pnpm 11+（版本由 `packageManager` 钉定 11.25.0）、pnpm workspace 单仓库。
 - 现代 Chromium / Edge / Firefox（支持 CSS `container queries`，因为整屏缩放依赖 `cqh/cqw`）。
 - 后端子包依赖（`apps/server/package.json`）：`express@5`、`socket.io`、`zod`、`pino`、`tsx`、`helmet`、`cors`、**`better-sqlite3`（本地持久化，WAL）**、**`compression`（静态 gzip）**；开发依赖 `@types/better-sqlite3`、`@types/compression`、**`esbuild`（`pnpm package:dist` 打服务端单文件）** 等。
 - 前端子包依赖（`apps/client/package.json`）：`vue@3`、`pinia`、`socket.io-client`、`tailwindcss@4`（`@tailwindcss/vite`）、`lucide-vue-next`、`@tanstack/vue-virtual`（虚拟列表）、`@vueuse/core` + `@vueuse/integrations`（组合式工具，含 `useFocusTrap`）、`nanoid`、`canvas-confetti`（猜中礼花）、`clsx` + `tailwind-merge`（类名合并 `cn()`）、`focus-trap`（弹窗焦点陷阱 peer）。**Toast 为自建组件（`components/common/AppToaster.vue` + `composables/useToasts.ts`）**，不依赖第三方通知库。
@@ -218,7 +218,7 @@ draw-and-guess/
 
 ### 环境要求
 
-- Node.js 当前维护中的 LTS（建议 22 或 24）、pnpm 10+。
+- Node.js 当前维护中的 LTS（建议 22 或 24）、pnpm 11+（版本由 `packageManager` 钉定 11.25.0）。
 - 现代 Chromium / Edge / Firefox（支持 container queries）。
 
 ### 首次安装
@@ -393,7 +393,7 @@ pnpm format:check  # 仅检查格式
 - **组件测试（`pnpm test:component`）**：运行于 happy-dom，优先用 Testing Library 的角色/名称查询与 `userEvent.setup()` 模拟真实操作；只有需要精确校验 Vue emit / v-model 契约时使用 Vue Test Utils。音频播放与 focus-trap 已有独立测试，组件 setup 只验证调用意图。
 - **集成测试（`pnpm test:integration`）**：使用真实 Pinia 或 `createTestingPinia({ createSpy: vi.fn })`；Socket.IO 由统一替身隔离，MSW 以 `onUnhandledRequest: 'error'` 守住 HTTP 边界。禁止访问真实服务。
 - **覆盖率（`pnpm test:coverage`）**：V8 汇总全部 Vitest projects，统计 `apps/client/src`（`views/**` 除外，由 E2E 覆盖）、`apps/server/src`、`packages/{shared,config,strings}/src`，输出 text/json-summary/html/lcov 到 `coverage/`，并执行贴近实测的全局与关键文件阈值；分层门禁与最新结果见 `test/COVERAGE.md`，新增测试应提高而非降低阈值。
-- **端到端测试（`pnpm test:e2e`，Playwright）**：launcher 承担 webServer（构建前端 → 生成 fixture → 建库 → 监听）。默认词库 fixture 含 5,000 词，用于虚拟表格压力验收；兼容性项目覆盖 Chromium DPR 1/1.5/2、Firefox DPR 2 和后台标签页恢复（设备向触屏验收已随手机/平板适配一并移除）。页面封装在 `test/e2e/pages/`，fixtures 在 `test/e2e/fixtures/test-base.ts`，spec 在 `test/e2e/specs/`。CI 上 `retries=1`（本地 0 重试以暴露不稳定用例）；launcher 构建时注入 `VITE_EXPOSE_LOGICAL_CANVAS=1` 开启跨端栅格哈希探针（默认生产构建不包含该探针）。
+- **端到端测试（`pnpm test:e2e`，Playwright）**：launcher 承担 webServer（构建前端 → 生成 fixture → 建库 → 监听）。默认词库 fixture 含 5,000 词，用于虚拟表格压力验收；兼容性项目覆盖 Chromium DPR 1/1.5、Firefox DPR 2 和后台标签页恢复（设备向触屏验收已随手机/平板适配一并移除）。页面封装在 `test/e2e/pages/`，fixtures 在 `test/e2e/fixtures/test-base.ts`，spec 在 `test/e2e/specs/`。CI 上 `retries=1`（本地 0 重试以暴露不稳定用例）；launcher 构建时注入 `VITE_EXPOSE_LOGICAL_CANVAS=1` 开启跨端栅格哈希探针（默认生产构建不包含该探针）。
 - 可作为将来单测目标的纯函数（注释已注明「可独立单测」）：`packages/shared/src/pure.ts`、`apps/server/src/scoring.ts`、`apps/server/src/snapshot.ts`；仓储接口（`repositories/`）可注入内存实现测试。
 - **修改代码后的最低验证要求**：依次运行
   ```bash
@@ -585,7 +585,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 
 ## AI 代理操作指南
 
-- **优先阅读**：本 `AGENTS.md` → `README.md`（注意其部分章节过时）→ 目标模块对应文件。改动前先读相关文件头部注释（这些注释通常写明设计意图与边界）。
+- **优先阅读**：本 `AGENTS.md` → `README.md` → 目标模块对应文件。改动前先读相关文件头部注释（这些注释通常写明设计意图与边界）。
 - **修改范围控制**：只改当前任务相关的文件；不要顺手格式化无关文件、不要改动 `pnpm-lock.yaml`、`pnpm-workspace.yaml`、`.pi/`、`dist/`、`node_modules/`、`.env`。
 - **如何验证修改正确**：改完运行 `pnpm format && pnpm lint && pnpm typecheck && pnpm build`；涉及界面/流程改动可用浏览器（含 Playwright MCP）端到端验证。
 - **遇到不确定事项**：
@@ -630,7 +630,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 
 ### Issue tracker
 
-议题与规格以 `.scratch/` 下的本地 Markdown 文件管理（随仓库入库）。见 `docs/agents/issue-tracker.md`。
+议题与规格以 `.scratch/` 下的本地 Markdown 文件管理（目录**按需创建**，随仓库入库、不要加入 `.gitignore`）。见 `docs/agents/issue-tracker.md`。
 
 ### Triage labels
 

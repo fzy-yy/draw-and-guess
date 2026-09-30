@@ -5,7 +5,7 @@
 ## 运行环境
 
 - Node.js 当前维护中的 LTS（建议 22 或 24）
-- pnpm 10+
+- pnpm 11+（版本由 `packageManager` 钉定 11.25.0）
 - Chromium、Edge、Chrome 或 Firefox 的现代版本
 
 前端运行时依赖：`vue@3` + `pinia`（状态）、`socket.io-client`（实时通信）、`zod`（经共享包引入，协议校验）、`@tanstack/vue-virtual`（词库虚拟列表，随词库弹窗按需加载）、`@vueuse/core` + `@vueuse/integrations`（组合式工具，含 `useFocusTrap`）、`nanoid`（短 ID）、`clsx` + `tailwind-merge`（类名合并 `cn()`）、`canvas-confetti`（猜中礼花，按需加载）、`focus-trap`（弹窗焦点陷阱 peer）。**Toast 为自建组件（`components/common/AppToaster.vue` + `composables/useToasts.ts`）**，未使用第三方通知库；UI 图标来自 `lucide-vue-next`，样式基于 Tailwind CSS v4（容器单位 `cqh/cqw` 整屏缩放）。画布渲染采用「归一化点列 + 直线段描边」的增量同步模型。服务端另含 `better-sqlite3`（本地持久化，WAL）、`compression`（静态 gzip）。

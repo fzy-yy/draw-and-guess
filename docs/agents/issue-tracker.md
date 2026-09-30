@@ -2,6 +2,7 @@
 
 本仓库的议题（issues）与规格（specs）以 Markdown 文件形式存放在 `.scratch/` 下，
 随仓库入库（不要加入 .gitignore），供 to-tickets / triage / to-spec / wayfinder 等技能读写。
+目录**按需创建**：当前没有在办议题时它不存在是正常的，不要为此建空占位文件。
 
 ## 约定
 
