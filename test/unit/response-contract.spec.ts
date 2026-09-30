@@ -41,7 +41,8 @@ describe('真实服务端响应与 ack Schema 契约', () => {
       harness.service.updateProfile(identity.player.id, { nickname: '契约改名', avatarId: '02' }),
     )
     expectSuccessAck(EVENTS.presenceGet, harness.service.presenceSnapshot())
-    expectSuccessAck(EVENTS.roomList, harness.service.presenceSnapshot().rooms)
+    // 与 handlers/session.ts 的 room:list 实现保持一致：只取公开房间列表。
+    expectSuccessAck(EVENTS.roomList, harness.service.publicRooms())
     expectSuccessAck(
       EVENTS.stateResync,
       harness.service.snapshotForPlayer(identity.player.id, true),

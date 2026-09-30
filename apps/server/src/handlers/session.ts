@@ -45,7 +45,7 @@ export function registerSessionHandlers(socket: AppSocket, service: GameService)
   bindRequest(socket, EVENTS.presenceUpdatePreferences, (input, playerId) =>
     service.updatePreferences(playerId, input),
   )
-  bindRequest(socket, EVENTS.roomList, (_input, _playerId) => service.presenceSnapshot().rooms)
+  bindRequest(socket, EVENTS.roomList, (_input, _playerId) => service.publicRooms())
   // 状态重同步：断线恢复/大厅刷新时拉取权威房间快照（可能为 undefined，表示不在房间）
   // forceFull=true：仅作为客户端“本地落后于权威 lastSequence”时的自检修复通道，拉取完整画布历史
   bindRequest(socket, EVENTS.stateResync, (_input, playerId) =>

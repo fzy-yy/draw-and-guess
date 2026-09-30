@@ -333,6 +333,24 @@ describe('SqliteProvider 严格校验（异常数据阻止加载）', () => {
     )
   })
 
+  it('difficulty_enum 含超出配置区间的难度 → 拒绝并点名元数据键（而非误导为词条越界）', async () => {
+    // level_config 同步覆盖 6：没有交叉校验时元数据会整体通过，错误被推迟到逐词校验，
+    // 排查方向被误导为「词条难度不在白名单」；交叉校验必须在这里就把病根点出来。
+    await expect(
+      load(
+        createVocabDb({
+          meta: {
+            difficulty_enum: JSON.stringify([1, 2, 3, 4, 5, 6]),
+            level_config: JSON.stringify({
+              ...defaultLevelConfig(),
+              '6': { time_limit: 45, score_weight: 5 },
+            }),
+          },
+        }),
+      ),
+    ).rejects.toThrow(/difficulty_enum 含超出合法区间/)
+  })
+
   it('缺少 category_enum → 拒绝并点名元数据键（而非误导为词条分类越界）', async () => {
     await expect(load(createVocabDb({ removeMeta: ['category_enum'] }))).rejects.toThrow(
       /category_enum.*非空 JSON 数组/,

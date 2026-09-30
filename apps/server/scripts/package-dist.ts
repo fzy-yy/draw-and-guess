@@ -34,6 +34,7 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { APP_CONFIG } from '@draw-guess/config'
 import { buildStartScript, buildUsageNotes, type DistVariant } from '../src/build/dist-templates.ts'
+import { serverPrivateConfig } from '../src/config/private.ts'
 import {
   buildNodeDistUrl,
   buildNodeIndexUrl,
@@ -215,7 +216,12 @@ function zipApp(appDir: string, zipPath: string): void {
 /** 落盘一个变体的两份文本产物；内容生成在 dist-templates 纯函数里（有单测锁定）。 */
 function writeVariantTexts(appDir: string, version: string, variant: DistVariant): void {
   writeFileSync(join(appDir, 'start.cmd'), buildStartScript(variant), 'utf8')
-  writeFileSync(join(appDir, '使用说明.txt'), buildUsageNotes(version, variant), 'utf8')
+  // 使用说明里的默认端口从私有配置派生（唯一来源），改端口时文档自动跟随。
+  writeFileSync(
+    join(appDir, '使用说明.txt'),
+    buildUsageNotes(version, variant, serverPrivateConfig.network.port),
+    'utf8',
+  )
 }
 
 /** 两个分发变体的固定构建顺序（先 slim 后 full）。 */

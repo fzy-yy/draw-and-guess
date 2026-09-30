@@ -9,11 +9,22 @@
 import { isIP } from 'node:net'
 import { serverPrivateConfig } from './private.ts'
 
+/**
+ * 日志级别合法值：类型（LogLevel）、运行时校验与错误文案都从这一份常量派生，
+ * 避免此前「类型、数组、文案」三处各维护一份的漂移风险；新增档位只需改这里。
+ */
+const LOG_LEVELS = ['info', 'error'] as const
+
+/**
+ * 日志级别：只有 info/error 两档——RuntimeLogger 没有 debug/warn 通道（零调用者已删除），
+ * 档位必须与可观察行为一致。
+ */
+export type LogLevel = (typeof LOG_LEVELS)[number]
+
 export type DeploymentConfig = {
   host: string
   port: number
-  /** 日志级别只有 info/error 两档：RuntimeLogger 没有 debug/warn 通道（零调用者已删除），档位必须与可观察行为一致。 */
-  logLevel: 'info' | 'error'
+  logLevel: LogLevel
   /** 是否启用日志记录：false 时服务端完全不创建日志记录器、不写日志文件，节省内存。 */
   logEnabled: boolean
   /** 日志文件保留的最大条数（1～100）：每次启动新建一个，超出时删除最老的。 */
@@ -123,10 +134,10 @@ export function getDeploymentConfig(env: NodeJS.ProcessEnv = process.env): Deplo
   const host =
     explicitHost === '' ? serverPrivateConfig.network.host : parseListenHost(explicitHost)
   const candidateLevel = env.LOG_LEVEL?.trim() || 'info'
-  // 类型谓词集中「字符串 → 合法日志级别」的收窄：调用点无需再各自 `as DeploymentConfig['logLevel']`
-  const levels: readonly string[] = ['info', 'error']
-  const isLogLevel = (value: string): value is DeploymentConfig['logLevel'] =>
-    levels.includes(value)
+  // 类型谓词集中「字符串 → 合法日志级别」的收窄：调用点无需再各自断言；
+  // 用逐项比较而非对只读元组 `includes`，既保持谓词签名又不引入类型断言。
+  const isLogLevel = (value: string): value is LogLevel =>
+    LOG_LEVELS.some((level) => level === value)
   const logEnabled = parseBooleanEnv('LOG_ENABLED', env.LOG_ENABLED, true)
   const healthMetricsEnabled = parseBooleanEnv(
     'HEALTH_METRICS_ENABLED',
@@ -153,7 +164,7 @@ export function getDeploymentConfig(env: NodeJS.ProcessEnv = process.env): Deplo
   }
   const logMaxFiles = parsedMaxFiles
   if (!isLogLevel(candidateLevel)) {
-    throw new Error(`LOG_LEVEL 仅支持 ${levels.join('、')}`)
+    throw new Error(`LOG_LEVEL 仅支持 ${LOG_LEVELS.join('、')}`)
   }
   return {
     host,

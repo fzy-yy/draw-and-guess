@@ -63,8 +63,11 @@ export function buildStartScript(variant: DistVariant): string {
 /**
  * 生成《使用说明.txt》（面向终端用户，纯文本）：
  * 运行要求与运行时目录说明按变体区分，其余章节两包一致。
+ *
+ * @param port 默认监听端口，由调用方从 `serverPrivateConfig.network.port` 派生传入——
+ * 模板是纯函数、不依赖配置模块，端口文案与配置只有一处来源（改默认端口时文档自动跟随）。
  */
-export function buildUsageNotes(version: string, variant: DistVariant): string {
+export function buildUsageNotes(version: string, variant: DistVariant, port: number): string {
   const withNode = variant === 'full'
   const requirement = withNode
     ? '  1. 本包已内置 Node 运行时，无需安装 Node.js。'
@@ -84,7 +87,7 @@ export function buildUsageNotes(version: string, variant: DistVariant): string {
     '',
     '三、其他玩家加入',
     '  1. 其他玩家需与房主处于同一局域网（同一路由器/热点）。',
-    '  2. 在浏览器打开窗口里列出的「局域网地址」（形如 http://192.168.x.x:5174）。',
+    `  2. 在浏览器打开窗口里列出的「局域网地址」（形如 http://192.168.x.x:${port}）。`,
     '  3. 若无法打开：请在 Windows 防火墙弹窗中允许访问「专用网络」，',
     '     并确认设备处于同一网段。',
     '',
@@ -100,7 +103,7 @@ export function buildUsageNotes(version: string, variant: DistVariant): string {
       : null,
     '',
     '五、常见问题',
-    '  - 端口 5174 被占用：服务会自动顺延到下一个空闲端口，以窗口显示的地址为准。',
+    `  - 端口 ${port} 被占用：服务会自动顺延到下一个空闲端口，以窗口显示的地址为准。`,
     '  - 本服务仅供局域网使用，请勿开放到公网。',
   ]
   return joinCrlf(lines.filter((line): line is string => line !== null))

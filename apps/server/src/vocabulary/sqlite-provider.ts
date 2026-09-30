@@ -189,6 +189,17 @@ export class SqliteProvider implements VocabularyProvider {
       return list
     }
     const difficultyEnum = parseNumberList('difficulty_enum')
+    // 双重白名单交叉校验：difficulty_enum 自身也必须落在配置区间内。若只在逐词校验时拦截，
+    // 元数据把「6」写进枚举且 level_config 同步覆盖时整体能通过元数据校验，而难度 6 的词条
+    // 会报「不在 difficulty_enum 白名单内」——错误指向词条，真正的病根（元数据）被掩盖。
+    const { min, max } = APP_CONFIG.vocabulary.difficultyRange
+    for (const level of difficultyEnum) {
+      if (level < min || level > max) {
+        throw new Error(
+          `词库 difficulty_enum 含超出合法区间（${min}~${max}）的难度「${level}」，请修正词库数据。`,
+        )
+      }
+    }
     const levelConfig = this.parseLevelConfig(map, difficultyEnum)
     return {
       name: map.get('name')?.trim(),

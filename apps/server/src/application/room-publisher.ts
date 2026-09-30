@@ -43,14 +43,21 @@ export class RoomPublisher {
     }
   }
 
+  /**
+   * 公开房间列表：与 presenceSnapshot 共用同一过滤/映射口径（同一份实现，不是复制）。
+   * room:list 只需要房间列表，不必为随后丢弃的玩家列表付出映射成本。
+   */
+  publicRooms(): PresenceSnapshot['rooms'] {
+    return [...this.context.rooms.values()]
+      .filter((room) => room.visibility === 'public')
+      .map((room) => this.context.toPublicRoom(room))
+  }
+
   presenceSnapshot(): PresenceSnapshot {
     const players = [...this.context.players.values()]
       .filter((player) => player.preferences.discoverable)
       .map((player) => this.context.toPublicPlayer(player))
-    const rooms = [...this.context.rooms.values()]
-      .filter((room) => room.visibility === 'public')
-      .map((room) => this.context.toPublicRoom(room))
-    return { players, rooms }
+    return { players, rooms: this.publicRooms() }
   }
 
   broadcastPresence(): void {
