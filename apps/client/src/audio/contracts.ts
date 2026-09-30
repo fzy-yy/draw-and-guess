@@ -13,9 +13,12 @@
 /** HTMLMediaElement.preload 的合法取值（lib.dom 为窄联合，非 string）。 */
 export type AudioPreload = '' | 'auto' | 'metadata' | 'none'
 
-/** 单个播放元素的窄化接口（唯一直接接触 HTMLAudioElement 的是浏览器适配器）。 */
+/**
+ * 单个播放元素的窄化接口（唯一直接接触 HTMLAudioElement 的是浏览器适配器）。
+ * 刻意不含 `url`（管理器从不回读，只写不读）与 `dispose`（池实例随页面存活，
+ * 全仓无「应用级注销销毁」调用链；停止播放用 pause + currentTime 即可）。
+ */
 export interface AudioPort {
-  readonly url: string
   /** 播放（fire-and-forget）；失败与 Autoplay 拦截在实现内部静默处理，不向上抛。 */
   play(): void
   pause(): void
@@ -29,8 +32,6 @@ export interface AudioPort {
   preload: AudioPreload
   /** 当前播放位置（秒），用于池满复用重置。 */
   currentTime: number
-  /** 销毁：暂停并清空资源。 */
-  dispose(): void
 }
 
 /** 工厂：由管理器在需要时创建新的播放器。 */

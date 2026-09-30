@@ -1,7 +1,12 @@
 import { APP_CONFIG } from '@draw-guess/config'
 import type { SoundName } from './types.ts'
 import { discoverSoundAssets } from './assets.ts'
-import { buildSoundManifest, reportManifestIssues, type SoundManifest } from './manifest.ts'
+import {
+  buildSoundManifest,
+  reportManifestIssues,
+  ASSET_DIR,
+  type SoundManifest,
+} from './manifest.ts'
 
 /**
  * 音效清单运行时组装层：把「真实 assets 目录」与「配置清单」合成运行时 manifest，
@@ -40,14 +45,18 @@ const runtimeManifest: SoundManifest = buildSoundManifest(
 /** 已提示过的缺失键集合，避免开发模式下重复告警刷屏。 */
 const warnedMissingNames = new Set<string>()
 
-/** 获取指定音效键名的静态资源 URL；缺失时安全返回 undefined（不抛异常）。 */
+/**
+ * 获取指定音效键名的静态资源 URL；缺失时安全返回 undefined（不抛异常）。
+ * 告警双通道：批量校验（initAudio）供启动期汇总，本函数的逐键 warn 供运行期兜底（发现新增缺失键）。
+ */
 export function getSoundUrl(name: SoundName | string): string | undefined {
   const normalized = name.toLowerCase()
   const url = runtimeManifest.entries.get(normalized)?.url
   if (!url && readViteEnv().DEV === true && !warnedMissingNames.has(normalized)) {
     warnedMissingNames.add(normalized)
+    // 目录字面量单源于 manifest.ASSET_DIR，避免两处硬编码漂移
     console.warn(
-      `[Audio] 暂未提供音效文件: ${normalized}.mp3 或 ${normalized}.wav（路径: apps/client/src/assets/audio/）`,
+      `[Audio] 暂未提供音效文件: ${normalized}.mp3 或 ${normalized}.wav（路径: ${ASSET_DIR}）`,
     )
   }
   return url
@@ -56,6 +65,7 @@ export function getSoundUrl(name: SoundName | string): string | undefined {
 /**
  * 音效系统启动钩子：在开发/测试环境把清单问题醒目输出到控制台（可定位、不抛错），
  * 生产环境静默降级。严格失败语义（抛异常）由 assertSoundManifestIntegrity 在测试/构建期单独使用。
+ * 告警双通道：本钩子的批量校验供启动期一次性汇总，getSoundUrl 的逐键 warn 供运行期兜底。
  */
 export function initAudio(): void {
   if (!isStrictValidationEnv()) return

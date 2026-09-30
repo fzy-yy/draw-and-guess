@@ -19,9 +19,10 @@ describe('SoundManager 假音频/假时钟', () => {
       settings: baseSettings,
     })
     // 收敛后的唯一音效调用面：playSound→play、stopAll、updateSettings（均被
-    // useAudioFeedback/App 使用），以及作为运行依赖的查询与销毁入口。
-    //（playBgm/stopBgm/syncBgmVolume 已随 BGM 系统移除。）
-    for (const method of ['play', 'stopAll', 'updateSettings', 'dispose'] as const) {
+    // useAudioFeedback/App 使用）。
+    //（playBgm/stopBgm/syncBgmVolume 已随 BGM 系统移除；dispose 因其宣称的
+    // 「应用级注销」调用链在全仓不存在，已随端口成员一并删除。）
+    for (const method of ['play', 'stopAll', 'updateSettings'] as const) {
       expect(typeof (manager as unknown as Record<string, unknown>)[method]).toBe('function')
     }
   })
@@ -174,7 +175,7 @@ describe('SoundManager 假音频/假时钟', () => {
     expect(factory.created.length).toBe(1)
   })
 
-  it('stopAll 暂停并重置全部池内实例但不销毁；dispose 彻底释放', () => {
+  it('stopAll 暂停并重置全部池内实例，实例保留在池中可复用', () => {
     const factory = new FakeAudioFactory()
     const manager = new SoundManager({
       audioFactory: factory,
@@ -187,13 +188,10 @@ describe('SoundManager 假音频/假时钟', () => {
     const port = factory.created[0]!
     expect(port.paused).toBe(false)
 
-    // stopAll：暂停但实例保留（池可复用）
+    // stopAll：暂停并重置时间，但实例保留（池可复用）。
+    //（dispose 彻底销毁入口已删除：全仓无「应用级注销」调用链，卸载路径只依赖 stopAll。）
     manager.stopAll()
     expect(port.paused).toBe(true)
-    expect(port.disposed).toBe(false)
-
-    // dispose：释放全部实例
-    manager.dispose()
-    expect(factory.created.every((createdPort) => createdPort.disposed)).toBe(true)
+    expect(port.currentTime).toBe(0)
   })
 })

@@ -1,6 +1,6 @@
 # 04 audio 死表面删除（dispose 链等）+ 注释修正 + 不变量硬化
 
-Status: ready-for-agent
+Status: resolved
 
 ## 背景
 

@@ -1,3 +1,4 @@
+import type { soundCatalog } from '@draw-guess/config'
 import type { SoundName } from './types.ts'
 
 /**
@@ -5,12 +6,13 @@ import type { SoundName } from './types.ts'
  * 得到每个键的可用性（available / missing）、是否有重复扩展名冲突，以及可定位的校验问题。
  *
  * - 键的唯一合法来源是 @draw-guess/config 的 soundCatalog；assets 目录只会被「发现」，不会定义键。
- * - 本模块为纯函数/纯类型，不触碰 Vite（import.meta.glob）、import.meta.env 或配置运行时对象，
+ * - 本模块为纯函数/纯类型，不触碰 Vite（import.meta.glob）、import.meta.env 或配置运行时对象
+ *   （soundCatalog 仅以 import type 做类型级形状派生，编译后零残留），
  *   以便在 Node 下直接被单元测试；需要读取运行时清单 / 环境的逻辑放在 runtime.ts。
  */
 
-/** 素材目录（用于诊断提示，非 UI 文案）。 */
-const ASSET_DIR = 'apps/client/src/assets/audio/'
+/** 素材目录（清单诊断与运行期告警共用的唯一来源；非 UI 文案）。 */
+export const ASSET_DIR = 'apps/client/src/assets/audio/'
 
 /** 一个已被 Vite 收集到的音效资源（由 assets.ts 产出，这里只定义结构）。 */
 export interface DiscoveredSound {
@@ -22,12 +24,24 @@ export interface DiscoveredSound {
   ext: 'mp3' | 'wav'
 }
 
-/** 单个配置键的元数据（与 @draw-guess/config 的 soundCatalog 条目结构一致）。 */
-export interface SoundMeta {
-  readonly volumeMultiplier: number
-  readonly cooldownMs: number
-  readonly required: boolean
-}
+/** soundCatalog 条目的类型（类型级从 @draw-guess/config 派生，import type 不引入运行时依赖）。 */
+type CatalogEntry = (typeof soundCatalog)[keyof typeof soundCatalog]
+
+/** 把 as const 的字面量类型加宽回基础类型，让清单机制能接受任意合法形状的目录（含自定义目录）。 */
+type WidenLiteral<T> = T extends boolean
+  ? boolean
+  : T extends number
+    ? number
+    : T extends string
+      ? string
+      : T
+
+/**
+ * 单个配置键的元数据：字段名与形状由 @draw-guess/config 的 soundCatalog 类型派生（单一来源，
+ * 手抄接口会随配置增删漂移）；字面量值经 WidenLiteral 加宽——清单是纯函数，必须能接受
+ * 未来自定义目录（如 required:false 的可选键）而非仅内置 12 键的字面量形状。
+ */
+export type SoundMeta = { readonly [K in keyof CatalogEntry]: WidenLiteral<CatalogEntry[K]> }
 
 /** 键的可用性状态。 */
 export type SoundAvailability = 'available' | 'missing'
@@ -57,10 +71,11 @@ export interface SoundManifestIssue {
 export interface SoundManifest {
   entries: ReadonlyMap<string, SoundManifestEntry>
   issues: readonly SoundManifestIssue[]
-  /** 是否存在需要开发/测试期阻断的问题（必需缺失或重复扩展名）。 */
+  /**
+   * 是否存在需要开发/测试期阻断的问题（必需缺失或重复扩展名）。
+   * 这是消费侧（assertSoundManifestIntegrity 等）的唯一判定口径。
+   */
   hasFatalIssues: boolean
-  /** 全部必需资源可用且无扩展名冲突。 */
-  isValid: boolean
 }
 
 /**
@@ -91,12 +106,17 @@ export function buildSoundManifest(
   const issues: SoundManifestIssue[] = []
 
   for (const [key, meta] of Object.entries(catalog)) {
-    const matches = discovered.filter((sound) => sound.name === key.toLowerCase())
+    // 键大小写不变量：资源发现（assets.ts 对文件名 toLowerCase）与查询
+    // （isManifestEntryAvailable / runtime.getSoundUrl）都以小写为键，入表前先归一；
+    // 否则未来 catalog 引入大写键时 entries 会与查询口径静默失联。
+    // 当前内置 12 键全部小写，归一属零行为变化的防御。
+    const entryKey = key.toLowerCase()
+    const matches = discovered.filter((sound) => sound.name === entryKey)
 
     if (matches.length === 0) {
       // 完全缺失：区分必需（会阻断）与可选（仅降级、播放时静默跳过）
-      entries.set(key, {
-        key,
+      entries.set(entryKey, {
+        key: entryKey,
         required: meta.required,
         availability: 'missing',
         url: undefined,
@@ -107,21 +127,23 @@ export function buildSoundManifest(
         meta.required
           ? {
               kind: 'required-missing',
-              key,
-              detail: `必需音效「${key}」缺失资源文件，请将 ${key}.mp3 或 ${key}.wav 放入 ${ASSET_DIR}`,
+              key: entryKey,
+              detail: `必需音效「${entryKey}」缺失资源文件，请将 ${entryKey}.mp3 或 ${entryKey}.wav 放入 ${ASSET_DIR}`,
             }
           : {
+              // 刻意扩展位：内置 soundCatalog 当前全部 required:true，
+              // 自定义词库/目录音效未来可标 required:false——可选缺失仅记录诊断、永不判失败
               kind: 'optional-missing',
-              key,
-              detail: `可选音效「${key}」暂缺资源文件（不阻断，播放时静默跳过）：${key}.mp3 / ${key}.wav`,
+              key: entryKey,
+              detail: `可选音效「${entryKey}」暂缺资源文件（不阻断，播放时静默跳过）：${entryKey}.mp3 / ${entryKey}.wav`,
             },
       )
       continue
     }
 
     const { selected, duplicate } = resolveDuplicate(matches)
-    entries.set(key, {
-      key,
+    entries.set(entryKey, {
+      key: entryKey,
       required: meta.required,
       availability: 'available',
       url: selected.url,
@@ -132,8 +154,8 @@ export function buildSoundManifest(
     if (duplicate) {
       issues.push({
         kind: 'duplicate-extension',
-        key,
-        detail: `同一音效「${key}」同时存在 ${selected.ext} 与 ${duplicate.ext}，已优先使用 ${key}.${selected.ext}，建议仅保留一种格式`,
+        key: entryKey,
+        detail: `同一音效「${entryKey}」同时存在 ${selected.ext} 与 ${duplicate.ext}，已优先使用 ${entryKey}.${selected.ext}，建议仅保留一种格式`,
       })
     }
   }
@@ -146,7 +168,6 @@ export function buildSoundManifest(
     entries,
     issues,
     hasFatalIssues,
-    isValid: !hasFatalIssues,
   }
 }
 

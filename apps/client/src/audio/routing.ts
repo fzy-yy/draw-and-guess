@@ -9,12 +9,12 @@ import type { SoundName } from './types.ts'
  * 并把这里的决策交给 SoundManager 消费。
  *
  * 背景音乐（BGM）决策已随 BGM 系统移除：阶段切换只保留入场提示音。
- * 约定：两个 switch 的 default 分支为 `never`，用于在类型层面保证「映射完整」——
- * 新增阶段/事件而忘记处理时会直接编译报错。
+ * 约定：本模块各 switch（共三个：阶段 / 领域事件 / 交互语义）的 default 分支为 `never`，
+ * 用于在类型层面保证「映射完整」——新增阶段/事件而忘记处理时会直接编译报错。
  */
 
-/** 领域事件（非房间阶段）→ 音效。 */
-export type AudioEvent =
+/** 领域事件（非房间阶段）→ 音效。仅模块内 eventToAudio 消费，不作为对外表面导出。 */
+type AudioEvent =
   'self-ready' | 'self-guessed' | 'invite' | 'countdown-tick' | 'room-leave' | 'session-restore'
 
 /**

@@ -17,7 +17,7 @@ export interface SoundManagerOptions {
 
 /**
  * 纯 HTML5 Audio 短音效管理器（不依赖全局 Audio 与 Date.now()）。
- * 负责音效实例池复用、防刷冷却、动态音量折算与销毁。
+ * 负责音效实例池复用、防刷冷却与动态音量折算。
  *
  * 背景音乐（BGM）系统已整体移除：本管理器只处理一次性短音效；
  * 播放被浏览器 Autoplay 拦截或资源缺失时静默降级，不做解锁重试。
@@ -26,7 +26,11 @@ export class SoundManager {
   /** 短音效实例池：soundName -> AudioPort[]。 */
   private sfxPool = new Map<SoundName, AudioPort[]>()
 
-  /** SFX 池满时的轮转游标（soundName -> 下一个复用的下标），保证可预测、不固定复用首个实例。 */
+  /**
+   * SFX 池满时的轮转游标（soundName -> 下一个复用的下标），保证可预测、不固定复用首个实例。
+   * 不变量：池实例只增不减（无任何驱逐路径），游标对 pool.length 取模后永不移除、不会悬空；
+   * 若未来为池引入实例驱逐（缩容），必须先重置对应键的游标，否则取模结果可能落在错误位置。
+   */
   private sfxPoolCursor = new Map<SoundName, number>()
 
   /** 各音效最近一次可听触发时间戳（用于冷却限频）。 */
@@ -62,8 +66,8 @@ export class SoundManager {
    * 资源缺失或浏览器 Autoplay 拦截时静默降级（短音效不做解锁重试）。
    */
   public play(name: SoundName): void {
+    // SoundName 即 soundCatalog 的键（keyof 推导），已知键访问静态必然存在 meta，无需空值守卫
     const meta = APP_CONFIG.audio.sounds[name]
-    if (!meta) return
 
     // 冷却防刷检查（可听触发前不判失败）；从未触发过则立即允许，避免时钟从 0 起算时误抑制
     const now = this.clock.now()
@@ -142,8 +146,8 @@ export class SoundManager {
   /** 设置变化时同步仍活跃（非暂停）的 SFX 音量，使其立即反映新的音量/静音偏好。 */
   private syncActiveSfxVolumes(): void {
     for (const [name, pool] of this.sfxPool) {
+      // 同上：池键由 SoundName 写入，已知键访问静态必然存在 meta
       const meta = APP_CONFIG.audio.sounds[name]
-      if (!meta) continue
       for (const port of pool) {
         if (port.paused) continue // 已暂停的实例下次播放会重新设音量，无需同步
         port.volume = calculateEffectiveVolume(this.settings, meta.volumeMultiplier)
@@ -151,7 +155,7 @@ export class SoundManager {
     }
   }
 
-  /** 停止所有音效（用于组件卸载或注销；保留池以复用，不销毁实例）。 */
+  /** 停止所有音效（用于组件卸载；保留池实例以便复用，暂停的音量在下次播放时重设）。 */
   public stopAll(): void {
     for (const pool of this.sfxPool.values()) {
       for (const port of pool) {
@@ -159,19 +163,5 @@ export class SoundManager {
         port.currentTime = 0
       }
     }
-  }
-
-  /**
-   * 彻底销毁：暂停并释放发音池内所有实例、清空状态与冷却记录。
-   * 全局单例长生命周期不调用，仅在被替换或应用级注销时使用。
-   */
-  public dispose(): void {
-    for (const pool of this.sfxPool.values()) {
-      for (const port of pool) port.dispose()
-    }
-    // 清空池、轮转游标与冷却记录
-    this.sfxPool.clear()
-    this.sfxPoolCursor.clear()
-    this.lastTriggerTime.clear()
   }
 }

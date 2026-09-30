@@ -14,11 +14,9 @@ import { interactionToAudio, type InteractionAudioEvent } from './routing.ts'
 
 /** 单个 HTMLAudioElement 的窄化代理。 */
 class BrowserAudioPort implements AudioPort {
-  readonly url: string
   private readonly audio: HTMLAudioElement
 
   constructor(url: string) {
-    this.url = url
     this.audio = new Audio(url)
   }
 
@@ -63,12 +61,6 @@ class BrowserAudioPort implements AudioPort {
   pause(): void {
     this.audio.pause()
   }
-
-  dispose(): void {
-    this.audio.pause()
-    this.audio.src = ''
-    this.audio.load()
-  }
 }
 
 /** 浏览器工厂：用 new Audio(url) 创建播放器（仅供下方单例装配，非公开 API）。 */
@@ -102,6 +94,6 @@ export function playSound(name: SoundName): void {
  * 调用方只表达“激活/选择/切换/打开/关闭”，具体资源由 routing.ts 集中映射。
  */
 export function playInteractionSound(event: InteractionAudioEvent): void {
-  const sound = interactionToAudio(event)
-  if (sound) soundManager.play(sound)
+  // interactionToAudio 的返回类型是非空 SoundName 联合，恒可直接播放，无需再判空
+  soundManager.play(interactionToAudio(event))
 }
