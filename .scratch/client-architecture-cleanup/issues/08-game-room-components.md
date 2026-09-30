@@ -1,6 +1,6 @@
 # 08 game/room 组件：视图切换修复②、ActionPopover/MultiSelect 死面、防御精简
 
-Status: ready-for-agent
+Status: resolved
 
 ## 背景
 

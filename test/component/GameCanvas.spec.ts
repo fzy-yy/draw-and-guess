@@ -103,7 +103,8 @@ interface CanvasProps {
   canDraw: boolean
   tool: ToolKind
   color: string
-  revision?: number
+  // 组件侧 revision 为必填（协议必选整数），默认快照与构造参数同口径收严
+  revision: number
 }
 
 function mountCanvas(props: Partial<CanvasProps> = {}) {
@@ -117,6 +118,7 @@ function mountCanvas(props: Partial<CanvasProps> = {}) {
       canDraw: true,
       tool: 'pen',
       color: '#1F2937',
+      revision: 0,
       ...props,
     },
   })

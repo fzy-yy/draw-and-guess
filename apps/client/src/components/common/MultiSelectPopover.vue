@@ -1,16 +1,16 @@
 <!--
   多选筛选弹层组件（可复用，基于 ActionPopover 外壳）。
-  职责：一个「触发按钮 + 多选弹层」的受控筛选器——
-  - 词库管理的「显示字段」（列显隐）与「分类/难度」筛选均由本组件承载；
-  - 触发按钮默认展示当前标签 + 已选数量徽章（选中数 > 0 时高亮）；
-    也支持 iconOnly 模式：只展示图标，语义通过悬浮 title 与无障碍标签表达；
-  - 弹层内提供「全选/全不选」切换按钮与滚动复选列表，点选即时上抛（父组件持有选中集合）。
+  职责：一个「纯图标触发按钮 + 多选弹层」的受控筛选器——
+  词库管理弹窗的「分类/难度/可绘制性」三类字段筛选由本组件承载。
+  触发按钮只展示图标：语义通过悬浮 title（选中时含「标签 · 数量」）与无障碍标签表达；
+  选中数 > 0 且调用方启用 highlight 时图标高亮，表示筛选生效中。
+  弹层内提供「全选/全不选」切换按钮与滚动复选列表，点选即时上抛（父组件持有选中集合）。
   通用性：options 与全部文案/语义标签由调用方给定（值 + 展示文案），组件不感知业务字段含义，
   任何「枚举值多选」场景（如将来的战绩筛选）都可直接复用。
 -->
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
-import { ChevronDown, Filter } from 'lucide-vue-next'
+import { Filter } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
 import ActionPopover from '@/components/common/ActionPopover.vue'
@@ -23,22 +23,20 @@ export interface MultiSelectOption {
 
 const props = withDefaults(
   defineProps<{
-    /** 触发按钮与弹层的语义标签（如「全部分类」「显示字段」） */
+    /** 弹层与分组的语义标签（如「分类」），也是悬浮提示的展示基底 */
     label: string
     /** 可选项列表 */
     options: MultiSelectOption[]
     /** 当前选中值集合（受控：父组件持有并回传，组件不做内部状态） */
     selected: string[]
-    /** 触发按钮的无障碍标签（如「按分类筛选」「显示字段」），语义由调用方注入 */
+    /** 触发按钮的无障碍标签（如「按分类筛选」），语义由调用方注入 */
     triggerAria: string
     /** 弹层「全选」按钮文案 */
     selectAllLabel: string
     /** 弹层「全不选」按钮文案（已全选时点击切换为全不选） */
     deselectAllLabel: string
     disabled?: boolean
-    /** 纯图标触发模式：只显示图标，语义由悬浮 title 与 aria 标签表达 */
-    iconOnly?: boolean
-    /** 纯图标模式下展示的图标；缺省用通用筛选图标 */
+    /** 触发按钮图标；缺省用通用筛选图标 */
     icon?: Component
     /** 图标是否高亮（选中数 > 0 时表示筛选生效中） */
     highlight?: boolean
@@ -47,7 +45,6 @@ const props = withDefaults(
   }>(),
   {
     disabled: false,
-    iconOnly: false,
     icon: undefined,
     highlight: false,
     placement: 'top',
@@ -59,7 +56,7 @@ const emit = defineEmits<{
   'update:selected': [values: string[]]
 }>()
 
-// 已选数量（用于触发按钮徽章）
+// 已选数量：驱动悬浮 title 的「标签 · 数量」文案与图标高亮判定（受控集合的长度，无本地徽章）。
 const selectedCount = computed(() => props.selected.length)
 
 /** 当前是否已选中全部选项：决定「全选/全不选」切换按钮的文案与行为 */
@@ -67,7 +64,7 @@ const allSelected = computed(
   () => props.options.length > 0 && props.selected.length === props.options.length,
 )
 
-// 悬浮提示文案：iconOnly 模式下承载完整语义（如「分类 · 2」），有文字时仅作补充说明。
+// 悬浮提示文案：纯图标触发按钮靠它承载完整语义（如「分类 · 2」），未选中时仅展示标签。
 const triggerTitle = computed(() =>
   selectedCount.value ? strings.common.countBadge(props.label, selectedCount.value) : props.label,
 )
@@ -98,24 +95,14 @@ function toggleSelectAll(): void {
     :disabled="disabled"
     :placement="placement"
     :trigger-title="triggerTitle"
-    align="start"
   >
     <template #trigger>
-      <!-- iconOnly：只展示图标（悬浮说明见触发按钮 title）；常规：图标 + 文字 + 箭头 -->
+      <!-- 纯图标触发：语义见触发按钮 title 与 trigger-aria；筛选生效时图标高亮 -->
       <span
-        v-if="props.iconOnly"
         class="flex items-center"
         :class="highlight && selectedCount ? 'text-blue' : 'text-muted'"
       >
         <component :is="props.icon ?? Filter" class="h-[2.4cqh] w-[2.4cqh]" aria-hidden="true" />
-      </span>
-      <span v-else class="flex items-center gap-[0.3em]">
-        <Filter class="h-[1.35cqh] w-[1.35cqh]" aria-hidden="true" />
-        <!-- 未选中时展示默认文案（如「全部分类」），选中后展示「分类 · 2」强调生效中 -->
-        <span class="max-w-[9cqw] truncate">{{
-          selectedCount ? strings.common.countBadge(label, selectedCount) : label
-        }}</span>
-        <ChevronDown class="h-[1.2cqh] w-[1.2cqh]" aria-hidden="true" />
       </span>
     </template>
     <template #default>

@@ -35,7 +35,12 @@ const props = defineProps<{
   canDraw: boolean
   tool: ToolKind
   color: string
-  revision?: number
+  /**
+   * 权威画布修订号（协议必选整数：GameView 绑定 `game.drawingRevision`，
+   * RoomSnapshot 的 game schema 中 drawingRevision 无 optional）。
+   * 填充提交锁解锁判定与 watch 触发集共用，唯一绑定点即恒有值，故为必填 prop。
+   */
+  revision: number
 }>()
 
 const emit = defineEmits<{
@@ -79,7 +84,7 @@ machine.sync({
 })
 
 const fillSession = useFillSession({
-  revision: () => props.revision ?? 0,
+  revision: () => props.revision,
   roundId: () => props.roundId,
 })
 
@@ -137,7 +142,7 @@ watch(
     props.roundId,
     props.strokes,
     props.strokes.length,
-    props.revision ?? 0,
+    props.revision,
     props.undoneStrokeIds.length,
     props.undoneStrokeIds.at(-1),
   ],

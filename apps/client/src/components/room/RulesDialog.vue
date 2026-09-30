@@ -26,12 +26,12 @@ import { playerCountOptions } from '@/utils/room-facts'
 
 const open = defineModel<boolean>('open', { default: false })
 const props = defineProps<{ draft?: RoomSettings }>()
-const emit = defineEmits<{ close: []; save: [draft: RoomSettings] }>()
+const emit = defineEmits<{ save: [draft: RoomSettings] }>()
 const store = useGameStore()
 
+/** 关闭弹窗：只写 v-model:open（BaseDialog 自身的关闭路径也会写回 false，不再向上抛 close）。 */
 function handleClose(): void {
   open.value = false
-  emit('close')
 }
 
 /** 下拉选项：数值范围/枚举值一律来自公开配置与 strings，禁止另写一套。 */
@@ -69,7 +69,6 @@ watch(
     section-class="h-[82cqh]"
     labelledby="rules-title"
     :close-aria="strings.room.settingsCloseAria"
-    @close="handleClose"
   >
     <template #header>
       <SectionHeader

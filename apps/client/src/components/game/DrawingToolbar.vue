@@ -1,7 +1,7 @@
 <!--
   底部绘图工具栏（从 GameView.vue 拆出的子组件）：
-  工具/颜色/线宽/历史操作。tool/color/width 由父组件持有并传入（props），
-  本次修改通过 update:tool / update:color / width-change 事件回写；
+  工具/颜色/线宽/历史操作。tool/color/width 由父组件持有，经 defineModel
+  双向绑定回写（v-model:tool / v-model:color / v-model:width，即 update:* 事件）；
   历史操作（撤销/重做）直接调用 store.drawAction，清空则向上抛 clear 事件交给父组件确认。
 -->
 <script setup lang="ts">

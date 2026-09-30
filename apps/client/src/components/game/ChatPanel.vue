@@ -121,7 +121,7 @@ watch(
       </div>
       <!-- 当前角色标签：观战中 / 已猜中 / 作画中 / 猜词中（与得分条共用同一映射） -->
       <span class="bg-sky px-[0.6em] py-[0.35cqh] text-blue rounded-[99em] text-fs-10 font-bold">{{
-        roleTextFor(store.me ?? undefined)
+        roleTextFor(store.me)
       }}</span>
     </header>
     <!-- 消息列表：猜词、系统、猜中、预设等类型分别高亮 -->
@@ -131,6 +131,11 @@ watch(
       aria-live="polite"
       @scroll="handleMessageScroll"
     >
+      <!--
+        first:mt-auto（聊天窗口锚底技巧）：消息总高不足一屏时，靠首元素自动外边距
+        吃掉剩余空间、把整列推到底部，与「最新消息在下方」的阅读锚点一致；
+        内容超过一屏后 mt-auto 归零，不影响滚动跟随逻辑。
+      -->
       <div
         v-for="message in messages"
         :key="message.id"

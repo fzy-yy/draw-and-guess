@@ -33,12 +33,14 @@ const slots = computed(() => {
   return result
 })
 
+// 待确认操作的目标 id（菜单项只置位）：声明放在引用它们的 computed 之前——
+// computed 惰性求值本无运行时风险，纯防后续维护中被误读为「引用先于定义」的顺序腐化。
+const pendingKickId = ref<string>()
+const pendingHostId = ref<string>()
 // 待确认踢出的成员：置位后弹出确认框，确认后调用 store.kick（踢人是广播全员的破坏性操作）。
 const kickTarget = computed(() =>
   store.room?.members.find((member) => member.id === pendingKickId.value),
 )
-const pendingKickId = ref<string>()
-const pendingHostId = ref<string>()
 const hostTarget = computed(() =>
   store.room?.members.find((member) => member.id === pendingHostId.value),
 )

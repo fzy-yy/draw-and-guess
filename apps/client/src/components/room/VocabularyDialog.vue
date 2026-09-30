@@ -5,7 +5,8 @@
   - 非房主：可打开查看本局词库，但不可选择（只读：无复选框、无保存，仅能搜索/筛选浏览）。
   三类筛选（分类/难度/可绘制性）与搜索框可叠加生效（取交集）。
 
-  工具栏单行布局：搜索框占左半行，右半行为筛选功能按钮。
+  工具栏单行布局：搜索框占左半行，右半行为筛选功能按钮（仅词条模式；
+  词库包模式该侧留空，可用词库数只展示在页脚，避免与页脚重复计数）。
   批量选择收敛为一个「统一三态复选框」放于表格表头，作用于当前搜索+筛选结果（无筛选时即全部词条）。
   词库统计（全部/搜索结果/已选）合并到底部操作栏左侧，表格区不单独占行。
   选择集合由父组件持有；展示文案来自 @draw-guess/strings，上限与默认值来自配置包。
@@ -185,12 +186,18 @@ watch(searchKeyword, () => {
   )
 })
 
-/** 切换视图模式：词条列表 <-> 词库包选择 */
-function toggleViewMode(): void {
-  viewMode.value = viewMode.value === 'words' ? 'packages' : 'words'
+/**
+ * 视图模式切换的**唯一入口**（词条列表 <-> 词库包选择）：
+ * 工具栏圆形切换钮与底部「切换到词条/词库包」按钮都必须走本函数，
+ * 行为恒为「清搜索词 + 目标列表滚动复位 + 切模式」。
+ * 历史上底部按钮直接改 viewMode、绕过清理逻辑，导致两条路径不等价
+ * （词库包模式输入过搜索词后从底部返回，搜索词会残留并误筛词条列表）。
+ */
+function switchViewMode(mode: 'words' | 'packages'): void {
+  viewMode.value = mode
   query.clearSearch()
   void nextTick(() =>
-    viewMode.value === 'words' ? wordTable.value?.scrollToTop() : packageTable.value?.scrollToTop(),
+    mode === 'words' ? wordTable.value?.scrollToTop() : packageTable.value?.scrollToTop(),
   )
 }
 
@@ -279,7 +286,7 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
                   : strings.room.vocabSwitchToWords
               "
               audio-feedback="select"
-              @click="toggleViewMode"
+              @click="switchViewMode(viewMode === 'words' ? 'packages' : 'words')"
             >
               <Library v-if="viewMode === 'words'" class="h-[2.2cqh] w-[2.2cqh]" />
               <ListFilter v-else class="h-[2.2cqh] w-[2.2cqh]" />
@@ -296,18 +303,11 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
               :deselect-all-label="strings.room.vocabDeselectAllShort"
               :options="filter.options"
               :selected="filterSelections[filter.key] ?? []"
-              icon-only
               :icon="filter.icon"
               :highlight="true"
               placement="bottom"
               @update:selected="updateFilter(filter.key, $event)"
             />
-          </div>
-          <!-- 词库包模式右侧信息：显示可用词库数 -->
-          <div v-else class="flex w-1/2 min-w-0 items-center justify-end">
-            <span class="text-muted text-fs-12">
-              {{ strings.room.vocabPackageTotal(store.vocabulary.packages.length) }}
-            </span>
           </div>
         </div>
 
@@ -351,7 +351,7 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
           variant="secondary"
           type="button"
           audio-feedback="select"
-          @click="viewMode = 'words'"
+          @click="switchViewMode('words')"
         >
           {{ strings.room.vocabSwitchToWords }}
         </AppButton>

@@ -1,9 +1,10 @@
 <!--
-  邀请在线玩家弹窗（房主或允许邀请的成员）——列出空闲且允许接收邀请的在线玩家，点击发送按钮即邀请。
+  邀请在线玩家弹窗（房主或允许邀请的成员）——列出空闲的在线玩家，点击发送按钮即邀请。
   原 RoomView.vue 邀请弹窗迁入本组件，基于 BaseDialog 复用外壳；可用玩家列表内部计算。
   发送按钮复用 RoundIconButton 图标按钮组件；点击后进入冷却倒计时
   （秒数来自 @draw-guess/config 的 UI 配置），防止对同一玩家重复邀请；
   发送结果由 store.invite 内统一 Toast 提示「邀请已发出/失败」。
+  显隐只由 v-model:open 承担（BaseDialog 关闭时自行写回 false），不再向上抛 close 事件。
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -16,13 +17,7 @@ import RoundIconButton from '@/components/common/RoundIconButton.vue'
 import { useGameStore } from '@/stores/game'
 
 const open = defineModel<boolean>('open', { default: false })
-const emit = defineEmits<{ close: [] }>()
 const store = useGameStore()
-
-function handleClose(): void {
-  open.value = false
-  emit('close')
-}
 
 // 可邀请玩家：当前空闲的在线玩家（排除自己）。
 // 「是否允许接收邀请」不在公开资料中下发，由服务端 sendInvite 侧校验并拒绝。
@@ -61,24 +56,21 @@ async function sendInvite(playerId: string): Promise<void> {
 }
 
 // 弹窗打开期间按 UI 配置的 tick 间隔刷新剩余秒数（与 HUD 倒计时口径一致）；关闭时清理定时器并清空冷却状态。
-// immediate：组件在 open=true 时才挂载，必须在初始化时也启动定时器，否则倒计时永远停在初始值。
-watch(
-  open,
-  (isOpen) => {
-    if (isOpen) {
-      cooldownEndsAt.value = new Map()
-      window.clearInterval(tickTimer)
-      tickTimer = window.setInterval(
-        () => (nowTick.value = Date.now()),
-        store.config.ui.tickIntervalMs,
-      )
-    } else {
-      window.clearInterval(tickTimer)
-      tickTimer = undefined
-    }
-  },
-  { immediate: true },
-)
+// 本组件随房间常驻挂载、open 只会从 false 变化触发，无需 immediate（RoomView 重进房间时
+// showInvite 初值即 false，不存在「挂载时 open 已为 true」的启动路径）。
+watch(open, (isOpen) => {
+  if (isOpen) {
+    cooldownEndsAt.value = new Map()
+    window.clearInterval(tickTimer)
+    tickTimer = window.setInterval(
+      () => (nowTick.value = Date.now()),
+      store.config.ui.tickIntervalMs,
+    )
+  } else {
+    window.clearInterval(tickTimer)
+    tickTimer = undefined
+  }
+})
 onBeforeUnmount(() => window.clearInterval(tickTimer))
 </script>
 
@@ -88,7 +80,6 @@ onBeforeUnmount(() => window.clearInterval(tickTimer))
     width-class="w-[52cqw]"
     labelledby="invite-title"
     :close-aria="strings.room.inviteCloseAria"
-    @close="handleClose"
   >
     <template #header>
       <SectionHeader

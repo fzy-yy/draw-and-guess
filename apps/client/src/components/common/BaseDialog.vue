@@ -84,7 +84,7 @@ const { activate: activateTrap, deactivate: deactivateTrap } = useFocusTrap(dial
  * 注意：仲裁集合按 [role="dialog"] 全局查询——ActionPopover 面板同为 role=dialog，
  * 也会进入该集合。两处隐性耦合：依赖 ActionPopover 根节点的 @keydown.esc.stop
  * 在其打开期间先截获 Esc，键盘事件不落至本文件的 document 级监听（互指说明见
- * ActionPopover.vue 的 Esc 截获注释，该侧注释由后续工单补齐）。
+ * ActionPopover.vue 的 Esc 截获注释，两侧须同步维护）。
  */
 function isTopmostDialog(): boolean {
   const dialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]')).filter(
