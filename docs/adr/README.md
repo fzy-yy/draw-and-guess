@@ -58,5 +58,7 @@
 | [0034](0034-node-single-file-distribution.md)              | Node 单文件分发与 Windows slim/full 双包交付   | 已采纳 |
 | [0035](0035-startup-config-fail-fast.md)                   | 启动期配置写法或取值不对即中止，不静默取默认值 | 已采纳 |
 | [0036](0036-origin-private-ip-literal.md)                  | Origin 放行的私网来源只认 IP 字面量            | 已采纳 |
+| [0037](0037-allow-local-hostname-origin.md)                | 来源放行面增加「服务器自己的名字」             | 已采纳 |
+| [0038](0038-repo-local-build-temp-dir.md)                  | 构建临时目录固定到仓库内，规避 %TEMP% 删除拦截 | 已采纳 |
 
 > **决策与后果以本目录为准**，源码注释只链接本目录。

@@ -126,7 +126,7 @@ docs/adr/          架构决策记录（背景 / 决策 / 后果），源码注�
 
 **身份恢复边界**：恢复令牌明文只返回并保存在当前客户端；服务端仅在签发或校验调用栈中短暂接触明文，常驻内存与 SQLite 都只保存 SHA-256 摘要。每次成功恢复都会签发新令牌并立即使旧令牌失效；并发恢复只有一个请求能接管原身份。
 
-**浏览器边界**：HTTP API、Socket.IO polling 与 WebSocket 握手共用本机/私网 Origin 白名单（私网来源**只认 IP 字面量**，`10.attacker.com` 这类域名前缀不算，见 [`docs/adr/0036`](docs/adr/0036-origin-private-ip-literal.md)）。响应启用仅覆盖同源生产脚本、Socket.IO、音频、SVG/data/blob 资源与 Vue 行内 style 属性的 CSP；为保证纯 HTTP 局域网访问，不启用 `upgrade-insecure-requests` 或 HSTS。本项目仍仅面向可信局域网，不应通过端口转发、反向代理或公网 IP 暴露到互联网。
+**浏览器边界**：HTTP API、Socket.IO polling 与 WebSocket 握手共用本机/私网 Origin 白名单（私网来源**只认 IP 字面量**，`10.attacker.com` 这类域名前缀不算，见 [`docs/adr/0036`](docs/adr/0036-origin-private-ip-literal.md)）；另外放行**服务器自己**的计算机名及其 `.local` 形态，用于局域网里 `http://<计算机名>:5174` 这类访问（见 [`docs/adr/0037`](docs/adr/0037-allow-local-hostname-origin.md)）。响应启用仅覆盖同源生产脚本、Socket.IO、音频、SVG/data/blob 资源与 Vue 行内 style 属性的 CSP；为保证纯 HTTP 局域网访问，不启用 `upgrade-insecure-requests` 或 HSTS。本项目仍仅面向可信局域网，不应通过端口转发、反向代理或公网 IP 暴露到互联网。
 
 **状态持久化边界**：服务端为「内存权威 + 低频落盘」——房间、成员席位、画布笔画、聊天消息、计时器和对局实时状态均不落盘，重启即清空；仅玩家身份摘要/资料/偏好与完成局战报经 SQLite 落盘（`apps/server/data/game.db`）。重启后身份可凭客户端持有的令牌在宽限内恢复到大厅，历史战报可查。业务日志写入 `apps/server/log/` 文件（不输出到控制台，避免 Windows 控制台 GBK 解码 UTF-8 中文乱码）。分发包则把同样的数据写到 `server.mjs` 旁的 `data/`（`game.db`、`logs/`、用户自定义词库 `vocabulary/custom/`、可选 `.env`）。浏览器本地只保存三个键：`draw-and-guess-profile-v1`（昵称 / 内置头像编号 / 短期恢复令牌）、`draw-and-guess-settings-v1`（本地设置），以及 `sessionStorage` 的 `draw-and-guess-fullscreen-prompt-v1`（全屏提示已读标记）。
 
