@@ -19,6 +19,7 @@ import type { RuntimeLogger } from './errors.ts'
 import type { AppServer, AppSocket, AppSocketData, InterServerEvents } from './socket-types.ts'
 import { loadVocabulary, type VocabularyRegistry } from './vocabulary/index.ts'
 import { isPrivateIpv4 } from './startup/lan-addresses.ts'
+import { findLocalHostnames } from './startup/local-hostnames.ts'
 import { registerSessionHandlers } from './handlers/session.ts'
 import { registerRoomHandlers } from './handlers/room.ts'
 import { registerGameHandlers } from './handlers/game.ts'
@@ -30,7 +31,10 @@ import { createDatabase } from './db/index.ts'
 import { runMigrations } from './db/migrate.ts'
 import type { OperationalMetrics } from './observability/metrics.ts'
 
-export function isAllowedOrigin(origin: string | undefined): boolean {
+export function isAllowedOrigin(
+  origin: string | undefined,
+  allowedHostnames: readonly string[] = [],
+): boolean {
   if (!origin) return true
   try {
     const url = new URL(origin)
@@ -43,12 +47,20 @@ export function isAllowedOrigin(origin: string | undefined): boolean {
     // `10.attacker.com`、`192.168.evil.com` 这类**域名**当成私网放行——恶意页面可用 DNS
     // rebinding 把自己的域名解析到受害者内网 IP，等于把局域网服务交给任意网页
     //（域名前缀像私网 ≠ 地址在私网）。取舍与完整论证见 docs/adr/0036-origin-private-ip-literal.md。
-    return (
+    if (
       hostname === 'localhost' ||
       hostname === '127.0.0.1' ||
       hostname === '::1' ||
       (isIPv4(hostname) && isPrivateIpv4(hostname))
-    )
+    ) {
+      return true
+    }
+    // 服务器**自己的名字**（含 `.local` 形态）也算本机来源：局域网玩家习惯用计算机名访问，
+    // 而域名形态此前一律被拒，表现为「页面能打开、Socket 一直连不上」。放行它的唯一理由是
+    // 这个解析权属于本机（不等于「Origin 与请求 Host 同名」那种会被 DNS rebinding 利用的规则），
+    // 因此比对必须是**完整相等**：前缀/后缀匹配会让 `my-pc.evil.com` 这类伪装混进来。
+    // 名单由 startup/local-hostnames.ts 枚举，论证见 docs/adr/0037-allow-local-hostname-origin.md。
+    return allowedHostnames.some((name) => name.toLowerCase() === hostname)
   } catch {
     return false
   }
@@ -99,6 +111,11 @@ export async function createApplication(
     clientDist?: string
     /** 显式开启后仍只允许回环请求读取详细指标；默认仅返回安全摘要。 */
     healthMetricsEnabled?: boolean
+    /**
+     * 来源放行面里的「服务器自己的名字」（含 `.local` 形态）：缺省取操作系统报告的本机名，
+     * 测试或用其它方式确定名字的嵌入场景可注入固定名单（见 startup/local-hostnames.ts）。
+     */
+    localHostnames?: readonly string[]
   } = {},
 ): Promise<RunningApplication> {
   const vocabulary = options.vocabulary ?? (await loadVocabulary())
@@ -112,6 +129,8 @@ export async function createApplication(
   }
   const app = express()
   const httpServer = createHttpServer(app)
+  // 服务器自己的名字候选取一次（属于 OS 事实，应用生命周期内不变）：避免每个请求都去问操作系统。
+  const localHostnames = options.localHostnames ?? findLocalHostnames()
   // Socket.IO 只负责传输重连；身份、业务房间与遗漏画布一律由秘密令牌 + 权威全量快照恢复。
   // 不启用 connectionStateRecovery：它会在应用层注册校验前恢复旧 socket.rooms 并重放消息，
   // 导致已经被领域层移出房间的身份仍短暂收到旧房间数据，形成跨房间状态与隐私风险。
@@ -122,9 +141,10 @@ export async function createApplication(
     AppSocketData
   >(httpServer, {
     // CORS 只约束浏览器的 HTTP 响应；allowRequest 同步覆盖 polling 与 WebSocket 握手入口。
-    allowRequest: (request, callback) => callback(null, isAllowedOrigin(request.headers.origin)),
+    allowRequest: (request, callback) =>
+      callback(null, isAllowedOrigin(request.headers.origin, localHostnames)),
     cors: {
-      origin: (origin, callback) => callback(null, isAllowedOrigin(origin)),
+      origin: (origin, callback) => callback(null, isAllowedOrigin(origin, localHostnames)),
       credentials: false,
     },
     maxHttpBufferSize: 128 * 1024,
@@ -167,7 +187,9 @@ export async function createApplication(
       hsts: false,
     }),
   )
-  app.use(cors({ origin: (origin, callback) => callback(null, isAllowedOrigin(origin)) }))
+  app.use(
+    cors({ origin: (origin, callback) => callback(null, isAllowedOrigin(origin, localHostnames)) }),
+  )
   app.use(express.json({ limit: '32kb' }))
   // 静态资源 gzip 压缩：JS/CSS/SVG 经 compression 减小传输体积，对局域网也有明显收益。
   // 放在静态托管前，仅对可压缩内容（text/javascript/css/svg 等）生效。

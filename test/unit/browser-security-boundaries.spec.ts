@@ -20,7 +20,9 @@ afterEach(async () => {
   temporaryDirectory = ''
 })
 
-async function startApplication(): Promise<string> {
+async function startApplication(
+  options: { localHostnames?: readonly string[] } = {},
+): Promise<string> {
   temporaryDirectory = mkdtempSync(join(tmpdir(), 'draw-guess-browser-boundary-'))
   const clientDist = join(temporaryDirectory, 'dist')
   mkdirSync(clientDist)
@@ -33,6 +35,7 @@ async function startApplication(): Promise<string> {
     clientDist,
     vocabulary: createMemoryVocabularyRegistry(),
     logger: SILENT_LOGGER,
+    ...options,
   })
   await new Promise<void>((resolve, reject) => {
     application!.httpServer.once('error', reject)
@@ -63,6 +66,19 @@ describe('浏览器与 Socket 握手边界', () => {
     expect(isAllowedOrigin('http://172.16.88.1.attacker.com')).toBe(false)
   })
 
+  it('服务器自己的名字（含 .local 形态）放行，伪装与陌生名字不放行', () => {
+    const localNames = ['my-pc', 'my-pc.local', 'mbp', 'mbp.local']
+    expect(isAllowedOrigin('http://my-pc:5174', localNames)).toBe(true)
+    // URL 会小写化主机名，名单里的写法因此大小写不敏感
+    expect(isAllowedOrigin('http://MY-PC:5174', localNames)).toBe(true)
+    expect(isAllowedOrigin('http://my-pc.local:5174', localNames)).toBe(true)
+    // 放行面只认完整相等：前缀/后缀拼出来的名字一律落空（放行域名形态的唯一理由是它属于本机）
+    expect(isAllowedOrigin('http://my-pc.evil.com', localNames)).toBe(false)
+    expect(isAllowedOrigin('http://evil-my-pc', localNames)).toBe(false)
+    // 名单外的名字（别的机器的计算机名）同样拒绝
+    expect(isAllowedOrigin('http://other-pc:5174', localNames)).toBe(false)
+  })
+
   it('allowRequest 在 Engine.IO 握手阶段拒绝公网 Origin', async () => {
     const baseUrl = await startApplication()
     const rejected = await fetch(`${baseUrl}/socket.io/?EIO=4&transport=polling`, {
@@ -75,6 +91,19 @@ describe('浏览器与 Socket 握手边界', () => {
     })
     expect(accepted.status).toBe(200)
     expect(await accepted.text()).toMatch(/^0/u)
+  })
+
+  it('allowRequest 放行服务器自己的名字：用计算机名访问不再「页面能打开、Socket 连不上」', async () => {
+    const baseUrl = await startApplication({ localHostnames: ['my-pc', 'my-pc.local'] })
+    const accepted = await fetch(`${baseUrl}/socket.io/?EIO=4&transport=polling`, {
+      headers: { Origin: 'http://my-pc:5174' },
+    })
+    expect(accepted.status).toBe(200)
+    // 伪装成同前缀的域名仍被拒（名单是完整相等比对，不做前缀匹配）
+    const rejected = await fetch(`${baseUrl}/socket.io/?EIO=4&transport=polling`, {
+      headers: { Origin: 'http://my-pc.evil.com' },
+    })
+    expect(rejected.status).toBe(403)
   })
 
   it('纯 HTTP 响应启用最小 CSP，但不启用 HTTPS 自动升级或 HSTS', async () => {
