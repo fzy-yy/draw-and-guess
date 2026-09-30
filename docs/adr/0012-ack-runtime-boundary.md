@@ -1,6 +1,7 @@
 # 0012 客户端请求响应：ack 也建立运行时 Schema 边界
 
-- 状态：已采纳
+**状态**：已采纳
+
 - 来源：请求响应协议对称性需求
 
 ## 背景
@@ -41,9 +42,11 @@ schema-first：服务端在 binder 里校验请求，客户端在 `push-protocol
    统一展示 `strings.request.protocolFailure`**；只有传输异常才按原策略重试。业务失败路径不变。
 6. ack 外壳不增加 `protocolVersion` 字段：注册已按版本门禁（`PROTOCOL_MISMATCH` 是合法业务失败），
    再在每一条 ack 上带版本只会重复信息并造成不兼容变更。
-7. 空响应与“可能没有房间”外壳在同类事件间共享同一 Schema 实例。首屏预算只有约 3 KiB 余量，
+7. 空响应与“可能没有房间”外壳在同类事件间共享同一 Schema 实例。当时的首屏预算只有约 3 KiB 余量，
    36 个事件各建一套 ZodObject/ZodUnion 曾让入口 gzip 触线；共享实例后实测
-   `test/e2e/specs/08-performance-budget.spec.ts` 入口 164.6 KiB（余量 0.4 KiB）、首屏 175.5 KiB（余量 4.5 KiB）。
+   `test/e2e/specs/08-performance-budget.spec.ts` 入口 164.6 KiB（余量 0.4 KiB）、首屏 175.5 KiB（余量 4.5 KiB）
+   ——上列数字是写作时的实测值（对应当时的入口 165 / 首屏 180 KiB 预算），该预算其后由
+   ADR-0014 上调为入口 176 / 首屏 192 KiB。
 
 ## 后果
 

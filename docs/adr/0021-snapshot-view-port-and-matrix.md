@@ -1,6 +1,7 @@
 # 0021 快照裁剪窄端口与角色×阶段穷举矩阵
 
-- 状态：已采纳
+**状态**：已采纳
+
 - 来源：架构评审候选 C5（隐私是 AGENTS 硬约束，但回归防线只有 5 个子串抽查）
 
 ## 背景
@@ -27,17 +28,13 @@ constructor 收整张 `GameService`（`snapshot.ts` ↔ `game-service.ts` 类型
    `new SnapshotBuilder(this)` **结构上直接满足，零断言**；GS↔Snapshot 类型环断开
    （snapshot.ts 不再 import game-service）。GS 的写路径/计时器/仓储对本模块不可见，
    「裁剪器不可能改动权威状态」由类型而非纪律保证。
-2. **穷举矩阵**（`test/unit/snapshot.matrix.spec.ts`）：观看者角色 7 档
-   （房主兼画家/画家/猜词者/房主非画家/观战/候场/已离局）× 阶段 7 档
-   （waiting/starting/choosing_word/drawing/round_result/paused/game_result）= 49 格，
-   另有私密房码、canReturnWaiting 时间轴、strokesOmitted 差分、观战=画家防御、
-   非成员拒绝 5 个专项行。每格**三重守卫**：
-   - ① `RoomSnapshotSchema`（strict）safeParse 必过——任何 Secret 字段混入即现形；
-   - ② 序列化不含 36 个秘密键名（PlayerSecret/MemberState/RoomSecret/GameSecret
-     全内部字段清单）+ `SENTINEL-` 哨兵值（秘密字段换键位泄漏也会被抓）；
-   - ③ 授权可见性真值表：answer/wordHint 仅画家本人（全阶段）、wordOptions
-     仅画家 × choosing_word、answerMask 结算即全文/作画非画家非真值、
-     privateJoinCode 仅房主、canReturnWaiting 三条件——欠曝与越权同罪。
+2. **穷举矩阵**（`test/unit/snapshot.matrix.spec.ts`）：观看者角色 7 档 × 阶段 7 档 = 49 格，
+   另有私密房码、canReturnWaiting 时间轴、strokesOmitted 差分、观战=画家防御、非成员拒绝等专项行。
+   每格**三重守卫**：① `RoomSnapshotSchema`（strict）safeParse 必过——任何 Secret 字段混入即现形；
+   ② 序列化不含矩阵登记的全部秘密键名（`PlayerSecret`/`MemberState`/`RoomSecret`/`GameSecret`
+   的内部字段清单，见该文件的 `FORBIDDEN_KEYS`）+ `SENTINEL-` 哨兵值（秘密字段换键位泄漏也会被抓）；
+   ③ 授权可见性真值表：answer/wordHint 仅画家本人、wordOptions 仅画家 × choosing_word、
+   privateJoinCode 仅房主、canReturnWaiting 三条件——欠曝与越权同罪。
 3. **fixture 直构 Secret**（带哨兵值）+ fake 端口（词库复用 mini-vocabulary registry，
    clock 用字面量 `{ now }`）——矩阵毫秒级、不触仓储/socket/计时器，deletion test：
    删掉窄端口则矩阵必须回到全图 harness，复杂度是集中的。

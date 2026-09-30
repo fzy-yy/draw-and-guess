@@ -1,22 +1,20 @@
 # 0013 词库重建适配：难度级配置加载期解析与提示字段改版
 
-- 状态：已采纳
+**状态**：已采纳
+
 - 来源：词库 SQLite 重建（`vocabulary/base_words.db` 结构大改）的适配需求
 
 ## 背景
 
-词库被整体重建，库表与元数据发生了不兼容变化：
+词库被整体重建，库表发生了不兼容变化：`words` 表删掉逐词 `time_limit`/`score_weight`，改为按
+`metadata.level_config`（难度 → `{time_limit, score_weight}` 映射）派生，并新增 `drawability`（可绘制性
+1~5，词库作者标注）与 `hint`（提示文案 ≤10 字）两列，另有仅记录编辑时间、不参与玩法的 `updated_at`；
+`metadata` 的枚举与描述列随之增删。**库表字段与校验规则的现行清单以 `AGENTS.md` 的「词库与内容」
+一节为准**，此处不重复。
 
-- `words` 表**删除**逐词 `time_limit`/`score_weight` 两列，**新增** `drawability`（可绘制性 1~5，
-  词库作者标注）与 `hint`（提示文案 ≤10 字）两列，另有仅记录编辑时间、不参与玩法的 `updated_at`；
-- `metadata` 表**删除** `time_limit_enum`/`score_weight_enum`/`default_time_limit`/`default_score_weight`，
-  **新增** `level_config`（难度 → `{time_limit, score_weight}` 映射）、`difficulty_enum`、
-  `drawability_enum`、`enabled_enum` 与 `drawability_desc`；
-- 目录内现仅 `base_words.db` 一个词库（旧 `test_words.db` 删除）；`hint` 在现有 2000 词中全部非空。
-
-下游对旧结构有一串耦合点：回合时限读逐词 `timeLimit`、计分读逐词 `scoreWeight`、
-结构化提示揭示的是词条**分类**（旧词库没有独立提示字段）、词库管理表格与画家选词卡只展示难度。
-适配时必须回答三个问题：难度级配置在哪里解析成词条字段？提示揭示改用什么内容？协议 DTO 如何演进？
+下游对旧结构有一串耦合点：回合时限读逐词 `timeLimit`、计分读逐词 `scoreWeight`、结构化提示揭示的是
+词条**分类**（旧词库没有独立提示字段）、词库管理表格与画家选词卡只展示难度。适配时必须回答三个问题：
+难度级配置在哪里解析成词条字段？提示揭示改用什么内容？协议 DTO 如何演进？
 
 ## 决策
 
@@ -32,11 +30,9 @@
   维护 5 级映射可靠，且与重建词库的既定数据格式不符；
 - 库内 JSON 条目沿用库表 **snake_case** 命名（`time_limit`/`score_weight`），Provider 解析时
   一次性收窄为契约层 camelCase——数据库命名域与运行时命名域在此边界完成翻译；
-- 校验 fail-fast：`level_config` 与 `difficulty_enum` 必须**严格互相覆盖**（每级都有条目、
-  无多余键、`time_limit` 正整数秒、`score_weight` 正数）；`drawability ⊆ drawability_enum`、
-  `hint` trim 后 ≤ `maxHintLength`（服务端私有配置，现值 10）。任何异常以带中文文案的 Error
-  阻止启动。词库对服务端是只读资产，宁可启动失败也不带病运行——缺一级配置意味着该难度词条
-  的时限/权重**无从派生**，静默兜底会让回合时长与得分悄悄偏离词库作者意图；
+- 校验 fail-fast，任何异常都以带中文文案的 Error 阻止启动（规则清单见 `AGENTS.md`）。词库对服务端
+  是只读资产，宁可启动失败也不带病运行——缺一级配置意味着该难度词条的时限/权重**无从派生**，
+  静默兜底会让回合时长与得分悄悄偏离词库作者意图；
 - 逐词 `updated_at` 与 `metadata.drawability_desc` 仅是词库作者的编辑注记，不进入运行时 DTO。
 
 ### 2. 结构化提示改为揭示 `hint`，空则回退分类
@@ -63,9 +59,8 @@
   与现库对齐）；
 - `hashWords` 输入纳入 `hint`/`drawability`：两字段变化必须产生新版本号，
   否则客户端与房间词库重置判断会漏检；
-- 客户端 UI：选词卡展示「难度 + 可绘」两行星级（文字小标签 + 精确星数），
-  词库管理弹窗新增「可绘制性」（星级）与「提示」两列并支持可绘制性多选筛选；
-  星级上限 `ui.drawabilityMax` 进 `@draw-guess/config`，与 `difficultyMax` 并列。
+- 选词卡与词库管理表新增「可绘」星级展示（上限 `ui.drawabilityMax` 进 `@draw-guess/config`，
+  与 `difficultyMax` 并列）。
 
 ## 后果
 

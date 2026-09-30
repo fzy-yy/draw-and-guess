@@ -1,6 +1,7 @@
 # 0016 类型护栏分层：协议泛型接入、strictTemplates 与 type-checked lint 的范围取舍
 
-- 状态：已采纳
+**状态**：已采纳
+
 - 来源：全库 TypeScript 类型严谨性整改（用户要求「补全所有 TS 类型，减少 bug」）
 
 ## 背景
@@ -33,15 +34,13 @@ InterServerEvents, AppSocketData>`（`socket-types.ts` 集中声明），客户�
 2. **泛型边界适配收敛到 4 处具名断言**：binder 的 `on`、GameService 的 room/player 推送、
    request 的 `emitWithAck`——Socket.IO 的 `EventParams/Parameters<>` 对泛型事件名是延迟
    条件类型，函数体内 TS 无法自证匹配；断言签名仍受协议联合约束（不再是任意 string），
-   事件↔载荷配对已在调用方由泛型强制。
-3. **护栏分层**：
-   - 客户端（.vue/.ts）：`vue-tsc strict + strictTemplates + vue-augmentations.d.ts`
-     （ComponentCustomProps 放行 aria-_/title/role/onXxx 透传、HTMLAttributes 放行 data-_、
-     LucideProps 放行 key）——模板类型严格性由 vue-tsc 把关，精度高于 type-aware lint；
-   - 服务端 + packages：ESLint `recommendedTypeChecked`（no-unsafe-* 抓 any 扩散）+
-     `no-non-null-assertion`；`no-misused-promises` 关闭（异步事件回调属设计内语义）；
-   - test/**：不启用 type-checked 层（测试替身 `as unknown as` 是惯例），配置块级豁免；
-   - `no-non-null-assertion` 对客户端单独启用（不依赖类型信息）。
+   事件↔载荷配对已在调用方由泛型强制。**（后续：ADR-0019 已把其中 request `emitWithAck`
+   一项移出并把 `io()` 构造断言纳入，现行份数见 `AGENTS.md`。）**
+3. **护栏分层**：客户端用 vue-tsc `strict + strictTemplates`（模板类型严格性精度高于 type-aware
+   lint，透传放行清单见 `apps/client/src/vue-augmentations.d.ts`）；服务端 + packages 用 ESLint
+   `recommendedTypeChecked`（`no-unsafe-*` 抓 any 扩散）+ `no-non-null-assertion`；
+   test/** 不开 type-checked 层（测试替身的 `as unknown as` 属惯例），配置块级豁免。
+   `no-misused-promises` 关闭——异步事件回调属设计内语义。逐项范围见 `AGENTS.md`「类型护栏分层」。
 4. **断言治理**：生产非空断言 23 → 2 处定点豁免（flood-fill 热循环栈顶、sqlite-provider
    接口适配的 require-await），各带中文理由；DataTable 以 `visibleRows` computed 集中收窄
    替代模板 9 处 `!`；可消除的单层 `as` 全部改守卫/类型谓词/`isAvatarId` 共享守卫。

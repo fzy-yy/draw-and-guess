@@ -1,6 +1,7 @@
 # 0019 Socket 窄端口：消费者与替身都不得依赖全量 Socket 类型
 
-- 状态：已采纳
+**状态**：已采纳
+
 - 来源：架构评审候选 C3（be8c01f 类型整改只保护了生产方向，测试 adapter 方向反而靠 `as never` 硬转）
 
 ## 背景
@@ -42,8 +43,8 @@ be8c01f 给客户端接入 `GameSocket = Socket<ServerToClientEvents, ClientToSe
 ## 后果
 
 - 正面：4 套替身获得编译期核对（端口成员增删/改名时 fake 立刻失配），`as never` 清零；
-  消费者只见到自己用到的面（leverage：session 的读者不再能 emit；attach 的调用方不再能
-  connect）；未来任何「给 socket 加成员」的改动都被窄端口挡在消费面之外。
+  消费者只见到自己用到的面（session 的读者不再能 emit、attach 的调用方不再能 connect）；
+  未来任何「给 socket 加成员」的改动都被窄端口挡在消费面之外。
 - 边界与代价：`never` 形参技巧有理解成本（两个 fake 文件顶部注释解释 + 本篇 ADR）；
   `GameSocket` 别名保留但用途收窄到 io() 构造点。
 - 维护约定：新增消费 Socket 的代码一律依赖最小端口，不得为图方便引用 `GameSocket`；

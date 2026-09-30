@@ -1,8 +1,6 @@
 # 0034 · Node 单文件分发与 Windows 双包交付
 
-## 状态
-
-已采纳
+**状态**：已采纳
 
 ## 背景
 
@@ -21,31 +19,11 @@
 
 ## 决策
 
-**一、交付形态 = 单 JS + 资源目录，产出 slim / full 两个 zip。** `pnpm package:dist` 一次产出：
-
-```text
-release/
-├── slim/draw-and-guess/     → draw-and-guess-<version>-win-x64-slim.zip   (约 2MB，需系统 Node 22+)
-└── full/draw-and-guess/     → draw-and-guess-<version>-win-x64-full.zip   (约 37MB，自带 Node)
-```
-
-两包共有：
-
-```text
-draw-and-guess/
-├── server.mjs                         服务端 ESM 单文件（依赖内联）
-├── start.cmd                          双击启动
-├── 使用说明.txt
-├── client/                            前端构建产物（由该服务静态托管）
-├── vocabulary/                        内置词库（随包）
-└── node_modules/better-sqlite3/       Node-API 预编译原生模块（仅 win32-x64）
-```
-
-**full** 额外携带：
-
-```text
-└── runtime/node.exe + runtime/LICENSE 官方 Node 运行时（Node 24 LTS，win-x64）
-```
+**一、交付形态 = 单 JS + 资源目录，产出 slim / full 两个 zip。** `pnpm package:dist` 一次产出约 2MB 的
+slim 包（需系统 Node 22+）与约 37MB 的 full 包（自带 Node）。两包同构：服务端 ESM 单文件 `server.mjs`
+（依赖内联，`better-sqlite3` 外置）+ `client/` 前端产物 + `vocabulary/` 内置词库 + `start.cmd`/`使用说明.txt`；
+full 另带 `runtime/node.exe` 与 Node 的 `LICENSE`（不含 npm/npx）。**逐项产物清单以 `AGENTS.md` 的
+「Windows 分发包」一节为准**，此处不重复。
 
 不做 exe / 安装器；仅支持 Windows x64。运行期数据（`data/`）在首次启动时于 `server.mjs` 旁创建：
 `game.db`、`logs/`、`vocabulary/custom/`、可选 `.env`。
@@ -61,8 +39,7 @@ slim 保持「检测系统 Node 22+，缺失/过低给中文提示并暂停」�
 - source：沿用仓库相对路径（`apps/server/data`、`apps/server/log`、仓库 `vocabulary/`、`apps/client/dist`、
   根 `.env`），**端口固定、不自动开浏览器**——保住 Vite 的 5174 代理；
 - dist：以 `server.mjs` 所在目录为根解析 `client/`、`vocabulary/`、`data/`，**端口被占用自动顺延、
-  启动后自动打开浏览器**（开关 `DRAW_GUESS_OPEN_BROWSER` 经部署配置收口模块解析，默认开、
-  `0`/`false` 关闭，登记于 `.env.example`——与 HOST/PORT/LOG_* 同一治理通道）。
+  启动后自动打开浏览器**（`DRAW_GUESS_OPEN_BROWSER` 可关闭，与 HOST/PORT/LOG_* 同一治理通道）。
   顺延的「探测空闲端口 → 正式监听」之间存在微秒级 TOCTOU 竞态：窗口极小、真发生时下次启动
   会自动再顺延，评审结论为**接受该风险**，不做重试封装。
 
@@ -78,17 +55,14 @@ slim 保持「检测系统 Node 22+，缺失/过低给中文提示并暂停」�
 `require`，避免内联的 CJS 依赖动态 `require('buffer')` 时触发 esbuild 兜底报错。
 
 **六、内置 Node 的获取（下载即校验）。** 构建时解析官方分发索引里最新的**稳定 Node 24 LTS（v24.x）**，
-从镜像下载 win-x64 zip 并缓存到 `release/.cache/`；默认镜像 `https://npmmirror.com/mirrors/node/`，
-可用 `NODE_DIST_MIRROR` 覆盖、用 `NODE_VERSION` 钉死版本。full 包内只放 `node.exe` 与 Node 的 `LICENSE`
-（不含 npm/npx），随包分发并提供许可证。下载完整性：取同一版本目录的 `SHASUMS256.txt`，
-**写缓存与缓存命中都比对 zip 的 sha256**；不符删除缓存重下载一次，二次仍不符报错（只自愈一次防镜像
-同步不完整导致的无限重下）；`SHASUMS256.txt` 拿不到或无目标条目按 fail-fast 中止构建。
-CI（`windows-latest`，runner 在境外）显式设 `NODE_DIST_MIRROR=https://nodejs.org/dist/`。
-信任边界：校验文件与 zip 同源，**防截断/缓存损坏，不防被攻陷的镜像**（防后者需 GPG 签名验证，
-超出局域网工具的威胁模型，明确不做）。
+从镜像下载 win-x64 zip 并缓存到 `release/.cache/`（镜像与版本可经 `NODE_DIST_MIRROR`/`NODE_VERSION` 覆盖；
+CI 的 runner 在境外，显式改走官网）。完整性用同版本目录的 `SHASUMS256.txt` 比对 sha256，**写缓存与
+缓存命中都比对**；不符则删缓存重下一次、二次仍不符报错（只自愈一次，防镜像同步不完整导致无限重下），
+校验文件拿不到或无目标条目按 fail-fast 中止构建。信任边界：校验文件与 zip 同源，**防截断/缓存损坏，
+不防被攻陷的镜像**——防后者需 GPG 签名验证，超出局域网工具的威胁模型，明确不做。
 
-**七、发布。** `.github/workflows/windows-release.yml`：打 `v*` tag 在 `windows-latest` 构建两个 zip 并作为
-**两个 Release 资产**发布；手动触发只产出一个 artifact（内含两个 zip）。本功能随 `2.5.0` 发布，协议版本不变。
+**七、发布。** 打 `v*` tag 在 `windows-latest` 构建两个 zip 并作为**两个 Release 资产**发布；
+手动触发只产出一个 artifact（内含两个 zip）。本功能随 `2.5.0` 发布，协议版本不变。
 
 ## 后果
 

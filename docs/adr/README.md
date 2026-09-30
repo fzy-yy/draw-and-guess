@@ -14,51 +14,98 @@
 ## 命名与结构
 
 - 文件名：`NNNN-<kebab-case-英文短名>.md`，编号四位递增、不复用；
-- 正文固定四段：**状态 / 背景 / 决策 / 后果**（外加「关联」列出代码与相关决策）；
+- 正文固定四段：**状态 / 背景 / 决策 / 后果**（外加「关联」列出代码与相关决策），状态行写为
+  `**状态**：已采纳`；
 - 状态只有三种：`已采纳` / `已废弃（被 NNNN 取代，或因所描述子系统被整体移除）` / `已推翻`；
-- 决策一旦写进 ADR 就**不再改写历史**：改主意时新开一条并标注取代关系。
+- 决策一旦写进 ADR 就**不再改写历史**：改主意时新开一条并标注取代关系；
+- **篇幅纪律**：ADR 的价值是「为什么这样选、否掉了什么」。规范清单、产物布局、命令用法等
+  「是什么」以 `AGENTS.md` 为准，正文不重复；缺陷叙述只保留能解释当前设计的部分。
 
 ## 索引
 
+**编号与文件名是稳定标识**，源码注释按编号链接到具体文件；下面的分组只是导航，不改变任何编号。
+
+### 画布与绘图
+
+| 编号                                                     | 主题                                         | 状态   |
+| :------------------------------------------------------- | :------------------------------------------- | :----- |
+| [0003](0003-canvas-coordinate-bounds.md)                 | 画布归一化坐标统一映射到 `canvas-1`          | 已采纳 |
+| [0009](0009-fill-degradation-and-locks.md)               | 填充的渲染态/提交态两把锁与 Worker 失败降级  | 已采纳 |
+| [0010](0010-drawing-history-cap.md)                      | 绘图历史上限用「拒绝新增」而非 FIFO 丢弃     | 已采纳 |
+| [0017](0017-drawing-replay-atomic-commit.md)             | 画布重放原子提交：后备缓冲整帧换入除空白窗   | 已采纳 |
+| [0018](0018-canvas-replay-machine.md)                    | 画布重放状态机：决策入机、单快照入口与锁分家 | 已采纳 |
+| [0022](0022-geometry-single-source-and-request-flags.md) | 坐标几何单口径与请求标志语义分离             | 已采纳 |
+
+### 协议与类型护栏
+
+| 编号                                          | 主题                                         | 状态   |
+| :-------------------------------------------- | :------------------------------------------- | :----- |
+| [0012](0012-ack-runtime-boundary.md)          | 客户端请求响应也建立运行时 Schema 边界       | 已采纳 |
+| [0016](0016-type-aware-guardrails.md)         | 类型护栏分层：协议泛型接入与 strictTemplates | 已采纳 |
+| [0019](0019-socket-narrow-ports.md)           | Socket 窄端口：消费者与替身不依赖全量实例    | 已采纳 |
+| [0020](0020-push-registry.md)                 | 推送事件单注册表：登记一处、清单派生         | 已采纳 |
+| [0021](0021-snapshot-view-port-and-matrix.md) | 快照裁剪窄端口与角色×阶段穷举矩阵            | 已采纳 |
+
+### 服务端领域与持久化
+
+| 编号                                        | 主题                                          | 状态   |
+| :------------------------------------------ | :-------------------------------------------- | :----- |
+| [0002](0002-final-ranking-no-gaps.md)       | 战报名次按实际产出条目递增，不留下排名空洞    | 已采纳 |
+| [0005](0005-log-retention-order.md)         | 日志保留按创建时间删最旧，不按文件名排序      | 已采纳 |
+| [0007](0007-local-observability-privacy.md) | 本地运维诊断采用有界安全聚合                  | 已采纳 |
+| [0011](0011-session-logout-atomicity.md)    | 会话注销先原子吊销持久化令牌，再清理内存      | 已采纳 |
+| [0023](0023-member-facts-single-source.md)  | 成员事实单一口径：具名谓词取代内联组合判定    | 已采纳 |
+| [0024](0024-round-machine-ownership.md)     | 回合所有权归 RoundMachine：阶段写入与对局消息 | 已采纳 |
+
+### 客户端架构与 UI 原语
+
+| 编号                                               | 主题                                           | 状态   |
+| :------------------------------------------------- | :--------------------------------------------- | :----- |
+| [0008](0008-context-menu-singleton-vs-teleport.md) | 右键菜单用舞台内单例状态，不用 Teleport        | 已采纳 |
+| [0014](0014-settings-view-static-import.md)        | 设置页静态导入消除首开白闪；懒加载重试桥       | 已采纳 |
+| [0015](0015-select-dropdown-fixed-anchoring.md)    | 下拉面板 fixed 视口锚定、祖先滚动即关闭        | 已采纳 |
+| [0025](0025-resync-module.md)                      | 重连/重同步独立成 resync 模块                  | 已采纳 |
+| [0026](0026-client-diagnostics-core.md)            | 客户端诊断内核单一口径                         | 已采纳 |
+| [0027](0027-vocabulary-dialog-session.md)          | 词库弹窗会话生命周期独立成 composable          | 已采纳 |
+| [0028](0028-client-room-facts.md)                  | 客户端房间事实单一口径：阶段文案与可玩成员     | 已采纳 |
+| [0029](0029-shallow-wrappers-kept.md)              | 客户端浅层包装保持现状：删除测试判定不复用折叠 | 已采纳 |
+
+### 词汇与提示
+
+| 编号                                              | 主题                                         | 状态   |
+| :------------------------------------------------ | :------------------------------------------- | :----- |
+| [0001](0001-progressive-hint-interval.md)         | 逐步提示间隔用毫秒计算、不再按秒向下取整     | 已采纳 |
+| [0004](0004-vocabulary-default-package.md)        | 词库默认包按「词数 + id」确定性选择          | 已采纳 |
+| [0013](0013-vocabulary-level-config-and-hints.md) | 词库难度级配置加载期解析与提示字段改版       | 已采纳 |
+| [0032](0032-drawer-hint-full-and-progressive.md)  | 画家模式完整提示、猜词者逐渐披露（wordHint） | 已采纳 |
+
+### 本机反馈
+
+| 编号                                             | 主题                                     | 状态   |
+| :----------------------------------------------- | :--------------------------------------- | :----- |
+| [0031](0031-guess-confetti-strict-transition.md) | 猜中礼花触发：严格跃迁、不枚举阶段       | 已采纳 |
+| [0033](0033-confetti-main-thread-rendering.md)   | 礼花改主线程渲染（CSP 拦截 blob Worker） | 已采纳 |
+
+### 启动、来源安全与配置
+
+| 编号                                        | 主题                                           | 状态   |
+| :------------------------------------------ | :--------------------------------------------- | :----- |
+| [0035](0035-startup-config-fail-fast.md)    | 启动期配置写法或取值不对即中止，不静默取默认值 | 已采纳 |
+| [0036](0036-origin-private-ip-literal.md)   | Origin 放行的私网来源只认 IP 字面量            | 已采纳 |
+| [0037](0037-allow-local-hostname-origin.md) | 来源放行面增加「服务器自己的名字」             | 已采纳 |
+
+### 构建、分发与 CI
+
 | 编号                                                       | 主题                                           | 状态   |
 | :--------------------------------------------------------- | :--------------------------------------------- | :----- |
-| [0001](0001-progressive-hint-interval.md)                  | 逐步提示间隔用毫秒计算、不再按秒向下取整       | 已采纳 |
-| [0002](0002-final-ranking-no-gaps.md)                      | 战报名次按实际产出条目递增，不留下排名空洞     | 已采纳 |
-| [0003](0003-canvas-coordinate-bounds.md)                   | 画布归一化坐标统一映射到 `canvas-1`            | 已采纳 |
-| [0004](0004-vocabulary-default-package.md)                 | 词库默认包按「词数 + id」确定性选择            | 已采纳 |
-| [0005](0005-log-retention-order.md)                        | 日志保留按创建时间删最旧，不按文件名排序       | 已采纳 |
-| [0006](0006-bgm-teardown-dispose.md)                       | BGM 切歌时释放旧实例（dispose 清 src）         | 已废弃 |
-| [0007](0007-local-observability-privacy.md)                | 本地运维诊断采用有界安全聚合                   | 已采纳 |
-| [0008](0008-context-menu-singleton-vs-teleport.md)         | 右键菜单用舞台内单例状态，不用 Teleport        | 已采纳 |
-| [0009](0009-fill-degradation-and-locks.md)                 | 填充的渲染态/提交态两把锁与 Worker 失败降级    | 已采纳 |
-| [0010](0010-drawing-history-cap.md)                        | 绘图历史上限用「拒绝新增」而非 FIFO 丢弃       | 已采纳 |
-| [0011](0011-session-logout-atomicity.md)                   | 会话注销先原子吊销持久化令牌，再清理内存       | 已采纳 |
-| [0012](0012-ack-runtime-boundary.md)                       | 客户端请求响应也建立运行时 Schema 边界         | 已采纳 |
-| [0013](0013-vocabulary-level-config-and-hints.md)          | 词库难度级配置加载期解析与提示字段改版         | 已采纳 |
-| [0014](0014-settings-view-static-import.md)                | 设置页静态导入消除首开白闪；懒加载重试桥       | 已采纳 |
-| [0015](0015-select-dropdown-fixed-anchoring.md)            | 下拉面板 fixed 视口锚定、祖先滚动即关闭        | 已采纳 |
-| [0016](0016-type-aware-guardrails.md)                      | 类型护栏分层：协议泛型接入与 strictTemplates   | 已采纳 |
-| [0017](0017-drawing-replay-atomic-commit.md)               | 画布重放原子提交：后备缓冲整帧换入除空白窗     | 已采纳 |
-| [0018](0018-canvas-replay-machine.md)                      | 画布重放状态机：决策入机、单快照入口与锁分家   | 已采纳 |
-| [0019](0019-socket-narrow-ports.md)                        | Socket 窄端口：消费者与替身不依赖全量实例      | 已采纳 |
-| [0020](0020-push-registry.md)                              | 推送事件单注册表：登记一处、清单派生           | 已采纳 |
-| [0021](0021-snapshot-view-port-and-matrix.md)              | 快照裁剪窄端口与角色×阶段穷举矩阵              | 已采纳 |
-| [0022](0022-geometry-single-source-and-request-flags.md)   | 坐标几何单口径与请求标志语义分离               | 已采纳 |
-| [0023](0023-member-facts-single-source.md)                 | 成员事实单一口径：具名谓词取代内联组合判定     | 已采纳 |
-| [0024](0024-round-machine-ownership.md)                    | 回合所有权归 RoundMachine：阶段写入与对局消息  | 已采纳 |
-| [0025](0025-resync-module.md)                              | 重连/重同步独立成 resync 模块                  | 已采纳 |
-| [0026](0026-client-diagnostics-core.md)                    | 客户端诊断内核单一口径                         | 已采纳 |
-| [0027](0027-vocabulary-dialog-session.md)                  | 词库弹窗会话生命周期独立成 composable          | 已采纳 |
-| [0028](0028-client-room-facts.md)                          | 客户端房间事实单一口径：阶段文案与可玩成员     | 已采纳 |
-| [0029](0029-shallow-wrappers-kept.md)                      | 客户端浅层包装保持现状：删除测试判定不复用折叠 | 已采纳 |
 | [0030](0030-ci-artifact-quota-and-capacity-test-window.md) | CI 工件配额兜底与容量用例的回合窗口            | 已采纳 |
-| [0031](0031-guess-confetti-strict-transition.md)           | 猜中礼花触发：严格跃迁、不枚举阶段             | 已采纳 |
-| [0032](0032-drawer-hint-full-and-progressive.md)           | 画家模式完整提示、猜词者逐渐披露（wordHint）   | 已采纳 |
-| [0033](0033-confetti-main-thread-rendering.md)             | 礼花改主线程渲染（CSP 拦截 blob Worker）       | 已采纳 |
 | [0034](0034-node-single-file-distribution.md)              | Node 单文件分发与 Windows slim/full 双包交付   | 已采纳 |
-| [0035](0035-startup-config-fail-fast.md)                   | 启动期配置写法或取值不对即中止，不静默取默认值 | 已采纳 |
-| [0036](0036-origin-private-ip-literal.md)                  | Origin 放行的私网来源只认 IP 字面量            | 已采纳 |
-| [0037](0037-allow-local-hostname-origin.md)                | 来源放行面增加「服务器自己的名字」             | 已采纳 |
 | [0038](0038-repo-local-build-temp-dir.md)                  | 构建临时目录固定到仓库内，规避 %TEMP% 删除拦截 | 已采纳 |
+
+### 已废弃
+
+| 编号                                 | 主题                                   | 状态                                       |
+| :----------------------------------- | :------------------------------------- | :----------------------------------------- |
+| [0006](0006-bgm-teardown-dispose.md) | BGM 切歌时释放旧实例（dispose 清 src） | 已废弃（BGM 子系统已整体移除，无取代 ADR） |
 
 > **决策与后果以本目录为准**，源码注释只链接本目录。
