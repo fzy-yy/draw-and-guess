@@ -5,6 +5,7 @@
  * 领域服务调用仍由 GameService 承载，本层不裁决任何游戏状态。
  */
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
+import { isIPv4 } from 'node:net'
 import path from 'node:path'
 import compression from 'compression'
 import cors from 'cors'
@@ -38,11 +39,15 @@ export function isAllowedOrigin(origin: string | undefined): boolean {
     const hostname = url.hostname.replace(/^\[|\]$/gu, '')
     // 开发代理与局域网部署都需要跨端口访问，但只允许本地/私网浏览器来源；
     // 私网判定与 findLanAddresses 播报共用 isPrivateIpv4，避免「播报的地址」被 CORS 拒绝。
+    // 私网来源必须先过 isIPv4 **字面量闸**：isPrivateIpv4 只按前缀匹配，单看前缀会把
+    // `10.attacker.com`、`192.168.evil.com` 这类**域名**当成私网放行——恶意页面可用 DNS
+    // rebinding 把自己的域名解析到受害者内网 IP，等于把局域网服务交给任意网页
+    //（域名前缀像私网 ≠ 地址在私网）。取舍与完整论证见 docs/adr/0036-origin-private-ip-literal.md。
     return (
       hostname === 'localhost' ||
       hostname === '127.0.0.1' ||
       hostname === '::1' ||
-      isPrivateIpv4(hostname)
+      (isIPv4(hostname) && isPrivateIpv4(hostname))
     )
   } catch {
     return false

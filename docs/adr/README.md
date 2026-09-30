@@ -56,5 +56,7 @@
 | [0032](0032-drawer-hint-full-and-progressive.md)           | 画家模式完整提示、猜词者逐渐披露（wordHint）   | 已采纳 |
 | [0033](0033-confetti-main-thread-rendering.md)             | 礼花改主线程渲染（CSP 拦截 blob Worker）       | 已采纳 |
 | [0034](0034-node-single-file-distribution.md)              | Node 单文件分发与 Windows slim/full 双包交付   | 已采纳 |
+| [0035](0035-startup-config-fail-fast.md)                   | 启动期配置写法或取值不对即中止，不静默取默认值 | 已采纳 |
+| [0036](0036-origin-private-ip-literal.md)                  | Origin 放行的私网来源只认 IP 字面量            | 已采纳 |
 
 > **决策与后果以本目录为准**，源码注释只链接本目录。

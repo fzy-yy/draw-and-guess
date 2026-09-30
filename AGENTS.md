@@ -247,6 +247,7 @@ pnpm start      # 单一 Express + Socket.IO 生产服务（tsx src/index.ts）
 - 其它玩家连接**同一局域网**后在浏览器输入上述地址即可。
 - 常见问题：IP/端口与终端输出不一致、设备不在同一网段、防火墙未放行 Node.js 专用网络、版本不兼容（刷新/清缓存）。
 - 部署参数可覆盖：`PORT=5180 pnpm start`、`HOST=0.0.0.0`、`LOG_LEVEL=error`、`LOG_ENABLED=false`（关闭则完全不创建日志记录器、不写日志文件）、`LOG_MAX_FILES=3`（日志文件保留上限）、`HEALTH_METRICS_ENABLED=true`（仅允许本机查看详细健康指标）、`DRAW_GUESS_OPEN_BROWSER=false`（仅分发产物模式：关闭启动后自动打开浏览器）。服务启动时会自动加载项目根目录 `.env`（复制 `.env.example` 即可）；进程已有环境变量优先级高于 `.env`。环境变量**不会**覆盖游戏规则。
+- **配置写法严格校验**：`PORT` 只接受纯十进制正整数、`HOST` 只接受 IP 字面量或 RFC1123 主机名、布尔项只接受开/关两族等价写法（`1/true/yes/on` ↔ `0/false/no/off`），写法或取值不对**启动即中止**；带 UTF-8 BOM 的 `.env` 整份拒绝加载。不静默降级、不静默取默认值（见 `docs/adr/0035-startup-config-fail-fast.md`）。
 
 ### Windows 分发包（slim / full）
 
@@ -559,7 +560,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 
 ## 配置、安全与敏感信息
 
-- **环境变量**：仅 `.env.example` 中的 `HOST / PORT / LOG_LEVEL / LOG_ENABLED / LOG_MAX_FILES / HEALTH_METRICS_ENABLED / DRAW_GUESS_OPEN_BROWSER` 可覆盖部署参数（浏览器开关仅产物模式生效）；游戏规则按 shared/public/server-private 边界修改。`.env` 已被 `.gitignore` 忽略，不入库。
+- **环境变量**：仅 `.env.example` 中的 `HOST / PORT / LOG_LEVEL / LOG_ENABLED / LOG_MAX_FILES / HEALTH_METRICS_ENABLED / DRAW_GUESS_OPEN_BROWSER` 可覆盖部署参数（浏览器开关仅产物模式生效）；游戏规则按 shared/public/server-private 边界修改。显式写下的取值或写法非法（`PORT=1e3`、`.env` 带 BOM、布尔项拼错等）一律启动即中止，不静默取默认值（ADR-0035）。`.env` 已被 `.gitignore` 忽略，不入库。
 - **密钥 / 凭据**：仓库中**不包含**任何真实密钥、Token、密码或个人信息。临时身份恢复令牌由服务端生成，明文只返回客户端并在当前服务会话内短暂持有；SQLite 仅保存 `players.token_digest` 的 SHA-256 摘要。每次成功恢复必须旋转令牌并使旧摘要失效，令牌仍不是公开快照字段。
 - **本地存储**：浏览器仅保存昵称、内置头像编号、本地设置与短期恢复令牌（见 `packages/config/src/app.ts` 的存储键）。
 - **敏感信息纪律**：禁止将真实密钥、Token、密码、私有地址或任何个人信息写入仓库、提交日志或本文件。`.gitignore` 已忽略 `.env`、`*.local`、日志与数据库文件。

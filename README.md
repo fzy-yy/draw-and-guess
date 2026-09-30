@@ -77,7 +77,8 @@ pnpm package:dist     # 构建 Windows 分发包（slim/full 两个可运行目�
 - **配置边界**：协议版本、头像白名单和载荷范围以 [`packages/shared/src/protocol/constants.ts`](packages/shared/src/protocol/constants.ts) 为唯一来源；浏览器安全默认值由 [`@draw-guess/config`](packages/config/src/index.ts) 导出；限频、数据库路径和清理策略位于 [`apps/server/src/config/`](apps/server/src/config/)；禁止跨边界复制协议常量。
 - **部署覆盖**：复制 [`.env.example`](.env.example) 为根目录 `.env`，可配置 `HOST`、`PORT`、`LOG_LEVEL`、`LOG_ENABLED`、`LOG_MAX_FILES`、`HEALTH_METRICS_ENABLED`、`DRAW_GUESS_OPEN_BROWSER`（浏览器开关仅分发产物模式生效）；服务启动时会自动加载 `.env`（进程已有环境变量优先级更高）。环境变量不会覆盖游戏规则。
   - `LOG_ENABLED=false` 时完全不创建日志记录器、不写日志文件（零内存开销）；
-  - `LOG_MAX_FILES` 控制日志文件保留条数（默认 10，每次启动新建一个 `apps/server/log/app-<秒级时间戳>.log`，超出删除最老）。
+  - `LOG_MAX_FILES` 控制日志文件保留条数（默认 10，每次启动新建一个 `apps/server/log/app-<秒级时间戳>.log`，超出删除最老）；
+  - 配置写法严格校验：`PORT` 只接受纯十进制正整数、`HOST` 只接受 IP 字面量或 RFC1123 主机名、布尔项只接受开/关两族等价写法，写法或取值不对**启动即报错**；带 UTF-8 BOM 的 `.env`（记事本与 PowerShell 5.1 的默认写法）会被整份拒绝加载，均不会静默取默认值（见 [`docs/adr/0035`](docs/adr/0035-startup-config-fail-fast.md)）。
   - `/api/health` 默认只返回版本与协议安全摘要；仅当 `HEALTH_METRICS_ENABLED=true` 且请求来自本机回环地址时返回详细聚合指标。
 - **词库来源**：[`vocabulary/`](vocabulary/) 目录下可包含多个 SQLite 词库包（metadata/words 表），由 Provider 注册并在房间内选择。词条为富字段（词面/别称/唯一分类/难度/可绘制性/提示，另有按难度从 `metadata.level_config` **加载期派生**的时限与权重），**作画阶段的结构化提示揭示词条 `hint`（为空回退分类）**；分类/难度/可绘制性必须分别落在 `category_enum`/`difficulty_enum`/`drawability_enum` 白名单内，`level_config` 必须覆盖全部难度级，`enabled=0` 的词条不参与抽选。修改后重启服务生效，异常数据会以中文错误阻止启动（详见 `docs/adr/0013-vocabulary-level-config-and-hints.md`）。
 - 服务启动时会按规范化词面去重并生成稳定 ID（`sqlite:主键`）；词条过少或过长会阻止启动并显示中文错误。
@@ -125,7 +126,7 @@ docs/adr/          架构决策记录（背景 / 决策 / 后果），源码注�
 
 **身份恢复边界**：恢复令牌明文只返回并保存在当前客户端；服务端仅在签发或校验调用栈中短暂接触明文，常驻内存与 SQLite 都只保存 SHA-256 摘要。每次成功恢复都会签发新令牌并立即使旧令牌失效；并发恢复只有一个请求能接管原身份。
 
-**浏览器边界**：HTTP API、Socket.IO polling 与 WebSocket 握手共用本机/私网 Origin 白名单。响应启用仅覆盖同源生产脚本、Socket.IO、音频、SVG/data/blob 资源与 Vue 行内 style 属性的 CSP；为保证纯 HTTP 局域网访问，不启用 `upgrade-insecure-requests` 或 HSTS。本项目仍仅面向可信局域网，不应通过端口转发、反向代理或公网 IP 暴露到互联网。
+**浏览器边界**：HTTP API、Socket.IO polling 与 WebSocket 握手共用本机/私网 Origin 白名单（私网来源**只认 IP 字面量**，`10.attacker.com` 这类域名前缀不算，见 [`docs/adr/0036`](docs/adr/0036-origin-private-ip-literal.md)）。响应启用仅覆盖同源生产脚本、Socket.IO、音频、SVG/data/blob 资源与 Vue 行内 style 属性的 CSP；为保证纯 HTTP 局域网访问，不启用 `upgrade-insecure-requests` 或 HSTS。本项目仍仅面向可信局域网，不应通过端口转发、反向代理或公网 IP 暴露到互联网。
 
 **状态持久化边界**：服务端为「内存权威 + 低频落盘」——房间、成员席位、画布笔画、聊天消息、计时器和对局实时状态均不落盘，重启即清空；仅玩家身份摘要/资料/偏好与完成局战报经 SQLite 落盘（`apps/server/data/game.db`）。重启后身份可凭客户端持有的令牌在宽限内恢复到大厅，历史战报可查。业务日志写入 `apps/server/log/` 文件（不输出到控制台，避免 Windows 控制台 GBK 解码 UTF-8 中文乱码）。分发包则把同样的数据写到 `server.mjs` 旁的 `data/`（`game.db`、`logs/`、用户自定义词库 `vocabulary/custom/`、可选 `.env`）。浏览器本地只保存三个键：`draw-and-guess-profile-v1`（昵称 / 内置头像编号 / 短期恢复令牌）、`draw-and-guess-settings-v1`（本地设置），以及 `sessionStorage` 的 `draw-and-guess-fullscreen-prompt-v1`（全屏提示已读标记）。
 

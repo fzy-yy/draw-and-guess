@@ -53,6 +53,16 @@ describe('浏览器与 Socket 握手边界', () => {
     expect(isAllowedOrigin('file:///tmp/index.html')).toBe(false)
   })
 
+  it('私网前缀的域名不被当作局域网来源：私网判定必须先过 IP 字面量闸', () => {
+    // 只按前缀判定（/^10\./ 等）时，`10.attacker.com` 这类**域名**会被当成私网放行——
+    // 恶意页面可用 DNS rebinding 把自己的域名解析到受害者内网 IP，此时浏览器发出的 Origin
+    // 与解析目标都是该域名，等于把局域网内的服务交给任意网页（见 ADR-0036）。
+    expect(isAllowedOrigin('http://10.attacker.com')).toBe(false)
+    expect(isAllowedOrigin('http://10.0.0.20.attacker.com')).toBe(false)
+    expect(isAllowedOrigin('https://192.168.1.1.evil.com')).toBe(false)
+    expect(isAllowedOrigin('http://172.16.88.1.attacker.com')).toBe(false)
+  })
+
   it('allowRequest 在 Engine.IO 握手阶段拒绝公网 Origin', async () => {
     const baseUrl = await startApplication()
     const rejected = await fetch(`${baseUrl}/socket.io/?EIO=4&transport=polling`, {
