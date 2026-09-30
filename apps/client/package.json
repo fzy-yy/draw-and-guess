@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173 --strictPort",
-    "build": "vite build",
+    "build": "node ../../scripts/with-local-temp.mjs vite build",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json && vue-tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
