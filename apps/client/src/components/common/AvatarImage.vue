@@ -26,7 +26,9 @@ const rootClass = computed(() =>
 </script>
 
 <template>
-  <span :class="rootClass" :aria-label="label">
+  <!-- role="img" + aria-label：内层 <img> 是装饰图（alt=""），可读名称由外层 span 承担；
+       generic 容器不保证无障碍名生效，需显式声明 img 语义（对齐 HostCrownBadge / DifficultyStars）。 -->
+  <span :class="rootClass" :aria-label="label" role="img">
     <img
       class="pointer-events-none h-[82%] w-[82%] object-contain"
       :src="getAvatarUrl(avatarId)"

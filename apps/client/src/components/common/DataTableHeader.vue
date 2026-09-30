@@ -1,16 +1,17 @@
-<script setup lang="ts">
+<!--
+  DataTable 的吸顶表头：列名展示、排序按钮与表头统一复选框（三态）。
+  列类型不再是本地手抄：本文件只消费 key/label/sortable 三个字段，
+  统一取 data-table.types 的 DataTableHeaderColumn（由 DataTableColumn Pick 派生），
+  与共享列定义保持单源，避免两处同形接口各自漂移。
+-->
+<script setup lang="ts" generic="T extends object">
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
+import type { DataTableHeaderColumn } from './data-table.types'
 import { DATA_TABLE_SELECTION_COLUMN_WIDTH } from './data-table-layout'
 
-export interface DataTableHeaderColumn {
-  key: string
-  label: string
-  sortable?: boolean
-}
-
 defineProps<{
-  columns: DataTableHeaderColumn[]
+  columns: DataTableHeaderColumn<T>[]
   widths: Map<string, string>
   hasSelection: boolean
   selectionMode: 'multiple' | 'single'
@@ -53,6 +54,7 @@ const emit = defineEmits<{ sort: [key: string]; 'toggle-all': [] }>()
           sortKey === column.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'
         "
       >
+        <!-- 排序语义是反向开关：sortable 缺省（undefined）即可排序，显式 false 才禁用（约定见 data-table.types 的 DataTableColumn.sortable） -->
         <button
           v-if="column.sortable !== false"
           type="button"

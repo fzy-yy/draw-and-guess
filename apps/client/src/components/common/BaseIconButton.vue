@@ -10,7 +10,7 @@ import { cn } from '@/utils/cn'
 
 const props = withDefaults(
   defineProps<{
-    /** 无障碍标签（图标按钮无可见文字，应提供；缺省不渲染 aria-label）。注：不能用 ariaLabel 作为 prop——Vue 对 aria-* 属性恒透传，无法绑定为 prop。 */
+    /** 无障碍标签（图标按钮无可见文字，应提供；缺省不渲染 aria-label）。命名约定：图标按钮家族统一用 label prop（表单类原语用 ariaLabel），组件内部落到 aria-label；两种命名都是合法的可绑定 prop，此处只是约定，并非 Vue 对 aria-* 有限制。 */
     label?: string
     /** 禁用态。 */
     disabled?: boolean

@@ -1,6 +1,7 @@
 <!--
   通用确认弹窗：图标 + 标题 + 正文 + 底部「取消/确认」按钮，基于 BaseDialog 复用了无标题栏的确认布局。
-  供对局（清空/提前结束）与房间（退出）等破坏性确认场景复用，使用统一红色 danger 确认按钮。
+  供对局（清空/提前结束）与房间（退出）等破坏性确认场景复用；确认按钮默认 danger（红色），
+  非破坏性场景可经 confirmVariant 换 primary（如诊断页「恢复默认设置」）。
 -->
 <script setup lang="ts">
 import { useId, type FunctionalComponent } from 'vue'

@@ -1,7 +1,7 @@
 <!--
   通用数据表格组件（可复用，泛型化）。
   职责边界（保持「纯展示」，业务状态全部由调用方持有，保证组件可嵌入任意场景）：
-  - 列由调用方以 columns 定义（key/label/排序取值/对齐/宽度），并预先完成「列显隐」过滤；
+  - 列由调用方以 columns 定义（key/label/排序开关/排序取值/宽度权重），渲染哪些列完全由调用方传入的数组决定；
   - 表头点击上抛 sort 事件（升/降序切换由父组件维护 sortKey/sortDir 后回传）；
   - 单元格支持两种渲染方式：具名插槽 `cell-<key>`（自定义富内容）或缺省的文本渲染；
   - 可选行首选择列：传入 selectedIds 后显示；multiple 模式使用三态复选框，single 模式使用单选按钮；
@@ -20,7 +20,7 @@ import { DATA_TABLE_SELECTION_COLUMN_WIDTH, getColumnWidths } from './data-table
 import DataTableHeader from './DataTableHeader.vue'
 
 const props = defineProps<{
-  /** 列定义（调用方已按「显示字段」过滤后的可见列） */
+  /** 列定义（可见列完全由调用方传入的数组决定，本组件不感知过滤逻辑） */
   columns: DataTableColumn<T>[]
   /** 行数据（已由调用方完成搜索/筛选/排序） */
   rows: T[]
@@ -98,14 +98,13 @@ const {
   topSpacerHeight,
   bottomSpacerHeight,
   rowAt,
-  scrollToIndex,
   scrollToTop,
 } = useVirtualTableRows<T>(
   computed<T[]>(() => props.rows),
   scrollContainer,
 )
 
-defineExpose({ scrollToIndex, scrollToTop })
+defineExpose({ scrollToTop })
 
 /**
  * 可见列的内联宽度（百分比）：按权重相对占比归一化到 100%，
@@ -133,8 +132,10 @@ const visibleRows = computed(() =>
     class="flex min-h-0 flex-col overflow-hidden rounded-none border-[0.16cqh] border-line bg-white"
   >
     <!-- 表格区：表头吸顶，表体滚动（容器高度由调用方控制）；内部只挂载可视行。
-         顶部/底部虚拟占位用 table 外的 div 承载：table-fixed 的列宽由「表格第一行」决定，
-         若占位 tr/td（colspan）成为第一行，列宽将无法从 th 读取，会产生错位空白。 -->
+         顶部/底部虚拟占位是 tbody 内的 tr/td（colspan）：列宽已由 colgroup 逐列定死，
+         占位行不再参与「第一行决定列宽」的读取（旧注释担心的错位空白随 colgroup 方案不存在了）。
+         占位高度也不能挂到 th 上——thead 仅此一行且 sticky 吸顶，把 th 撑到占位高会让
+         表头本身占满滚动区、吞掉可视行；占位必须留在 tbody 内随内容滚动。 -->
     <div
       ref="scrollContainer"
       class="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-gutter-stable"

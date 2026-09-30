@@ -17,6 +17,11 @@ export function useVirtualTableRows<T>(
   let resetFrame: number | undefined
   let resizeObserver: ResizeObserver | undefined
 
+  /**
+   * 滚动到指定行（越界钳制）。刻意**不**对外暴露：当前唯一用途是下方
+   * watch(rows) 的数据变化归零与 scrollToTop 复用；「搜索定位跳转」预留未兑现，
+   * 对外链路（DataTable expose / Vocab*TableView 转发 / ScrollableTable 契约）已整体回收。
+   */
   function scrollToIndex(index: number): void {
     const safeIndex = Math.max(0, Math.min(index, Math.max(0, rows.value.length - 1)))
     // @tanstack Virtualizer 实例直连即可：scrollToIndex/scrollToOffset/measure 都是公开
@@ -84,7 +89,7 @@ export function useVirtualTableRows<T>(
     topSpacerHeight,
     bottomSpacerHeight,
     rowAt: (index: number) => rows.value[index],
-    scrollToIndex,
+    // 对外只开放「滚动归零」；内部 scrollToIndex 不上架（理由见其函数注释）
     scrollToTop: () => scrollToIndex(0),
   }
 }

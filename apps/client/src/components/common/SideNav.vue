@@ -18,7 +18,7 @@ export interface SideNavItem<K extends string = string> {
 defineProps<{
   /** 导航条目列表（顺序即渲染顺序）。 */
   items: SideNavItem<K>[]
-  /** 无障碍标签（nav 语义，如「设置分类」）。注：不能命名为 ariaLabel——Vue 对 aria-* 属性恒透传，无法绑定为 prop（与 IconButton 同规约）。 */
+  /** 无障碍标签（nav 语义，如「设置分类」）。命名约定（与 IconButton 同规约）：图标/导航类原语用 label，表单类原语用 ariaLabel，组件内部落到 aria-label；aria-* 本可正常绑定为 prop，用 label 只是家族约定。 */
   label: string
 }>()
 

@@ -44,7 +44,6 @@ const table = ref<ScrollableTable>()
 
 defineExpose({
   scrollToTop: () => table.value?.scrollToTop(),
-  scrollToIndex: (index: number) => table.value?.scrollToIndex(index),
 })
 </script>
 

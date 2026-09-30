@@ -81,6 +81,10 @@ const { activate: activateTrap, deactivate: deactivateTrap } = useFocusTrap(dial
 /**
  * 多个弹窗可能在断线瞬间同时存在；只允许视觉层级最高者处理键盘，
  * 防止系统阻断框在最上层时，底层普通弹窗仍响应 Esc 并把焦点还到游戏控件。
+ * 注意：仲裁集合按 [role="dialog"] 全局查询——ActionPopover 面板同为 role=dialog，
+ * 也会进入该集合。两处隐性耦合：依赖 ActionPopover 根节点的 @keydown.esc.stop
+ * 在其打开期间先截获 Esc，键盘事件不落至本文件的 document 级监听（互指说明见
+ * ActionPopover.vue 的 Esc 截获注释，该侧注释由后续工单补齐）。
  */
 function isTopmostDialog(): boolean {
   const dialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]')).filter(
@@ -99,7 +103,8 @@ function handleKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Escape' || !isTopmostDialog()) return
   event.stopImmediatePropagation()
   event.preventDefault()
-  if (props.dismissible) closeDialog()
+  // dismissible 门禁只在 closeDialog 内保留一道：Esc 与模板关闭钮共用同一守卫，不再双重判断
+  closeDialog()
 }
 
 /** 打开/关闭弹窗时同步激活/失活焦点陷阱，并在失活时归还焦点。 */

@@ -1,6 +1,6 @@
 # 07 common 组件：scrollToIndex 链回收、列类型单源、注释事实修正
 
-Status: ready-for-agent
+Status: resolved
 
 ## 背景
 

@@ -77,7 +77,7 @@ const VocabularyPackageTableStub = defineComponent({
   },
   emits: ['select'],
   setup(props, { emit, expose }) {
-    expose({ scrollToTop: () => undefined, scrollToIndex: () => undefined })
+    expose({ scrollToTop: () => undefined })
     return () =>
       h(
         'div',

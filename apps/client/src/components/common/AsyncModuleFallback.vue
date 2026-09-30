@@ -1,6 +1,6 @@
 <!--
-  异步模块（懒加载）的占位与失败兜底：由 utils/lazy-component.ts 统一注入，
-  同时充当 defineAsyncComponent 的 loadingComponent 与 errorComponent。
+  异步模块（懒加载）的占位与失败兜底：由 utils/lazy-component.ts 的自管理包装组件
+  在 loading/error 两态渲染（不经 defineAsyncComponent 的 loadingComponent/errorComponent 注入）。
 
   定位约定：本组件绝对定位铺满「最近的定位祖先」，因此宿主容器必须声明 relative，
   否则会逃逸到 .game-stage 上覆盖整个舞台。容器本身 pointer-events-none（不遮挡底层交互），

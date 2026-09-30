@@ -10,7 +10,7 @@ import BaseIconButton from '@/components/common/BaseIconButton.vue'
 
 const props = withDefaults(
   defineProps<{
-    /** 无障碍标签（按钮无可见文字，必须提供）。注：不能用 ariaLabel 作为 prop——Vue 对 aria-* 属性恒透传，无法绑定为 prop。 */
+    /** 无障碍标签（按钮无可见文字，必须提供）。命名约定：图标按钮家族统一用 label prop（表单类原语用 ariaLabel），组件内部落到 aria-label；aria-* 本可正常绑定为 prop，用 label 只是家族约定。 */
     label: string
     /** 尺寸变体：default 用于对局 HUD，lg 用于房间顶栏。 */
     size?: 'default' | 'lg'
