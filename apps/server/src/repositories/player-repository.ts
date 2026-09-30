@@ -35,7 +35,7 @@ export interface PlayerRepository {
   setConnection(id: string, connected: boolean, disconnectedAt?: number): void
   remove(id: string): void
   /**
-   * 启动恢复：把全部玩家标记为断线；room_id 兼容列仅在此写一次 NULL，此后不读该列。
+   * 启动恢复：把全部玩家标记为断线（旧版 room_id 兼容列已在迁移 v7 删除，本方法不再涉及）。
    * 身份保留供宽限恢复。
    */
   markAllDisconnected(disconnectedAt: number): void
@@ -106,9 +106,10 @@ export class SqlitePlayerRepository implements PlayerRepository {
   }
 
   markAllDisconnected(disconnectedAt: number): void {
-    // room_id 为历史兼容列：仅启动恢复写一次 NULL，此后不读该列（房间不再写穿数据库）。
+    // 房间从不跨进程恢复，只需清空连接态并开启新的宽限窗口；
+    // 旧版 room_id 兼容列已在迁移 v7 删除，不再写入（否则迁移后该 UPDATE 会因列不存在而失败）。
     this.database.connection
-      .prepare('UPDATE players SET connected = 0, disconnected_at = ?, room_id = NULL')
+      .prepare('UPDATE players SET connected = 0, disconnected_at = ?')
       .run(disconnectedAt)
   }
 

@@ -194,6 +194,22 @@ export const MIGRATIONS: readonly Migration[] = [
       database.exec('DROP TABLE players_with_plaintext_token;')
     },
   },
+  {
+    version: 7,
+    name: 'drop-player-room-column-and-redundant-indexes',
+    // 清理 v1/v6 遗留的两类冗余（纯结构优化，不触碰业务数据）：
+    // - idx_players_token_digest：token_digest 的 UNIQUE 约束已由 SQLite 自动索引覆盖查询，
+    //   显式索引只会放大写入成本；v1 的 idx_players_token 已在 v6 重建表时删除，无需重复处理。
+    // - players.room_id：v5 起即为历史兼容列（没有任何读路径，仅由启动恢复写一次 NULL），
+    //   连同只服务该列的 idx_players_room 一并删除；此后玩家仓储不再写该列。
+    // 顺序要求：先删索引再删列——SQLite 不允许删除仍被索引引用的列
+    //（DROP COLUMN 需 3.35+，better-sqlite3 内置版本满足）。
+    up: `
+      DROP INDEX IF EXISTS idx_players_token_digest;
+      DROP INDEX IF EXISTS idx_players_room;
+      ALTER TABLE players DROP COLUMN room_id;
+    `,
+  },
 ]
 
 /**

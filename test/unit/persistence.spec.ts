@@ -44,6 +44,23 @@ describe('SQLite 迁移与事务边界', () => {
     expect(versions).toHaveLength(MIGRATIONS.length)
   })
 
+  it('迁移 v7 删除 players 冗余索引与废弃 room_id 列', () => {
+    runMigrations(database)
+    const db = database.connection
+    // 列层面：room_id 兼容列已删除。
+    const columns = db.prepare('PRAGMA table_info(players)').all() as Array<{ name: string }>
+    expect(columns.map((column) => column.name)).not.toContain('room_id')
+    // 索引层面：显式冗余索引与死列索引均删除；token_digest 的唯一性仍由 UNIQUE 自动索引保证，
+    // 唯一约束未被削弱（v1 的 idx_players_token 早在 v6 随旧表删除，同样不应出现）。
+    const indexNames = (
+      db.prepare('PRAGMA index_list(players)').all() as Array<{ name: string }>
+    ).map((index) => index.name)
+    expect(indexNames).not.toContain('idx_players_token')
+    expect(indexNames).not.toContain('idx_players_token_digest')
+    expect(indexNames).not.toContain('idx_players_room')
+    expect(indexNames.some((name) => name.startsWith('sqlite_autoindex_players'))).toBe(true)
+  })
+
   it('战报从表写入失败时回滚整局，重复归档保持单行并更新结果', () => {
     runMigrations(database)
     const db = database.connection
@@ -138,11 +155,10 @@ describe('SQLite 迁移与事务边界', () => {
       .all() as Array<{ name: string }>
     expect(tables.map((table) => table.name)).not.toContain('rooms')
     expect(tables.map((table) => table.name)).not.toContain('room_members')
-    expect(db.prepare('SELECT room_id FROM players WHERE id = ?').get('player-1')).toMatchObject({
-      room_id: null,
-    })
+    // v7 已删除废弃的 room_id 兼容列：升级前写入的 legacy-room 引用随之消失。
     const playerColumns = db.prepare('PRAGMA table_info(players)').all() as Array<{ name: string }>
     expect(playerColumns.map((column) => column.name)).not.toContain('token')
+    expect(playerColumns.map((column) => column.name)).not.toContain('room_id')
     expect(
       db.prepare('SELECT token_digest FROM players WHERE id = ?').get('player-1'),
     ).toMatchObject({ token_digest: digestRecoveryToken('token-1') })
