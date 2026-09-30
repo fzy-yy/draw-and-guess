@@ -1,6 +1,6 @@
-import type { PlayerSecret, RoomSecret } from './../models.ts'
-import type { ArchiveRepository, PlayerRepository } from './../repositories/index.ts'
-import { type RuntimeDependencies } from './../runtime.ts'
+import type { PlayerSecret, RoomSecret } from '../models.ts'
+import type { ArchiveRepository, PlayerRepository } from '../repositories/index.ts'
+import { type RuntimeDependencies } from '../runtime.ts'
 
 /** 仅暴露本用例需要的数据与副作用端口；由应用层连接跨用例动作。 */
 export interface RoomPersistenceCoordinatorContext {
@@ -29,7 +29,8 @@ export class RoomPersistenceCoordinator {
 
   public persistGameResult(room: RoomSecret, reason: string): void {
     const game = room.game
-    if (!game || !game.finalRanking) return
+    // 空榜单不写归档：全员资料缺失（极端注销时序）时归档没有任何玩家结果，只会制造空战报噪音。
+    if (!game || !game.finalRanking || game.finalRanking.length === 0) return
     const finishedAt = this.context.clock.now()
     // game_results：逐玩家最终结果（从冻结的 finalRanking 拆出）。
     const results = game.finalRanking.map((entry) => ({

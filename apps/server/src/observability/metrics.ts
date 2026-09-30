@@ -7,6 +7,11 @@ import {
 
 const MAX_COUNTER = Number.MAX_SAFE_INTEGER
 const MAX_LATENCY_MS = 60_000
+/**
+ * 运行时白名单是有界键空间的执行点（ADR-0007：指标只使用有限协议事件名与错误码）。
+ * 类型系统在运行时不生效——调用方经 `as` 绕过类型传入任意键会无界污染 Map 键空间，
+ * 因此不能只靠类型约束；测试显式验证「绕过类型的非法值不进入指标」。
+ */
 const KNOWN_EVENTS = new Set(Object.keys(CLIENT_REQUEST_SCHEMAS))
 const KNOWN_ERROR_CODES = new Set<string>(Object.values(ERROR_CODES))
 
@@ -58,10 +63,11 @@ export class OperationalMetrics {
   }
 
   recordAcknowledgement(event: ClientRequestEvent, latencyMs: number, errorCode?: ErrorCode): void {
+    // 运行时白名单判定是有界键空间的执行点（见文件头注释），与类型约束不是双养关系。
     if (!KNOWN_EVENTS.has(event)) return
     const nextCount = increment(this.acknowledgementCount)
     const sample = Number.isFinite(latencyMs) ? Math.min(MAX_LATENCY_MS, Math.max(0, latencyMs)) : 0
-    // 数值达到饱和后继续用固定权重更新均值，避免长期进程累计值溢出。
+    // 递推均值（EWMA 式）：权重随计数递减；计数饱和后权重趋近 0、均值冻结，避免累计值溢出。
     const weight = 1 / Math.max(1, nextCount)
     this.averageAckLatencyMs += (sample - this.averageAckLatencyMs) * weight
     this.acknowledgementCount = nextCount
