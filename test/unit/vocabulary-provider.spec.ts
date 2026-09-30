@@ -4,7 +4,7 @@
  * 覆盖点：
  * 1. 正常加载：level_config 按难度派生 timeLimit/scoreWeight、hint trim、enabled 过滤、meta 透传与版本哈希；
  * 2. 严格校验（异常数据必须以中文 Error 阻止加载，绝不带病运行）：
- *    level_config 缺失/缺级/多余键/条目非法、difficulty_enum/drawability_enum 缺失、
+ *    level_config 缺失/缺级/多余键/条目非法、difficulty_enum/drawability_enum/category_enum 缺失、
  *    分类越界、可绘制性越界、提示超长、别称超数、词面重复；
  * 3. 内容哈希对 hint/drawability 变化的敏感性。
  *
@@ -330,6 +330,12 @@ describe('SqliteProvider 严格校验（异常数据阻止加载）', () => {
     )
     await expect(load(createVocabDb({ removeMeta: ['drawability_enum'] }))).rejects.toThrow(
       /drawability_enum/,
+    )
+  })
+
+  it('缺少 category_enum → 拒绝并点名元数据键（而非误导为词条分类越界）', async () => {
+    await expect(load(createVocabDb({ removeMeta: ['category_enum'] }))).rejects.toThrow(
+      /category_enum.*非空 JSON 数组/,
     )
   })
 

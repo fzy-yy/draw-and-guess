@@ -39,10 +39,13 @@ function buildWords(count?: number): VocabularyWord[] {
   }))
 }
 
-/** 构建内存 VocabularyRegistry（单一词库包，id 命名为 base_words 以贴合现有快照与 UI 约定）。 */
-export function createMemoryVocabularyRegistry(): VocabularyRegistry {
+/**
+ * 构建内存 VocabularyRegistry（单一词库包，id 命名为 base_words 以贴合现有快照与 UI 约定）。
+ * wordCount 缺省为开局裁决线（buildWordSpecs 默认值）；可传更小值以验证「包词数不足」的门槛。
+ */
+export function createMemoryVocabularyRegistry(wordCount?: number): VocabularyRegistry {
   const packageId = 'base_words'
-  const items = buildWords()
+  const items = buildWords(wordCount)
   const byId = new Map(items.map((word) => [word.id, word]))
   const store = {
     items,

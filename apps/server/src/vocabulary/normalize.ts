@@ -20,21 +20,24 @@ export function canonicalWordId(source: string, rawId: string | number): string 
  * 输入包含 id/text/aliases/category/difficulty/drawability/hint 与加载期派生的
  * timeLimit/scoreWeight 等全部玩法相关字段，
  * 任何内容变化都会得到新版本号，供客户端对比与房间词库重置判断。
+ * 每个词条先用 JSON 序列化成数组再按行拼接：字段经 JSON 转义，
+ * 消除 `§`/`,` 等分隔符出现在词面或别称里时的编码歧义（不同内容不得映射到同一哈希）。
+ * 词条顺序即数组顺序（Provider 按主键排序读取），内容不变则版本号不变。
  */
 export function hashWords(words: VocabularyWord[]): string {
   const canonical = words
     .map((word) =>
-      [
+      JSON.stringify([
         word.id,
         word.text,
-        word.aliases.join(','),
+        word.aliases,
         word.category,
         word.difficulty,
         word.drawability,
         word.hint,
-        word.timeLimit ?? '',
-        word.scoreWeight ?? '',
-      ].join('§'),
+        word.timeLimit ?? null,
+        word.scoreWeight ?? null,
+      ]),
     )
     .join('\n')
   return createHash('sha256').update(canonical).digest('hex').slice(0, 12)

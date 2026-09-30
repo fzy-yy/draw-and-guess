@@ -1,7 +1,8 @@
 /**
  * 词库来源提供者契约（Provider 架构的核心扩展点）。
  *
- * 领域层（GameService/RoundMachine/Snapshot）只依赖本文件定义的接口与 LoadedVocabulary 结构，
+ * 本文件是 Provider 侧契约（加载与校验的扩展点）；领域侧消费面见 index.ts 的
+ * VocabularyRegistry / VocabularyStore（GameService/RoundMachine/Snapshot 等依赖后者），
  * 与「词库数据从哪来」彻底解耦：
  * - 当前实现：sqlite-provider.ts（SQLite 词库库文件，words/metadata 表）；
  * - 将来扩展：实现本接口的新 Provider 后，在 vocabulary/index.ts 的 loadVocabulary

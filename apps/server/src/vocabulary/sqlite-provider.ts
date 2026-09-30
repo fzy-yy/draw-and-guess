@@ -73,10 +73,13 @@ export class SqliteProvider implements VocabularyProvider {
       const usedIds = new Set<number>()
       const parsedWords: VocabularyWord[] = []
 
+      // 哈希版本号按数组顺序逐词拼接：SQL 不保证行序（VACUUM 重写文件、查询计划变化都会改序），
+      // 必须显式 ORDER BY id，才能保证「内容不变则版本号不变」的确定性。
       const rows = database
         .prepare(
           `SELECT id, text, category, difficulty, drawability, enabled, aliases, hint, updated_at
-           FROM words`,
+           FROM words
+           ORDER BY id`,
         )
         .all() as WordRow[]
 
@@ -167,6 +170,15 @@ export class SqliteProvider implements VocabularyProvider {
         return []
       }
     }
+    // 必填非空白名单：category_enum 缺失/畸形时若静默返回空集，逐词校验会把错误指向
+    // 词条本身（「分类不在白名单内」）而非元数据，排查方向被误导；这里直接点名元数据键 fail-fast。
+    const parseRequiredList = (key: string): string[] => {
+      const list = parseList(key)
+      if (list.length === 0) {
+        throw new Error(`词库元数据缺少合法的 ${key}（应为非空 JSON 数组），请修正词库数据。`)
+      }
+      return list
+    }
     const parseNumberList = (key: string): number[] => {
       const list = parseList(key)
         .map(Number)
@@ -183,8 +195,8 @@ export class SqliteProvider implements VocabularyProvider {
       description: map.get('description')?.trim(),
       version: map.get('version'),
       updatedAt: map.get('updated_at'),
-      categoryEnum: parseList('category_enum'),
-      // 难度与可绘制性白名单是 level_config 完整性与逐词校验的基准，缺失即异常数据
+      categoryEnum: parseRequiredList('category_enum'),
+      // 三个白名单都是逐词校验与 level_config 完整性的基准，缺失即异常数据
       difficultyEnum,
       drawabilityEnum: parseNumberList('drawability_enum'),
       levelConfig,
@@ -265,6 +277,8 @@ export class SqliteProvider implements VocabularyProvider {
     drawabilitySet: Set<number>,
     usedIds: Set<number>,
   ): void {
+    // 重复主键检查：正式库与测试 fixture 的 words.id 都是 INTEGER PRIMARY KEY，重复本不可能出现；
+    // 保留此检查是为将来「未声明主键的自定义词库」兜底（Provider 是异常数据的最后防线）。
     if (usedIds.has(row.id)) {
       throw new Error(`词库存在重复主键：「${row.id}」，请修正词库数据。`)
     }

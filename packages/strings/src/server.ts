@@ -52,6 +52,10 @@ export const serverStrings = {
     VERSION_CONFLICT_START: '房间状态已变化，请确认所有人准备后重试',
     VOCABULARY_TOO_SMALL: (min: number) => `至少选择 ${min} 个词条`,
     VOCABULARY_TOO_SMALL_GAME: (required: number) => `本局至少需要选择 ${required} 个词条`,
+    // 词库包本身的词数不足以开局（区别于「勾选数不足」）：切换词库时提前拒绝，
+    // 避免房主先选中、再在 startGame 阶段才收到失败。
+    VOCABULARY_PACKAGE_TOO_SMALL: (count: number, min: number) =>
+      `该词库仅 ${count} 个词条，不足以开局（至少需要 ${min} 个）`,
     VOCABULARY_PACKAGE_NOT_FOUND: '指定的词库不存在或未加载',
     INVALID_WORD_ID: '选择中包含无效词条，请刷新词库',
     INVALID_WORD_ID_CHOOSE: '候选词已失效，请等待服务端自动选择',

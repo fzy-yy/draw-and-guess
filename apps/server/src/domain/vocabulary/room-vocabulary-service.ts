@@ -41,6 +41,19 @@ export class RoomVocabularyService {
       throw new GameError('VERSION_CONFLICT', serverStrings.errors.VERSION_CONFLICT_VOCABULARY)
     const target = this.context.registry.get(packageId)
     if (!target) throw new GameError('NOT_FOUND', serverStrings.errors.VOCABULARY_PACKAGE_NOT_FOUND)
+    // 选中即校验：加载门槛（APP_CONFIG.vocabulary.minWords）只保证「库可用」，
+    // 6～59 词的自定义库能出现在包列表里，却不足以开局（MIN_SELECTED_VOCABULARY_WORDS）。
+    // 若放行到写入后，房主只能在开局失败时才发现并手动切回大词库；
+    // 这里在任何状态写入之前以可读错误拒绝（update() 的勾选校验语义不变）。
+    if (target.items.length < MIN_SELECTED_VOCABULARY_WORDS) {
+      throw new GameError(
+        'VOCABULARY_TOO_SMALL',
+        serverStrings.errors.VOCABULARY_PACKAGE_TOO_SMALL(
+          target.items.length,
+          MIN_SELECTED_VOCABULARY_WORDS,
+        ),
+      )
+    }
     room.vocabularyPackageId = packageId
     room.selectedWordIds = new Set(target.items.map((word) => word.id))
     room.stateVersion += 1

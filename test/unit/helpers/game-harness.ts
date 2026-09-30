@@ -4,6 +4,7 @@ import { defaultRoomSettings } from '@draw-guess/config'
 import { GameService } from '../../../apps/server/src/game-service.ts'
 import { SILENT_LOGGER, type RuntimeLogger } from '../../../apps/server/src/errors.ts'
 import type { RuntimeDependencies } from '../../../apps/server/src/runtime.ts'
+import type { VocabularyRegistry } from '../../../apps/server/src/vocabulary/index.ts'
 import { createMemoryRepositories } from './in-memory-repositories.ts'
 import { createMemoryVocabularyRegistry } from './mini-vocabulary.ts'
 import { createFakeRuntime, type FakeRuntime } from './fake-clock.ts'
@@ -51,6 +52,8 @@ export function createGameHarness(
   options: {
     runtime?: FakeRuntime
     repositories?: ReturnType<typeof createMemoryRepositories>
+    /** 注入自定义词库注册表（如低于开局裁决线的小词库），默认使用标准内存词库。 */
+    vocabulary?: VocabularyRegistry
     /** 注入记录型日志器即可断言「失败必须落白名单日志」；默认静默。 */
     logger?: RuntimeLogger
   } = {},
@@ -69,7 +72,7 @@ export function createGameHarness(
   } as unknown as ServiceIo
   const service = new GameService(
     io,
-    createMemoryVocabularyRegistry(),
+    options.vocabulary ?? createMemoryVocabularyRegistry(),
     repositories,
     options.logger ?? SILENT_LOGGER,
     runtime as RuntimeDependencies,

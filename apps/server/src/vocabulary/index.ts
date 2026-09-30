@@ -40,14 +40,9 @@ export interface VocabularyRegistry {
   getDefault(): VocabularyStore
 }
 
-/** 判断目录项是否为可加载的词库文件（排除 SQLite 运行期附属文件）。 */
+/** 判断目录项是否为可加载的词库文件：只认 .db 后缀，SQLite 辅助文件（-journal/-wal/-shm）天然被排除。 */
 function isVocabularyFile(file: string): boolean {
-  return (
-    file.endsWith('.db') &&
-    !file.endsWith('-journal') &&
-    !file.endsWith('-wal') &&
-    !file.endsWith('-shm')
-  )
+  return file.endsWith('.db')
 }
 
 /**
@@ -135,12 +130,13 @@ export async function loadVocabulary(
 
   const getDefault = (): VocabularyStore => {
     const found = stores.get(defaultPackageId)
-    if (!found) {
-      const first = stores.values().next().value
-      if (!first) throw new Error('没有任何有效词库已被加载')
-      return first
-    }
-    return found
+    if (found) return found
+    // 启动期不变式：stores 必非空（循环至少加载一个库，加载失败即抛错），
+    // defaultPackageId 也由 packages[0] 派生且与 stores 同步写入，故本分支仅作类型收窄。
+    // 生产代码禁用非空断言，这里保留显式兜底错误以便损坏状态可诊断。
+    const first = stores.values().next().value
+    if (!first) throw new Error('没有任何有效词库已被加载')
+    return first
   }
 
   return {
