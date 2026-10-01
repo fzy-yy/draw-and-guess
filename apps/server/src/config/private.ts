@@ -44,6 +44,5 @@ export const serverPrivateConfig = {
     difficultyRange: { min: 1, max: 5 },
     deduplicate: true,
     resetWhenExhausted: true,
-    useWordTimeLimit: true,
   },
 } as const

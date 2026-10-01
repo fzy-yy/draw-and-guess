@@ -105,7 +105,12 @@ function chooseWord(wordId: string): void {
           />
         </button>
       </div>
-      <span>{{ strings.game.autoChoose(secondsLeft) }}</span>
+      <!-- 选词阶段关闭限时时没有倒计时：提示「不限时」而不是「N 秒后自动选择」 -->
+      <span>{{
+        store.room.settings.allowChooseTimeLimit
+          ? strings.game.autoChoose(secondsLeft)
+          : strings.game.chooseNoLimitHint
+      }}</span>
     </OverlayCard>
     <!-- 阶段遮罩：游戏暂停（房主可继续或提前结束） -->
     <OverlayCard v-else-if="store.room.phase === 'paused'">

@@ -157,14 +157,17 @@ export function countOnlinePlayers(room: MemberList, isOnline: OnlineLookup): nu
  * round_result（全局结算展示时长）。round_result 若缺标称值，暂停快照会把总时长误算为
  * 冻结剩余量，使客户端进度条被钉死在 100%。其余阶段（starting/game_result 等）不可暂停，
  * 无标称值，返回 undefined。
+ * 选词阶段关闭限时（allowChooseTimeLimit=false）时同样返回 undefined——
+ * 该阶段本就没有截止时间，调用方据此保持 `phaseEndsAt = 0` 哨兵而不是重建倒计时。
  */
 export function nominalPhaseDurationMs(
   phase: RoomPhase | undefined,
   game: Pick<GameSecret, 'roundDurationMs'>,
-  settings: Pick<RoomSettings, 'chooseSeconds'>,
+  settings: Pick<RoomSettings, 'chooseSeconds' | 'allowChooseTimeLimit'>,
 ): number | undefined {
   if (phase === 'drawing') return game.roundDurationMs
-  if (phase === 'choosing_word') return settings.chooseSeconds * 1_000
+  if (phase === 'choosing_word')
+    return settings.allowChooseTimeLimit ? settings.chooseSeconds * 1_000 : undefined
   if (phase === 'round_result') return APP_CONFIG.game.roundResultSeconds * 1_000
   return undefined
 }

@@ -75,7 +75,9 @@ describe('RoomSettingsSchema 正/负向配对', () => {
   it('越界与错误类型被拒绝', () => {
     const valid = defaultRoomSettings(6)
     expect(RoomSettingsSchema.safeParse({ ...valid, progressiveHints: 1 }).success).toBe(false)
-    expect(RoomSettingsSchema.safeParse({ ...valid, extraGuessSeconds: 91 }).success).toBe(false)
+    // 单回合时长收窄为四档白名单：区间内的旧值（如 105）同样非法
+    expect(RoomSettingsSchema.safeParse({ ...valid, drawSeconds: 105 }).success).toBe(false)
+    expect(RoomSettingsSchema.safeParse({ ...valid, drawSeconds: 45 }).success).toBe(false)
   })
 })
 

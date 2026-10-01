@@ -1,4 +1,4 @@
-import { ROOM_RULE_LIMITS } from '@draw-guess/shared/protocol/constants'
+import { DRAW_SECONDS_OPTIONS, ROOM_RULE_LIMITS } from '@draw-guess/shared/protocol/constants'
 import type { RoomSettings } from '@draw-guess/shared'
 
 /**
@@ -13,14 +13,13 @@ import type { RoomSettings } from '@draw-guess/shared'
 /** 房间规则默认基线（不含容量；容量按建房场景注入）。 */
 export const roomSettingsDefaults = {
   roundsPerPlayer: 2,
-  drawSeconds: 90,
+  drawSeconds: 120,
   chooseSeconds: 15,
+  allowChooseTimeLimit: false,
   optionCount: 3,
   showWordLength: true,
   progressiveHints: true,
   guessBaseScore: 300,
-  /** 额外猜词时间：默认 0（不额外增加），叠加在难度派生时限之上。 */
-  extraGuessSeconds: 0,
   allowPlayerInvite: true,
   allowPause: true,
   allowWordReroll: true,
@@ -39,9 +38,8 @@ export const game = {
     step: 1,
   },
   drawSeconds: {
-    ...ROOM_RULE_LIMITS.drawSeconds,
+    options: DRAW_SECONDS_OPTIONS,
     default: roomSettingsDefaults.drawSeconds,
-    step: 15,
   },
   chooseSeconds: {
     ...ROOM_RULE_LIMITS.chooseSeconds,
@@ -52,15 +50,6 @@ export const game = {
     ...ROOM_RULE_LIMITS.optionCount,
     default: roomSettingsDefaults.optionCount,
     step: 1,
-  },
-  /**
-   * 额外猜词时间滑块：在词条难度派生时限（或作画时间回退）之上叠加的秒数。
-   * 合法区间来自协议 ROOM_RULE_LIMITS（0~90，改上限只动 shared 常量），步进 5。
-   */
-  extraGuessSeconds: {
-    ...ROOM_RULE_LIMITS.extraGuessSeconds,
-    default: roomSettingsDefaults.extraGuessSeconds,
-    step: 5,
   },
   startingCountdownSeconds: 3, // 开局倒计时
   roundResultSeconds: 6, // 回合结算展示时长

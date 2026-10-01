@@ -120,10 +120,10 @@ describe('RulesDialog 完整规则字段', () => {
       strings.room.chooseTimeField,
       strings.room.optionCountField,
       strings.room.joinPolicyField,
+      strings.room.toggleChooseTimeLimit,
       strings.room.togglePlayerInvite,
       strings.room.toggleAllowWordReroll,
-      strings.room.drawFallbackField,
-      strings.room.extraGuessSecondsField,
+      strings.room.drawSecondsField,
       strings.room.guessBaseScoreField,
       strings.room.toggleShowWordLength,
       strings.room.toggleProgressiveHints,
@@ -144,7 +144,6 @@ describe('RulesDialog 完整规则字段', () => {
       expect.objectContaining({
         maxPlayers: 4,
         joinPolicy: 'forbid',
-        extraGuessSeconds: 0,
         allowPause: !draft.allowPause,
       }),
     )

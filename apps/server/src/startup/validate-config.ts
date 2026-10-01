@@ -27,7 +27,10 @@ export function validateBusinessConfig(config: typeof APP_CONFIG = APP_CONFIG): 
   const { player, game, drawing, vocabulary } = config
   requireConfig(player.minPlayers <= player.maxPlayers, '玩家最小人数不能大于最大人数')
   requireDefaultInRange('每人轮数', game.roundsPerPlayer)
-  requireDefaultInRange('作画秒数', game.drawSeconds)
+  requireConfig(
+    game.drawSeconds.options.includes(game.drawSeconds.default),
+    '单回合时长默认值必须落在合法档位内',
+  )
   requireDefaultInRange('选词秒数', game.chooseSeconds)
   requireDefaultInRange('画笔宽度', drawing.width)
   requireConfig(

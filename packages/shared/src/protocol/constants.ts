@@ -2,7 +2,7 @@
  * 线上协议的公开约束。前后端配置与 Zod Schema 都必须引用这里，避免边界两侧各维护一份。
  * 这里只放会影响协议兼容性或客户端可提交载荷的值；限频、持久化与清理策略属于服务端私有配置。
  */
-export const PROTOCOL_VERSION = '15' as const
+export const PROTOCOL_VERSION = '16' as const
 
 /**
  * room:closed 推送的稳定关闭码：客户端按码分支（例如被踢弹窗），展示文案只用于提示。
@@ -72,14 +72,18 @@ export const PLAYER_PROTOCOL_LIMITS = {
   chatMaxLength: 60,
 } as const
 
+/**
+ * 单回合时长的合法档位（秒）：房间规则只允许在这四档之间选择。
+ * 收窄成白名单而非区间，是因为「单回合时长」现在只由房间决定——
+ * 词条难度派生的时限已移除（见 docs/adr/0046-vocabulary-slimming-and-unified-round-time.md）。
+ */
+export const DRAW_SECONDS_OPTIONS = [60, 90, 120, 150] as const
+
 export const ROOM_RULE_LIMITS = {
   roundsPerPlayer: { min: 1, max: 5 },
-  drawSeconds: { min: 45, max: 180 },
   chooseSeconds: { min: 10, max: 30 },
   optionCount: { min: 2, max: 5 },
   guessBaseScore: { min: 50, max: 2_000 },
-  // 额外猜词时间：在难度派生时限之上叠加，用于降低难度；0 表示不额外增加。
-  extraGuessSeconds: { min: 0, max: 90 },
 } as const
 
 export const PRIVATE_ROOM_CODE = {

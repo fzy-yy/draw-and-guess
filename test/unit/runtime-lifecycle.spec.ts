@@ -7,7 +7,7 @@ describe('统一假运行时驱动完整回合生命周期', () => {
     const harness = createGameHarness()
     const { host, guest, room, game } = startTwoPlayerGame(
       harness,
-      testRoomSettings({ drawSeconds: 90, chooseSeconds: 10 }),
+      testRoomSettings({ drawSeconds: 90, chooseSeconds: 10, allowChooseTimeLimit: true }),
     )
     expect(room.phase).toBe('choosing_word')
     const answer = game.candidates[0]!

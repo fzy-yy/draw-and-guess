@@ -139,7 +139,7 @@ describe('member-facts 选择器与计数契约', () => {
 
 describe('nominalPhaseDurationMs 契约', () => {
   const game = { roundDurationMs: 45_000 }
-  const settings = { chooseSeconds: 12 }
+  const settings = { chooseSeconds: 12, allowChooseTimeLimit: true }
 
   it('drawing 返回本回合实际作画时长', () => {
     expect(nominalPhaseDurationMs('drawing', game, settings)).toBe(45_000)
@@ -147,6 +147,15 @@ describe('nominalPhaseDurationMs 契约', () => {
 
   it('choosing_word 返回房间选词秒数换算的毫秒', () => {
     expect(nominalPhaseDurationMs('choosing_word', game, settings)).toBe(12_000)
+  })
+
+  it('选词阶段关闭限时时没有标称总时长（调用方据此保持无截止时间哨兵）', () => {
+    expect(
+      nominalPhaseDurationMs('choosing_word', game, {
+        chooseSeconds: 12,
+        allowChooseTimeLimit: false,
+      }),
+    ).toBeUndefined()
   })
 
   it('round_result 返回全局结算展示时长（暂停快照按它换算进度，防进度条钉死）', () => {

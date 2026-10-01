@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   AVATAR_IDS,
+  DRAW_SECONDS_OPTIONS,
   DRAWING_PROTOCOL_LIMITS,
   PLAYER_PROTOCOL_LIMITS,
   PRIVATE_ROOM_CODE,
@@ -40,7 +41,7 @@ describe('monorepo 包边界', () => {
     expect(APP_CONFIG.player.nicknameMaxLength).toBe(PLAYER_PROTOCOL_LIMITS.nicknameMaxLength)
     expect(APP_CONFIG.room.privateCodeLength).toBe(PRIVATE_ROOM_CODE.length)
     expect(APP_CONFIG.game.roundsPerPlayer.min).toBe(ROOM_RULE_LIMITS.roundsPerPlayer.min)
-    expect(APP_CONFIG.game.drawSeconds.max).toBe(ROOM_RULE_LIMITS.drawSeconds.max)
+    expect(APP_CONFIG.game.drawSeconds.options).toBe(DRAW_SECONDS_OPTIONS)
     expect(APP_CONFIG.drawing.colorPattern).toBe(DRAWING_PROTOCOL_LIMITS.colorPattern)
     expect(APP_CONFIG.drawing.width.min).toBe(DRAWING_PROTOCOL_LIMITS.width.min)
     expect(APP_CONFIG.drawing.maxPointsPerBatch).toBe(DRAWING_PROTOCOL_LIMITS.maxPointsPerBatch)

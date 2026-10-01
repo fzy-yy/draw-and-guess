@@ -1,8 +1,24 @@
 import { z } from 'zod'
 import { RequestSchema } from './base.ts'
-import { PLAYER_PROTOCOL_LIMITS, PRIVATE_ROOM_CODE, ROOM_RULE_LIMITS } from './constants.ts'
+import {
+  DRAW_SECONDS_OPTIONS,
+  PLAYER_PROTOCOL_LIMITS,
+  PRIVATE_ROOM_CODE,
+  ROOM_RULE_LIMITS,
+} from './constants.ts'
 
 export const RoomVisibilitySchema = z.enum(['public', 'private'])
+
+/**
+ * 单回合时长：字面量联合直接由 DRAW_SECONDS_OPTIONS 展开，
+ * 保证「合法档位」在协议与配置之间只有一份来源（105/135 这类旧值会被拒）。
+ */
+export const DrawSecondsSchema = z.union([
+  z.literal(DRAW_SECONDS_OPTIONS[0]),
+  z.literal(DRAW_SECONDS_OPTIONS[1]),
+  z.literal(DRAW_SECONDS_OPTIONS[2]),
+  z.literal(DRAW_SECONDS_OPTIONS[3]),
+])
 
 export const RoomSettingsSchema = z
   .object({
@@ -16,16 +32,18 @@ export const RoomSettingsSchema = z
       .int()
       .min(ROOM_RULE_LIMITS.roundsPerPlayer.min)
       .max(ROOM_RULE_LIMITS.roundsPerPlayer.max),
-    drawSeconds: z
-      .number()
-      .int()
-      .min(ROOM_RULE_LIMITS.drawSeconds.min)
-      .max(ROOM_RULE_LIMITS.drawSeconds.max),
+    drawSeconds: DrawSecondsSchema,
     chooseSeconds: z
       .number()
       .int()
       .min(ROOM_RULE_LIMITS.chooseSeconds.min)
       .max(ROOM_RULE_LIMITS.chooseSeconds.max),
+    /**
+     * 选词阶段是否计时。关闭时服务端不写截止时间（phaseEndsAt = 0）、不排超时计时器，
+     * 画家可以一直想；只有画家离开/掉线才由兜底路径代选
+     * （见 docs/adr/0045-custom-word-and-untimed-choosing.md）。
+     */
+    allowChooseTimeLimit: z.boolean(),
     optionCount: z
       .number()
       .int()
@@ -38,12 +56,6 @@ export const RoomSettingsSchema = z
       .int()
       .min(ROOM_RULE_LIMITS.guessBaseScore.min)
       .max(ROOM_RULE_LIMITS.guessBaseScore.max),
-    // 额外猜词时间：叠加在难度派生时限之上的秒数（0~90），计分方式已固定为标准不再可配。
-    extraGuessSeconds: z
-      .number()
-      .int()
-      .min(ROOM_RULE_LIMITS.extraGuessSeconds.min)
-      .max(ROOM_RULE_LIMITS.extraGuessSeconds.max),
     allowPlayerInvite: z.boolean(),
     allowPause: z.boolean(),
     allowWordReroll: z.boolean(),

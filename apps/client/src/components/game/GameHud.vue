@@ -61,9 +61,18 @@ const roundDisplay = computed(() => {
   return Math.min(Math.max(game.currentRound, 1), game.totalRounds)
 })
 
+/**
+ * 当前阶段是否有截止时间：`phaseEndsAt = 0` 是本项目「本阶段无截止时间」的哨兵
+ * （选词阶段关闭限时，或该阶段处于暂停），此时不渲染倒计时与进度条，改显示「不限时」。
+ */
+const hasDeadline = computed(() => (props.game?.phaseEndsAt ?? 0) > 0)
+
 /** 最后 10 秒（且未归零）进入紧急样式：计时器底色与进度条同步变红。 */
 const isUrgent = computed(
-  () => props.secondsLeft <= store.config.game.warningSeconds && props.secondsLeft > 0,
+  () =>
+    hasDeadline.value &&
+    props.secondsLeft <= store.config.game.warningSeconds &&
+    props.secondsLeft > 0,
 )
 
 /**
@@ -168,13 +177,16 @@ function handlePauseToggle(): void {
         :class="{ 'bg-red': isUrgent }"
       >
         <Clock3 class="h-[2.5cqh] w-[2.5cqh] shrink-0" />
-        <b class="min-w-0 text-center text-fs-24 tabular-nums">{{ secondsLeft }}</b>
-        <span class="shrink-0 text-fs-10 text-sky">{{ strings.game.secondsSuffix }}</span>
-        <i
-          class="absolute bottom-0 left-0 h-[0.45cqh] w-full origin-left"
-          :class="isUrgent ? 'bg-yellow' : 'bg-green'"
-          :style="{ transform: `scaleX(${progress})` }"
-        ></i>
+        <template v-if="hasDeadline">
+          <b class="min-w-0 text-center text-fs-24 tabular-nums">{{ secondsLeft }}</b>
+          <span class="shrink-0 text-fs-10 text-sky">{{ strings.game.secondsSuffix }}</span>
+          <i
+            class="absolute bottom-0 left-0 h-[0.45cqh] w-full origin-left"
+            :class="isUrgent ? 'bg-yellow' : 'bg-green'"
+            :style="{ transform: `scaleX(${progress})` }"
+          ></i>
+        </template>
+        <b v-else class="min-w-0 text-center text-fs-14">{{ strings.game.chooseNoLimit }}</b>
       </HudPill>
       <NetworkStatusButton
         :connected="store.connected"

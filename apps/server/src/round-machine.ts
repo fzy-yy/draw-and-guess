@@ -77,8 +77,8 @@ export class RoundMachine {
       phaseEndsAt: now + countdownMs,
       currentRound: 0,
       totalRounds: activeMembers.length * room.settings.roundsPerPlayer,
-      // 开局默认房间时长（含额外猜词时间）；每回合 beginDrawing 按词条时限刷新
-      roundDurationMs: (room.settings.drawSeconds + room.settings.extraGuessSeconds) * 1_000,
+      // 单回合时长只由房间规则决定，词条不再参与（见 docs/adr/0046-*）
+      roundDurationMs: room.settings.drawSeconds * 1_000,
       drawerOrder: this.shuffle(activeMembers.map((member) => member.playerId)),
       drawerId: '',
       candidates: [],
@@ -135,19 +135,29 @@ export class RoundMachine {
     game.candidates = this.pickCandidates(room, game)
     game.rerollUsed = false
     game.phaseStartedAt = this.service.clock.now()
-    game.phaseEndsAt = this.service.clock.now() + room.settings.chooseSeconds * 1_000
-    // 选词超时：服务端随机选择一个候选词并直接开画。
-    // 候选池按规则在开局前已校验充足（resetWhenExhausted 保障轮转），正常不会为空；
-    // 此处仍作防御：极端情况下（词库被掏空）走弃权流程作废本回合，避免房间滞留 choosing_word。
-    // abandonChoosing 会递归 beginChoosing 并推进回合序号，最终回合耗尽即进入最终结算，递归有界。
-    game.timer = this.service.scheduler.set(room.settings.chooseSeconds * 1_000, () =>
-      this.service.safeRun('choosingTimeout', () => {
-        if (room.phase !== 'choosing_word') return
-        const candidate = this.autoPickCandidate(game)
-        if (candidate) this.beginDrawing(room, candidate)
-        else this.abandonChoosing(room, serverStrings.notices.candidatesExhausted)
-      }),
-    )
+    // 选词阶段是否计时由房间规则决定；关闭时 phaseEndsAt = 0 是本项目「本阶段无截止时间」
+    // 的哨兵（与暂停期同义），不排计时器、不自动代选——画家可以一直想，
+    // 唯一的自动兜底是画家离开/掉线（见 abandonChoosing 的调用方）。
+    this.service.scheduler.clear(game.timer)
+    if (room.settings.allowChooseTimeLimit) {
+      const chooseMs = room.settings.chooseSeconds * 1_000
+      game.phaseEndsAt = game.phaseStartedAt + chooseMs
+      // 选词超时：服务端随机选择一个候选词并直接开画。
+      // 候选池按规则在开局前已校验充足（resetWhenExhausted 保障轮转），正常不会为空；
+      // 此处仍作防御：极端情况下（词库被掏空）走弃权流程作废本回合，避免房间滞留 choosing_word。
+      // abandonChoosing 会递归 beginChoosing 并推进回合序号，最终回合耗尽即进入最终结算，递归有界。
+      game.timer = this.service.scheduler.set(chooseMs, () =>
+        this.service.safeRun('choosingTimeout', () => {
+          if (room.phase !== 'choosing_word') return
+          const candidate = this.autoPickCandidate(game)
+          if (candidate) this.beginDrawing(room, candidate)
+          else this.abandonChoosing(room, serverStrings.notices.candidatesExhausted)
+        }),
+      )
+    } else {
+      game.phaseEndsAt = 0
+      game.timer = undefined
+    }
     this.service.emitRoom(room.id)
   }
   /**
@@ -177,27 +187,16 @@ export class RoundMachine {
     const game = this.service.requireGame(room)
     this.service.scheduler.clear(game.timer)
     this.transition(room, 'drawing')
-    // 富答案直接取自候选池：词条即含别称/分类与加载期派生的时限权重。
-    // 「answer 必在 candidates 内」由三条调用路径保证（chooseWord 的 find、选词超时与
-    // 暂停恢复的 candidates 取值）；若不变式被破坏则显式失败，绝不伪造 difficulty: 0
-    // 的富字段——那会静默失真时限与计分权重。
+    // 富答案直接取自候选池：「answer 必在 candidates 内」由三条调用路径保证
+    // （chooseWord 的 find、选词超时与暂停恢复的 candidates 取值）；
+    // 若不变式被破坏则显式失败，绝不伪造字段——那会静默失真别称与分类。
     const richAnswer = game.candidates.find((candidate) => candidate.id === answer.id)
     if (!richAnswer) throw new GameError('INTERNAL_ERROR')
     game.answer = richAnswer
     game.offeredWordIds.add(answer.id) // 记录已展示词条，避免整局后续回合重复
-    // 回合实际时长：难度级派生时限（level_config，加载期落到词条 timeLimit）覆盖房间统一作画秒数
-    //（可在配置关闭；钳制到合法区间，见 docs/adr/0013-vocabulary-level-config-and-hints.md）
-    const configuredSeconds =
-      APP_CONFIG.vocabulary.useWordTimeLimit && richAnswer.timeLimit
-        ? richAnswer.timeLimit
-        : room.settings.drawSeconds
-    // 基础时长先钳制到协议合法区间，再叠加房间可配的「额外猜词时间」（0~90 秒，用于降低难度）。
-    const baseSeconds = Math.max(
-      APP_CONFIG.game.drawSeconds.min,
-      Math.min(APP_CONFIG.game.drawSeconds.max, configuredSeconds),
-    )
-    const seconds = baseSeconds + room.settings.extraGuessSeconds
-    game.roundDurationMs = seconds * 1_000
+    // 单回合时长只由房间规则决定：词条难度派生的时限已移除，不再按答案调整
+    //（见 docs/adr/0046-vocabulary-slimming-and-unified-round-time.md）。
+    game.roundDurationMs = room.settings.drawSeconds * 1_000
     game.phaseStartedAt = this.service.clock.now()
     game.phaseEndsAt = this.service.clock.now() + game.roundDurationMs
     // 作画倒计时结束进入回合结算
@@ -362,11 +361,17 @@ export class RoundMachine {
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_RESUME)
     // 标称总时长由 member-facts 单一口径给出（覆盖全部可暂停阶段）；重建后的已用时间
     // 保持暂停时刻的进度，客户端倒计时与进度条从冻结值继续（而非从 0 重走）。
-    const totalDurationMs =
-      nominalPhaseDurationMs(next, game, room.settings) ?? pauseState.remainingMs
-    const effectiveElapsedMs = Math.max(0, totalDurationMs - pauseState.remainingMs)
-    game.phaseStartedAt = this.service.clock.now() - effectiveElapsedMs
-    game.phaseEndsAt = this.service.clock.now() + pauseState.remainingMs
+    const totalDurationMs = nominalPhaseDurationMs(next, game, room.settings)
+    if (totalDurationMs === undefined) {
+      // 该阶段本就无截止时间（选词阶段关闭限时）：恢复后继续无限等待，
+      // phaseEndsAt 保持哨兵 0，不重建倒计时。
+      game.phaseStartedAt = this.service.clock.now()
+      game.phaseEndsAt = 0
+    } else {
+      const effectiveElapsedMs = Math.max(0, totalDurationMs - pauseState.remainingMs)
+      game.phaseStartedAt = this.service.clock.now() - effectiveElapsedMs
+      game.phaseEndsAt = this.service.clock.now() + pauseState.remainingMs
+    }
     delete game.pauseState
     this.transition(room, next)
     this.scheduleCurrentPhase(room)
@@ -376,6 +381,8 @@ export class RoundMachine {
     // 暂停恢复后按冻结的剩余毫秒重新调度当前阶段计时器
     const delay = Math.max(0, game.phaseEndsAt - this.service.clock.now())
     this.service.scheduler.clear(game.timer)
+    // 无截止时间的阶段（选词阶段关闭限时）不排计时器：恢复后仍无限等待
+    if (game.phaseEndsAt === 0) return
     if (room.phase === 'choosing_word') {
       // 恢复选词阶段：超时后随机取一个候选词自动开画——与首轮超时同构，暂停恢复不改变自动选词行为；
       // 候选池为空时同样作废本回合

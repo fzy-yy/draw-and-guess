@@ -48,6 +48,15 @@ const joinPolicyOptions: RuleSelectOption<RoomSettings['joinPolicy']>[] = [
   { value: 'spectate', label: strings.room.joinPolicySpectate },
   { value: 'next_game', label: strings.room.joinPolicyNextGame },
 ]
+/**
+ * 单回合时长档位：合法值来自公开配置（唯一来源是协议常量），
+ * 展示文案由 strings 统一格式化；不使用原生 <select>。
+ */
+const drawSecondsOptions: RuleSelectOption<RoomSettings['drawSeconds']>[] =
+  store.config.game.drawSeconds.options.map((seconds) => ({
+    value: seconds,
+    label: strings.common.secondsUnit(seconds),
+  }))
 
 // 本地编辑副本：所有字段均为原始值，浅拷贝即可；每次打开（draft 变化）时重新同步。
 // 初值用配置工厂生成完整合法对象，避免用类型断言绕过 RoomSettings 的字段约束。
@@ -111,7 +120,12 @@ watch(
             :min="store.config.game.chooseSeconds.min"
             :max="store.config.game.chooseSeconds.max"
             :step="store.config.game.chooseSeconds.step"
-            :display="strings.common.secondsUnit(localDraft.chooseSeconds)"
+            :display="
+              localDraft.allowChooseTimeLimit
+                ? strings.common.secondsUnit(localDraft.chooseSeconds)
+                : strings.room.chooseTimeUnlimited
+            "
+            :disabled="!localDraft.allowChooseTimeLimit"
           />
 
           <RuleSliderField
@@ -131,6 +145,10 @@ watch(
 
           <div class="flex flex-col justify-center gap-[1.2cqh]">
             <RuleToggleField
+              v-model="localDraft.allowChooseTimeLimit"
+              :label="strings.room.toggleChooseTimeLimit"
+            />
+            <RuleToggleField
               v-model="localDraft.allowPlayerInvite"
               :label="strings.room.togglePlayerInvite"
             />
@@ -148,23 +166,10 @@ watch(
           {{ strings.room.advancedSettings }}
         </summary>
         <div class="mt-[1.5cqh] grid grid-cols-3 gap-[1.5cqh_1.4em]">
-          <RuleSliderField
+          <RuleSelectField
             v-model="localDraft.drawSeconds"
-            :label="strings.room.drawFallbackField"
-            :min="store.config.game.drawSeconds.min"
-            :max="store.config.game.drawSeconds.max"
-            :step="store.config.game.drawSeconds.step"
-            :display="strings.common.secondsUnit(localDraft.drawSeconds)"
-            :hint="strings.room.drawFallbackHint"
-          />
-          <RuleSliderField
-            v-model="localDraft.extraGuessSeconds"
-            :label="strings.room.extraGuessSecondsField"
-            :min="store.config.game.extraGuessSeconds.min"
-            :max="store.config.game.extraGuessSeconds.max"
-            :step="store.config.game.extraGuessSeconds.step"
-            :display="strings.common.secondsUnit(localDraft.extraGuessSeconds)"
-            :hint="strings.room.extraGuessSecondsHint"
+            :label="strings.room.drawSecondsField"
+            :options="drawSecondsOptions"
           />
           <RuleSliderField
             v-model="localDraft.guessBaseScore"

@@ -74,6 +74,18 @@ export class SnapshotBuilder {
     // 暂停现场（pauseState）由 RoundMachine 成对写入：暂停态下快照按它换算冻结的截止时间
     // 与剩余毫秒；非暂停态为 undefined，直接下发权威 phaseEndsAt。
     const pauseState = room.phase === 'paused' ? game?.pauseState : undefined
+    // 暂停阶段按原阶段标称总时长换算截止时间，供客户端把倒计时与进度条准确冻结在暂停时刻的
+    // 数值上（标称总时长由 member-facts 单一口径给出，覆盖全部可暂停阶段含 round_result）。
+    // 没有标称总时长意味着该阶段本就没有截止时间（选词阶段关闭限时）：下发哨兵 0 表达
+    // 「无倒计时」，与未暂停时的口径一致。
+    const pauseNominalMs =
+      game && pauseState ? nominalPhaseDurationMs(pauseState.phase, game, room.settings) : undefined
+    const pausedEndsAt =
+      game && pauseState
+        ? pauseNominalMs === undefined
+          ? 0
+          : game.phaseStartedAt + pauseNominalMs
+        : undefined
     // 按观看者角色裁剪对局视图的敏感字段
     const gameView: GameView | undefined = game
       ? {
@@ -84,15 +96,7 @@ export class SnapshotBuilder {
           totalRounds: game.totalRounds,
           drawerId: game.drawerId,
           phaseStartedAt: game.phaseStartedAt,
-          // 暂停阶段：下发冻结的剩余毫秒 pausedRemainingMs，并按原阶段标称总时长换算截止时间，
-          // 供客户端把倒计时与进度条准确冻结在暂停时刻的数值上。标称总时长由 member-facts
-          // 单一口径给出且覆盖全部可暂停阶段（含 round_result）；若缺值，总时长会被误算为
-          // 冻结剩余量，使进度条被钉死在 100%。
-          phaseEndsAt: pauseState
-            ? game.phaseStartedAt +
-              (nominalPhaseDurationMs(pauseState.phase, game, room.settings) ??
-                pauseState.remainingMs)
-            : game.phaseEndsAt,
+          phaseEndsAt: pausedEndsAt ?? game.phaseEndsAt,
           ...(pauseState ? { pausedRemainingMs: pauseState.remainingMs } : {}),
           // 答案展示规则：结算阶段公开全文；否则按设置显示遮罩或隐藏字数
           answerMask: game.answer

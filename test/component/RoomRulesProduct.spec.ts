@@ -53,7 +53,7 @@ describe('房间规则与高级设置', () => {
     wrapper.unmount()
   })
 
-  it('编辑 UI 覆盖全部规则字段（含额外猜词时间），保存原样上抛草稿', async () => {
+  it('编辑 UI 覆盖全部规则字段（含单回合时长档位与选词阶段限时），保存原样上抛草稿', async () => {
     const draft = defaultRoomSettings(6)
     const wrapper = mount(RulesDialog, {
       props: { open: true, draft },
@@ -65,23 +65,19 @@ describe('房间规则与高级设置', () => {
     expect(wrapper.text()).toContain(strings.room.advancedSettings)
     expect(wrapper.text()).not.toContain('玩法预设')
     expect(wrapper.text()).not.toContain('计分方式')
-    expect(wrapper.text()).toContain(strings.room.drawFallbackField)
-    expect(wrapper.text()).toContain(strings.room.extraGuessSecondsField)
+    expect(wrapper.text()).toContain(strings.room.drawSecondsField)
+    expect(wrapper.text()).toContain(strings.room.toggleChooseTimeLimit)
     expect(wrapper.text()).toContain(strings.room.toggleShowWordLength)
     expect(wrapper.text()).toContain(strings.room.toggleProgressiveHints)
     expect(wrapper.text()).toContain(strings.room.guessBaseScoreField)
     expect(wrapper.text()).toContain(strings.room.togglePause)
-    // 滑块：轮数/选词时间/候选数 + 回退时长/额外时间/基础分 = 6；开关 5
-    //（结构化提示与提示出现时机已随 ADR-0042 一并移除）
-    expect(wrapper.findAll('input[type="range"]')).toHaveLength(6)
-    expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(5)
-
-    // 额外猜词时间滑块区间：0~90、步进 5（来自配置，改上限只需改协议常量）；全场唯一 min=0 的滑块
-    const extraSlider = wrapper
-      .findAll('input[type="range"]')
-      .find((input) => input.attributes('min') === '0')!
-    expect(extraSlider.attributes('max')).toBe('90')
-    expect(extraSlider.attributes('step')).toBe('5')
+    // 滑块：轮数/选词时间/候选数/基础分 = 4；开关 6（新增「选词阶段限时」）
+    //（结构化提示、提示出现时机与额外猜词时间均已移除）
+    expect(wrapper.findAll('input[type="range"]')).toHaveLength(4)
+    expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(6)
+    // 下拉：最大玩家数 / 单回合时长 / 中途加入 = 3；单回合时长默认显示 120 秒
+    expect(wrapper.findAll('button[aria-haspopup="listbox"]')).toHaveLength(3)
+    expect(wrapper.text()).toContain(strings.common.secondsUnit(draft.drawSeconds))
 
     await wrapper.get('button[aria-haspopup="listbox"]').trigger('click')
     await wrapper
@@ -97,7 +93,7 @@ describe('房间规则与高级设置', () => {
     wrapper.unmount()
   })
 
-  it('摘要始终显示容量、轮数与回退时长，只追加偏离默认组的字段与额外时间', async () => {
+  it('摘要始终显示容量、轮数、单回合时长与选词阶段状态，只追加偏离默认组的字段', async () => {
     const roomStore = useRoomStore()
     const session = useSessionStore()
     roomStore.room = createRoomFixture('waiting')
@@ -108,16 +104,18 @@ describe('房间规则与高级设置', () => {
       global: { plugins: [pinia] },
     })
 
-    expect(wrapper.text()).toContain(strings.room.ruleDrawFallback(90))
+    expect(wrapper.text()).toContain(strings.room.ruleDrawValue(120))
+    // 选词阶段默认不限时：常驻展示，不依赖差异判定
+    expect(wrapper.text()).toContain(strings.room.chooseTimeUnlimited)
     expect(wrapper.text()).not.toContain(strings.room.ruleOptionsDt)
-    // 额外时间为 0 时不展示
-    expect(wrapper.text()).not.toContain(strings.room.extraGuessSecondsField)
 
     roomStore.room.settings.optionCount = 5
-    roomStore.room.settings.extraGuessSeconds = 30
+    roomStore.room.settings.allowChooseTimeLimit = true
+    roomStore.room.settings.chooseSeconds = 25
     await flushPromises()
     expect(wrapper.text()).toContain(strings.room.ruleOptionsDd(5))
-    expect(wrapper.text()).toContain(strings.room.extraGuessSecondsValue(30))
+    expect(wrapper.text()).toContain(strings.common.secondsUnit(25))
+    expect(wrapper.text()).not.toContain(strings.room.chooseTimeUnlimited)
     wrapper.unmount()
   })
 })

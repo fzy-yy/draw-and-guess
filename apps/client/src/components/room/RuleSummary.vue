@@ -63,16 +63,17 @@ const summaryRows = computed(() => {
     {
       key: 'drawSeconds',
       label: strings.room.ruleDrawDt,
-      value: strings.room.ruleDrawFallback(settings.drawSeconds),
+      value: strings.room.ruleDrawValue(settings.drawSeconds),
     },
   ]
-  // 额外猜词时间是「降低难度」的显式声明：只要 >0 就常驻展示，不依赖差异判定。
-  if (settings.extraGuessSeconds > 0)
-    rows.push({
-      key: 'extraGuessSeconds',
-      label: strings.room.extraGuessSecondsField,
-      value: strings.room.extraGuessSecondsValue(settings.extraGuessSeconds),
-    })
+  // 选词阶段是否计时是本局的关键行为（默认为不限时），常驻展示而不是按差异判定。
+  rows.push({
+    key: 'chooseTime',
+    label: strings.room.ruleChooseTimeDt,
+    value: settings.allowChooseTimeLimit
+      ? strings.common.secondsUnit(settings.chooseSeconds)
+      : strings.room.chooseTimeUnlimited,
+  })
   const addDifference = (
     field: keyof Omit<RoomSettings, 'maxPlayers'>,
     label: string,
@@ -80,11 +81,6 @@ const summaryRows = computed(() => {
   ): void => {
     if (differences.has(field)) rows.push({ key: field, label, value })
   }
-  addDifference(
-    'chooseSeconds',
-    strings.room.chooseTimeField,
-    strings.common.secondsUnit(settings.chooseSeconds),
-  )
   addDifference(
     'optionCount',
     strings.room.ruleOptionsDt,

@@ -58,6 +58,8 @@ export const game = {
   toggleAnswerVisibilityAria: '切换答案显示状态',
   toggleAnswerVisibilityHint: '点击切换答案明文与遮罩',
   autoChoose: (seconds: number) => `${seconds} 秒后将自动选择`,
+  chooseNoLimit: '不限时',
+  chooseNoLimitHint: '本回合不限时，想好再开始',
   pausedTitle: '游戏已安全暂停',
   pausedSubtitle: '所有计时已由服务器冻结',
   pausedHint: '等待房主继续；断线玩家可在宽限期内恢复座位。',

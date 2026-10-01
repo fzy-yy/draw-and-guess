@@ -90,7 +90,7 @@ export interface GameSecret {
   pauseState?: { phase: RoomPhase; remainingMs: number }
   currentRound: number // 当前回合序号（从 1 开始）
   totalRounds: number // 总回合数 = 人数 × 每人轮数
-  /** 当前回合实际作画时长（毫秒）：难度级派生时限（level_config）或房间设置，计分与逐步提示调度统一用它 */
+  /** 当前回合实际作画时长（毫秒）：只取房间单回合时长，计分与逐步提示调度统一用它 */
   roundDurationMs: number
   drawerOrder: string[] // 画家轮换顺序（开局时洗牌）
   drawerId: string // 当前画家

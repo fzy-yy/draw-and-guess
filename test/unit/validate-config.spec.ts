@@ -21,12 +21,12 @@ describe('启动期业务配置校验', () => {
     )
   })
 
-  it('区间默认值越界时中止启动（点名字段）', () => {
+  it('单回合时长默认值不在合法档位时中止启动', () => {
     const config = mutableConfig()
-    const drawSeconds = config.game!.drawSeconds as Record<string, number>
-    drawSeconds.default = drawSeconds.max! + 1
+    const drawSeconds = config.game!.drawSeconds as { options: number[]; default: number }
+    drawSeconds.default = 105
     expect(() => validateBusinessConfig(config as unknown as typeof APP_CONFIG)).toThrow(
-      '作画秒数 默认值必须落在 min～max 区间内',
+      '单回合时长默认值必须落在合法档位内',
     )
   })
 
