@@ -148,8 +148,8 @@ function handlePauseToggle(): void {
       </SquareIconButton>
     </div>
 
-    <!-- 中：题目（画家可点击切换明文/遮罩，猜词者恒为遮罩） -->
-    <div class="flex min-w-0 items-center justify-center">
+    <!-- 中：题目（画家可点击切换明文/遮罩，猜词者恒为遮罩）；单元素居中用 grid place-items-center -->
+    <div class="grid min-w-0 place-items-center">
       <HudPill
         class="min-w-[16cqw] max-w-[34cqw] justify-center px-[1.2em] transition-colors"
         :class="{

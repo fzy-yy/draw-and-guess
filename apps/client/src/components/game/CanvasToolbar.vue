@@ -119,6 +119,7 @@ function runHistory(key: HistoryKey): void {
           :paint="color"
           :selected="isCustomColor"
           :label="strings.game.customColorTitle"
+          :aria-label="strings.game.customColorAria"
           :disabled="!props.canDraw"
           @select="selectColor"
         >

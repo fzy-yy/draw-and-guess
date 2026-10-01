@@ -12,6 +12,10 @@ import { AvatarImage } from '@/components/common'
 import { roleTextFor } from '@/utils/role-text'
 
 const store = useGameStore()
+
+// 头像右下角标（画家 / 已猜中）共用同一底座；提取常量避免长串在模板里逐字重复。
+const memberBadgeClass =
+  'absolute right-[-0.25cqh] bottom-[-0.15cqh] h-[2.1cqh] w-[2.1cqh] rounded-full bg-blue p-[0.3cqh] text-white'
 </script>
 
 <template>
@@ -42,12 +46,9 @@ const store = useGameStore()
           :avatar-id="member.avatarId"
           :label="strings.common.playerAvatarAria(member.nickname)"
         />
-        <Brush
-          v-if="member.isDrawer"
-          class="absolute right-[-0.25cqh] bottom-[-0.15cqh] h-[2.1cqh] w-[2.1cqh] rounded-full bg-blue p-[0.3cqh] text-white"
-        /><Eye
+        <Brush v-if="member.isDrawer" :class="memberBadgeClass" /><Eye
           v-else-if="member.guessed"
-          class="absolute right-[-0.25cqh] bottom-[-0.15cqh] h-[2.1cqh] w-[2.1cqh] rounded-full bg-blue p-[0.3cqh] text-white"
+          :class="memberBadgeClass"
         />
       </div>
       <div class="flex min-w-0 flex-col leading-tight">

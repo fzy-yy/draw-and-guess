@@ -45,3 +45,5 @@
   `components/game/HudPill.vue`、`components/game/OverlayCard.vue`、`components/room/RuleRow.vue`
 - 来源：2026-09-26 架构评审候选 7（浅层包装碎片，报告评为 Speculative）
 - 相关：ADR-0016（类型护栏分层）、ADR-0028（客户端房间事实单一口径）
+- 现状（2026-10-01，不改写上方决策正文）：工具栏变体 `ToolButton` 已随对局界面重设计被
+  `SquareIconButton` 取代（见 [ADR-0043](0043-game-view-floating-layout.md)）；其余包装保持本决策。

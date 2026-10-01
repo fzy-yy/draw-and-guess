@@ -58,7 +58,7 @@ function onWheel(event: WheelEvent): void {
 
 <template>
   <div
-    class="relative flex min-h-[4.4cqh] shrink-0 cursor-default items-center justify-center px-[0.4em]"
+    class="relative grid min-h-[4.4cqh] shrink-0 cursor-default place-items-center px-[0.4em]"
     :class="[disabled ? 'opacity-40' : '', hovering && !disabled ? 'cursor-none' : '']"
     :aria-label="strings.game.brushSize"
     :title="strings.game.brushWheelHint"

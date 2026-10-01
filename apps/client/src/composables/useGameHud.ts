@@ -1,5 +1,5 @@
 /**
- * 对局 HUD 组合式逻辑：时间驱动、剩余时间/进度、猜词权限、阶段标签、画家与排行榜。
+ * 对局 HUD 组合式逻辑：时间驱动、剩余时间/进度、猜词权限、阶段标签与排行榜。
  * 从 GameView 拆出，便于独立测试；ticker 的生命周期在 composable 内管理。
  * 计时用 @vueuse/core 的 useTimestamp 驱动（组件卸载自动清理，替代手写 setInterval）。
  */
@@ -60,10 +60,6 @@ export function useGameHud(store: GameStore) {
   )
   // 阶段中文标签（画布状态遮罩 / 各面板复用；映射与文案统一来自 utils/phase-text）
   const phaseLabel = computed(() => phaseTextFor(store.room?.phase))
-  // 当前画家成员信息
-  const drawer = computed(() =>
-    store.room?.members.find((member) => member.id === game.value?.drawerId),
-  )
   // 最终排行：按分数降序并计算同名次（同分并列）
   const rankings = computed<RankedMember[]>(() => {
     // game_result 优先读取服务端在结算瞬间冻结的榜单；旧快照缺少该字段时才回退实时成员。
@@ -89,5 +85,5 @@ export function useGameHud(store: GameStore) {
   })
 
   // correctedNow 仅在内部被 secondsLeft/progress 使用，不作为对外返回值暴露（GameView 不消费它）。
-  return { game, secondsLeft, progress, canGuess, phaseLabel, drawer, rankings }
+  return { game, secondsLeft, progress, canGuess, phaseLabel, rankings }
 }

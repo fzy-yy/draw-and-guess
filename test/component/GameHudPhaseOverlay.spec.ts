@@ -49,7 +49,6 @@ describe('useGameHud 角色与计时派生', () => {
     expect(hud.canGuess.value).toBe(true)
     expect(hud.secondsLeft.value).toBeGreaterThanOrEqual(29)
     expect(hud.progress.value).toBeGreaterThan(0.45)
-    expect(hud.drawer.value?.id).toBe(HOST_ID)
 
     roomStore.room.phase = 'paused'
     roomStore.room.game!.pausedRemainingMs = 12_500

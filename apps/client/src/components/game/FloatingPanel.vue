@@ -5,11 +5,16 @@
   拖动只绑定标题栏，正文里的输入框、聊天滚动与画布绘制不会被抢走指针事件。
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { X } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { cn } from '@/utils/cn'
 import { scaleFadeEnter, scaleFadeLeave } from '@/components/game/scale-fade.ts'
+import {
+  bringPanelToFront,
+  registerPanelLayer,
+  unregisterPanelLayer,
+} from '@/components/game/floating-panel-z'
 
 export interface PanelPosition {
   /** 面板左上角相对可视工作区（画布容器）的横向百分比。 */
@@ -34,9 +39,9 @@ const props = withDefaults(
 )
 
 const panelElement = ref<HTMLElement>()
-// 起始层级刻意压在阶段遮罩（z-30）之下：拖动置顶也不会盖住暂停/结算遮罩。
-let highestZIndex = 20
-const zIndex = ref(highestZIndex)
+// 层级由模块级共享协调器分配，保证两个面板能互相置顶（细节与上限见 floating-panel-z.ts）。
+const layer = registerPanelLayer()
+onUnmounted(() => unregisterPanelLayer(layer.id))
 const dragging = ref(false)
 
 const rootClass = computed(() =>
@@ -50,7 +55,7 @@ const rootClass = computed(() =>
 const shellStyle = computed<Record<string, string>>(() => ({
   left: `${position.value.x}%`,
   top: `${position.value.y}%`,
-  zIndex: String(zIndex.value),
+  zIndex: String(layer.zIndex.value),
 }))
 
 let dragOrigin:
@@ -64,8 +69,7 @@ let dragOrigin:
 
 /** 点击面板或开始拖动时置顶，避免后打开的面板被已有面板遮住。 */
 function bringToFront(): void {
-  highestZIndex += 1
-  zIndex.value = highestZIndex
+  bringPanelToFront(layer.id)
 }
 
 function beginDrag(event: PointerEvent): void {

@@ -77,7 +77,7 @@ expectTypeOf<BusinessKeys<ReturnType<typeof useGameStore>>>().toEqualTypeOf<
 >()
 
 expectTypeOf<keyof ReturnType<typeof useGameHud>>().toEqualTypeOf<
-  'game' | 'secondsLeft' | 'progress' | 'canGuess' | 'phaseLabel' | 'drawer' | 'rankings'
+  'game' | 'secondsLeft' | 'progress' | 'canGuess' | 'phaseLabel' | 'rankings'
 >()
 
 expectTypeOf<keyof ReturnType<typeof useRoomSync>>().toEqualTypeOf<

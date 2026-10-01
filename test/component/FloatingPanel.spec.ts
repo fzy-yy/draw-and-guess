@@ -1,4 +1,4 @@
-import { defineComponent, h, ref } from 'vue'
+import { defineComponent, h, nextTick, ref } from 'vue'
 import { setActivePinia, type Pinia } from 'pinia'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -187,5 +187,47 @@ describe('FloatingPanel 与顶栏开关联动', () => {
     await flushPromises()
     expect(wrapper.findAll('section').some((node) => node.text().includes(panelTitle))).toBe(false)
     wrapper.unmount()
+  })
+})
+
+describe('FloatingPanel 跨面板层级（模块级共享）', () => {
+  /**
+   * 缺陷回归：层级计数器原先写在 `<script setup>` 内，每个实例各持一份，两个面板互相置顶失效。
+   * 这里挂载两个真实面板，断言「后点击者在上」且层级始终低于阶段遮罩（z-30）。
+   */
+  it('后点击的面板置顶，且层级始终低于阶段遮罩', async () => {
+    const first = mount(FloatingPanel, {
+      props: { open: true, title: strings.game.playersPanelTitle },
+    })
+    const second = mount(FloatingPanel, {
+      props: { open: true, title: strings.game.chatPanelTitle },
+    })
+    const firstSection = first.get('section').element as HTMLElement
+    const secondSection = second.get('section').element as HTMLElement
+    const zIndex = (element: HTMLElement): number => Number(element.style.zIndex)
+
+    // 第二个面板登记时可能触发一次整体重排：等待重排后的层级落地再断言。
+    await nextTick()
+
+    // 起始都低于阶段遮罩，且后挂载者默认在上
+    expect(zIndex(firstSection)).toBeLessThan(30)
+    expect(zIndex(secondSection)).toBeGreaterThan(zIndex(firstSection))
+
+    // 点击先挂载的面板 → 跨实例置顶生效
+    await first.get('section').trigger('pointerdown')
+    expect(zIndex(firstSection)).toBeGreaterThan(zIndex(secondSection))
+    expect(zIndex(firstSection)).toBeLessThan(30)
+
+    // 反复交替置顶会触发内部压缩，层级不得突破阶段遮罩
+    for (let round = 0; round < 20; round += 1) {
+      await first.get('section').trigger('pointerdown')
+      await second.get('section').trigger('pointerdown')
+    }
+    expect(zIndex(secondSection)).toBeGreaterThan(zIndex(firstSection))
+    expect(zIndex(firstSection)).toBeLessThan(30)
+    expect(zIndex(secondSection)).toBeLessThan(30)
+
+    first.unmount()
+    second.unmount()
   })
 })

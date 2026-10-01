@@ -1,0 +1,134 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { setActivePinia, type Pinia } from 'pinia'
+import { strings } from '@draw-guess/strings'
+import GameView from '@/views/GameView.vue'
+import { useRoomStore } from '@/stores/room'
+import { useSessionStore } from '@/stores/session'
+import { createRoomFixture, HOST_ID } from '../client/room-fixture'
+import { createPiniaWithFakeTransport, type FakeGameTransport } from '../client/fake-game-transport'
+
+/**
+ * 新对局骨架（浮层布局）的集成级保障：真实 Pinia + 假 Socket 传输 + 真实 GameView 组件树，
+ * 覆盖「顶栏 + 铺满画布 + 两个浮层面板 + 底部工具条」以及顶栏开关对面板/工具条显隐的驱动。
+ *
+ * 这是规格「Testing Decisions」要求补的最高缝之下的集成用例：断言外部可观察结果（DOM 结构
+ * 与显隐），不触碰组件私有状态。happy-dom 不实现 Canvas 2D 与布局，这里提供最小上下文替身
+ * （与 GameCanvas 组件测试同构）；MSW 网络边界与音频/焦点陷阱替身由 integration setup 统一提供。
+ */
+
+/** 最小 Canvas 2D 上下文替身：记录绘制调用即可，重放决策由画布组件自身保障。 */
+function createContextStub(): CanvasRenderingContext2D {
+  return {
+    canvas: { width: 1280, height: 720 },
+    globalCompositeOperation: 'source-over',
+    strokeStyle: '#000000',
+    fillStyle: '#000000',
+    lineWidth: 1,
+    lineCap: 'butt',
+    lineJoin: 'miter',
+    imageSmoothingEnabled: true,
+    save: vi.fn(),
+    restore: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    stroke: vi.fn(),
+    clearRect: vi.fn(),
+    fillRect: vi.fn(),
+    drawImage: vi.fn(),
+    getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4), width: 1, height: 1 })),
+    putImageData: vi.fn(),
+  } as unknown as CanvasRenderingContext2D
+}
+
+let pinia: Pinia
+let fakeTransport: FakeGameTransport
+
+beforeEach(() => {
+  // happy-dom 无 Canvas 2D 与布局：固定展示画布尺寸，保证逻辑栅格推导确定。
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+    () => createContextStub() as never,
+  )
+  vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: 640,
+    bottom: 360,
+    width: 640,
+    height: 360,
+    toJSON: () => ({}),
+  } as DOMRect)
+
+  const installed = createPiniaWithFakeTransport()
+  pinia = installed.pinia
+  fakeTransport = installed.fakeTransport
+  setActivePinia(pinia)
+  fakeTransport.setConnected(true)
+
+  // 本机设为房主兼当前画家：顶栏会显示「工具」开关，底部工具条默认可见。
+  useSessionStore().playerId = HOST_ID
+  useRoomStore().room = createRoomFixture('drawing')
+})
+
+afterEach(() => {
+  fakeTransport.transport.destroy()
+})
+
+/** 挂载完整对局视图（真实子组件树），返回包装器由用例断言并卸载。 */
+function mountGameView(): VueWrapper {
+  return mount(GameView, { global: { plugins: [pinia] } })
+}
+
+/** 按标题定位浮层面板：只匹配 FloatingPanel 渲染的 section。 */
+function findPanel(wrapper: VueWrapper, title: string): boolean {
+  return wrapper.findAll('section').some((node) => node.text().includes(title))
+}
+
+describe('GameView 新对局骨架', () => {
+  it('渲染顶栏、铺满画布、两个浮层面板与底部工具条', () => {
+    const wrapper = mountGameView()
+
+    expect(wrapper.find(`header[aria-label="${strings.game.topBarAria}"]`).exists()).toBe(true)
+    expect(wrapper.find('canvas').exists()).toBe(true)
+    expect(findPanel(wrapper, strings.game.playersPanelTitle)).toBe(true)
+    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(true)
+    expect(
+      wrapper.find(`[role="toolbar"][aria-label="${strings.game.toolbarAria}"]`).exists(),
+    ).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('顶栏开关可收起并重新打开面板与工具条', async () => {
+    const wrapper = mountGameView()
+
+    expect(findPanel(wrapper, strings.game.playersPanelTitle)).toBe(true)
+    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(true)
+
+    // 顶栏「玩家面板」开关 → 收起玩家面板（退出动画结束后从 DOM 移除）
+    await wrapper.get(`[aria-label="${strings.game.togglePlayers}"]`).trigger('click')
+    await flushPromises()
+    expect(findPanel(wrapper, strings.game.playersPanelTitle)).toBe(false)
+
+    // 顶栏「聊天面板」开关 → 收起聊天面板
+    await wrapper.get(`[aria-label="${strings.game.toggleChat}"]`).trigger('click')
+    await flushPromises()
+    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(false)
+
+    // 再次点击同一开关 → 重新打开玩家面板
+    await wrapper.get(`[aria-label="${strings.game.togglePlayers}"]`).trigger('click')
+    await flushPromises()
+    expect(findPanel(wrapper, strings.game.playersPanelTitle)).toBe(true)
+
+    // 顶栏「绘图工具」开关 → 收起底部工具条
+    expect(wrapper.find('[role="toolbar"]').exists()).toBe(true)
+    await wrapper.get(`[aria-label="${strings.game.toggleTools}"]`).trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+})
