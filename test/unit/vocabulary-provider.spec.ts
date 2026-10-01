@@ -2,10 +2,10 @@
  * SQLite 词库 Provider 专项单测（词库瘦身适配后）。
  *
  * 覆盖点：
- * 1. 正常加载：只读出词面/分类/别称，enabled 过滤、meta 透传与版本哈希；
- * 2. **兼容路径**：旧词库文件仍带 difficulty/drawability/hint 列与 level_config /
- *    difficulty_enum / drawability_enum 元数据键时照常加载，多余列既不读也不校验
- *    （代码先不依赖、数据后删列，见 ADR-0046）；
+ * 1. 正常加载：只读出词面/分类/别称，meta 透传与版本哈希；
+ * 2. **兼容路径**：旧词库文件仍带 difficulty/drawability/hint/enabled 列与 level_config /
+ *    difficulty_enum / drawability_enum / enabled_enum 元数据键时照常加载，多余列既不读也不校验
+ *    （词库表已删列，见 ADR-0048）；
  * 3. 严格校验（异常数据必须以中文 Error 阻止加载，绝不带病运行）：
  *    category_enum 缺失、分类越界、词面为空/超长、别称超数/超长、主键与词面重复、词数不足；
  * 4. 内容哈希对词面/别称/分类变化的敏感性。
@@ -32,7 +32,7 @@ interface WordInput {
   hint: string
 }
 
-/** 默认合法词条：6 条启用 + 1 条下架（minWords=6 恰好通过）。 */
+/** 默认合法词条：7 条（minWords=6 通过）；legacy 列 enabled 仍写出，用于证明它不再参与过滤。 */
 function defaultWords(): WordInput[] {
   return [
     {
@@ -97,13 +97,13 @@ function defaultWords(): WordInput[] {
     },
     {
       id: 7,
-      text: '下架词',
+      text: '遗留启用位为零的词',
       category: '动物',
       difficulty: 1,
       drawability: 1,
       enabled: 0,
       aliases: [],
-      hint: '不应加载',
+      hint: '启用位列已退出领域模型，写入 0 也照常加载',
     },
   ]
 }
@@ -211,10 +211,10 @@ afterEach(() => {
 })
 
 describe('SqliteProvider 正常加载', () => {
-  it('只读出词面/分类/别称并过滤 enabled=0', async () => {
+  it('只读出词面/分类/别称，遗留的 enabled 列不再参与过滤', async () => {
     const loaded = await load(createVocabDb())
-    // 6 条启用词（第 7 条 enabled=0 不进候选池）
-    expect(loaded.words).toHaveLength(6)
+    // 7 条全部加载：词库已删除「是否启用」概念，旧库里的 enabled=0 不再被解释为下架
+    expect(loaded.words).toHaveLength(7)
     expect(loaded.words.map((word) => word.id)).toEqual([
       'sqlite:1',
       'sqlite:2',
@@ -222,6 +222,7 @@ describe('SqliteProvider 正常加载', () => {
       'sqlite:4',
       'sqlite:5',
       'sqlite:6',
+      'sqlite:7',
     ])
     // 词条只剩词面/分类/别称/ID：难度、可绘制性与提示已随词库瘦身移除
     expect(loaded.words[0]).toEqual({
@@ -237,7 +238,7 @@ describe('SqliteProvider 正常加载', () => {
   it('旧词库仍带难度/可绘制性/提示列与 level_config 元数据时照常加载', async () => {
     // createVocabDb 默认就写出全部遗留列与元数据键：加载成功即证明「多余列不报错」
     const loaded = await load(createVocabDb())
-    expect(loaded.words).toHaveLength(6)
+    expect(loaded.words).toHaveLength(7)
     expect(loaded.meta).not.toHaveProperty('difficultyEnum')
     expect(loaded.meta).not.toHaveProperty('drawabilityEnum')
     expect(loaded.meta).not.toHaveProperty('levelConfig')
@@ -251,7 +252,7 @@ describe('SqliteProvider 正常加载', () => {
     expect(loaded.meta.name).toBe('测试词库')
     expect(loaded.meta.fileVersion).toBe('1.0.0')
     expect(loaded.meta.categoryEnum).toEqual(['动物', '植物', '自然', '电器'])
-    expect(loaded.meta.wordCount).toBe(6)
+    expect(loaded.meta.wordCount).toBe(7)
   })
 
   it('trim 别称两端空白', async () => {
@@ -326,7 +327,7 @@ describe('SqliteProvider 严格校验（异常数据阻止加载）', () => {
     ).rejects.toThrow(/重复词面/)
   })
 
-  it('启用词数不足 minWords → 拒绝', async () => {
+  it('词数不足 minWords → 拒绝', async () => {
     await expect(load(createVocabDb({ words: (words) => words.slice(0, 5) }))).rejects.toThrow(
       /有效词条仅 5 个，至少需要 6 个/,
     )

@@ -4,8 +4,9 @@
  * 供 E2E launcher 在「唯一临时目录」内生成最小但**可开完整局**的词库 SQLite 库文件：
  * - 包 ID 取数据库文件名，名称/描述/版本等元数据可按测试场景注入；
  * - 词条数 ≥ MIN_SELECTED_VOCABULARY_WORDS（协议常量裁决线），否则 startGame 会因词条不足而拒绝；
- * - 表结构保留词库重建版的遗留列（difficulty/drawability/hint/level_config 等），
- *   用于覆盖「旧词库文件带多余列时 Provider 照常加载」的兼容路径。
+ * - 表结构刻意保留旧词库的遗留列（difficulty/drawability/hint/enabled/updated_at）与遗留元数据键
+ *   （difficulty_enum/drawability_enum/enabled_enum/level_config），用于覆盖「旧词库文件带多余列时
+ *   Provider 照常加载」的兼容路径（真实库文件已按 ADR-0048 删列）。
  *
  * 只写入调用方给定的临时路径，绝不触碰仓库真实 vocabulary/*.db。
  * 放在 apps/server/src 内是让 better-sqlite3 能按 pnpm 严格 node_modules 解析到（而非 test/ 目录）。
@@ -63,8 +64,8 @@ export function createMinimalVocabularyDb(
       );
     `)
 
-    // 词库瘦身后难度/可绘制性/level_config 已退出领域模型；夹具仍写出这些遗留列与元数据键，
-    // 用于覆盖「旧词库文件带多余列时 Provider 照常加载」的兼容路径。
+    // 词库瘦身后难度/可绘制性/启用位/level_config 已退出领域模型并从库表删列（ADR-0046/0048）；
+    // 夹具仍写出这些遗留列与元数据键，用于覆盖「旧词库文件带多余列时 Provider 照常加载」的兼容路径。
     const difficultyEnum = [1, 2, 3, 4, 5]
     const levelConfig: Record<string, { time_limit: number; score_weight: number }> = {}
     for (const level of difficultyEnum) {

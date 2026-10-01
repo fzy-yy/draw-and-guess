@@ -11,7 +11,7 @@
  * 各 Provider 的职责边界：
  * 1. 读取原始数据（文件 / 数据库 / 远程）；
  * 2. 严格校验（与自身元数据的交叉校验，如 category ⊆ category_enum）；
- * 3. 规范化（见 normalize.ts：ID 生成、去重、enabled 过滤、内容哈希版本号）；
+ * 3. 规范化（见 normalize.ts：ID 生成、去重、内容哈希版本号）；
  * 4. 任何异常数据都以带中文文案的 Error 阻止启动，绝不带病运行。
  */
 import type { VocabularyWord } from '@draw-guess/shared'
@@ -38,7 +38,7 @@ export interface VocabularyMeta {
 
 /** Provider 加载结果：已是校验后、过滤后、可直接进入内存领域层的最终形态。 */
 export interface LoadedVocabulary {
-  /** 已启用（enabled=1）且通过分类/别称/词面校验、去重后的全部词条 */
+  /** 通过分类/别称/词面校验、去重后的全部词条 */
   words: VocabularyWord[]
   /** 内容哈希版本号（随词库内容变化；供客户端与房间词库选择做变更对比） */
   version: string

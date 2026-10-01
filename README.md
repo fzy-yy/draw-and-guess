@@ -80,7 +80,7 @@ pnpm package:dist     # 构建 Windows 分发包（slim/full 两个可运行目�
   - `LOG_MAX_FILES` 控制日志文件保留条数（默认 10，每次启动新建一个 `apps/server/log/app-<秒级时间戳>.log`，超出删除最老）；
   - 配置写法严格校验：`PORT` 只接受纯十进制正整数、`HOST` 只接受 IP 字面量或 RFC1123 主机名、布尔项只接受开/关两族等价写法，写法或取值不对**启动即报错**；带 UTF-8 BOM 的 `.env`（记事本与 PowerShell 5.1 的默认写法）会被整份拒绝加载，均不会静默取默认值（见 [`docs/adr/0035`](docs/adr/0035-startup-config-fail-fast.md)）。
   - `/api/health` 默认只返回版本与协议安全摘要；仅当 `HEALTH_METRICS_ENABLED=true` 且请求来自本机回环地址时返回详细聚合指标。
-- **词库来源**：[`vocabulary/`](vocabulary/) 目录下可包含多个 SQLite 词库包（metadata/words 表），由 Provider 注册并在房间内选择。词条只保留**词面/别称/唯一分类/启用状态**——难度、可绘制性、提示与难度级配置已随词库瘦身退出领域模型（见 [`docs/adr/0046`](docs/adr/0046-vocabulary-slimming-and-unified-round-time.md)）：旧词库文件仍带这些遗留列时照常可用，Provider 既不读取也不校验。分类必须落在 `category_enum` 白名单内，`enabled=0` 的词条不参与抽选。修改后重启服务生效，异常数据会以中文错误阻止启动。
+- **词库来源**：[`vocabulary/`](vocabulary/) 目录下可包含多个 SQLite 词库包（metadata/words 表），由 Provider 注册并在房间内选择。词条只保留**词面/别称/唯一分类**——难度、可绘制性、提示、难度级配置与启用位已随词库瘦身退出领域模型**并从库表删列**（见 [`docs/adr/0046`](docs/adr/0046-vocabulary-slimming-and-unified-round-time.md)、[`docs/adr/0048`](docs/adr/0048-vocabulary-schema-slimming.md)）：旧词库文件仍带这些遗留列时照常可用，Provider 既不读取也不校验。分类必须落在 `category_enum` 白名单内。修改后重启服务生效，异常数据会以中文错误阻止启动。
 - 服务启动时会按规范化词面去重并生成稳定 ID（`sqlite:主键`）；词条过少或过长会阻止启动并显示中文错误。
 
 ## 工程结构

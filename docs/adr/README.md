@@ -84,6 +84,7 @@
 | [0013](0013-vocabulary-level-config-and-hints.md)          | 词库难度级配置加载期解析与提示字段改版       | 已废弃（被 0046 取代） |
 | [0045](0045-custom-word-and-untimed-choosing.md)           | 画家自定义题目与选词阶段不限时               | 已采纳                 |
 | [0046](0046-vocabulary-slimming-and-unified-round-time.md) | 词库瘦身与统一回合时长（取代 0013）          | 已采纳                 |
+| [0048](0048-vocabulary-schema-slimming.md)                 | 词库表结构落地瘦身：只留词面/分类/别称       | 已采纳                 |
 | [0032](0032-drawer-hint-full-and-progressive.md)           | 画家模式完整提示、猜词者逐渐披露（wordHint） | 已废弃（被 0042 取代） |
 | [0042](0042-remove-structured-hints.md)                    | 移除结构化提示：只保留逐字遮罩               | 已采纳                 |
 

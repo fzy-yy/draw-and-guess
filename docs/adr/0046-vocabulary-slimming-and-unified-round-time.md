@@ -49,3 +49,5 @@
 - 取代：[ADR-0013](0013-vocabulary-level-config-and-hints.md)（难度级配置加载期解析与提示字段改版）
 - 相关：[ADR-0042](0042-remove-structured-hints.md)（结构化提示退出对局链路）、
   [ADR-0047](0047-fixed-100-point-scoring.md)（固定 100 分制）
+- 后续：[ADR-0048](0048-vocabulary-schema-slimming.md) 已执行本 ADR 决策 3 的「数据后删列」，并删除
+  「是否启用」语义（词库文件不再有 `enabled` 列）。

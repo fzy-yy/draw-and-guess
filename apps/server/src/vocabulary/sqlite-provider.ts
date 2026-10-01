@@ -3,18 +3,19 @@
  *
  * 职责链：定位并读取词库数据库 → 读取 metadata 构造分类白名单 →
  * 读 words 表逐词条严格校验（category ⊆ category_enum、词面长度、别称合法、主键不重复）→
- * 规范化（ID 生成 / enabled 过滤 / 去重）→ 内容哈希版本号。
+ * 规范化（ID 生成 / 去重）→ 内容哈希版本号。
  * 任何异常数据都以带中文文案的 Error 阻止启动，绝不带病运行。
  *
- * 库表结构（词库重建版，见 vocabulary/base_words.db）：
+ * 库表结构（见 vocabulary/base_words.db）：
  * - metadata(meta_data_key PRIMARY KEY, meta_data_value)：版本、更新时间与分类枚举集合
  *  （数组统一存 JSON 文本）；
- * - words(id, text, category, enabled, aliases, updated_at)——单词条只有一个分类（category）；
- *   别称以 JSON 数组文本存储；enabled 为 0/1（1=进入候选池）。
+ * - words(id, text, category, aliases)——单词条只有一个分类（category）；
+ *   别称以 JSON 数组文本存储。
  *
- * 难度、可绘制性、提示与难度级时限/权重已随词库瘦身退出领域模型：旧词库文件里若仍残留这些列，
- * 本 Provider 既不读取也不校验（代码先不依赖、数据后删列，见
- * docs/adr/0046-vocabulary-slimming-and-unified-round-time.md）。
+ * 难度、可绘制性、提示、难度级时限/权重与「是否启用」位已随词库瘦身退出领域模型，库文件也已
+ * 删列（见 docs/adr/0046-vocabulary-slimming-and-unified-round-time.md 与
+ * docs/adr/0048-vocabulary-schema-slimming.md）；旧词库文件里若仍残留这些列，本 Provider
+ * 既不读取也不校验。
  */
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -32,12 +33,11 @@ interface MetadataRow {
   meta_data_value: string
 }
 
-/** words 表行：只取领域模型需要的列；遗留列（难度/可绘制性/提示等）完全不读。 */
+/** words 表行：只取领域模型需要的列；遗留列（难度/可绘制性/提示/启用位等）完全不读。 */
 interface WordRow {
   id: number
   text: string
   category: string
-  enabled: number
   aliases: string
 }
 
@@ -68,15 +68,13 @@ export class SqliteProvider implements VocabularyProvider {
       // 必须显式 ORDER BY id，才能保证「内容不变则版本号不变」的确定性。
       const rows = database
         .prepare(
-          `SELECT id, text, category, enabled, aliases
+          `SELECT id, text, category, aliases
            FROM words
            ORDER BY id`,
         )
         .all() as WordRow[]
 
       for (const row of rows) {
-        // enabled=0（false）的词条直接跳过：不进入候选池，也不参与去重与版本哈希
-        if (row.enabled !== 1) continue
         const aliases = this.parseAliases(row)
         this.assertWordShape(row, aliases, categorySet, usedIds)
         parsedWords.push({
