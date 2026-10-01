@@ -171,14 +171,6 @@ watch(
             :label="strings.room.drawSecondsField"
             :options="drawSecondsOptions"
           />
-          <RuleSliderField
-            v-model="localDraft.guessBaseScore"
-            :label="strings.room.guessBaseScoreField"
-            :min="store.config.game.score.guessBaseRange.min"
-            :max="store.config.game.score.guessBaseRange.max"
-            :step="store.config.game.score.guessBaseRange.step"
-            :display="strings.room.guessBaseScoreUnit(localDraft.guessBaseScore)"
-          />
           <div class="flex flex-col gap-[0.8cqh]">
             <RuleToggleField
               v-model="localDraft.showWordLength"

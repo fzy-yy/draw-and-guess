@@ -69,11 +69,10 @@ describe('房间规则与高级设置', () => {
     expect(wrapper.text()).toContain(strings.room.toggleChooseTimeLimit)
     expect(wrapper.text()).toContain(strings.room.toggleShowWordLength)
     expect(wrapper.text()).toContain(strings.room.toggleProgressiveHints)
-    expect(wrapper.text()).toContain(strings.room.guessBaseScoreField)
     expect(wrapper.text()).toContain(strings.room.togglePause)
-    // 滑块：轮数/选词时间/候选数/基础分 = 4；开关 6（新增「选词阶段限时」）
-    //（结构化提示、提示出现时机与额外猜词时间均已移除）
-    expect(wrapper.findAll('input[type="range"]')).toHaveLength(4)
+    // 滑块：轮数/选词时间/候选数 = 3；开关 6（新增「选词阶段限时」）
+    //（结构化提示、提示出现时机、额外猜词时间与猜词基础分均已移除）
+    expect(wrapper.findAll('input[type="range"]')).toHaveLength(3)
     expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(6)
     // 下拉：最大玩家数 / 单回合时长 / 中途加入 = 3；单回合时长默认显示 120 秒
     expect(wrapper.findAll('button[aria-haspopup="listbox"]')).toHaveLength(3)

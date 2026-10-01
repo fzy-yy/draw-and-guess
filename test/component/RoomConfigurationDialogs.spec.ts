@@ -124,7 +124,6 @@ describe('RulesDialog 完整规则字段', () => {
       strings.room.togglePlayerInvite,
       strings.room.toggleAllowWordReroll,
       strings.room.drawSecondsField,
-      strings.room.guessBaseScoreField,
       strings.room.toggleShowWordLength,
       strings.room.toggleProgressiveHints,
       strings.room.togglePause,

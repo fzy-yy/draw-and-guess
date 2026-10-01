@@ -174,7 +174,7 @@ function makeGame(phase: RoomPhase, drawerId: string): GameSecret {
     ...(settled
       ? {
           roundResult: { answer: answer?.text ?? '', details: [], drawerScore: 80 },
-          correctDetails: [{ playerId: GUESSER_ID, base: 100, speed: 40, order: 10, total: 150 }],
+          correctDetails: [{ playerId: GUESSER_ID, order: 1, total: 100 }],
         }
       : {}),
     ...(phase === 'paused'

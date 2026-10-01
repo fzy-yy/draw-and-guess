@@ -122,8 +122,6 @@ export const room = {
   optionCountUnit: (count: number) => `${count} 个`,
   toggleShowWordLength: '显示答案字数',
   toggleProgressiveHints: '逐步提示字符',
-  guessBaseScoreField: '猜词基础分',
-  guessBaseScoreUnit: (score: number) => `${score} 分`,
   togglePlayerInvite: '普通玩家可邀请',
   togglePause: '房主可暂停',
   toggleAllowWordReroll: '允许选词换一组',

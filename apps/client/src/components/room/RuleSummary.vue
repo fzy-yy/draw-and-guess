@@ -94,11 +94,6 @@ const summaryRows = computed(() => {
     enabled(settings.showWordLength),
   )
   addDifference(
-    'guessBaseScore',
-    strings.room.guessBaseScoreField,
-    strings.room.guessBaseScoreUnit(settings.guessBaseScore),
-  )
-  addDifference(
     'allowPlayerInvite',
     strings.room.togglePlayerInvite,
     enabled(settings.allowPlayerInvite),

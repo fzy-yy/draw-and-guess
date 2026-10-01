@@ -214,12 +214,8 @@ export class RoundMachine {
     game.correctOrder.push(member.playerId)
     // 按可玩成员数（排除观战）计算速度奖励和顺序奖励，累加到成员总分（scoring 模块统一口径）
     const detail = buildGuessDetail({
-      game,
-      room,
       playerId: member.playerId,
-      guessedAt: member.guessedAt,
       orderIndex: game.correctOrder.length,
-      durationMs: game.roundDurationMs,
     })
     member.score += detail.total
     // 与入账同一条明细留存，供结算展示直接取用（见 GameSecret.correctDetails 说明）
@@ -260,8 +256,8 @@ export class RoundMachine {
     // （使 elapsedMs 变负）或因成员中途离开改变可玩人数（使顺序奖归零），
     // 导致结算展示的分数与实际入账不一致。
     const details = [...game.correctDetails]
-    // 画家得分：每个猜中者计一件，全员猜中另有满员奖励（均排除观战成员，scoring 模块统一）
-    const drawerScore = buildDrawerScore({ game, room, drawerAbandoned })
+    // 画家得分：每个猜中者 20 分、单回合上限 100（scoring 模块统一）
+    const drawerScore = buildDrawerScore({ game, drawerAbandoned })
     const drawer = room.members.find((member) => member.playerId === game.drawerId)
     if (drawer) {
       drawer.score += drawerScore

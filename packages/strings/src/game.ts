@@ -66,9 +66,7 @@ export const game = {
   resumeGame: '继续游戏',
   endEarly: '提前结束',
   roundAnswerLabel: '本回合答案',
-  scoreBase: (base: number) => `基础 ${base}`,
-  scoreSpeed: (speed: number) => `速度 +${speed}`,
-  scoreOrder: (order: number) => `顺序 +${order}`,
+  scoreOrderLabel: (order: number) => `第 ${order} 个猜中`,
   scoreTotal: (total: number) => `+${total}`,
   noGuesses: '本回合无人猜中，再接再厉！',
   drawerScoreLine: (score: number, seconds: number) =>

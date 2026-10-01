@@ -134,12 +134,10 @@ function chooseWord(wordId: string): void {
         <article
           v-for="detail in game.roundResult.details"
           :key="detail.playerId"
-          class="grid grid-cols-[1.5fr_repeat(4,1fr)] items-center bg-line px-[0.8em] py-[0.8cqh] text-left text-fs-12"
+          class="grid grid-cols-[1.5fr_1fr_auto] items-center gap-[0.5em] bg-line px-[0.8em] py-[0.8cqh] text-left text-fs-12"
         >
           <b>{{ store.room.members.find((member) => member.id === detail.playerId)?.nickname }}</b
-          ><span>{{ strings.game.scoreBase(detail.base) }}</span
-          ><span>{{ strings.game.scoreSpeed(detail.speed) }}</span
-          ><span>{{ strings.game.scoreOrder(detail.order) }}</span
+          ><span>{{ strings.game.scoreOrderLabel(detail.order) }}</span
           ><strong class="text-blue text-fs-18">{{ strings.game.scoreTotal(detail.total) }}</strong>
         </article>
         <p v-if="!game.roundResult.details.length">{{ strings.game.noGuesses }}</p>

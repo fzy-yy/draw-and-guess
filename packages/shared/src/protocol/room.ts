@@ -51,11 +51,6 @@ export const RoomSettingsSchema = z
       .max(ROOM_RULE_LIMITS.optionCount.max),
     showWordLength: z.boolean(),
     progressiveHints: z.boolean(),
-    guessBaseScore: z
-      .number()
-      .int()
-      .min(ROOM_RULE_LIMITS.guessBaseScore.min)
-      .max(ROOM_RULE_LIMITS.guessBaseScore.max),
     allowPlayerInvite: z.boolean(),
     allowPause: z.boolean(),
     allowWordReroll: z.boolean(),

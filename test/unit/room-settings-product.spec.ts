@@ -35,7 +35,6 @@ describe('房间规则产品闭环', () => {
       { optionCount: 2.5 },
       { showWordLength: 'yes' },
       { progressiveHints: 1 },
-      { guessBaseScore: 25 },
       { allowPlayerInvite: 'yes' },
       { allowPause: 1 },
       { allowWordReroll: null },

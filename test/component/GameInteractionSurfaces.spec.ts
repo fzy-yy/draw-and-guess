@@ -217,7 +217,7 @@ describe('PhaseOverlay 阶段分支', () => {
       roundResult: {
         answer: '苹果',
         drawerScore: 20,
-        details: [{ playerId: GUEST_ID, base: 100, speed: 30, order: 10, total: 140 }],
+        details: [{ playerId: GUEST_ID, order: 1, total: 100 }],
       },
     })
     session.playerId = GUEST_ID
@@ -232,7 +232,8 @@ describe('PhaseOverlay 阶段分支', () => {
       onLeaveRoom,
     })
     expect(screen.getByText(strings.game.roundAnswerLabel)).toBeTruthy()
-    expect(screen.getByText(strings.game.scoreTotal(140))).toBeTruthy()
+    expect(screen.getByText(strings.game.scoreOrderLabel(1))).toBeTruthy()
+    expect(screen.getByText(strings.game.scoreTotal(100))).toBeTruthy()
 
     room.room.phase = 'game_result'
     await nextTick()

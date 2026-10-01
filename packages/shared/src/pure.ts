@@ -2,7 +2,7 @@
  * 共享领域纯函数：答案规范化、遮罩生成、计分与状态机转换表。
  * 无任何运行时依赖，可在 Node 与浏览器中直接单测。
  */
-import type { RoomPhase, ScoreDetail } from './types/index.ts'
+import type { RoomPhase } from './types/index.ts'
 
 /**
  * 规范化画板颜色为大写 HEX。
@@ -80,24 +80,17 @@ export function createAnswerMask(
 }
 
 /**
- * 计算猜中者分数（固定标准计分：基础 + 速度 + 顺序）。速度奖励按剩余时间比例线性衰减，
- * 并通过取整保证各客户端展示一致。两人局不使用顺序奖，避免唯一猜词者天然获得第一名额外分。
- * （旧「固定分」scoreMode 已随房间规则精简移除，不再作为可配置分支。）
+ * 猜中得分：只由本回合猜中顺序决定（得分表由调用方注入，见公开配置包的 game.score）。
+ * 速度奖、顺序奖与词条权重已随固定 100 分制移除
+ *（见 docs/adr/0047-fixed-100-point-scoring.md）。
+ *
+ * 顺序超出表长时取表内最后一档：最低分仍然给分，避免 6 人局第 6 名得 0
+ * 与「猜中就该有分」的玩法口径冲突。
  */
-export function calculateGuessScore(input: {
-  elapsedMs: number
-  durationMs: number
-  correctOrder: number
-  playerCount: number
-  base: number
-  maxSpeedBonus: number
-  orderBonuses: readonly number[]
-}): Omit<ScoreDetail, 'playerId'> {
-  const duration = Math.max(1, input.durationMs)
-  const remainingRatio = Math.max(0, Math.min(1, 1 - input.elapsedMs / duration))
-  const speed = Math.round(input.maxSpeedBonus * remainingRatio)
-  const order = input.playerCount === 2 ? 0 : (input.orderBonuses[input.correctOrder - 1] ?? 0)
-  return { base: input.base, speed, order, total: input.base + speed + order }
+export function guessScoreForOrder(correctOrder: number, orderScores: readonly number[]): number {
+  if (orderScores.length === 0) return 0
+  const index = Math.max(1, Math.trunc(correctOrder)) - 1
+  return orderScores[Math.min(index, orderScores.length - 1)] ?? 0
 }
 
 /**

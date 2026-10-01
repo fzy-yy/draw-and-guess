@@ -65,7 +65,6 @@ export function createRoomFixture(
       optionCount: 3,
       showWordLength: true,
       progressiveHints: true,
-      guessBaseScore: 100,
       allowPlayerInvite: true,
       allowPause: true,
       allowWordReroll: true,

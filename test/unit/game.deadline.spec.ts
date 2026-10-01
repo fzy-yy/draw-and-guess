@@ -23,7 +23,6 @@ const settings: RoomSettings = {
   optionCount: 3,
   showWordLength: true,
   progressiveHints: true,
-  guessBaseScore: 300,
   allowPlayerInvite: true,
   allowPause: true,
   allowWordReroll: true,

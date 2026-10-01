@@ -83,7 +83,6 @@ export const ROOM_RULE_LIMITS = {
   roundsPerPlayer: { min: 1, max: 5 },
   chooseSeconds: { min: 10, max: 30 },
   optionCount: { min: 2, max: 5 },
-  guessBaseScore: { min: 50, max: 2_000 },
 } as const
 
 export const PRIVATE_ROOM_CODE = {

@@ -76,7 +76,9 @@ export function createMinimalVocabularyDb(
     for (const level of difficultyEnum) {
       levelConfig[String(level)] = {
         time_limit: E2E_WORD_TIME_LIMIT_SECONDS,
-        score_weight: APP_CONFIG.game.score.defaultWordWeight,
+        // 计分已改为固定 100 分制，词条权重不再参与计算；夹具保留该列只为覆盖
+        // 「旧词库仍带多余列」的兼容路径（列本身由词库重建另行删除）。
+        score_weight: 5,
       }
     }
 

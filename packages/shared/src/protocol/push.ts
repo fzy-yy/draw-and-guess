@@ -64,9 +64,9 @@ export const ChatMessageSchema = z
 export const ScoreDetailSchema = z
   .object({
     playerId: z.string().uuid(),
-    base: z.number(),
-    speed: z.number(),
-    order: z.number(),
+    /** 本回合猜中顺序（1 起）。 */
+    order: z.number().int().positive(),
+    /** 本回合得分：只由猜中顺序决定（100/80/60/40/20）。 */
     total: z.number(),
   })
   .strict()

@@ -6,8 +6,9 @@ import type { RoomSettings } from '@draw-guess/shared'
  *
  * 旧「玩法预设」（标准/轻松/竞速三档）已移除：房间规则只保留唯一默认组
  * `roomSettingsDefaults`，建房与规则弹窗初始草稿、服务端默认设置与规则摘要
- * 对照基线统一从它取值，禁止另写一套。计分方式也已固定为标准
- * （基础 + 速度 + 顺序，见 shared pure.ts calculateGuessScore）。
+ * 对照基线统一从它取值，禁止另写一套。计分固定为 100 分制：猜词者按本回合猜中顺序得
+ * 100/80/60/40/20，画家每个猜中者 20 分、单回合上限 100
+ *（见 docs/adr/0047-fixed-100-point-scoring.md）。
  */
 
 /** 房间规则默认基线（不含容量；容量按建房场景注入）。 */
@@ -19,7 +20,6 @@ export const roomSettingsDefaults = {
   optionCount: 3,
   showWordLength: true,
   progressiveHints: true,
-  guessBaseScore: 300,
   allowPlayerInvite: true,
   allowPause: true,
   allowWordReroll: true,
@@ -59,12 +59,9 @@ export const game = {
   progressiveHintRatio: 0.5,
   // 猜词比较固定为：NFKC 规范化 → 去首尾空白 → 折叠连续空白 → 忽略拉丁大小写（由 shared normalizeAnswer 内置）
   score: {
-    defaultWordWeight: 5, // 词条 score_weight 缺省时的计分基准
-    /** 房间规则“统一猜词基础分”滑块合法区间（步进 50，覆盖默认值）。 */
-    guessBaseRange: { ...ROOM_RULE_LIMITS.guessBaseScore, step: 50 },
-    maxSpeedBonus: 700, // 速度奖励上限
-    orderBonuses: [100, 60, 30, 0, 0], // 猜中顺序奖励（前 3 名）
-    drawerPerCorrect: 120, // 画家每个猜中者得分
-    drawerAllCorrectBonus: 100, // 画家全员猜中奖励
+    /** 猜中顺序得分表：第 1/2/3/4/5 名依次得分；超出表长按最后一档计。 */
+    orderScores: [100, 80, 60, 40, 20],
+    drawerPerCorrect: 20, // 画家每个猜中者得分
+    drawerMaxScore: 100, // 画家单回合得分上限
   },
 } as const

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateGuessScore, countGraphemes, truncateGraphemes } from '@draw-guess/shared'
+import { countGraphemes, guessScoreForOrder, truncateGraphemes } from '@draw-guess/shared'
 import { enforceEventRate } from '../../apps/server/src/rate-limit.ts'
 import { GameError } from '../../apps/server/src/errors.ts'
 import type { PlayerSecret } from '../../apps/server/src/models.ts'
@@ -16,17 +16,15 @@ describe('审查缺陷回归：共享规则与限频', () => {
     expect(truncateGraphemes(nickname, 1)).toBe('👩🏽‍💻')
   })
 
-  it('词条权重缩放基础分后仍保持统一的速度/顺序计算', () => {
-    const score = calculateGuessScore({
-      elapsedMs: 1_000,
-      durationMs: 10_000,
-      correctOrder: 1,
-      playerCount: 4,
-      base: 600,
-      maxSpeedBonus: 700,
-      orderBonuses: [100],
-    })
-    expect(score).toEqual({ base: 600, speed: 630, order: 100, total: 1_330 })
+  it('猜中得分只由顺序决定，超出得分表长度时取最低档', () => {
+    const orderScores = [100, 80, 60, 40, 20]
+    expect(guessScoreForOrder(1, orderScores)).toBe(100)
+    expect(guessScoreForOrder(5, orderScores)).toBe(20)
+    // 6 人局第 6 名仍拿最低分，而不是 0 分
+    expect(guessScoreForOrder(6, orderScores)).toBe(20)
+    // 防御：越界与非整数顺序不产生 NaN
+    expect(guessScoreForOrder(0, orderScores)).toBe(100)
+    expect(guessScoreForOrder(2.7, orderScores)).toBe(80)
   })
 
   it('限频使用注入时间，不依赖系统时钟', () => {
