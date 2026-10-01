@@ -25,6 +25,8 @@ describe('审查缺陷回归：共享规则与限频', () => {
     // 防御：越界与非整数顺序不产生 NaN
     expect(guessScoreForOrder(0, orderScores)).toBe(100)
     expect(guessScoreForOrder(2.7, orderScores)).toBe(80)
+    // 防御：空得分表（配置误置空数组）返回 0 而不是崩溃
+    expect(guessScoreForOrder(1, [])).toBe(0)
   })
 
   it('限频使用注入时间，不依赖系统时钟', () => {
