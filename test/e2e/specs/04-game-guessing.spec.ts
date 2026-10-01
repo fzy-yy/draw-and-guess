@@ -36,7 +36,39 @@ test.describe('04 - 实时猜词与计分流转 (Guessing, Chat & Scoring)', () 
         { timeout: 10_000 },
       )
 
-      // 3. 猜词者输入正确题目完成猜中
+      // 3. 消息条数超过一屏后，聊天浮层必须给消息列表可滚动的高度，输入区仍在面板内可见。
+      // 回归：浮层面板槽位曾把网格行高交给内容决定（隐式 auto 行），消息越多整块越高，
+      // 消息列表自身永远拿不到滚动高度：既不出现滚动条，猜词输入还被挤出可见区。
+      const guessInput = guesser.page.locator('input#guess-input')
+      for (let index = 0; index < 20; index += 1) {
+        await guessInput.fill(`干扰猜测第${index}条这是一段足够长的错误答案`)
+        await guessInput.press('Enter')
+        // 猜词事件限频 5 次/秒：放慢到 230ms 一条，避免服务端把消息按限频丢弃。
+        await guesser.page.waitForTimeout(230)
+      }
+      const chatLayout = await guesser.page.evaluate(() => {
+        const list = document.querySelector('div[aria-live="polite"]')
+        const panel = list?.closest('section')
+        const input = document.querySelector('input#guess-input')
+        if (!(list instanceof HTMLElement) || !panel || !(input instanceof HTMLElement))
+          return undefined
+        const listBounds = list.getBoundingClientRect()
+        const panelBounds = panel.getBoundingClientRect()
+        const inputBounds = input.getBoundingClientRect()
+        return {
+          scrollable: list.scrollHeight > list.clientHeight,
+          listBeyondPanel: Math.round(listBounds.bottom - panelBounds.bottom),
+          inputBeyondPanel: Math.round(inputBounds.bottom - panelBounds.bottom),
+          followedLatest: list.scrollHeight - list.scrollTop - list.clientHeight < 32,
+        }
+      })
+      expect(chatLayout?.scrollable).toBe(true)
+      expect(chatLayout?.listBeyondPanel).toBeLessThanOrEqual(0)
+      expect(chatLayout?.inputBeyondPanel).toBeLessThanOrEqual(0)
+      // 仍保持「新消息到达即跟随到底部」的阅读锚点
+      expect(chatLayout?.followedLatest).toBe(true)
+
+      // 4. 猜词者输入正确题目完成猜中
       await guesser.game.sendGuess(answer)
       // 最后一名猜词者（本局唯一猜词者）猜中即结束本回合，服务端会在同一份快照里把阶段切到
       // round_result；此时礼花仍应触发，且必须**真的绘制出像素**（主线程渲染，画布可读）。

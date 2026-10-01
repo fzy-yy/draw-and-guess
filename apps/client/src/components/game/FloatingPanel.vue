@@ -153,7 +153,7 @@ function endDrag(event: PointerEvent): void {
           <X />
         </button>
       </header>
-      <div class="grid min-h-0 flex-1 overflow-hidden">
+      <div class="grid min-h-0 flex-1 grid-rows-1 overflow-hidden">
         <slot />
       </div>
     </section>
