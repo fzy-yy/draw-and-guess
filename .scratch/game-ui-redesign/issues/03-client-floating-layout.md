@@ -4,7 +4,7 @@
 **Blocked by**: 01
 
 > 依据：`.scratch/game-ui-redesign/spec.md`、`docs/adr/0043-game-view-floating-layout.md`。
-> 视觉参照：`apps/client/prototype/game-layout/`（原型仅作参照，不作为交付物）。
+> 视觉参照：`prototypes` 分支的 `apps/client/prototype/game-layout/`（原型仅作参照，不作为交付物）。
 
 ## 目标
 

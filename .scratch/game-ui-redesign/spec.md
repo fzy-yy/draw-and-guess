@@ -2,7 +2,7 @@
 
 > **Status**: ready-for-agent
 > 来源：2026-10-01 用户提出「按当前原型改造对局界面 + 删除提示」，经 grilling 三轮访谈收敛。
-> 原型：`apps/client/prototype/game-layout/`（唯一版本「底部工具条」，已在 `main` 提交）。
+> 原型：`prototypes` 分支的 `apps/client/prototype/game-layout/`（唯一版本「底部工具条」；原型不留在 `main`）。
 > 关联决策：[ADR-0042](../../docs/adr/0042-remove-structured-hints.md)、[ADR-0043](../../docs/adr/0043-game-view-floating-layout.md)。
 
 ## Problem Statement
@@ -130,7 +130,7 @@
 
 ## Further Notes
 
-- 原型位置与运行：`apps/client/prototype/game-layout/`，`pnpm --filter @draw-guess/client dev` 后访问 `/prototype/game-layout/index.html`；原型只是视觉参照，不作为交付物。
+- 原型位置与运行：`prototypes` 分支的 `apps/client/prototype/game-layout/`（先 `git checkout prototypes`），`pnpm --filter @draw-guess/client dev` 后访问 `/prototype/game-layout/index.html`；原型只是视觉参照，不作为交付物。
 - 本规格**取代**此前提案中的三变体原型方案（`A 浮卡 / B 半透明 / C 贴边 / D 底部工具条`）；最终只保留「底部工具条」版。
 - 删除结构化提示同时会使 [ADR-0032](../../docs/adr/0032-drawer-hint-full-and-progressive.md) 废弃、[ADR-0013](../../docs/adr/0013-vocabulary-level-config-and-hints.md) 的提示部分仅剩词库数据语义（见 ADR-0042）。
 - 协议为不兼容变更，落地时前后端需同批部署；旧页面刷新即被版本握手拦下。
