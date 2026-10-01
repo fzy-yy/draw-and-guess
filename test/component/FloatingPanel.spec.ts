@@ -231,3 +231,53 @@ describe('FloatingPanel 跨面板层级（模块级共享）', () => {
     second.unmount()
   })
 })
+
+describe('FloatingPanel 钉死与直角变体', () => {
+  /** 用真实 PointerEvent 驱动拖动：VTU trigger 无法可靠携带 clientX/pointerId。 */
+  function pointer(
+    type: string,
+    target: HTMLElement,
+    { clientX, clientY, pointerId = 1 }: { clientX: number; clientY: number; pointerId?: number },
+  ): void {
+    target.dispatchEvent(
+      new PointerEvent(type, { bubbles: true, button: 0, clientX, clientY, pointerId }),
+    )
+  }
+
+  it('draggable=false 时标题栏不参与拖动，也不显示抓取光标', () => {
+    const wrapper = mount(FloatingPanel, {
+      props: {
+        open: true,
+        position: { x: 0, y: 0 },
+        draggable: false,
+        title: strings.game.playersPanelTitle,
+      },
+    })
+    const header = wrapper.get('header')
+    expect(header.classes()).not.toContain('cursor-grab')
+
+    const panel = wrapper.get('section').element as HTMLElement
+    const workspace = panel.parentElement as HTMLElement
+    vi.spyOn(workspace, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 1000, 500))
+    vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 100, 200))
+    pointer('pointerdown', header.element as HTMLElement, { clientX: 10, clientY: 10 })
+    pointer('pointermove', header.element as HTMLElement, { clientX: 500, clientY: 300 })
+
+    expect(wrapper.emitted('update:position')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('rounded=false 渲染直角，默认为圆角', () => {
+    const square = mount(FloatingPanel, {
+      props: { open: true, rounded: false, title: strings.game.playersPanelTitle },
+    })
+    expect(square.get('section').classes()).toContain('rounded-none')
+    square.unmount()
+
+    const round = mount(FloatingPanel, {
+      props: { open: true, title: strings.game.playersPanelTitle },
+    })
+    expect(round.get('section').classes()).toContain('rounded-[0.7em]')
+    round.unmount()
+  })
+})

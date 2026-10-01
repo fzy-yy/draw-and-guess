@@ -145,12 +145,10 @@ function handleFullscreenToggle(): void {
       @toggle-fullscreen="handleFullscreenToggle"
     />
 
-    <!-- 画布铺满顶栏以下整块：黑色描边 + 圆角（与浮层一致）+ 极微边距；
+    <!-- 画布铺满顶栏以下整块：黑色描边 + 极微边距（直角）；
          浮层面板与底部工具条都相对此容器定位与夹取 -->
     <div class="min-h-0 flex-1 p-[0.7cqh_0.7cqw]">
-      <div
-        class="relative h-full overflow-hidden rounded-[0.7em] border-[0.35cqh] border-black bg-white"
-      >
+      <div class="relative h-full overflow-hidden border-[0.35cqh] border-black bg-white">
         <GameCanvas
           v-model:width="width"
           :round-id="game.roundId"
@@ -178,11 +176,13 @@ function handleFullscreenToggle(): void {
           }}</span>
         </div>
 
-        <!-- 浮层玩家面板（贴左缘，默认打开，可拖动 / 关闭） -->
+        <!-- 浮层玩家面板：钉死在画板左缘（不可拖动、直角），默认打开，可开合 -->
         <FloatingPanel
           v-model:open="playersOpen"
           v-model:position="playersPosition"
           :title="strings.game.playersPanelTitle"
+          :draggable="false"
+          :rounded="false"
           width-class="w-[10cqw]"
           height-class="h-full"
         >
