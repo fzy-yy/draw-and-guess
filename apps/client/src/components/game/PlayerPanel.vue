@@ -28,7 +28,7 @@ const memberBadgeClass =
     <article
       v-for="member in store.room.members"
       :key="member.id"
-      class="grid min-h-[6cqh] min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-[0.45em] rounded-[0.35em] border-l-[0.32cqh] px-[0.45em] py-[0.35cqh]"
+      class="grid min-h-[6cqh] min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-[0.45em] border-l-[0.32cqh] px-[0.45em] py-[0.35cqh]"
       :class="[
         member.guessed ? 'bg-green/10' : 'bg-white',
         member.connection !== 'online' && 'border-dashed bg-line/40',
