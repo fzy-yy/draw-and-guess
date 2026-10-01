@@ -57,6 +57,7 @@
 | [0023](0023-member-facts-single-source.md)   | 成员事实单一口径：具名谓词取代内联组合判定    | 已采纳 |
 | [0024](0024-round-machine-ownership.md)      | 回合所有权归 RoundMachine：阶段写入与对局消息 | 已采纳 |
 | [0040](0040-round-timing-and-phase-facts.md) | 回合时序与阶段事实收口：RoundMachine 独占时序 | 已采纳 |
+| [0047](0047-fixed-100-point-scoring.md)      | 计分改为固定 100 分制                         | 已采纳 |
 
 ### 客户端架构与 UI 原语
 
@@ -76,13 +77,15 @@
 
 ### 词汇与提示
 
-| 编号                                              | 主题                                         | 状态                   |
-| :------------------------------------------------ | :------------------------------------------- | :--------------------- |
-| [0001](0001-progressive-hint-interval.md)         | 逐步提示间隔用毫秒计算、不再按秒向下取整     | 已采纳                 |
-| [0004](0004-vocabulary-default-package.md)        | 词库默认包按「词数 + id」确定性选择          | 已采纳                 |
-| [0013](0013-vocabulary-level-config-and-hints.md) | 词库难度级配置加载期解析与提示字段改版       | 已采纳                 |
-| [0032](0032-drawer-hint-full-and-progressive.md)  | 画家模式完整提示、猜词者逐渐披露（wordHint） | 已废弃（被 0042 取代） |
-| [0042](0042-remove-structured-hints.md)           | 移除结构化提示：只保留逐字遮罩               | 已采纳                 |
+| 编号                                                       | 主题                                         | 状态                   |
+| :--------------------------------------------------------- | :------------------------------------------- | :--------------------- |
+| [0001](0001-progressive-hint-interval.md)                  | 逐步提示间隔用毫秒计算、不再按秒向下取整     | 已采纳                 |
+| [0004](0004-vocabulary-default-package.md)                 | 词库默认包按「词数 + id」确定性选择          | 已采纳                 |
+| [0013](0013-vocabulary-level-config-and-hints.md)          | 词库难度级配置加载期解析与提示字段改版       | 已废弃（被 0046 取代） |
+| [0045](0045-custom-word-and-untimed-choosing.md)           | 画家自定义题目与选词阶段不限时               | 已采纳                 |
+| [0046](0046-vocabulary-slimming-and-unified-round-time.md) | 词库瘦身与统一回合时长（取代 0013）          | 已采纳                 |
+| [0032](0032-drawer-hint-full-and-progressive.md)           | 画家模式完整提示、猜词者逐渐披露（wordHint） | 已废弃（被 0042 取代） |
+| [0042](0042-remove-structured-hints.md)                    | 移除结构化提示：只保留逐字遮罩               | 已采纳                 |
 
 ### 本机反馈
 

@@ -1,6 +1,6 @@
 # 0013 词库重建适配：难度级配置加载期解析与提示字段改版
 
-**状态**：已采纳
+**状态**：已废弃（被 [ADR-0046](0046-vocabulary-slimming-and-unified-round-time.md) 取代）
 
 - 来源：词库 SQLite 重建（`vocabulary/base_words.db` 结构大改）的适配需求
 
