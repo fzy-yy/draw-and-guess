@@ -58,6 +58,7 @@ describe('使用说明.txt 模板', () => {
     for (const variant of ['slim', 'full'] as const) {
       const notes = buildUsageNotes('2.5.0', variant, TEST_PORT)
       expect(notes).toContain('data/vocabulary/custom/')
+      expect(notes).toContain('vocabulary/templates/example.db')
       expect(notes).toContain('请勿开放到公网')
     }
   })

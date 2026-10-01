@@ -94,6 +94,11 @@ function copyAssets(appDir: string): void {
     if (file.endsWith('.db'))
       copyFileSync(join(repoRoot, 'vocabulary', file), join(vocabularyTarget, file))
   }
+  // 空白词库样板随包分发：它不是运行时词库（0 词会被门槛拒绝），只作玩家自定义词库的起点。
+  const templatesSource = join(repoRoot, 'vocabulary', 'templates')
+  if (existsSync(templatesSource)) {
+    cpSync(templatesSource, join(vocabularyTarget, 'templates'), { recursive: true })
+  }
 
   const require = createRequire(import.meta.url)
   const betterSqliteDir = dirname(require.resolve('better-sqlite3/package.json'))

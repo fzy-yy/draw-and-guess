@@ -98,6 +98,7 @@ export function buildUsageNotes(version: string, variant: DistVariant, port: num
     '      data/vocabulary/custom/    用户自定义词库（可放多个 .db，不会被升级覆盖）',
     '      data/.env                  高级配置（端口、日志开关等，可选）',
     '  - 内置词库在 vocabulary/ 目录，升级版本时会随包更新。',
+    '  - 自定义词库样板在 vocabulary/templates/example.db，复制到 data/vocabulary/custom/ 填词即可。',
     withNode
       ? `  - 内置 Node ${BUNDLED_NODE_MAJOR} LTS 运行时在 runtime/ 目录（含其 LICENSE），请勿删除。`
       : null,
