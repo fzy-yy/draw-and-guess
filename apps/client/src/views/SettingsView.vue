@@ -11,7 +11,6 @@ import {
   PaintBucket,
   Palette,
   SlidersHorizontal,
-  Users,
   Volume2,
 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
@@ -78,12 +77,6 @@ const shortcutRows: Array<{
     name: strings.settings.fill,
     detail: strings.settings.fillDetail,
     icon: PaintBucket,
-  },
-  {
-    setting: 'playersPanelShortcut',
-    name: strings.settings.panelPlayers,
-    detail: strings.settings.panelPlayersDetail,
-    icon: Users,
   },
   {
     setting: 'chatPanelShortcut',

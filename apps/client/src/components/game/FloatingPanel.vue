@@ -3,8 +3,6 @@
   开关状态与位置由父组件持有（v-model:open / v-model:position）：顶栏开关与面板内关闭按钮
   写同一份 open，因此两处天然同步；位置以相对画布容器的百分比记账，刷新即重置。
   拖动只绑定标题栏，正文里的输入框、聊天滚动与画布绘制不会被抢走指针事件。
-  `draggable=false` 的面板被钉死在父组件给定的位置（如玩家面板固定在画板左缘）；
-  `rounded=false` 用直角，避免贴边钉死时与画板边缘之间露出缺口。
 -->
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
@@ -36,12 +34,8 @@ const props = withDefaults(
     /** 面板尺寸类（宽 / 高，随舞台容器单位等比缩放）。 */
     widthClass?: string
     heightClass?: string
-    /** 是否可拖动：钉死在画板某条边上的面板（如玩家面板）关掉拖动。 */
-    draggable?: boolean
-    /** 是否保留圆角：贴边钉死的面板用直角，避免与画板边缘之间露出缺口。 */
-    rounded?: boolean
   }>(),
-  { widthClass: '', heightClass: '', draggable: true, rounded: true },
+  { widthClass: '', heightClass: '' },
 )
 
 const panelElement = ref<HTMLElement>()
@@ -52,8 +46,7 @@ const dragging = ref(false)
 
 const rootClass = computed(() =>
   cn(
-    'pointer-events-auto absolute flex min-h-0 flex-col overflow-hidden border-[0.28cqh] border-navy bg-paper/95 shadow-float',
-    props.rounded ? 'rounded-[0.7em]' : 'rounded-none',
+    'pointer-events-auto absolute flex min-h-0 flex-col overflow-hidden rounded-[0.7em] border-[0.28cqh] border-navy bg-paper/95 shadow-float',
     props.widthClass,
     props.heightClass,
   ),
@@ -80,8 +73,6 @@ function bringToFront(): void {
 }
 
 function beginDrag(event: PointerEvent): void {
-  // 钉死面板不参与拖动：位置由父组件固定，标题栏只作为标题与关闭按钮的容器。
-  if (!props.draggable) return
   if (event.button !== 0) return
   // 图标点击的原始 target 往往是 SVG 子节点；检查完整事件路径，避免把关闭按钮误判成拖动手柄。
   if (
@@ -144,11 +135,8 @@ function endDrag(event: PointerEvent): void {
       @pointerdown="bringToFront"
     >
       <header
-        class="flex shrink-0 items-center gap-[0.6em] border-b-[0.18cqh] border-line px-[0.75em] py-[0.55cqh]"
-        :class="[
-          draggable ? 'touch-none cursor-grab active:cursor-grabbing' : '',
-          dragging ? 'bg-sky' : 'bg-white/70',
-        ]"
+        class="flex shrink-0 touch-none cursor-grab items-center gap-[0.6em] border-b-[0.18cqh] border-line px-[0.75em] py-[0.55cqh] active:cursor-grabbing"
+        :class="dragging ? 'bg-sky' : 'bg-white/70'"
         @pointerdown="beginDrag"
         @pointermove="moveDrag"
         @pointerup="endDrag"

@@ -15,14 +15,11 @@ test.describe('04 - 实时猜词与计分流转 (Guessing, Chat & Scoring)', () 
       expect(answer).toBeTruthy()
 
       // 新浮层布局：猜词者顶栏不含任何提示文案（结构化提示已移除），且非画家没有底部工具条；
-      // 浮层玩家面板可由顶栏开关收起 / 重新打开。
+      // 玩家面板是常驻左栏，没有顶栏开关。
       await expect(guesser.page.getByLabel('对局顶栏')).not.toContainText('提示')
       await expect(guesser.page.getByRole('toolbar', { name: '绘图工具栏' })).toHaveCount(0)
       await expect(guesser.game.playersPanel).toBeVisible()
-      await guesser.game.togglePlayersPanel()
-      await expect(guesser.game.playersPanel).toBeHidden()
-      await guesser.game.togglePlayersPanel()
-      await expect(guesser.game.playersPanel).toBeVisible()
+      await expect(guesser.page.getByRole('button', { name: '玩家面板' })).toHaveCount(0)
 
       // 1. 发送普通错误猜词
       await guesser.game.sendGuess('这不是正确答案')

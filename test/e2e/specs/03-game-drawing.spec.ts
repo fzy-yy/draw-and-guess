@@ -23,11 +23,9 @@ test.describe('03 - 对局画板与绘图工具 (Game Drawing & Canvas)', () => 
       await drawer.game.toggleToolbar()
       await expect(drawer.game.toolbar).toBeVisible()
 
+      // 玩家面板是常驻左栏：没有顶栏开关，始终可见
       await expect(drawer.game.playersPanel).toBeVisible()
-      await drawer.game.togglePlayersPanel()
-      await expect(drawer.game.playersPanel).toBeHidden()
-      await drawer.game.togglePlayersPanel()
-      await expect(drawer.game.playersPanel).toBeVisible()
+      await expect(drawer.page.getByRole('button', { name: '玩家面板' })).toHaveCount(0)
 
       // 4. 画家使用画笔在画布绘制线段
       await drawer.game.drawStroke([

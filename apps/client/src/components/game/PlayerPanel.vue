@@ -1,8 +1,9 @@
 <!--
-  浮层玩家面板（收窄版，替代旧的左侧得分条）：
+  对局常驻左栏（收窄版，替代旧的左侧得分条）：
   只保留头衔信息（头像 / 昵称 / 分数 / 局内角色）与座位色条，去掉「我」标记与多余留白，
   以更窄的宽度容纳 6 人；数据仍来自真实 room 快照（store.room.members），字段语义不变。
   画家 / 已猜中通过头像角标表达，掉线用虚线边框与半透明底表达。
+  宽度与高度由宿主（对局常驻左栏）给定：自身占位、不浮动、无标题栏、不可关闭。
 -->
 <script setup lang="ts">
 import { Brush, Eye } from 'lucide-vue-next'
@@ -21,7 +22,7 @@ const memberBadgeClass =
 <template>
   <aside
     v-if="store.room"
-    class="flex min-w-0 flex-col gap-[0.5cqh] overflow-y-auto overscroll-contain px-[0.5em] py-[0.7cqh]"
+    class="flex h-full min-w-0 flex-col gap-[0.5cqh] overflow-y-auto overscroll-contain px-[0.5em] py-[0.7cqh]"
     :aria-label="strings.game.playersPanelTitle"
   >
     <article

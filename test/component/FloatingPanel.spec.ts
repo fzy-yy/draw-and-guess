@@ -123,7 +123,7 @@ describe('FloatingPanel 与顶栏开关联动', () => {
     setActivePinia(pinia)
   })
 
-  /** 复刻 GameView 的绑定：顶栏开关与面板共用同一个 open 引用，两处都能改它。 */
+  /** 复刻 GameView 的绑定：顶栏开关与浮层面板共用同一个 open 引用，两处都能改它。 */
   function mountSharedOpen(): VueWrapper {
     const roomStore = useRoomStore()
     roomStore.room = createRoomFixture('drawing')
@@ -132,7 +132,6 @@ describe('FloatingPanel 与顶栏开关联动', () => {
     const Harness = defineComponent({
       components: { GameHud, FloatingPanel },
       setup() {
-        const playersOpen = ref(true)
         const chatOpen = ref(true)
         const toolsOpen = ref(true)
         return () =>
@@ -143,8 +142,6 @@ describe('FloatingPanel 与顶栏开关联动', () => {
               secondsLeft: 30,
               progress: 0.5,
               showTools: false,
-              playersOpen: playersOpen.value,
-              'onUpdate:playersOpen': (value: boolean) => (playersOpen.value = value),
               chatOpen: chatOpen.value,
               'onUpdate:chatOpen': (value: boolean) => (chatOpen.value = value),
               toolsOpen: toolsOpen.value,
@@ -153,11 +150,11 @@ describe('FloatingPanel 与顶栏开关联动', () => {
             h(
               FloatingPanel,
               {
-                open: playersOpen.value,
-                'onUpdate:open': (value: boolean) => (playersOpen.value = value),
-                title: strings.game.playersPanelTitle,
+                open: chatOpen.value,
+                'onUpdate:open': (value: boolean) => (chatOpen.value = value),
+                title: strings.game.chatPanelTitle,
               },
-              { default: () => h('p', '成员列表') },
+              { default: () => h('p', '聊天消息') },
             ),
           ])
       },
@@ -168,8 +165,8 @@ describe('FloatingPanel 与顶栏开关联动', () => {
 
   it('顶栏按钮可收起面板，面板内关闭按钮也能收起同一份状态', async () => {
     const wrapper = mountSharedOpen()
-    const toggle = wrapper.get(`[aria-label="${strings.game.togglePlayers}"]`)
-    const panelTitle = strings.game.playersPanelTitle
+    const toggle = wrapper.get(`[aria-label="${strings.game.toggleChat}"]`)
+    const panelTitle = strings.game.chatPanelTitle
 
     // 顶栏开关 → 收起
     await toggle.trigger('click')
@@ -229,55 +226,5 @@ describe('FloatingPanel 跨面板层级（模块级共享）', () => {
 
     first.unmount()
     second.unmount()
-  })
-})
-
-describe('FloatingPanel 钉死与直角变体', () => {
-  /** 用真实 PointerEvent 驱动拖动：VTU trigger 无法可靠携带 clientX/pointerId。 */
-  function pointer(
-    type: string,
-    target: HTMLElement,
-    { clientX, clientY, pointerId = 1 }: { clientX: number; clientY: number; pointerId?: number },
-  ): void {
-    target.dispatchEvent(
-      new PointerEvent(type, { bubbles: true, button: 0, clientX, clientY, pointerId }),
-    )
-  }
-
-  it('draggable=false 时标题栏不参与拖动，也不显示抓取光标', () => {
-    const wrapper = mount(FloatingPanel, {
-      props: {
-        open: true,
-        position: { x: 0, y: 0 },
-        draggable: false,
-        title: strings.game.playersPanelTitle,
-      },
-    })
-    const header = wrapper.get('header')
-    expect(header.classes()).not.toContain('cursor-grab')
-
-    const panel = wrapper.get('section').element as HTMLElement
-    const workspace = panel.parentElement as HTMLElement
-    vi.spyOn(workspace, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 1000, 500))
-    vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 100, 200))
-    pointer('pointerdown', header.element as HTMLElement, { clientX: 10, clientY: 10 })
-    pointer('pointermove', header.element as HTMLElement, { clientX: 500, clientY: 300 })
-
-    expect(wrapper.emitted('update:position')).toBeUndefined()
-    wrapper.unmount()
-  })
-
-  it('rounded=false 渲染直角，默认为圆角', () => {
-    const square = mount(FloatingPanel, {
-      props: { open: true, rounded: false, title: strings.game.playersPanelTitle },
-    })
-    expect(square.get('section').classes()).toContain('rounded-none')
-    square.unmount()
-
-    const round = mount(FloatingPanel, {
-      props: { open: true, title: strings.game.playersPanelTitle },
-    })
-    expect(round.get('section').classes()).toContain('rounded-[0.7em]')
-    round.unmount()
   })
 })

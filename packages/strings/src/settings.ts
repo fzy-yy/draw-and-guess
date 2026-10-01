@@ -42,8 +42,6 @@ export const settings = {
   eraserDetail: '切换到橡皮擦并沿用当前粗细',
   fill: '区域填充',
   fillDetail: '填充点击位置的封闭区域',
-  panelPlayers: '玩家面板',
-  panelPlayersDetail: '显示或隐藏玩家与得分面板',
   panelChat: '聊天面板',
   panelChatDetail: '显示或隐藏聊天面板',
   panelTools: '绘图工具条',

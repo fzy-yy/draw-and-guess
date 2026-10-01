@@ -17,7 +17,7 @@ export class GamePage {
     return this.page.getByRole('toolbar', { name: '绘图工具栏' })
   }
 
-  /** 浮层玩家面板（aria-label 来自玩家面板标题）。 */
+  /** 常驻玩家左栏（aria-label 来自玩家面板标题；不参与开关）。 */
   get playersPanel() {
     return this.page.getByLabel('玩家', { exact: true })
   }
@@ -25,10 +25,6 @@ export class GamePage {
   /** 浮层聊天面板（按标题文本定位，避免与玩家面板混淆）。 */
   get chatPanel() {
     return this.page.locator('section').filter({ hasText: '聊天' })
-  }
-
-  async togglePlayersPanel() {
-    await this.page.getByRole('button', { name: '玩家面板' }).click()
   }
 
   async toggleChatPanel() {

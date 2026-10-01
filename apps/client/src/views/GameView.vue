@@ -54,24 +54,23 @@ const showLeaveGameConfirm = ref(false) // 设置页退出对局确认弹窗
 const showGameSettings = ref(false) // 对局内设置弹窗
 
 // ---- 浮层面板与工具条的本地状态（仅本机 UI，刷新即重置；位置为相对画布容器的百分比）----
-const playersOpen = ref(true)
+// 玩家面板是常驻左栏（占位、不浮动、不可关闭），因此只有聊天面板需要开合与位置状态。
 const chatOpen = ref(true)
 const toolsOpen = ref(true)
-// 玩家贴左缘、聊天贴右缘（24cqw 宽 ⇒ 左边界默认在 76%）；高度由 h-full 撑满画布。
-const playersPosition = ref<PanelPosition>({ x: 0, y: 0 })
-const chatPosition = ref<PanelPosition>({ x: 76, y: 0 })
+// 聊天贴右缘：工作区宽度 = 舞台宽 - 两侧边距(1.4cqw) - 玩家左栏(10cqw) ≈ 88.6cqw，
+// 面板宽 24cqw ⇒ x 取 72% 时右缘约在舞台 98.5cqw 处，既不溢出舞台也贴住右缘。
+const chatPosition = ref<PanelPosition>({ x: 72, y: 0 })
 
 /** 仅画家在作画阶段可绘制：驱动画布与底部工具条的启用，非画家/非该阶段整组置灰。 */
 const canDraw = computed(() => store.isDrawer && store.room?.phase === 'drawing')
 /** 底部工具条可见性：仅画家且顶栏「工具」开关为开。 */
 const showToolbar = computed(() => store.isDrawer && toolsOpen.value)
 
-// ---- 面板显隐快捷键：P / C / T（设置页可改）开关三个面板，回车固定只打开聊天或聚焦猜词框 ----
+// ---- 面板显隐快捷键：C / T（设置页可改）开关聊天面板与工具条，回车固定只打开聊天或聚焦猜词框 ----
 // 对局内设置弹窗打开时让位，避免与设置页的输入控件冲突。
 const chatPanelRef = ref<{ focusInput: () => void }>()
 usePanelShortcuts({
   store,
-  playersOpen,
   chatOpen,
   toolsOpen,
   focusChatInput: () => chatPanelRef.value?.focusInput(),
@@ -133,7 +132,6 @@ function handleFullscreenToggle(): void {
   <main v-if="store.room && game" class="relative flex h-full flex-col bg-paper">
     <!-- 固定顶栏：回合 / 面板开关 / 题目 / 倒计时 / 网络 / 暂停·设置·全屏 -->
     <GameHud
-      v-model:players-open="playersOpen"
       v-model:chat-open="chatOpen"
       v-model:tools-open="toolsOpen"
       :is-fullscreen="isFullscreen"
@@ -145,70 +143,65 @@ function handleFullscreenToggle(): void {
       @toggle-fullscreen="handleFullscreenToggle"
     />
 
-    <!-- 画布铺满顶栏以下整块：黑色描边 + 极微边距（直角）；
-         浮层面板与底部工具条都相对此容器定位与夹取 -->
+    <!-- 顶栏以下：玩家常驻左栏 + 画板并排；画板内承载聊天浮层与底部工具条 -->
     <div class="min-h-0 flex-1 p-[0.7cqh_0.7cqw]">
-      <div class="relative h-full overflow-hidden border-[0.35cqh] border-black bg-white">
-        <GameCanvas
-          v-model:width="width"
-          :round-id="game.roundId"
-          :strokes="game.strokes"
-          :undone-stroke-ids="game.undoneStrokeIds"
-          :last-sequence="game.lastSequence"
-          :can-draw="canDraw"
-          :tool="tool"
-          :color="color"
-          :revision="game.drawingRevision"
-          @stroke="submitStroke"
-          @stroke-failure="recoverAuthoritativeDrawing"
-          @fill="submitFill"
-          @fill-failure="recoverAuthoritativeDrawing"
-        />
-
-        <!-- 画布状态遮罩：选词/结算/暂停等非作画阶段覆盖在画布上（猜词者在画家选词时也能看到状态） -->
-        <div
-          v-if="store.room.phase !== 'drawing'"
-          class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-[0.6cqh] bg-paper text-muted"
-        >
-          <Brush class="h-[7cqh] w-[7cqh] text-blue" /><b class="text-fs-20">{{ phaseLabel }}</b>
-          <span v-if="store.room.phase === 'choosing_word' && !store.isDrawer" class="text-fs-12">{{
-            strings.game.choosingHint
-          }}</span>
-        </div>
-
-        <!-- 浮层玩家面板：钉死在画板左缘（不可拖动、直角），默认打开，可开合 -->
-        <FloatingPanel
-          v-model:open="playersOpen"
-          v-model:position="playersPosition"
-          :title="strings.game.playersPanelTitle"
-          :draggable="false"
-          :rounded="false"
-          width-class="w-[10cqw]"
-          height-class="h-full"
-        >
+      <div class="flex h-full">
+        <!-- 常驻玩家左栏：占位（挤窄画板）、不浮动、无标题栏、不可关闭 -->
+        <aside class="w-[10cqw] shrink-0 bg-paper">
           <PlayerPanel />
-        </FloatingPanel>
+        </aside>
 
-        <!-- 浮层聊天面板（贴右缘，默认打开，可拖动 / 关闭） -->
-        <FloatingPanel
-          v-model:open="chatOpen"
-          v-model:position="chatPosition"
-          :title="strings.game.chatPanelTitle"
-          width-class="w-[24cqw]"
-          height-class="h-full"
-        >
-          <ChatPanel ref="chatPanelRef" :can-guess="canGuess" />
-        </FloatingPanel>
+        <div class="relative min-w-0 flex-1 overflow-hidden border-[0.35cqh] border-black bg-white">
+          <GameCanvas
+            v-model:width="width"
+            :round-id="game.roundId"
+            :strokes="game.strokes"
+            :undone-stroke-ids="game.undoneStrokeIds"
+            :last-sequence="game.lastSequence"
+            :can-draw="canDraw"
+            :tool="tool"
+            :color="color"
+            :revision="game.drawingRevision"
+            @stroke="submitStroke"
+            @stroke-failure="recoverAuthoritativeDrawing"
+            @fill="submitFill"
+            @fill-failure="recoverAuthoritativeDrawing"
+          />
 
-        <!-- 底部横向工具条：浮在画布底部居中，仅画家且开关为开时显示 -->
-        <CanvasToolbar
-          v-model:tool="tool"
-          v-model:color="color"
-          v-model:width="width"
-          :visible="showToolbar"
-          :can-draw="canDraw"
-          @clear="showClearConfirm = true"
-        />
+          <!-- 画布状态遮罩：选词/结算/暂停等非作画阶段覆盖在画布上（猜词者在画家选词时也能看到状态） -->
+          <div
+            v-if="store.room.phase !== 'drawing'"
+            class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-[0.6cqh] bg-paper text-muted"
+          >
+            <Brush class="h-[7cqh] w-[7cqh] text-blue" /><b class="text-fs-20">{{ phaseLabel }}</b>
+            <span
+              v-if="store.room.phase === 'choosing_word' && !store.isDrawer"
+              class="text-fs-12"
+              >{{ strings.game.choosingHint }}</span
+            >
+          </div>
+
+          <!-- 浮层聊天面板（贴右缘，默认打开，可拖动 / 关闭） -->
+          <FloatingPanel
+            v-model:open="chatOpen"
+            v-model:position="chatPosition"
+            :title="strings.game.chatPanelTitle"
+            width-class="w-[24cqw]"
+            height-class="h-full"
+          >
+            <ChatPanel ref="chatPanelRef" :can-guess="canGuess" />
+          </FloatingPanel>
+
+          <!-- 底部横向工具条：浮在画布底部居中，仅画家且开关为开时显示 -->
+          <CanvasToolbar
+            v-model:tool="tool"
+            v-model:color="color"
+            v-model:width="width"
+            :visible="showToolbar"
+            :can-draw="canDraw"
+            @clear="showClearConfirm = true"
+          />
+        </div>
       </div>
     </div>
 

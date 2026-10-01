@@ -39,3 +39,4 @@
   `utils/keyboard.ts`、`packages/config/src/settings.ts`、`packages/strings/src/settings.ts`
 - 测试：`test/component/GameHudPhaseOverlay.spec.ts`、`test/integration/game-view-shell.spec.ts`
 - 调整：[ADR-0043](0043-game-view-floating-layout.md)（顶栏高度子决策）
+- 后续调整：玩家面板改为常驻左栏后，其开关与快捷键一并移除——本 ADR 第 1 条中的「玩家面板」快捷键与顶栏「玩家」开关已不存在，快捷键只覆盖聊天面板与底部工具条；该面板也不可关闭（常驻占位）。

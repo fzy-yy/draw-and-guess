@@ -93,7 +93,6 @@ export const game = {
   confirmEnd: '确认结束',
   // —— 对局浮层布局：顶栏、可拖动浮层面板与底部横向工具条（见 docs/adr/0043-game-view-floating-layout.md）——
   topBarAria: '对局顶栏',
-  togglePlayers: '玩家面板',
   toggleChat: '聊天面板',
   toggleTools: '绘图工具',
   playersPanelTitle: '玩家',

@@ -42,4 +42,4 @@
   `components/common/`（方形图标按钮 / 圆形色板按钮 / 分隔线原语）
 - 规格：`.scratch/game-ui-redesign/spec.md`
 - 同时采纳：[ADR-0042](0042-remove-structured-hints.md)（移除结构化提示）
-- 后续调整：[ADR-0044](0044-panel-shortcuts-and-unified-topbar.md) 第 3 条把本 ADR 第 1 条的顶栏高度由 `9cqh` 回调为 `11cqh`（与大厅 / 房间 / 设置页顶栏统一）；另按评审反馈把画板改为直角，玩家面板钉死在画板左缘（`draggable=false`）并同样去圆角。
+- 后续调整：[ADR-0044](0044-panel-shortcuts-and-unified-topbar.md) 第 3 条把本 ADR 第 1 条的顶栏高度由 `9cqh` 回调为 `11cqh`（与大厅 / 房间 / 设置页顶栏统一）；另按反馈把画板改为直角，玩家面板改为**常驻左栏**（在流内占位、挤窄画板，不浮动、无标题栏、不可关闭、无开关与快捷键，直角）。

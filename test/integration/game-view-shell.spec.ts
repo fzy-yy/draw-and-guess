@@ -87,18 +87,23 @@ function findPanel(wrapper: VueWrapper, title: string): boolean {
   return wrapper.findAll('section').some((node) => node.text().includes(title))
 }
 
+/** 定位常驻玩家左栏：它是普通 aside（不是浮层 section），按 aria-label 判定。 */
+function hasPlayersColumn(wrapper: VueWrapper): boolean {
+  return wrapper.find(`aside[aria-label="${strings.game.playersPanelTitle}"]`).exists()
+}
+
 /** 在 window 上派发按键：与 usePanelShortcuts 的监听目标一致，模拟全局快捷键。 */
 function pressKey(key: string): void {
   window.dispatchEvent(new KeyboardEvent('keydown', { key }))
 }
 
 describe('GameView 新对局骨架', () => {
-  it('渲染顶栏、铺满画布、两个浮层面板与底部工具条', () => {
+  it('渲染顶栏、铺满画布、玩家常驻左栏、聊天浮层与底部工具条', () => {
     const wrapper = mountGameView()
 
     expect(wrapper.find(`header[aria-label="${strings.game.topBarAria}"]`).exists()).toBe(true)
     expect(wrapper.find('canvas').exists()).toBe(true)
-    expect(findPanel(wrapper, strings.game.playersPanelTitle)).toBe(true)
+    expect(hasPlayersColumn(wrapper)).toBe(true)
     expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(true)
     expect(
       wrapper.find(`[role="toolbar"][aria-label="${strings.game.toolbarAria}"]`).exists(),
@@ -107,26 +112,26 @@ describe('GameView 新对局骨架', () => {
     wrapper.unmount()
   })
 
-  it('顶栏开关可收起并重新打开面板与工具条', async () => {
+  it('顶栏开关可收起并重新打开聊天面板与工具条，玩家面板常驻左栏', async () => {
     const wrapper = mountGameView()
 
-    expect(findPanel(wrapper, strings.game.playersPanelTitle)).toBe(true)
-    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(true)
+    // 玩家面板是常驻左栏：不参与开关，始终在 DOM 中
+    expect(hasPlayersColumn(wrapper)).toBe(true)
+    expect(wrapper.find(`[aria-label="${strings.game.toggleChat}"]`).exists()).toBe(true)
 
-    // 顶栏「玩家面板」开关 → 收起玩家面板（退出动画结束后从 DOM 移除）
-    await wrapper.get(`[aria-label="${strings.game.togglePlayers}"]`).trigger('click')
-    await flushPromises()
-    expect(findPanel(wrapper, strings.game.playersPanelTitle)).toBe(false)
+    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(true)
 
     // 顶栏「聊天面板」开关 → 收起聊天面板
     await wrapper.get(`[aria-label="${strings.game.toggleChat}"]`).trigger('click')
     await flushPromises()
     expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(false)
+    // 收起聊天不影响常驻玩家左栏
+    expect(hasPlayersColumn(wrapper)).toBe(true)
 
-    // 再次点击同一开关 → 重新打开玩家面板
-    await wrapper.get(`[aria-label="${strings.game.togglePlayers}"]`).trigger('click')
+    // 再次点击同一开关 → 重新打开聊天面板
+    await wrapper.get(`[aria-label="${strings.game.toggleChat}"]`).trigger('click')
     await flushPromises()
-    expect(findPanel(wrapper, strings.game.playersPanelTitle)).toBe(true)
+    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(true)
 
     // 顶栏「绘图工具」开关 → 收起底部工具条
     expect(wrapper.find('[role="toolbar"]').exists()).toBe(true)
@@ -137,16 +142,8 @@ describe('GameView 新对局骨架', () => {
     wrapper.unmount()
   })
 
-  it('面板快捷键：P/C/T 开关对应面板，回车只打开不隐藏，输入控件聚焦时让位', async () => {
+  it('面板快捷键：C/T 开关对应面板，回车只打开不隐藏，输入控件聚焦时让位', async () => {
     const wrapper = mountGameView()
-
-    // P：玩家面板开 ↔ 关
-    pressKey('p')
-    await flushPromises()
-    expect(findPanel(wrapper, strings.game.playersPanelTitle)).toBe(false)
-    pressKey('p')
-    await flushPromises()
-    expect(findPanel(wrapper, strings.game.playersPanelTitle)).toBe(true)
 
     // 回车：聊天已打开时只聚焦、不隐藏
     pressKey('Enter')
@@ -171,9 +168,9 @@ describe('GameView 新对局骨架', () => {
 
     // 输入控件聚焦时快捷键让位：事件目标是可编辑元素，面板不受影响
     const input = wrapper.find('input').element
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', bubbles: true }))
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }))
     await flushPromises()
-    expect(findPanel(wrapper, strings.game.playersPanelTitle)).toBe(true)
+    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(true)
 
     wrapper.unmount()
   })
