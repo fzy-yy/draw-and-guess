@@ -1,6 +1,6 @@
 # T03 · 词库瘦身：删除难度、可绘制性、难度级配置与提示
 
-**Status**: ready-for-agent
+**Status**: 已完成（`c6334a2`）
 **Blocked by**: 02
 
 > 依据：`.scratch/custom-word-and-simplification/spec.md`「批次 ② 词库瘦身」。

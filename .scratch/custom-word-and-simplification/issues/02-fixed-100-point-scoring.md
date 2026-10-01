@@ -1,6 +1,6 @@
 # T02 · 计分改为固定 100 分制
 
-**Status**: ready-for-agent
+**Status**: 已完成（`620e380`）
 **Blocked by**: 01
 
 > 依据：`.scratch/custom-word-and-simplification/spec.md`「批次 ② 计分」。

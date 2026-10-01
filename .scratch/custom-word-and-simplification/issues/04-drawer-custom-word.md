@@ -1,6 +1,6 @@
 # T04 · 画家自定义词
 
-**Status**: ready-for-agent
+**Status**: 已完成（`fb050c9`）
 **Blocked by**: 03
 
 > 依据：`.scratch/custom-word-and-simplification/spec.md`「批次 ③」。

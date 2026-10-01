@@ -1,6 +1,6 @@
 # T06 · 主导人收口：全量验证与评审修复
 
-**Status**: ready-for-agent
+**Status**: 已完成（`3abdb35`、`34fe59f`、`21435ff`）
 **Blocked by**: 05
 
 > 由主导人（根线程）执行，不分配给子代理。

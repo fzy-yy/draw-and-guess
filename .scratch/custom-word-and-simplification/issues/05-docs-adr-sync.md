@@ -1,6 +1,6 @@
 # T05 · 文档与 ADR 同步
 
-**Status**: ready-for-agent
+**Status**: 已完成（`128fa5f`）
 **Blocked by**: 04
 
 > 依据：`.scratch/custom-word-and-simplification/spec.md`、`docs/adr/README.md` 的索引约定。

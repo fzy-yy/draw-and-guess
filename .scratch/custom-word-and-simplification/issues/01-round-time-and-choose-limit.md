@@ -1,6 +1,6 @@
 # T01 · 房间规则：单回合时长四档 + 选词阶段时限开关
 
-**Status**: ready-for-agent
+**Status**: 已完成（`5e987da`）
 **Blocked by**: —
 
 > 依据：`.scratch/custom-word-and-simplification/spec.md`「批次 ①」。
