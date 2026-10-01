@@ -308,7 +308,7 @@ for (const baseline of BASELINES) {
           .catch(() => true),
       ])
       const drawer = isHostDrawer ? host : guest
-      // 选词遮罩留档：验收「纯色无修饰 + 单行难度星」的选词卡形态
+      // 选词遮罩留档：验收「纯色无修饰、只显示词面」的选词卡形态（难度星已随词库瘦身移除）
       await captureBaseline(drawer.page, testInfo, baseline, '09a-word-cards')
       await drawer.game.chooseWord(0)
       // 进入作画阶段：画家工具按钮恢复可用（此时阶段遮罩已卸载，工具栏不再被遮挡）
