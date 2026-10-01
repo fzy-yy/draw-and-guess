@@ -114,8 +114,6 @@ export class SnapshotBuilder {
                 wordOptions: game.candidates.map((word) => ({
                   id: word.id,
                   text: word.text,
-                  difficulty: word.difficulty,
-                  drawability: word.drawability,
                 })),
               }
             : {}),

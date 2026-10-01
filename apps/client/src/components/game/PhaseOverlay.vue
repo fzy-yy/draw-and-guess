@@ -17,7 +17,6 @@ import { phaseTextFor } from '@/utils/phase-text'
 import type { RankedMember } from '@/composables/useGameHud'
 import AppButton from '@/components/common/AppButton.vue'
 import AvatarImage from '@/components/common/AvatarImage.vue'
-import DifficultyStars from '@/components/common/DifficultyStars.vue'
 import OverlayCard from '@/components/game/OverlayCard.vue'
 
 // 阶段遮罩需要的 HUD 派生值（剩余秒数、对局数据、最终排行）由父组件 GameView
@@ -93,16 +92,6 @@ function chooseWord(wordId: string): void {
           @click="chooseWord(option.id)"
         >
           <span class="leading-[1.2]">{{ option.text }}</span>
-          <!-- 仅展示难度星级（精确星数）：可绘制性不再展示——玩家自行判断好不好画；
-               不显示「难度」文字标签，只留星形；黄色按钮上必须用 navy 配色，否则黄星叠黄底不可见；
-               视觉无修饰（无描边/阴影），语义通过 aria-label 保留给屏幕阅读器 -->
-          <DifficultyStars
-            :value="option.difficulty"
-            :max="store.config.ui.difficultyMax"
-            exact
-            tone="navy"
-            class="text-fs-14"
-          />
         </button>
       </div>
       <!-- 选词阶段关闭限时时没有倒计时：提示「不限时」而不是「N 秒后自动选择」 -->

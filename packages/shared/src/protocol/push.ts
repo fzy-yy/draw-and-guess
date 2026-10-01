@@ -106,9 +106,6 @@ export const GameViewSchema = z
           .object({
             id: WordIdSchema,
             text: z.string(),
-            difficulty: z.number().int(),
-            // 可绘制性随候选词下发：画家选词卡展示第二组星级（词库重建后新增）
-            drawability: z.number().int(),
           })
           .strict(),
       )

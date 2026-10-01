@@ -36,9 +36,9 @@ export const SessionRegistrationSchema = z
 
 /**
  * 单个词条：仅描述公开字段，来自词库 Provider 的规范化输出。
- * hint 为词库内置提示文案（对局中作为结构化提示揭示；词库重建后取代分类提示）；
- * drawability 为可绘制性（1~5，词库作者标注，供选词卡与词库管理界面展示）；
- * timeLimit/scoreWeight 不再是逐词列，而是 Provider 加载期按难度从 level_config 派生。
+ * 难度、可绘制性、提示与「按难度派生的时限/权重」已随词库瘦身移除
+ *（见 docs/adr/0046-vocabulary-slimming-and-unified-round-time.md）；
+ * 词条只剩词面、分类、别称与稳定 ID。
  */
 export const VocabularyWordSchema = z
   .object({
@@ -46,11 +46,6 @@ export const VocabularyWordSchema = z
     text: z.string().min(1),
     aliases: z.array(z.string()),
     category: z.string().min(1),
-    difficulty: z.number().int(),
-    drawability: z.number().int(),
-    hint: z.string(),
-    timeLimit: z.number().nonnegative().optional(),
-    scoreWeight: z.number().nonnegative().optional(),
   })
   .strict()
 

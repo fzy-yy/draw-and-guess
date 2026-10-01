@@ -52,9 +52,6 @@ export const game = {
   chooseWordTitle: '选择一个词',
   rerollWords: '换一组',
   rerollUsed: '每回合仅能更换一次候选词',
-  wordDifficultyAria: (value: number) => `难度 ${value} 星`,
-  // 选词卡可绘制性无障碍描述（词库管理表格仍展示可绘制性列）
-  wordDrawabilityAria: (value: number) => `可绘制性 ${value} 星`,
   toggleAnswerVisibilityAria: '切换答案显示状态',
   toggleAnswerVisibilityHint: '点击切换答案明文与遮罩',
   autoChoose: (seconds: number) => `${seconds} 秒后将自动选择`,

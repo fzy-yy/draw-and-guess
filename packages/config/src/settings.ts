@@ -88,10 +88,6 @@ export const ui = {
   toastDurationMs: 3_200, // Toast 展示时长
   // 聊天区允许回看最近 80 条消息；服务端按 2 倍裁剪内存队列，兼顾滚动回看与内存上限。
   recentMessageCount: 80,
-  /** 难度星级最大值（词库 difficulty 上限，选词星级与难度列共用） */
-  difficultyMax: 5,
-  /** 可绘制性星级最大值（词库 drawability 上限，选词卡第二组星级与词库管理列共用） */
-  drawabilityMax: 5,
   /** 对局 HUD 时间刷新的毫秒间隔（useGameHud 的 useTimestamp interval）。 */
   tickIntervalMs: 200,
   /** 词库管理搜索框的防抖毫秒数，避免每次按键都触发过滤。 */

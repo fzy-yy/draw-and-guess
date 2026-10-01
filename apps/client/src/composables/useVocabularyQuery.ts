@@ -25,12 +25,8 @@ export function useVocabularyQuery(options: {
 }) {
   const search = ref('')
   const searchKeyword = ref('')
-  // 三类筛选（分类/难度/可绘制性）与搜索叠加生效（取交集）
-  const filterSelections = ref<Record<string, string[]>>({
-    category: [],
-    difficulty: [],
-    drawability: [],
-  })
+  // 分类筛选与搜索叠加生效（取交集）；难度/可绘制性筛选已随词库瘦身移除
+  const filterSelections = ref<Record<string, string[]>>({ category: [] })
   const wordSort = useTableSort()
 
   const searchableWords = computed(() =>
@@ -50,13 +46,7 @@ export function useVocabularyQuery(options: {
   const filteredWords = computed(() =>
     searchedWords.value.filter((word) => {
       const categories = filterSelections.value.category ?? []
-      const difficulties = filterSelections.value.difficulty ?? []
-      const drawable = filterSelections.value.drawability ?? []
-      return (
-        (!categories.length || categories.includes(word.category)) &&
-        (!difficulties.length || difficulties.includes(String(word.difficulty))) &&
-        (!drawable.length || drawable.includes(String(word.drawability)))
-      )
+      return !categories.length || categories.includes(word.category)
     }),
   )
   const wordRows = computed(() => {

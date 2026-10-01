@@ -39,9 +39,6 @@ export const serverPrivateConfig = {
     maxWords: 10_000,
     maxAliasesPerWord: 8,
     maxAliasLength: 24,
-    /** 词条 hint 提示文案的字符数上限（词库重建后约定 ≤10 字，空串合法） */
-    maxHintLength: 10,
-    difficultyRange: { min: 1, max: 5 },
     deduplicate: true,
     resetWhenExhausted: true,
   },

@@ -7,10 +7,6 @@ const pool: VocabularyWord[] = Array.from({ length: 10 }, (_, index) => ({
   text: `词${index}`,
   aliases: [],
   category: `类${index % 5}`,
-  difficulty: (index % 5) + 1,
-  // 词库重建后的必填字段：可绘制性与提示（本用例不关心其值，仅满足 DTO）
-  drawability: (index % 5) + 1,
-  hint: '',
 }))
 
 describe('CandidateSelector 纯函数契约', () => {
@@ -23,14 +19,26 @@ describe('CandidateSelector 纯函数契约', () => {
     expect(new Set(first.map((word) => word.category)).size).toBe(count)
     expect(pool).toEqual(before)
   })
-  it('词池不足返回副本，同分类时按难度补齐', () => {
+  it('词池不足返回副本，同分类时按词池原顺序补齐', () => {
     expect(selectDiverseCandidates({ pool: [], count: 3 })).toEqual([])
     const small = pool.slice(0, 2)
     expect(selectDiverseCandidates({ pool: small, count: 3 })).toEqual(small)
     expect(selectDiverseCandidates({ pool: small, count: 3 })).not.toBe(small)
     const singleCategory = pool.map((word) => ({ ...word, category: '同类' }))
     expect(
-      selectDiverseCandidates({ pool: singleCategory, count: 3 }).map((word) => word.difficulty),
-    ).toEqual([1, 3, 5])
+      selectDiverseCandidates({ pool: singleCategory, count: 3 }).map((word) => word.id),
+    ).toEqual(['0', '1', '2'])
+  })
+  it('候选数多于分类数时，剩余名额按词池原顺序补齐', () => {
+    // 前 6 条只有 5 个不同分类（类0 重复一次），第 6 个名额应从剩余词里按顺序补
+    const limited = pool.slice(0, 6)
+    expect(selectDiverseCandidates({ pool: limited, count: 6 }).map((word) => word.id)).toEqual([
+      '0',
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+    ])
   })
 })

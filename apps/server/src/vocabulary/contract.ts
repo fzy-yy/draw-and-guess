@@ -10,26 +10,13 @@
  *
  * 各 Provider 的职责边界：
  * 1. 读取原始数据（文件 / 数据库 / 远程）；
- * 2. 严格校验（与自身元数据的交叉校验，如 category ⊆ category_enum、
- *    level_config 覆盖 difficulty_enum 全部难度级）；
+ * 2. 严格校验（与自身元数据的交叉校验，如 category ⊆ category_enum）；
  * 3. 规范化（见 normalize.ts：ID 生成、去重、enabled 过滤、内容哈希版本号）；
- *    时限/权重按难度从 level_config 加载期派生到词条（词库重建后不再逐词携带）；
  * 4. 任何异常数据都以带中文文案的 Error 阻止启动，绝不带病运行。
  */
 import type { VocabularyWord } from '@draw-guess/shared'
 
-/**
- * 难度分级配置：某一难度对应的作画时限（秒）与计分权重。
- * 词库重建后 time_limit/score_weight 不再逐词携带，统一由 metadata 的 level_config 按难度提供。
- */
-export interface VocabularyLevelConfig {
-  /** 该难度词条的作画时限（秒） */
-  timeLimit: number
-  /** 该难度词条的计分权重（以全局默认权重为基准缩放基础分） */
-  scoreWeight: number
-}
-
-/** 词库元信息：登记来源、范围白名单与派生配置，不参与玩法裁决（sourceId 与 wordCount 供测试核验来源与词数）。 */
+/** 词库元信息：登记来源与分类白名单，不参与玩法裁决（sourceId 与 wordCount 供测试核验来源与词数）。 */
 export interface VocabularyMeta {
   /** 来源实现标识（与 VocabularyProvider.sourceId 一致） */
   sourceId: string
@@ -45,19 +32,13 @@ export interface VocabularyMeta {
   updatedAt?: string
   /** 分类白名单（category_enum）：词条分类必须是其子集，并透传给管理 UI 做筛选下拉 */
   categoryEnum: string[]
-  /** 难度白名单（difficulty_enum）：level_config 完整性校验的基准集合 */
-  difficultyEnum: number[]
-  /** 可绘制性白名单（drawability_enum）：词条 drawability 必须是其子集 */
-  drawabilityEnum: number[]
-  /** 难度 → 时限/权重映射：Provider 加载期按词条 difficulty 派生到词条字段 */
-  levelConfig: Record<number, VocabularyLevelConfig>
   /** 词库词数（words 表有效词数，服务端预先检查并保存；供测试核验） */
   wordCount?: number
 }
 
 /** Provider 加载结果：已是校验后、过滤后、可直接进入内存领域层的最终形态。 */
 export interface LoadedVocabulary {
-  /** 已启用（enabled=1）且通过分类/难度/可绘制性/别称/提示校验、去重后的全部词条 */
+  /** 已启用（enabled=1）且通过分类/别称/词面校验、去重后的全部词条 */
   words: VocabularyWord[]
   /** 内容哈希版本号（随词库内容变化；供客户端与房间词库选择做变更对比） */
   version: string

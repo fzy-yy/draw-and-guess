@@ -169,20 +169,18 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
 
     roomStore.room.phase = 'choosing_word'
     roomStore.room.game!.wordOptions = [
-      { id: 'word-1', text: '苹果', difficulty: 1, drawability: 2 },
-      { id: 'word-2', text: '香蕉', difficulty: 2, drawability: 3 },
+      { id: 'word-1', text: '苹果' },
+      { id: 'word-2', text: '香蕉' },
     ]
     session.playerId = HOST_ID
     await nextTick()
     expect(wrapper.get('[aria-live]').text()).toBe(strings.status.phaseChoosing)
     expect(wrapper.text()).toContain('苹果')
-    // 选词卡新形态：纯色无修饰（无 navy 边框/厚底边）、只显一行难度星、
-    // 不显示「难度/可绘」文字标签与可绘制性星级（可绘制性由玩家自行判断）
+    // 选词卡新形态：纯色无修饰（无 navy 边框/厚底边），只显示词面——
+    // 难度星级与可绘制性已随词库瘦身移除
     const wordCard = wrapper.findAll('button').find((button) => button.text().includes('苹果'))
     expect(wordCard, '画家应看到「苹果」候选词按钮').toBeTruthy()
     expect(wordCard!.classes().join(' ')).not.toMatch(/border-navy|border-b-/)
-    expect(wrapper.text()).not.toContain('可绘')
-    expect(wrapper.find('[aria-label="难度 1 星"]').exists()).toBe(true)
     session.playerId = GUEST_ID
     await nextTick()
     expect(wrapper.text()).not.toContain('苹果')

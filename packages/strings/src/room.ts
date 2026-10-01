@@ -80,17 +80,11 @@ export const room = {
   // —— 词库管理：筛选 / 表格列 ——
   vocabColumnText: '词面',
   vocabColumnCategories: '分类',
-  vocabColumnDifficulty: '难度',
-  vocabColumnDrawability: '可绘制性',
   vocabColumnAliases: '别称',
-  vocabColumnTimeLimit: '时限',
-  vocabColumnScoreWeight: '权重',
   vocabFilterAria: (name: string) => `按${name}筛选`,
   vocabSelectAllShort: '全选',
   vocabDeselectAllShort: '全不选',
   vocabNoMatch: '没有符合条件的词条。',
-  vocabDifficultyLabel: (value: number) => `${value} 星`,
-  vocabDrawabilityLabel: (value: number) => `${value} 星`,
   vocabAliasEmpty: '—',
   // —— 词库包选择与切换 ——
   vocabSwitchToPackages: '切换词库选择',

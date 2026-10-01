@@ -17,8 +17,7 @@ export function canonicalWordId(source: string, rawId: string | number): string 
 
 /**
  * 计算词库内容哈希版本号（sha256 前 12 位 hex）。
- * 输入包含 id/text/aliases/category/difficulty/drawability/hint 与加载期派生的
- * timeLimit/scoreWeight 等全部玩法相关字段，
+ * 输入包含 id/text/aliases/category 等全部词条字段（难度/可绘制性/提示已随词库瘦身移除），
  * 任何内容变化都会得到新版本号，供客户端对比与房间词库重置判断。
  * 每个词条先用 JSON 序列化成数组再按行拼接：字段经 JSON 转义，
  * 消除 `§`/`,` 等分隔符出现在词面或别称里时的编码歧义（不同内容不得映射到同一哈希）。
@@ -26,19 +25,7 @@ export function canonicalWordId(source: string, rawId: string | number): string 
  */
 export function hashWords(words: VocabularyWord[]): string {
   const canonical = words
-    .map((word) =>
-      JSON.stringify([
-        word.id,
-        word.text,
-        word.aliases,
-        word.category,
-        word.difficulty,
-        word.drawability,
-        word.hint,
-        word.timeLimit ?? null,
-        word.scoreWeight ?? null,
-      ]),
-    )
+    .map((word) => JSON.stringify([word.id, word.text, word.aliases, word.category]))
     .join('\n')
   return createHash('sha256').update(canonical).digest('hex').slice(0, 12)
 }

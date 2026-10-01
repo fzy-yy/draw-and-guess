@@ -43,9 +43,5 @@ export function validateBusinessConfig(config: typeof APP_CONFIG = APP_CONFIG): 
   for (const color of drawing.colors) {
     requireConfig(colorPattern.test(color), `画板颜色必须是 ${drawing.colorPattern} 格式：${color}`)
   }
-  requireConfig(
-    vocabulary.difficultyRange.min <= vocabulary.difficultyRange.max,
-    '词库难度下限不能大于上限',
-  )
   requireConfig(vocabulary.minWords <= vocabulary.maxWords, '词库最小词条数不能大于最大词条数')
 }

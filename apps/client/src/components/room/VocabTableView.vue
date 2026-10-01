@@ -5,7 +5,7 @@
   - 排序状态由父组件维护，点击表头经 DataTable 上抛后由父组件翻转；
   - 行首复选列与表头三态统一复选框由父组件持有选择集合并裁决批量范围
     （非房主只读时不传 selectedIds，复选列整体隐藏）；
-  - 各富内容列（分类徽章/难度星级/别称灰字等）通过 DataTable 的具名插槽渲染。
+  - 各富内容列（分类徽章/别称灰字）通过 DataTable 的具名插槽渲染。
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
@@ -13,7 +13,6 @@ import { strings } from '@draw-guess/strings'
 import type { VocabularyWord } from '@draw-guess/shared'
 import type { DataTableColumn, ScrollableTable } from '@/components/common/data-table.types'
 import DataTable from '@/components/common/DataTable.vue'
-import DifficultyStars from '@/components/common/DifficultyStars.vue'
 import { useSelectAllState } from '@/composables/useSelectAllState'
 
 const props = defineProps<{
@@ -27,9 +26,6 @@ const props = defineProps<{
   sortKey: string | null
   /** 当前排序方向 */
   sortDir: 'asc' | 'desc'
-  difficultyMax: number
-  /** 可绘制性星级上限（词库重建后与难度并列的第二组星级） */
-  drawabilityMax: number
 }>()
 
 const emit = defineEmits<{
@@ -87,18 +83,6 @@ defineExpose({
       </span>
       <span v-else class="text-muted">{{ strings.room.vocabAliasEmpty }}</span>
     </template>
-    <!-- 难度列：复用星级组件（上限来自全局配置） -->
-    <template #cell-difficulty="{ row }">
-      <DifficultyStars :value="row.difficulty" :max="props.difficultyMax" />
-    </template>
-    <!-- 可绘制性列：与难度同款星级组件（词库作者标注，上限独立配置） -->
-    <template #cell-drawability="{ row }">
-      <DifficultyStars
-        :value="row.drawability"
-        :max="props.drawabilityMax"
-        :aria-label="strings.game.wordDrawabilityAria(row.drawability)"
-      />
-    </template>
     <!-- 别称列：灰字省略，悬停可见全称 -->
     <template #cell-aliases="{ row }">
       <span
@@ -108,12 +92,6 @@ defineExpose({
         >{{ row.aliases.join(strings.common.listSeparator) }}</span
       >
       <span v-else class="text-muted">{{ strings.room.vocabAliasEmpty }}</span>
-    </template>
-    <!-- 时限列：难度级 level_config 加载期派生的作画秒数 -->
-    <template #cell-timeLimit="{ row }">
-      <span class="whitespace-nowrap tabular-nums">{{
-        strings.common.secondsUnit(row.timeLimit ?? 0)
-      }}</span>
     </template>
   </DataTable>
 </template>

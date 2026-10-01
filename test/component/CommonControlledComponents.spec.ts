@@ -6,7 +6,6 @@ import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
 import AvatarPickerDialog from '@/components/common/AvatarPickerDialog.vue'
 import DataTable from '@/components/common/DataTable.vue'
-import DifficultyStars from '@/components/common/DifficultyStars.vue'
 import NetworkStatusButton from '@/components/common/NetworkStatusButton.vue'
 
 describe('受控通用组件', () => {
@@ -77,15 +76,6 @@ describe('受控通用组件', () => {
     expect(updateAvatar).toHaveBeenCalledWith('02')
     expect(updateOpen).toHaveBeenCalledWith(false)
     expect(close).toHaveBeenCalledOnce()
-  })
-
-  it('DifficultyStars 无 Pinia 时按注入上限渲染并保留图像语义', () => {
-    const { container } = render(DifficultyStars, {
-      props: { value: 2, max: 4 },
-    })
-
-    expect(screen.getByRole('img', { name: strings.game.wordDifficultyAria(2) })).toBeTruthy()
-    expect(container.querySelectorAll('svg')).toHaveLength(4)
   })
 
   it('DataTable 无 Pinia 时可独立渲染受控列与空态', () => {

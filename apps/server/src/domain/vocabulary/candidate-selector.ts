@@ -6,65 +6,37 @@ export interface CandidateSelectorContext {
   count: number
 }
 
+/**
+ * 候选词抽样：只保留唯一一条与难度无关的偏好——同一回合的候选尽量来自不同分类，
+ * 让候选之间存在玩家可感知的区分度（同回合抽到两个「动物」是明显的体验退化）。
+ *
+ * 按难度的目标分布分层已随词库瘦身移除（见
+ * docs/adr/0046-vocabulary-slimming-and-unified-round-time.md）：时限与权重不再有难度维度。
+ */
 export function selectDiverseCandidates({
   pool,
   count,
 }: CandidateSelectorContext): VocabularyWord[] {
   if (pool.length <= count) return [...pool]
 
-  const shuffled = pool
   const selected: VocabularyWord[] = []
-  const usedCategories = new Set<string>()
   const usedIds = new Set<string>()
+  const usedCategories = new Set<string>()
 
-  // 目标难度分布：尽量覆盖简单(1-2)、中等(3)、困难(4-5)
-  const targetDifficulties: number[] = []
-  if (count === 3) targetDifficulties.push(1, 3, 5)
-  else if (count === 4) targetDifficulties.push(1, 2, 4, 5)
-  else if (count === 5) targetDifficulties.push(1, 2, 3, 4, 5)
-  else {
-    for (let i = 0; i < count; i += 1) {
-      targetDifficulties.push(Math.round(1 + (i * 4) / (count - 1)))
-    }
+  // 第一轮：优先挑选分类尚未出现的词，保持调用方给定的词池顺序
+  for (const word of pool) {
+    if (selected.length >= count) break
+    if (usedCategories.has(word.category)) continue
+    selected.push(word)
+    usedIds.add(word.id)
+    usedCategories.add(word.category)
   }
-
-  for (const targetDiff of targetDifficulties) {
-    // 1. 优先：难度接近（差值 <= 1）且分类未重复
-    let candidate = shuffled.find(
-      (w) =>
-        !usedIds.has(w.id) &&
-        Math.abs(w.difficulty - targetDiff) <= 1 &&
-        !usedCategories.has(w.category),
-    )
-    // 2. 次选：任意难度但分类未重复
-    if (!candidate) {
-      candidate = shuffled.find((w) => !usedIds.has(w.id) && !usedCategories.has(w.category))
-    }
-    // 3. 兜底：难度最接近的未选词
-    if (!candidate) {
-      const remaining = shuffled.filter((w) => !usedIds.has(w.id))
-      remaining.sort(
-        (a, b) => Math.abs(a.difficulty - targetDiff) - Math.abs(b.difficulty - targetDiff),
-      )
-      candidate = remaining[0]
-    }
-    if (candidate) {
-      selected.push(candidate)
-      usedIds.add(candidate.id)
-      if (candidate.category) usedCategories.add(candidate.category)
-    }
+  // 第二轮：分类已穷尽（候选数多于分类数）时按原顺序补齐
+  for (const word of pool) {
+    if (selected.length >= count) break
+    if (usedIds.has(word.id)) continue
+    selected.push(word)
+    usedIds.add(word.id)
   }
-
-  // 若依然未填满 count，用剩余未选词补齐
-  if (selected.length < count) {
-    for (const w of shuffled) {
-      if (!usedIds.has(w.id)) {
-        selected.push(w)
-        usedIds.add(w.id)
-        if (selected.length >= count) break
-      }
-    }
-  }
-
   return selected
 }

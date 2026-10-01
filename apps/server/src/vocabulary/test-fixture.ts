@@ -4,8 +4,8 @@
  * 供 E2E launcher 在「唯一临时目录」内生成最小但**可开完整局**的词库 SQLite 库文件：
  * - 包 ID 取数据库文件名，名称/描述/版本等元数据可按测试场景注入；
  * - 词条数 ≥ MIN_SELECTED_VOCABULARY_WORDS（协议常量裁决线），否则 startGame 会因词条不足而拒绝；
- * - 表结构与重建后的正式词库一致（metadata 含 level_config/difficulty_enum/drawability_enum，
- *   words 含 drawability/hint/updated_at），通过 SqliteProvider 的严格校验。
+ * - 表结构保留词库重建版的遗留列（difficulty/drawability/hint/level_config 等），
+ *   用于覆盖「旧词库文件带多余列时 Provider 照常加载」的兼容路径。
  *
  * 只写入调用方给定的临时路径，绝不触碰仓库真实 vocabulary/*.db。
  * 放在 apps/server/src 内是让 better-sqlite3 能按 pnpm 严格 node_modules 解析到（而非 test/ 目录）。
@@ -14,14 +14,11 @@ import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import Database from 'better-sqlite3'
 import { MIN_SELECTED_VOCABULARY_WORDS } from '@draw-guess/shared'
-import { APP_CONFIG } from '../config/index.ts'
 import { buildWordSpecs } from './test-word-specs.ts'
 
 /**
- * E2E 词条时限（秒）：远大于产品默认 90s。
- * 09 容量用例要在同一回合内用**真实点击**推满 maxHistoryCommands=1500 条命令，
- * 而 CI runner 的点击吞吐远低于本地，90s 窗口会在推满前到期（main 长期红的原因）。
- * 只影响 e2e fixture，不进生产词库。
+ * 遗留 level_config 的 time_limit 取值（秒）：单回合时长已改由房间规则决定，该列不再被读取，
+ * 仅作为「旧词库带多余列」的夹具数据保留。容量用例的回合窗口现由房间规则指定。
  */
 const E2E_WORD_TIME_LIMIT_SECONDS = 600
 
@@ -66,12 +63,9 @@ export function createMinimalVocabularyDb(
       );
     `)
 
-    // 难度/可绘制性白名单与 level_config：与 SqliteProvider 的完整性校验对齐
-    const { min: diffMin, max: diffMax } = APP_CONFIG.vocabulary.difficultyRange
-    const difficultyEnum = Array.from(
-      { length: diffMax - diffMin + 1 },
-      (_item, index) => diffMin + index,
-    )
+    // 词库瘦身后难度/可绘制性/level_config 已退出领域模型；夹具仍写出这些遗留列与元数据键，
+    // 用于覆盖「旧词库文件带多余列时 Provider 照常加载」的兼容路径。
+    const difficultyEnum = [1, 2, 3, 4, 5]
     const levelConfig: Record<string, { time_limit: number; score_weight: number }> = {}
     for (const level of difficultyEnum) {
       levelConfig[String(level)] = {
@@ -102,20 +96,17 @@ export function createMinimalVocabularyDb(
       `INSERT INTO words(id, text, category, difficulty, drawability, enabled, aliases, hint, updated_at)
        VALUES(?, ?, ?, ?, ?, 1, ?, ?, '')`,
     )
-    // 词面来自共享数据源（与内存 fixture 单源）；难度仍按配置的 difficulty_enum 取模
-    // （保持「测试时限/难度服从 APP_CONFIG」的原行为，配置枚举变化时不越白名单）。
+    // 词面/分类来自共享数据源（与内存 fixture 单源）；难度/可绘制性/提示只是旧词库的遗留列，
+    // Provider 已不再读取，这里照写是为了让 e2e 覆盖「旧词库带多余列」的兼容路径。
     for (const spec of buildWordSpecs(wordCount)) {
-      const difficulty = difficultyEnum[(spec.index - 1) % difficultyEnum.length] ?? spec.difficulty
       insertWord.run(
         spec.index,
         spec.text,
         spec.category,
-        difficulty,
-        // 可绘制性在 1~5 内轮换，覆盖星级展示的各档位
-        spec.drawability,
+        difficultyEnum[(spec.index - 1) % difficultyEnum.length] ?? 1,
+        ((spec.index - 1) % 5) + 1,
         '[]',
-        // 提示文案与正式词库同款形态（≤10 字），词库 Provider 仍会解析并校验该列
-        spec.hint,
+        '',
       )
     }
   } finally {

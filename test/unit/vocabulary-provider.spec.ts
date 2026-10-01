@@ -1,12 +1,14 @@
 /**
- * SQLite 词库 Provider 专项单测（词库重建适配后新增）。
+ * SQLite 词库 Provider 专项单测（词库瘦身适配后）。
  *
  * 覆盖点：
- * 1. 正常加载：level_config 按难度派生 timeLimit/scoreWeight、hint trim、enabled 过滤、meta 透传与版本哈希；
- * 2. 严格校验（异常数据必须以中文 Error 阻止加载，绝不带病运行）：
- *    level_config 缺失/缺级/多余键/条目非法、difficulty_enum/drawability_enum/category_enum 缺失、
- *    分类越界、可绘制性越界、提示超长、别称超数、词面重复；
- * 3. 内容哈希对 hint/drawability 变化的敏感性。
+ * 1. 正常加载：只读出词面/分类/别称，enabled 过滤、meta 透传与版本哈希；
+ * 2. **兼容路径**：旧词库文件仍带 difficulty/drawability/hint 列与 level_config /
+ *    difficulty_enum / drawability_enum 元数据键时照常加载，多余列既不读也不校验
+ *    （代码先不依赖、数据后删列，见 ADR-0046）；
+ * 3. 严格校验（异常数据必须以中文 Error 阻止加载，绝不带病运行）：
+ *    category_enum 缺失、分类越界、词面为空/超长、别称超数/超长、主键与词面重复、词数不足；
+ * 4. 内容哈希对词面/别称/分类变化的敏感性。
  *
  * 测试词库只写系统临时目录，每例结束即删除；表结构刻意不带 CHECK 约束，
  * 以便验证「Provider 是异常数据的最后防线」而非依赖数据库约束。
@@ -18,7 +20,7 @@ import { tmpdir } from 'node:os'
 import { createDatabase } from '../../apps/server/src/db/index.ts'
 import { SqliteProvider } from '../../apps/server/src/vocabulary/sqlite-provider.ts'
 
-/** 测试词条输入：与 words 表列一致（均可显式指定，便于构造异常数据）。 */
+/** 测试词条输入：与旧词库 words 表列一致（遗留列仍在，用于覆盖兼容路径）。 */
 interface WordInput {
   id: number
   text: string
@@ -106,8 +108,8 @@ function defaultWords(): WordInput[] {
   ]
 }
 
-/** 默认合法 level_config：难度 1~5 各有时限与权重（与时序无关的固定值）。 */
-function defaultLevelConfig(): Record<string, { time_limit: number; score_weight: number }> {
+/** 旧词库遗留的 level_config：Provider 已不再读取，夹具写出只为覆盖兼容路径。 */
+function legacyLevelConfig(): Record<string, { time_limit: number; score_weight: number }> {
   return {
     '1': { time_limit: 45, score_weight: 5 },
     '2': { time_limit: 60, score_weight: 6 },
@@ -129,7 +131,7 @@ interface FixtureOptions {
 let testDirectory = ''
 let counter = 0
 
-/** 在临时目录生成一份词库库文件并返回其绝对路径。 */
+/** 在临时目录生成一份「旧版词库」库文件（带全部遗留列与元数据键）并返回其绝对路径。 */
 function createVocabDb(options: FixtureOptions = {}): string {
   const file = join(testDirectory, `vocab-${(counter += 1)}.db`)
   // 经服务端 db 上下文取连接：pnpm 严格 node_modules 下测试目录不能直接 import better-sqlite3
@@ -149,17 +151,17 @@ function createVocabDb(options: FixtureOptions = {}): string {
         updated_at TEXT NOT NULL DEFAULT ''
       );
     `)
-    const levelConfig = defaultLevelConfig()
     const meta: Record<string, string> = {
       name: '测试词库',
       description: 'Provider 单测词库',
       version: '1.0.0',
       updated_at: '2026-09-23',
       category_enum: JSON.stringify(['动物', '植物', '自然', '电器']),
+      // 以下三个键是旧词库遗留：Provider 不再读取，写出只为覆盖兼容路径
       difficulty_enum: JSON.stringify([1, 2, 3, 4, 5]),
       drawability_enum: JSON.stringify([1, 2, 3, 4, 5]),
       enabled_enum: JSON.stringify([0, 1]),
-      level_config: JSON.stringify(levelConfig),
+      level_config: JSON.stringify(legacyLevelConfig()),
       ...(options.meta ?? {}),
     }
     if (options.removeMeta) for (const key of options.removeMeta) delete meta[key]
@@ -208,8 +210,8 @@ afterEach(() => {
   rmSync(testDirectory, { recursive: true, force: true })
 })
 
-describe('SqliteProvider 正常加载（词库重建版）', () => {
-  it('按难度从 level_config 派生时限与权重，透传枚举与提示，并过滤 enabled=0', async () => {
+describe('SqliteProvider 正常加载', () => {
+  it('只读出词面/分类/别称并过滤 enabled=0', async () => {
     const loaded = await load(createVocabDb())
     // 6 条启用词（第 7 条 enabled=0 不进候选池）
     expect(loaded.words).toHaveLength(6)
@@ -221,49 +223,46 @@ describe('SqliteProvider 正常加载（词库重建版）', () => {
       'sqlite:5',
       'sqlite:6',
     ])
-    const cat = loaded.words[0]!
-    const river = loaded.words.find((word) => word.text === '河流')!
-    // 难度 1 → 45s/权重 5；难度 5 → 90s/权重 9（加载期解析，逐词不再携带原始列）
-    expect({ timeLimit: cat.timeLimit, scoreWeight: cat.scoreWeight }).toEqual({
-      timeLimit: 45,
-      scoreWeight: 5,
+    // 词条只剩词面/分类/别称/ID：难度、可绘制性与提示已随词库瘦身移除
+    expect(loaded.words[0]).toEqual({
+      id: 'sqlite:1',
+      text: '猫',
+      aliases: ['小猫'],
+      category: '动物',
     })
-    expect({ timeLimit: river.timeLimit, scoreWeight: river.scoreWeight }).toEqual({
-      timeLimit: 90,
-      scoreWeight: 9,
-    })
-    // hint/drawability 透传；hint 两端空白被收紧
-    expect(cat.hint).toBe('喵喵叫的宠物')
-    expect(cat.drawability).toBe(1)
     // 版本号为 12 位 hex 内容哈希
     expect(loaded.version).toMatch(/^[0-9a-f]{12}$/)
   })
 
-  it('meta 透传 level_config、difficulty_enum 与 drawability_enum 供下游与排障使用', async () => {
+  it('旧词库仍带难度/可绘制性/提示列与 level_config 元数据时照常加载', async () => {
+    // createVocabDb 默认就写出全部遗留列与元数据键：加载成功即证明「多余列不报错」
+    const loaded = await load(createVocabDb())
+    expect(loaded.words).toHaveLength(6)
+    expect(loaded.meta).not.toHaveProperty('difficultyEnum')
+    expect(loaded.meta).not.toHaveProperty('drawabilityEnum')
+    expect(loaded.meta).not.toHaveProperty('levelConfig')
+    expect(loaded.words[0]).not.toHaveProperty('difficulty')
+    expect(loaded.words[0]).not.toHaveProperty('hint')
+  })
+
+  it('meta 透传名称/版本/分类白名单与词数', async () => {
     const loaded = await load(createVocabDb())
     expect(loaded.meta.sourceId).toBe('sqlite')
     expect(loaded.meta.name).toBe('测试词库')
     expect(loaded.meta.fileVersion).toBe('1.0.0')
     expect(loaded.meta.categoryEnum).toEqual(['动物', '植物', '自然', '电器'])
-    expect(loaded.meta.difficultyEnum).toEqual([1, 2, 3, 4, 5])
-    expect(loaded.meta.drawabilityEnum).toEqual([1, 2, 3, 4, 5])
-    expect(loaded.meta.levelConfig[2]).toEqual({ timeLimit: 60, scoreWeight: 6 })
     expect(loaded.meta.wordCount).toBe(6)
   })
 
-  it('trim 词条与别称两端空白', async () => {
+  it('trim 别称两端空白', async () => {
     const loaded = await load(
       createVocabDb({
         words: (words) => {
           const first = words[0]!
-          return [
-            { ...first, hint: '  喵喵叫的宠物  ', aliases: [' 小猫 ', '喵星人'] },
-            ...words.slice(1),
-          ]
+          return [{ ...first, aliases: [' 小猫 ', '喵星人'] }, ...words.slice(1)]
         },
       }),
     )
-    expect(loaded.words[0]!.hint).toBe('喵喵叫的宠物')
     expect(loaded.words[0]!.aliases).toEqual(['小猫', '喵星人'])
   })
 })
@@ -273,83 +272,6 @@ describe('SqliteProvider 严格校验（异常数据阻止加载）', () => {
   function withFirstWord(patch: Partial<WordInput>): FixtureOptions {
     return { words: (words) => [{ ...words[0]!, ...patch }, ...words.slice(1)] }
   }
-
-  it('缺少 level_config → 中文错误', async () => {
-    await expect(load(createVocabDb({ removeMeta: ['level_config'] }))).rejects.toThrow(
-      /level_config/,
-    )
-  })
-
-  it('level_config 缺少某个难度级 → 指明缺失的难度', async () => {
-    const partial = { ...defaultLevelConfig() }
-    delete partial['5']
-    await expect(
-      load(createVocabDb({ meta: { level_config: JSON.stringify(partial) } })),
-    ).rejects.toThrow(/缺少难度「5」/)
-  })
-
-  it('level_config 存在 difficulty_enum 之外的多余键 → 拒绝', async () => {
-    await expect(
-      load(
-        createVocabDb({
-          meta: {
-            level_config: JSON.stringify({
-              ...defaultLevelConfig(),
-              '9': { time_limit: 45, score_weight: 5 },
-            }),
-          },
-        }),
-      ),
-    ).rejects.toThrow(/difficulty_enum 内的难度键「9」/)
-  })
-
-  it('level_config 非法 JSON → 拒绝', async () => {
-    await expect(load(createVocabDb({ meta: { level_config: '{bad' } }))).rejects.toThrow(
-      /不是合法 JSON/,
-    )
-  })
-
-  it('level_config 时限非正整数 → 拒绝', async () => {
-    await expect(
-      load(
-        createVocabDb({
-          meta: {
-            level_config: JSON.stringify({
-              ...defaultLevelConfig(),
-              '1': { time_limit: 0, score_weight: 5 },
-            }),
-          },
-        }),
-      ),
-    ).rejects.toThrow(/time_limit 需为正整数秒/)
-  })
-
-  it('缺少 difficulty_enum / drawability_enum → 拒绝', async () => {
-    await expect(load(createVocabDb({ removeMeta: ['difficulty_enum'] }))).rejects.toThrow(
-      /difficulty_enum/,
-    )
-    await expect(load(createVocabDb({ removeMeta: ['drawability_enum'] }))).rejects.toThrow(
-      /drawability_enum/,
-    )
-  })
-
-  it('difficulty_enum 含超出配置区间的难度 → 拒绝并点名元数据键（而非误导为词条越界）', async () => {
-    // level_config 同步覆盖 6：没有交叉校验时元数据会整体通过，错误被推迟到逐词校验，
-    // 排查方向被误导为「词条难度不在白名单」；交叉校验必须在这里就把病根点出来。
-    await expect(
-      load(
-        createVocabDb({
-          meta: {
-            difficulty_enum: JSON.stringify([1, 2, 3, 4, 5, 6]),
-            level_config: JSON.stringify({
-              ...defaultLevelConfig(),
-              '6': { time_limit: 45, score_weight: 5 },
-            }),
-          },
-        }),
-      ),
-    ).rejects.toThrow(/difficulty_enum 含超出合法区间/)
-  })
 
   it('缺少 category_enum → 拒绝并点名元数据键（而非误导为词条分类越界）', async () => {
     await expect(load(createVocabDb({ removeMeta: ['category_enum'] }))).rejects.toThrow(
@@ -363,41 +285,14 @@ describe('SqliteProvider 严格校验（异常数据阻止加载）', () => {
     )
   })
 
-  it('难度越出配置区间 → 拒绝', async () => {
-    await expect(load(createVocabDb(withFirstWord({ difficulty: 9 })))).rejects.toThrow(
-      /不在合法区间/,
-    )
-  })
-
-  it('难度在配置区间内但越出 difficulty_enum → 拒绝（level_config 需同步收窄）', async () => {
-    const narrowed = { ...defaultLevelConfig() }
-    delete narrowed['5']
+  it('词面超长 → 拒绝', async () => {
     await expect(
       load(
-        createVocabDb({
-          meta: {
-            difficulty_enum: JSON.stringify([1, 2, 3, 4]),
-            level_config: JSON.stringify(narrowed),
-          },
-          words: (words) =>
-            [{ ...words[0]!, difficulty: 4 }, ...words.slice(1)].map((word) =>
-              word.text === '河流' ? { ...word, difficulty: 5 } : word,
-            ),
-        }),
+        createVocabDb(
+          withFirstWord({ text: '这是一个非常非常长的词面用于触发词面长度校验的上限约束条件' }),
+        ),
       ),
-    ).rejects.toThrow(/不在 difficulty_enum 白名单内/)
-  })
-
-  it('可绘制性越出 drawability_enum → 拒绝', async () => {
-    await expect(load(createVocabDb(withFirstWord({ drawability: 7 })))).rejects.toThrow(
-      /不在 drawability_enum 白名单内/,
-    )
-  })
-
-  it('提示超过长度上限 → 拒绝', async () => {
-    await expect(
-      load(createVocabDb(withFirstWord({ hint: '这条提示实在是太长了超过了十字上限' }))),
-    ).rejects.toThrow(/提示.*长度.*超过上限/)
+    ).rejects.toThrow(/长度.*超出允许范围/)
   })
 
   it('别称数量超限 → 拒绝', async () => {
@@ -408,6 +303,16 @@ describe('SqliteProvider 严格校验（异常数据阻止加载）', () => {
         ),
       ),
     ).rejects.toThrow(/别称数超过上限/)
+  })
+
+  it('别称超长 → 拒绝', async () => {
+    await expect(
+      load(
+        createVocabDb(
+          withFirstWord({ aliases: ['这是一个非常非常长的别称用于触发别称长度上限的约束'] }),
+        ),
+      ),
+    ).rejects.toThrow(/别称.*长度超出允许范围/)
   })
 
   it('词面重复 → 拒绝', async () => {
@@ -429,15 +334,19 @@ describe('SqliteProvider 严格校验（异常数据阻止加载）', () => {
 })
 
 describe('内容哈希敏感性', () => {
-  it('hint 或 drawability 变化都会产生新版本号（全部玩法字段进哈希）', async () => {
+  it('词面/别称/分类任一变化都会产生新版本号', async () => {
     const baseline = await load(createVocabDb())
-    const hintChanged = await load(
-      createVocabDb({ words: (w) => [{ ...w[0]!, hint: '换了说法的提示' }, ...w.slice(1)] }),
+    const textChanged = await load(
+      createVocabDb({ words: (w) => [{ ...w[0]!, text: '猫咪' }, ...w.slice(1)] }),
     )
-    const drawabilityChanged = await load(
-      createVocabDb({ words: (w) => [{ ...w[0]!, drawability: 5 }, ...w.slice(1)] }),
+    const aliasChanged = await load(
+      createVocabDb({ words: (w) => [{ ...w[0]!, aliases: ['小猫', '喵'] }, ...w.slice(1)] }),
     )
-    expect(hintChanged.version).not.toBe(baseline.version)
-    expect(drawabilityChanged.version).not.toBe(baseline.version)
+    const categoryChanged = await load(
+      createVocabDb({ words: (w) => [{ ...w[0]!, category: '植物' }, ...w.slice(1)] }),
+    )
+    expect(textChanged.version).not.toBe(baseline.version)
+    expect(aliasChanged.version).not.toBe(baseline.version)
+    expect(categoryChanged.version).not.toBe(baseline.version)
   })
 })

@@ -1,9 +1,9 @@
 <!--
   本局词库管理弹窗 —— 统一列表（表格）视图。
-  展示形式固定为表格：多字段陈列 + 表头排序 + 分类/难度/可绘制性筛选，全部字段恒显示（无列显隐）；
+  展示形式固定为表格：多字段陈列 + 表头排序 + 分类筛选，全部字段恒显示（无列显隐）；
   - 房主：可搜索/筛选、复选框批量选择、确认保存（恢复默认全选）；
   - 非房主：可打开查看本局词库，但不可选择（只读：无复选框、无保存，仅能搜索/筛选浏览）。
-  三类筛选（分类/难度/可绘制性）与搜索框可叠加生效（取交集）。
+  分类筛选与搜索框可叠加生效（取交集）。
 
   工具栏单行布局：搜索框占左半行，右半行为筛选功能按钮（仅词条模式；
   词库包模式该侧留空，可用词库数只展示在页脚，避免与页脚重复计数）。
@@ -13,7 +13,7 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch, type Component } from 'vue'
-import { Brush, Library, ListFilter, Star, Tags } from 'lucide-vue-next'
+import { Library, ListFilter, Tags } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { MIN_SELECTED_VOCABULARY_WORDS, type VocabularyWord } from '@draw-guess/shared'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -67,30 +67,11 @@ const allWordIds = computed(() => (store.vocabulary?.items ?? []).map((item) => 
 const allColumns = computed<DataTableColumn<VocabularyWord>[]>(() => [
   { key: 'text', label: strings.room.vocabColumnText, weight: 18 },
   { key: 'category', label: strings.room.vocabColumnCategories, weight: 11 },
-  { key: 'difficulty', label: strings.room.vocabColumnDifficulty, weight: 9 },
-  {
-    key: 'drawability',
-    label: strings.room.vocabColumnDrawability,
-    weight: 9,
-    sortValue: (word) => word.drawability,
-  },
   {
     key: 'aliases',
     label: strings.room.vocabColumnAliases,
     weight: 20,
     sortValue: (word) => word.aliases.join(','),
-  },
-  {
-    key: 'timeLimit',
-    label: strings.room.vocabColumnTimeLimit,
-    weight: 8,
-    sortValue: (word) => word.timeLimit ?? 0,
-  },
-  {
-    key: 'scoreWeight',
-    label: strings.room.vocabColumnScoreWeight,
-    weight: 8,
-    sortValue: (word) => word.scoreWeight ?? 0,
   },
 ])
 
@@ -136,12 +117,10 @@ function toggleSelectAll(): void {
   selection.toggleAll(filteredWords.value)
 }
 
-/** 字段筛选定义：分类（来自词库白名单 categoryEnum）/ 难度（1~上限）/ 可绘制性（1~上限）。 */
+/** 字段筛选定义：只有分类（来自词库白名单 categoryEnum）——难度与可绘制性已随词库瘦身移除。 */
 const filterDefs = computed<
   Array<{ key: string; label: string; icon: Component; options: MultiSelectOption[] }>
 >(() => {
-  const difficultyMax = store.config.ui.difficultyMax
-  const drawabilityMax = store.config.ui.drawabilityMax
   return [
     {
       key: 'category',
@@ -151,25 +130,6 @@ const filterDefs = computed<
         value: category,
         label: category,
       })),
-    },
-    {
-      key: 'difficulty',
-      label: strings.room.vocabColumnDifficulty,
-      icon: Star,
-      options: Array.from({ length: difficultyMax }, (_item, index) => {
-        const value = index + 1
-        return { value: String(value), label: strings.room.vocabDifficultyLabel(value) }
-      }),
-    },
-    {
-      // 可绘制性用画笔图标与难度星级区分（两个星级筛选并排，纯图标需可分辨）
-      key: 'drawability',
-      label: strings.room.vocabColumnDrawability,
-      icon: Brush,
-      options: Array.from({ length: drawabilityMax }, (_item, index) => {
-        const value = index + 1
-        return { value: String(value), label: strings.room.vocabDrawabilityLabel(value) }
-      }),
     },
   ]
 })
@@ -319,8 +279,6 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
           :selected-ids="isReadOnly ? undefined : selectedIds"
           :sort-key="sortKey"
           :sort-dir="sortDir"
-          :difficulty-max="store.config.ui.difficultyMax"
-          :drawability-max="store.config.ui.drawabilityMax"
           @sort="handleSort"
           @toggle="toggleWord"
           @toggle-all="toggleSelectAll"

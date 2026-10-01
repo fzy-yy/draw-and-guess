@@ -297,18 +297,12 @@ describe('表格、选择与词库 composables', () => {
       text: '苹果',
       aliases: ['红苹果'],
       category: '水果',
-      difficulty: 1,
-      drawability: 2,
-      hint: '红红的水果',
     },
     {
       id: 'b',
       text: '巴士',
       aliases: ['公交车'],
       category: '交通',
-      difficulty: 2,
-      drawability: 3,
-      hint: '马路上的交通工具',
     },
   ]
   const packages: VocabularyPackageInfo[] = [
@@ -346,7 +340,7 @@ describe('表格、选择与词库 composables', () => {
       packages: ref(packages),
       columns: ref([
         { key: 'text', label: '词语', sortable: true },
-        { key: 'difficulty', label: '难度', sortable: true, sortValue: (word) => word.difficulty },
+        { key: 'id', label: '编号', sortable: true },
       ]),
       debounceMs: 10,
     })
@@ -357,8 +351,10 @@ describe('表格、选择与词库 composables', () => {
     query.updateFilter('category', ['水果'])
     expect(query.filteredWords.value.map(({ id }) => id)).toEqual(['a'])
     query.updateFilter('category', [])
-    query.handleSort('difficulty')
-    query.handleSort('difficulty')
+    // 按 ID 升序再降序：localeCompare 与中文排序无关，结果确定
+    query.handleSort('id')
+    expect(query.wordRows.value.map(({ id }) => id)).toEqual(['a', 'b'])
+    query.handleSort('id')
     expect(query.wordRows.value.map(({ id }) => id)).toEqual(['b', 'a'])
     query.searchKeyword.value = '基础'
     expect(query.filteredPackages.value.map(({ id }) => id)).toEqual(['p1'])
