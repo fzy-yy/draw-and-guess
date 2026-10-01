@@ -7,7 +7,7 @@
  * 变体切换：URL ?variant=A|B|C（底部悬浮切换条或键盘 ←/→）。
  *
  * 装配要点：
- * - 复用现有对局组件渲染真实视觉（GameHud / ScoreStrip / ChatPanel / DrawingToolbar / GameCanvas）；
+ * - 复用真实对局组件渲染真实视觉（ChatPanel / GameCanvas），顶栏与玩家面板为原型自建；
  * - 用模拟数据填充 Pinia（见 prototype-store.ts），会走网络的 store 动作在本地模拟；
  * - 传输层替身的 socket 以 autoConnect:false 构造且从不 connect()，全程零网络流量。
  */

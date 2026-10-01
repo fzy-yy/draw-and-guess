@@ -167,9 +167,6 @@ export class RoundMachine {
     game.correctOrder = []
     game.correctDetails = [] // 新回合重置得分明细
     game.revealedIndices = new Set()
-    // 结构化提示清空；真正的文案在 beginDrawing（答案确定后）按 hint/分类写入
-    delete game.structuredHint
-    delete game.structuredHintRevealed
     game.roundResult = undefined
     room.members.forEach((member) => (member.guessedAt = undefined))
     // 新回合从空画布开始：重置全员绘图差分游标，保证本回合首份快照始终携带完整（空）画布，
@@ -180,7 +177,7 @@ export class RoundMachine {
     const game = this.service.requireGame(room)
     this.service.scheduler.clear(game.timer)
     this.transition(room, 'drawing')
-    // 富答案直接取自候选池：词条即含别称/分类/提示与加载期派生的时限权重。
+    // 富答案直接取自候选池：词条即含别称/分类与加载期派生的时限权重。
     // 「answer 必在 candidates 内」由三条调用路径保证（chooseWord 的 find、选词超时与
     // 暂停恢复的 candidates 取值）；若不变式被破坏则显式失败，绝不伪造 difficulty: 0
     // 的富字段——那会静默失真时限与计分权重。
@@ -203,16 +200,11 @@ export class RoundMachine {
     game.roundDurationMs = seconds * 1_000
     game.phaseStartedAt = this.service.clock.now()
     game.phaseEndsAt = this.service.clock.now() + game.roundDurationMs
-    // 结构化提示：词库重建后每个答案带一条 hint 提示文案，优先揭示它；
-    // hint 为空时回退揭示分类（旧语义保底），两者皆空则不开启提示。
-    // 单一提示槽位、对全体猜词者一致（揭示后随快照下发一条）。
-    const structuredHint = richAnswer.hint || richAnswer.category
-    if (structuredHint) game.structuredHint = structuredHint
     // 作画倒计时结束进入回合结算
     game.timer = this.service.scheduler.set(game.roundDurationMs, () =>
       this.service.safeRun('drawingTimeout', () => this.finishRound(room, false)),
     )
-    this.scheduleHints(room) // 若开启逐步/结构化提示则安排揭示计时器
+    this.scheduleHints(room) // 若开启逐步提示则安排揭示计时器
     this.addSystemNotice(room, serverStrings.notices.drawingStarted)
     this.service.emitRoom(room.id)
   }
@@ -461,11 +453,9 @@ export class RoundMachine {
     this.service.emitRoom(room.id)
   }
   /**
-   * 统一提示调度：全部延迟由 hint-scheduler.ts 的 createHintSchedule 计算（单一事实来源），
+   * 统一逐步提示调度：全部延迟由 hint-scheduler.ts 的 createHintSchedule 计算（单一事实来源），
    * 避免 round-machine 内联重抄一份逐步提示数学导致两处漂移。逐步提示在作画后半程按字符
-   * 数逐步揭示；结构化提示在剩余比例降到 hintStartRatio 时揭示一次词条提示（hint，
-   * 空则回退分类）。剩余不足时
-   * structuredDelay 以 Math.max(0, …) 归零并立即揭示（原不可达的 else 分支已合并进该值）。
+   * 数逐步揭示；剩余不足时以 Math.max(0, …) 归零并立即揭示。
    */
   public scheduleHints(room: RoomSecret): void {
     const game = this.service.requireGame(room)
@@ -482,9 +472,6 @@ export class RoundMachine {
       progressiveHints: room.settings.progressiveHints,
       wordText: game.answer.text,
       revealedCount: game.revealedIndices.size,
-      structuredHintsEnabled: room.settings.structuredHintsEnabled,
-      structuredHintPending: Boolean(game.structuredHint) && !game.structuredHintRevealed,
-      hintStartRatio: room.settings.hintStartRatio,
     })
 
     for (const delay of schedule.progressiveDelays) {
@@ -494,26 +481,10 @@ export class RoundMachine {
         ),
       )
     }
-    if (schedule.structuredDelay !== undefined) {
-      timers.push(
-        this.service.scheduler.set(schedule.structuredDelay, () =>
-          this.service.safeRun('revealStructuredHint', () => this.revealStructuredHint(room)),
-        ),
-      )
-    }
 
     game.hintTimers = timers
   }
 
-  /** 揭示结构化提示：词库单分类即提示，只会揭示一次（受房间规则开关门控）。 */
-  private revealStructuredHint(room: RoomSecret): void {
-    const game = room.game
-    if (!game?.answer || room.phase !== 'drawing') return
-    if (!room.settings.structuredHintsEnabled) return
-    if (!game.structuredHint || game.structuredHintRevealed) return
-    game.structuredHintRevealed = true
-    this.service.emitRoom(room.id)
-  }
   private revealHint(room: RoomSecret): void {
     const game = room.game
     if (!game?.answer || room.phase !== 'drawing') return

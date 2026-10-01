@@ -1,8 +1,8 @@
 /**
  * 原型模拟对局数据（纯 UI 演示，不连后端）。
  *
- * 以真实 DTO 类型构造一局「作画中」的房间快照，让现有组件（GameHud / ScoreStrip /
- * ChatPanel / DrawingToolbar / GameCanvas）在真实形状的数据上渲染；
+ * 以真实 DTO 类型构造一局「作画中」的房间快照，让组件（原型顶栏 / 玩家面板 / ChatPanel /
+ * GameCanvas）在真实形状的数据上渲染；
  * 数据只服务于渲染，不参与任何网络交互。
  */
 import type {

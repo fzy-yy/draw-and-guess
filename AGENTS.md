@@ -16,7 +16,7 @@
 - **日志文件化**：服务端日志**不输出到控制台**（规避 Windows 控制台 GBK 解码 UTF-8 中文乱码），通过 Pino 异步缓冲写入 `apps/server/log/app-<秒级时间戳>.log`（每次启动新建一个、最多保留 `LOG_MAX_FILES` 条），优雅关闭时 flush/close；可通过 `.env` 的 `LOG_ENABLED` 完全关闭（零内存开销）。
 - **画板**：高 DPI 实时画布，支持自由画笔、橡皮擦（`destination-out`）与封闭区域洪泛填充；画笔/橡皮擦共用连续粗细，可滚轮调整；支持预设或任意 HEX 颜色，工具可自定义单键切换。**渲染模型为「归一化点列 + 直线段描边」增量同步**（不引入轮廓填充型平滑库，曾因此导致白边/闪烁/空心缺陷）。
 - **头像**：仅允许从 40 个内置 SVG 白名单编号中选择，协议只传编号；禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像。
-- **应用标识**：名称「你画我猜」、版本 `2.5.0`、协议版本 `protocolVersion: '14'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
+- **应用标识**：名称「你画我猜」、版本 `2.5.0`、协议版本 `protocolVersion: '15'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
 - **Windows 分发包**：`pnpm package:dist` 把服务端打成 **ESM 单文件 `server.mjs`**（依赖内联、`better-sqlite3` 外置），产出 **slim / full 两个包**——slim 需系统 Node 22+（约 2MB），full 额外内置 **Node 24 LTS** 运行时 `runtime/node.exe`（约 37MB，零依赖）。两者均附 `client/`、`vocabulary/`、`better-sqlite3` Node-API 预编译与 `start.cmd`（full 直用内置运行时，slim 检测系统 Node）。数据（`game.db`/`logs/`/`vocabulary/custom/`/可选 `.env`）写在产物旁 `data/`；内置 Node 默认从国内镜像下载（`NODE_DIST_MIRROR` 可切官网、`NODE_VERSION` 可钉版本），**下载经同源 SHASUMS256 sha256 校验、缓存损坏自动重下一次**。产物模式自动顺延端口并打开默认浏览器（`DRAW_GUESS_OPEN_BROWSER=false` 关闭后者）。仅 Windows x64，详见 `docs/adr/0034-node-single-file-distribution.md`。
 
 ### 技术栈与运行环境
@@ -93,7 +93,7 @@ draw-and-guess/
 │       ├── game-service.ts        # handlers 兼容 Facade：子服务装配、对局操作与跨用例编排
 │       ├── round-machine.ts       # 回合流转状态机：仅依赖最小 RoundContext，不反向依赖整个 GameService
 │       ├── scoring.ts             # 计分纯函数：猜中明细、画家得分（可独立单测）
-│       ├── hint-scheduler.ts      # 提示揭示调度：按 hintStartRatio 与渐进间隔逐格揭示 hint 槽位
+│       ├── hint-scheduler.ts      # 逐步提示调度：按渐进间隔逐格揭示题目遮罩（结构化提示已移除，见 ADR-0042/0001）
 │       ├── snapshot.ts            # 角色裁剪快照构建（SnapshotViewPort 窄端口）：画家/观众视角差异化、strokesOmitted 差分（矩阵回归见 test/unit/snapshot.matrix.spec.ts）
 │       ├── rate-limit.ts          # 猜词/绘图滑动窗口限频
 │       ├── errors.ts              # GameError / success / failure / RuntimeLogger / SILENT_LOGGER（避免循环依赖）
@@ -186,16 +186,16 @@ draw-and-guess/
 │       │   ├── AvatarPickerDialog.vue # 40 个 SVG 头像选择模态框（v-model:open）
 │       │   ├── ActionPopover.vue  # 悬浮操作面板（聊天快捷互动用）
 │       │   ├── AppToaster.vue     # 自建 Toast 堆栈渲染：画框内右上角、白色长条+橙色小条+加粗文字、样式闭环在组件内、点击消失、淡入淡出、去重左弹跳（WAAPI）
-│       │   ├── game/              # 对局组件（提供 index.ts）：GameCanvas / GameHud / ChatPanel / DrawingToolbar / PhaseOverlay / OverlayCard / ScoreStrip / HudPill
+│       │   ├── game/              # 对局组件（提供 index.ts）：GameCanvas / GameHud / ChatPanel / PlayerPanel / FloatingPanel / CanvasToolbar / BrushSizeField / PhaseOverlay / OverlayCard / HudPill；scale-fade.ts 为浮层出入场过渡（浮层布局见 docs/adr/0043-game-view-floating-layout.md）
 │       │   ├── room/              # 房间组件（提供 index.ts）：SeatGrid / RuleSummary / RuleRow / RulesDialog / InviteDialog / VocabularyDialog / VocabTableView / VocabPackageTableView
 │       │   ├── lobby/             # 大厅组件（提供 index.ts）：CreateRoomDialog / JoinPrivateDialog
-│       │   ├── common/            # 通用原语组件（提供 index.ts）：含 DataTable 与 DataTableHeader、AsyncModuleFallback（懒加载占位/失败重试）、ContextMenu（右键菜单，白底浮层）、SelectDropdown（手写下拉，替代原生 select）、各输入/按钮/规则原语
+│       │   ├── common/            # 通用原语组件（提供 index.ts）：含 DataTable 与 DataTableHeader、AsyncModuleFallback（懒加载占位/失败重试）、ContextMenu（右键菜单，白底浮层）、SelectDropdown（手写下拉，替代原生 select）、SquareIconButton / ColorSwatchButton / GroupDivider 等共享原语、各输入/按钮/规则原语
 │       │   └── settings/          # 设置页组件（提供 index.ts）：AudioTab / ShortcutsTab / AccessibilityTab / DiagnosticsTab / SettingsSectionHeader
 │       ├── views/
 │       │   ├── ProfileView.vue    # 资料确认页（随机昵称/内置 SVG 头像选择，无上传）
 │       │   ├── LobbyView.vue      # 在线大厅（公开列表/公私建房/私密短码加入/可发现玩家）
 │       │   ├── RoomView.vue       # 房间等待（席位/准备/私密码/词库/规则/邀请/退出）
-│       │   ├── GameView.vue       # 对局骨架（HUD/画布/聊天/工具栏/各阶段遮罩/结算；useFullscreen 全屏）
+│       │   ├── GameView.vue       # 对局骨架：固定顶栏 + 铺满画布 + 浮层玩家/聊天面板 + 底部横向工具条 + 各阶段遮罩/结算（useFullscreen 全屏，布局见 docs/adr/0043-game-view-floating-layout.md）
 │       │   └── SettingsView.vue   # 设置页（声音/显示/快捷键/资料诊断）
 │       └── utils/
 │           ├── avatar.ts          # Vite SVG 静态资源白名单编号到 URL 映射
@@ -203,7 +203,7 @@ draw-and-guess/
 │           ├── lazy-component.ts  # 低频模块懒加载工厂（动态 import + 轻量 loading/失败重试）
 │           ├── bounded-diagnostics.ts # 有界诊断列表与 Zod 问题格式化统一内核（ADR-0026）
 │           ├── phase-text.ts      # 阶段文案统一映射（HUD 标签与阶段播报共用，ADR-0028）
-│           ├── role-text.ts       # 成员局内角色文案统一映射（得分条与聊天标签共用）
+│           ├── role-text.ts       # 成员局内角色文案统一映射（玩家面板与聊天标签共用）
 │           ├── keyboard.ts        # 画板快捷键共享判定（捕获校验与触发匹配同一规则，防「能存不能触发」死键）
 │           ├── confetti.ts        # 礼花特效（canvas-confetti 按需动态加载 + 主线程渲染，ADR-0031/0033）
 │           ├── room-facts.ts      # 客户端房间事实：可玩成员谓词与玩家人数选项（ADR-0028）
@@ -299,7 +299,7 @@ pnpm format:check  # 仅检查格式
 - **请求响应运行时边界**：`CLIENT_RESPONSE_SCHEMAS` 为每个请求事件声明完整 ack Schema（成功 data、`requestId`、已登记 `ErrorCode` 的失败外壳，均为 strict），响应类型由 Schema 推导。`createRequester` 对每次 `emitWithAck` 结果先经 `response-protocol.ts` 解码并核对 `requestId`：解析失败或不匹配返回 `failureKind: 'protocol'`（不重试、不写入 Pinia、只显示统一安全文案并记录脱敏诊断），只有传输故障才自动重试。
 - **版本化主动推送**：服务端主动事件一律使用 `createServerPush()` 包装；客户端先经 `SERVER_PUSH_SCHEMAS` 完整 Zod 解码，再通过 `snapshot-gate.ts` 校验房间、对局、回合、`stateVersion` 与 `drawingRevision`。非法推送只记录脱敏诊断，并以冷却窗口触发一次全量重同步。**推送事件在客户端只有唯一登记处**：`useAppBootstrap` 的 `push: PushHandlerMap` 注册表按协议事件逐条登记 `{ on, recovery }`（载荷整体透传、解码层零字段知识；非法载荷恢复策略即原「门禁域」与 handler 同条目共存）；注册/解绑清单由 `SERVER_PUSH_EVENT_NAMES`（schema 键派生）循环生成，`stores/socket.ts` 内不再有事件名单（见 `docs/adr/0020-push-registry.md`）。
 - **统一运行时依赖**：`GameService`、`RoundMachine`、`rate-limit.ts`、`snapshot.ts`、`scoring.ts`、`hint-scheduler.ts` 及 `apps/server/src/domain/`、`application/`、`protocol/` 全目录的领域时间、定时器与随机数统一来自 `runtime.ts` 的 `Clock` / `Scheduler` / `RandomSource`；这些作用域禁止直接调用系统时间、随机数或定时器，只有 `runtime.ts` 生产适配层放行，ESLint 会阻止回退。
-- **回合状态机**：`round-machine.ts` + `packages/shared/src/pure.ts` 的 `LEGAL_PHASES` 白名单；非法转换由服务端拒绝（`INVALID_TRANSITION`）。**阶段写入、准备失效、对局消息/系统通知与候选抽取、画家轮换、提示计时器只归 `round-machine.ts` 所有**（阶段写入静态守卫见 `test/unit/room-phase-transition.spec.ts`）；`RoundContext` 是运行时/副作用窄端口，`GameService` 退为请求 API 与装配适配（见 `docs/adr/0024-round-machine-ownership.md`）。
+- **回合状态机**：`round-machine.ts` + `packages/shared/src/pure.ts` 的 `LEGAL_PHASES` 白名单；非法转换由服务端拒绝（`INVALID_TRANSITION`）。**阶段写入、准备失效、对局消息/系统通知与候选抽取、画家轮换、逐步提示计时器只归 `round-machine.ts` 所有**（阶段写入静态守卫见 `test/unit/room-phase-transition.spec.ts`）；`RoundContext` 是运行时/副作用窄端口，`GameService` 退为请求 API 与装配适配（见 `docs/adr/0024-round-machine-ownership.md`）。
 - **计分统一口径**：`scoring.ts` 与 `pure.ts` 的 `calculateGuessScore` 使用同一规则（基础 + 速度 + 顺序；两人局禁用顺序奖）。
 - **成员事实单一口径**：房间内「占席 / 可玩 / 在线可玩 / 候场可玩 / 进榜」与连接三态、阶段标称时长只写在 `apps/server/src/domain/room/member-facts.ts`（纯函数，连通性经显式 `isOnline` 入参注入），其他模块经具名谓词 / 选择器调用；禁止在别处重新内联 `spectating`×`leftGame` 复合判定（防回潮见 `test/unit/member-facts-boundaries.spec.ts`，取舍见 `docs/adr/0023-member-facts-single-source.md`）。
 - **画布增量绘制**（`GameCanvas.vue` + `canvas/replay-machine.ts`）：坐标一律**归一化 0～1**；绘图序号单调递增，服务端拒绝旧包；橡皮擦/填充只传「点击位置 + 颜色」，不传像素，客户端按同一历史重放；`lastSequence` 用于重连续接。**渲染为直线段描边（`stroke()` + `round` 线帽），增量只补画新增段（fromIndex）**。**权威重放原子提交**：重放只画进后备 canvas，整帧成功后一次换入逻辑层——中止/取消的重放不得触碰逻辑层，`drawnPoints` 簿记与后备内容同口径（见 `docs/adr/0017-drawing-replay-atomic-commit.md`）。**「历史 → 栅格」的全部决策归画布重放状态机 `DrawingReplayMachine`**：唯一入口 `sync({commands, undoneIds, roundId})` + `resize/replay/预览方法`，增量 vs 整帧、undone 可见性过滤、世代取代、原子提交都是机器内政；组件与笔画会话不得直接绘制或清空逻辑层（见 `docs/adr/0018-canvas-replay-machine.md`）。
@@ -327,7 +327,7 @@ pnpm format:check  # 仅检查格式
 - **错误处理**：所有可观察错误码先登记到 shared 的 `ERROR_CODES` / `ErrorCode`；服务端用 `GameError` + `errors.ts` 生成统一 ack，默认中文文案必须满足 `Record<ErrorCode, string>`；客户端经 `request.ts` 统一超时，失败 Toast 归属由 `notify: 'always' | 'silent'` 显式声明（静默请求的选择性补弹走调用方对 `ok:false` 结果的错误码分支），其余展示服务端安全文案。
 - **日志**：由 `.env` 的 `LOG_ENABLED` 控制（默认 true）：关闭时完全不创建日志记录器、不写日志文件（零内存开销）；开启时服务端用 `pino`（默认结构化 JSON，无 ANSI 色码）异步缓冲写入，**每次启动写一个新的日志文件**（`apps/server/log/app-YYYY-MM-DD-HH-mm-ss.log`，精确到秒），目录最多保留最近 `LOG_MAX_FILES` 条（默认 10，超出删除最老）；优雅关闭必须 flush/close，异常退出仅做尽力同步 flush。日志正文与上下文字段采用静态白名单，禁止记录恢复令牌、答案、聊天全文或 payload；控制台只保留启动横幅，不输出业务日志；日志级别只有 `info`/`error` 两档（与 `RuntimeLogger` 通道一致），经 `LOG_LEVEL` 控制。ESLint 默认禁止 `console`，仅进程入口、启动提示、客户端开发期资源诊断、按需构建报告与测试运行器等明确适配层放行。
 - **UI 文案**：**严禁在组件/业务代码里硬编码展示字符**；一律从 `@draw-guess/strings` 的 `strings`（客户端）或 `serverStrings`（服务端）导入。SFC ESLint 规则覆盖 template 纯文本、静态 `aria-*` / `title` / `placeholder`、字符串与模板字符串；注释、class 名、不含硬编码文案的动态绑定、测试夹具与仅供开发者定位问题的技术诊断不视为 UI 文案。
-- **样式**：组件/页面视觉一律用**行内 Tailwind 类**写在 Vue 模板；重复长串收敛到共享组件（`AppButton`/`BaseDialog`/`ConfirmDialog`/`IconButton`/`ToolButton`/`OverlayCard`/`RuleRow`/`RoundIconButton`）或 `style/` 共享模块类。不要写共享层之外的原生 CSS 类选择器。语义色用 `@theme` 令牌；容器单位 `cqh/cqw` 用任意值（内部空格用 `_`，如 `shadow-[0_1.2cqh_5cqh_#0009]`）。
+- **样式**：组件/页面视觉一律用**行内 Tailwind 类**写在 Vue 模板；重复长串收敛到共享组件（`AppButton`/`BaseDialog`/`ConfirmDialog`/`IconButton`/`RoundIconButton`/`SquareIconButton`/`ColorSwatchButton`/`OverlayCard`/`RuleRow`）或 `style/` 共享模块类。不要写共享层之外的原生 CSS 类选择器。语义色用 `@theme` 令牌；容器单位 `cqh/cqw` 用任意值（内部空格用 `_`，如 `shadow-[0_1.2cqh_5cqh_#0009]`）。
 - **配色与对比度**：品牌基色固定为 `navy`/`muted`/`line`/`paper`/`blue`/`sky`/`yellow`/`green`/`red`/`purple`；为满足 WCAG AA，可使用 `success-fg`/`success-on-dark`/`warning-fg`/`danger-on-dark`/`control`/`focus` 等集中定义于 `style/tokens.css` 的无障碍语义令牌。`packages/config/src/room.ts` 的 `seatColors` 仍只取品牌基色；`#fff`/`#000`（及黑色变量 `--color-black`）与透明度衍生（如 `bg-blue/10`）不计入调色板。普通文字至少 4.5:1，大字号与非文字控件边界至少 3:1。**禁止**在组件/模板中硬编码任意 HEX（`bg-[#...]`/`text-[#...]`）或 Tailwind 默认色阶（`slate-*` 等）。`packages/config/src/drawing.ts` 的 `colors` 是**画板工具色**，属功能性工具配置，不纳入品牌调色板限制。
 - **动画一致性**：按钮/卡片交互动效统一为 160ms（复用 `.ui-feedback` / `.hover-tint` 共享类，或依赖 `@layer base` 中 `.game-stage button` 的全局过渡）；同类控件应复用同一动画，避免各自定制造成手感不一。
 - **布局规范（外 Grid 骨架，内 Flex 排版）**：
@@ -355,7 +355,7 @@ pnpm format:check  # 仅检查格式
 - **Vue 3.4+ `defineModel()` 统一双向绑定规范**：
   - 表单组件值绑定（`AppInput` / `SearchInput` 的 `modelValue`、`RuleSliderField` / `SettingSliderRow` 的数字值、`RuleToggleField` / `SettingSwitchRow` 的布尔值）；
   - 模态弹窗显隐控制统一命名为 `open`（`v-model:open="isOpen"`），所有弹窗组件（`BaseDialog` / `ConfirmDialog` / `AvatarPickerDialog` / `RulesDialog` / `VocabularyDialog` / `InviteDialog` / `CreateRoomDialog` / `JoinPrivateDialog`）均遵循该标准宏接口；
-  - 工具参数绑定（`DrawingToolbar` 与 `GameCanvas` 的 `v-model:width="strokeWidth"`）；
+  - 工具参数绑定（`CanvasToolbar` 与 `GameCanvas` 的 `v-model:width="strokeWidth"`）；
   - **严禁**使用已淘汰的手写 `props: { modelValue }` + `emit('update:modelValue')` 样板代码。
 - **统一 Barrel 导出（`index.ts`）与模块化消费**：
   - 各组件子目录（`components/common`、`components/lobby`、`components/room`、`components/game`、`components/settings`）均维护单一 `index.ts` 集中导出；
@@ -428,7 +428,7 @@ pnpm format:check  # 仅检查格式
 
 ### 控件尺寸与命中区
 
-- **普通交互控件**（动作按钮 `AppButton`、图标按钮 `IconButton`/`RoundIconButton`/`ToolButton`、开关行、弹窗按钮与关闭钮、席位角标、搜索清除钮）：尺寸**随舞台等比缩放，不设像素下限**；命中区即视觉尺寸，不经任何覆盖层外扩。
+- **普通交互控件**（动作按钮 `AppButton`、图标按钮 `IconButton`/`RoundIconButton`/`SquareIconButton`、开关行、弹窗按钮与关闭钮、席位角标、搜索清除钮）：尺寸**随舞台等比缩放，不设像素下限**；命中区即视觉尺寸，不经任何覆盖层外扩。
 - **密集控件**（画板色板、自定义取色、表情反应、表格表头与行复选框、筛选弹层复选框）：仅保留 `responsive.minDenseTargetPx`（**16px**）视觉下限，防止小窗下缩到看不见；除此之外仍等比缩放。
 - **滑块 `<input type="range">`**：命中区由滑块自身承担（`h-[2.75em]`，随字号缩放）。**禁止**在包裹 range 的 `label` 上挂任何覆盖层类——伪元素会盖住 range，而 range 只响应指针按下/拖拽（label 只转发 click），滑块将彻底无法拖动。
 - **下拉框 `<select>`**：是替换元素，**禁止**在其所属 `label` 上挂覆盖层类——`::after` 会拦截指针事件导致下拉框收不到点击、彻底无法展开（曾因此产生「建房/规则弹窗下拉失效」缺陷）。字段行仅保持原生 `label` 关联。
@@ -538,8 +538,8 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
    - 客户端请求必须带 `requestId`（幂等）与统一 `ack`；非法阶段/角色/序号/频率由 `binder.ts` 与领域服务拒绝。
    - 头像只允许 `packages/shared/src/protocol/constants.ts` 白名单中的内置 SVG 编号；**禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像**。
 3. **词库与内容**
-   - `vocabulary/` 目录下的 SQLite 词库包是仓库的权威词库来源（当前仅 `base_words.db`，可并存多个 `.db`，服务启动时全部加载并从中选默认包；分发产物模式另有产物 `data/vocabulary/custom/` 自定义目录与内置目录合并加载，同名包 ID 追加序号唯一化，见 `docs/adr/0034-node-single-file-distribution.md` 决策四）：`metadata` 表存 name/description/version/updated_at/category_enum/difficulty_enum/drawability_enum/enabled_enum/level_config（难度 → `{time_limit, score_weight}` 映射，JSON，**库内为 snake_case 命名**）/drawability_desc；`words` 表词条含 id/text/**category**（单词条仅一个分类）/difficulty/**drawability**（可绘制性 1~5，词库作者标注）/enabled/**hint**（对局结构化提示，≤10 字，空串合法）/aliases（JSON）/updated_at（仅编辑时间，不进 DTO）。逐词 `time_limit/score_weight` 已废弃：Provider **加载期**按难度查 `level_config` 派生到词条 `timeLimit/scoreWeight`，下游（回合时限/计分/UI/哈希）语义不变（见 `docs/adr/0013-vocabulary-level-config-and-hints.md`）。校验为 fail-fast：分类 ⊆ category_enum、难度 ⊆ difficulty_enum ∩ 配置区间、可绘制性 ⊆ drawability_enum、`level_config` 与 `difficulty_enum` 严格互相覆盖、hint 长度 ≤ `maxHintLength`、enabled=0 词条不进入候选池；目录内没有任何 `.db` 时按 `apps/server/src/config/private.ts` 的 `dbPath` 兜底探测（默认文件名 `base_words.db`）。修改后需重启服务，异常数据以中文错误阻止启动。
-   - **猜词提示使用词条 hint**：结构化提示揭示的是 `hint` 字段（hint 为空回退揭示 `category`，两者皆空不开启提示）；单揭示槽位与揭示时机（`hintStartRatio`）不变；选词卡对画家**不展示** hint（`wordOptions` 只带 `text/difficulty/drawability`），避免提示泄露。**提示同源、按角色区分完整度**：来源统一为词条 hint（空回退 category）——画家在「画家模式」完整显示提示（服务端画家专属 `wordHint`）与答案，画家切到「猜词者模式」或猜词者本人只看按时间逐渐披露的 `revealedHints[0]`；不再向画家下发独立的 `wordCategory`。
+   - `vocabulary/` 目录下的 SQLite 词库包是仓库的权威词库来源（当前仅 `base_words.db`，可并存多个 `.db`，服务启动时全部加载并从中选默认包；分发产物模式另有产物 `data/vocabulary/custom/` 自定义目录与内置目录合并加载，同名包 ID 追加序号唯一化，见 `docs/adr/0034-node-single-file-distribution.md` 决策四）：`metadata` 表存 name/description/version/updated_at/category_enum/difficulty_enum/drawability_enum/enabled_enum/level_config（难度 → `{time_limit, score_weight}` 映射，JSON，**库内为 snake_case 命名**）/drawability_desc；`words` 表词条含 id/text/**category**（单词条仅一个分类）/difficulty/**drawability**（可绘制性 1~5，词库作者标注）/enabled/**hint**（词库元数据，≤10 字，空串合法；已不进入对局链路，见 `docs/adr/0042-remove-structured-hints.md`）/aliases（JSON）/updated_at（仅编辑时间，不进 DTO）。逐词 `time_limit/score_weight` 已废弃：Provider **加载期**按难度查 `level_config` 派生到词条 `timeLimit/scoreWeight`，下游（回合时限/计分/UI/哈希）语义不变（见 `docs/adr/0013-vocabulary-level-config-and-hints.md`）。校验为 fail-fast：分类 ⊆ category_enum、难度 ⊆ difficulty_enum ∩ 配置区间、可绘制性 ⊆ drawability_enum、`level_config` 与 `difficulty_enum` 严格互相覆盖、hint 长度 ≤ `maxHintLength`、enabled=0 词条不进入候选池；目录内没有任何 `.db` 时按 `apps/server/src/config/private.ts` 的 `dbPath` 兜底探测（默认文件名 `base_words.db`）。修改后需重启服务，异常数据以中文错误阻止启动。
+   - **猜词提示只靠逐字遮罩**：结构化提示已从对局链路移除（词条 `hint` 仅作词库元数据，见 `docs/adr/0042-remove-structured-hints.md`），猜词者只根据题目遮罩按节奏逐格揭示字符推理（保留末尾非标点字符，调度归 `apps/server/src/hint-scheduler.ts`）；选词卡对画家**不展示** hint（`wordOptions` 只带 `text/difficulty/drawability`），避免提示泄露。
    - 猜词判定固定用 `normalizeAnswer`（NFKC + 去空白 + 折叠空白 + 忽略拉丁大小写），不要在别处另写一套比较。
 4. **配置治理**
    - 协议公开约束**只允许**写在 shared protocol constants；公开默认值与服务端私有策略按包边界分别维护，禁止复制同一协议常量。
@@ -599,7 +599,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 | 应用名/版本/公开连接参数                       | `packages/config/src/app.ts`                                                                                                                                                                                                                                                                                                                                        |
 | 协议版本/头像/载荷范围                         | `packages/shared/src/protocol/constants.ts`                                                                                                                                                                                                                                                                                                                         |
 | 服务端端口/限频/清理/数据库路径                | `apps/server/src/config/`                                                                                                                                                                                                                                                                                                                                           |
-| 对局轮数/时间/分数/提示                        | `packages/config/src/game.ts`                                                                                                                                                                                                                                                                                                                                       |
+| 对局轮数/时间/分数/逐步提示比例                | `packages/config/src/game.ts`                                                                                                                                                                                                                                                                                                                                       |
 | 画板颜色/粗细/批次/历史上限                    | `packages/config/src/drawing.ts`（历史上限语义见 `docs/adr/0010-drawing-history-cap.md`）                                                                                                                                                                                                                                                                           |
 | 词库内容                                       | `vocabulary/` 目录下的 SQLite 词库包（改后重启服务）                                                                                                                                                                                                                                                                                                                |
 | 新增词库来源                                   | `apps/server/src/vocabulary/` 实现 VocabularyProvider → 在 `apps/server/src/vocabulary/index.ts` 的 loadVocabulary 构造点接入（无配置分发开关）                                                                                                                                                                                                                     |
@@ -609,6 +609,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 | 成员状态判定（占席/可玩/在线/候场/进榜）       | `apps/server/src/domain/room/member-facts.ts`（ADR-0023）                                                                                                                                                                                                                                                                                                           |
 | 重连/重同步与自愈                              | `apps/client/src/stores/resync.ts`（冷却/在途/世代校验与会话失效重置，ADR-0025）                                                                                                                                                                                                                                                                                    |
 | 快照裁剪/隐私边界                              | `apps/server/src/snapshot.ts`（端口与裁剪）+ `test/unit/snapshot.matrix.spec.ts`（角色×阶段穷举矩阵）                                                                                                                                                                                                                                                               |
+| 对局界面布局（顶栏/画布/浮层/工具条）          | `apps/client/src/views/GameView.vue` + `apps/client/src/components/game/`（浮层布局见 `docs/adr/0043-game-view-floating-layout.md`）                                                                                                                                                                                                                                |
 | SQLite 建表/迁移                               | `apps/server/src/db/migrate.ts`（新变更追加新迁移）                                                                                                                                                                                                                                                                                                                 |
 | 持久化仓储（玩家/战报）                        | `apps/server/src/repositories/`                                                                                                                                                                                                                                                                                                                                     |
 | 日志开关/保留条数                              | `.env` → `apps/server/src/config/deployment.ts` → `apps/server/src/index.ts`                                                                                                                                                                                                                                                                                        |

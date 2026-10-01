@@ -7,7 +7,7 @@ describe('统一假运行时驱动完整回合生命周期', () => {
     const harness = createGameHarness()
     const { host, guest, room, game } = startTwoPlayerGame(
       harness,
-      testRoomSettings({ drawSeconds: 90, chooseSeconds: 10, hintStartRatio: 0.35 }),
+      testRoomSettings({ drawSeconds: 90, chooseSeconds: 10 }),
     )
     expect(room.phase).toBe('choosing_word')
     const answer = game.candidates[0]!
@@ -16,8 +16,14 @@ describe('统一假运行时驱动完整回合生命周期', () => {
     expect(game.phaseStartedAt).toBe(harness.runtime.now())
     expect(game.phaseEndsAt - game.phaseStartedAt).toBe(90_000)
 
-    harness.runtime.advance(90_000 * (1 - room.settings.hintStartRatio))
-    expect(game.structuredHintRevealed).toBe(true)
+    // 逐步提示：等待首个揭示窗口后，猜词者经快照看到的逐字遮罩应真正揭开至少一个字符（不锁内部下标簿记）。
+    const guesser = game.drawerId === host.playerId ? guest : host
+    const maskBefore = harness.service.snapshotForPlayer(guesser.playerId)?.game?.answerMask
+    harness.runtime.advance(90_000 * APP_CONFIG.game.progressiveHintRatio + 1)
+    const maskAfter = harness.service.snapshotForPlayer(guesser.playerId)?.game?.answerMask
+    expect(maskAfter).toBeDefined()
+    expect(maskAfter).not.toBe(maskBefore)
+    expect(maskAfter?.length).toBe(maskBefore?.length)
 
     const remainingBeforePause = game.phaseEndsAt - harness.runtime.now()
     harness.service.pause(host.playerId, '测试暂停')
@@ -29,7 +35,6 @@ describe('统一假运行时驱动完整回合生命周期', () => {
     harness.service.resume(host.playerId)
     expect(room.phase).toBe('drawing')
     expect(game.phaseEndsAt - harness.runtime.now()).toBe(remainingBeforePause)
-    const guesser = game.drawerId === host.playerId ? guest : host
     expect(harness.service.submitGuess(guesser.playerId, game.roundId, answer.text)).toEqual({
       correct: true,
     })

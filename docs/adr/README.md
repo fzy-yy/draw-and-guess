@@ -60,26 +60,28 @@
 
 ### 客户端架构与 UI 原语
 
-| 编号                                               | 主题                                           | 状态   |
-| :------------------------------------------------- | :--------------------------------------------- | :----- |
-| [0008](0008-context-menu-singleton-vs-teleport.md) | 右键菜单用舞台内单例状态，不用 Teleport        | 已采纳 |
-| [0014](0014-settings-view-static-import.md)        | 设置页静态导入消除首开白闪；懒加载重试桥       | 已采纳 |
-| [0015](0015-select-dropdown-fixed-anchoring.md)    | 下拉面板 fixed 视口锚定、祖先滚动即关闭        | 已采纳 |
-| [0025](0025-resync-module.md)                      | 重连/重同步独立成 resync 模块                  | 已采纳 |
-| [0026](0026-client-diagnostics-core.md)            | 客户端诊断内核单一口径                         | 已采纳 |
-| [0027](0027-vocabulary-dialog-session.md)          | 词库弹窗会话生命周期独立成 composable          | 已采纳 |
-| [0028](0028-client-room-facts.md)                  | 客户端房间事实单一口径：阶段文案与可玩成员     | 已采纳 |
-| [0029](0029-shallow-wrappers-kept.md)              | 客户端浅层包装保持现状：删除测试判定不复用折叠 | 已采纳 |
-| [0041](0041-snapshot-gate-decision-narrowing.md)   | 快照门禁决策类型按裁决能力收窄                 | 已采纳 |
+| 编号                                               | 主题                                             | 状态   |
+| :------------------------------------------------- | :----------------------------------------------- | :----- |
+| [0008](0008-context-menu-singleton-vs-teleport.md) | 右键菜单用舞台内单例状态，不用 Teleport          | 已采纳 |
+| [0014](0014-settings-view-static-import.md)        | 设置页静态导入消除首开白闪；懒加载重试桥         | 已采纳 |
+| [0015](0015-select-dropdown-fixed-anchoring.md)    | 下拉面板 fixed 视口锚定、祖先滚动即关闭          | 已采纳 |
+| [0025](0025-resync-module.md)                      | 重连/重同步独立成 resync 模块                    | 已采纳 |
+| [0026](0026-client-diagnostics-core.md)            | 客户端诊断内核单一口径                           | 已采纳 |
+| [0027](0027-vocabulary-dialog-session.md)          | 词库弹窗会话生命周期独立成 composable            | 已采纳 |
+| [0028](0028-client-room-facts.md)                  | 客户端房间事实单一口径：阶段文案与可玩成员       | 已采纳 |
+| [0029](0029-shallow-wrappers-kept.md)              | 客户端浅层包装保持现状：删除测试判定不复用折叠   | 已采纳 |
+| [0043](0043-game-view-floating-layout.md)          | 对局界面改为浮层布局：顶栏 + 铺满画布 + 浮层面板 | 已采纳 |
+| [0041](0041-snapshot-gate-decision-narrowing.md)   | 快照门禁决策类型按裁决能力收窄                   | 已采纳 |
 
 ### 词汇与提示
 
-| 编号                                              | 主题                                         | 状态   |
-| :------------------------------------------------ | :------------------------------------------- | :----- |
-| [0001](0001-progressive-hint-interval.md)         | 逐步提示间隔用毫秒计算、不再按秒向下取整     | 已采纳 |
-| [0004](0004-vocabulary-default-package.md)        | 词库默认包按「词数 + id」确定性选择          | 已采纳 |
-| [0013](0013-vocabulary-level-config-and-hints.md) | 词库难度级配置加载期解析与提示字段改版       | 已采纳 |
-| [0032](0032-drawer-hint-full-and-progressive.md)  | 画家模式完整提示、猜词者逐渐披露（wordHint） | 已采纳 |
+| 编号                                              | 主题                                         | 状态                   |
+| :------------------------------------------------ | :------------------------------------------- | :--------------------- |
+| [0001](0001-progressive-hint-interval.md)         | 逐步提示间隔用毫秒计算、不再按秒向下取整     | 已采纳                 |
+| [0004](0004-vocabulary-default-package.md)        | 词库默认包按「词数 + id」确定性选择          | 已采纳                 |
+| [0013](0013-vocabulary-level-config-and-hints.md) | 词库难度级配置加载期解析与提示字段改版       | 已采纳                 |
+| [0032](0032-drawer-hint-full-and-progressive.md)  | 画家模式完整提示、猜词者逐渐披露（wordHint） | 已废弃（被 0042 取代） |
+| [0042](0042-remove-structured-hints.md)           | 移除结构化提示：只保留逐字遮罩               | 已采纳                 |
 
 ### 本机反馈
 

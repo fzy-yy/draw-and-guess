@@ -1,7 +1,8 @@
 <!--
-  对局统一骨架：画家与猜词者共享 HUD、画布和玩家区，仅按服务端角色快照切换权限。
-  本文件已把顶栏、得分条、聊天区、工具栏与阶段遮罩拆为 components/game/ 下的子组件，
-  这里仅保留画布区、弹窗编排与浏览器级状态（全屏/弹窗开关/颜色线宽工具）。
+  对局统一骨架（浮层布局）：画家与猜词者共享顶栏、铺满画布与浮层面板，仅按服务端角色快照切换权限。
+  结构为「固定顶栏 + 铺满画布（黑色描边 / 圆角 / 极微边距）+ 可拖动浮层面板 + 底部横向工具条」，
+  取代旧的 3×3 网格；画布、浮层与工具条的定位/交互分别拆入 components/game/ 下的子组件。
+  本文件只保留画布装配、弹窗编排与浏览器级状态（全屏/弹窗开关/颜色线宽工具）。
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
@@ -13,12 +14,14 @@ import { EVENTS, type FillCommand, type Stroke, type StrokeAck } from '@draw-gue
 import { useGameStore } from '@/stores/game'
 import { AppButton, ConfirmDialog } from '@/components/common'
 import {
+  CanvasToolbar,
   ChatPanel,
-  DrawingToolbar,
+  FloatingPanel,
   GameCanvas,
   GameHud,
   PhaseOverlay,
-  ScoreStrip,
+  PlayerPanel,
+  type PanelPosition,
 } from '@/components/game'
 import { useGameHud } from '@/composables/useGameHud'
 import { useShortcuts } from '@/composables/useShortcuts'
@@ -35,9 +38,9 @@ const store = useGameStore()
 // 触发条件与防误触发取舍见 composables/useGuessConfetti.ts 与 docs/adr/0031-*）。
 useGuessConfetti(store)
 // ---- 对局 HUD（计时/进度/权限/排行等，含 ticker 生命周期，见 composables/useGameHud.ts）----
-// 整局只在此处调用一次 useGameHud，把派生值（剩余秒数/进度/画家/排位）作为 props 下发给
+// 整局只在此处调用一次 useGameHud，把派生值（剩余秒数/进度/排位）作为 props 下发给
 // GameHud/PhaseOverlay 等子组件，避免各组件各自开启 ticker 造成重复刷新。
-const { game, secondsLeft, progress, drawer, rankings, phaseLabel, canGuess } = useGameHud(store)
+const { game, secondsLeft, progress, rankings, phaseLabel, canGuess } = useGameHud(store)
 // ---- 画板快捷键与工具切换（含 keydown 监听生命周期，见 composables/useShortcuts.ts）----
 const { tool } = useShortcuts(store)
 
@@ -48,6 +51,19 @@ const showClearConfirm = ref(false) // 清空确认弹窗
 const showEndConfirm = ref(false) // 提前结束确认弹窗
 const showLeaveGameConfirm = ref(false) // 设置页退出对局确认弹窗
 const showGameSettings = ref(false) // 对局内设置弹窗
+
+// ---- 浮层面板与工具条的本地状态（仅本机 UI，刷新即重置；位置为相对画布容器的百分比）----
+const playersOpen = ref(true)
+const chatOpen = ref(true)
+const toolsOpen = ref(true)
+// 玩家贴左缘、聊天贴右缘（24cqw 宽 ⇒ 左边界默认在 76%）；高度由 h-full 撑满画布。
+const playersPosition = ref<PanelPosition>({ x: 0, y: 0 })
+const chatPosition = ref<PanelPosition>({ x: 76, y: 0 })
+
+/** 仅画家在作画阶段可绘制：驱动画布与底部工具条的启用，非画家/非该阶段整组置灰。 */
+const canDraw = computed(() => store.isDrawer && store.room?.phase === 'drawing')
+/** 底部工具条可见性：仅画家且顶栏「工具」开关为开。 */
+const showToolbar = computed(() => store.isDrawer && toolsOpen.value)
 
 // 全屏以根游戏舞台为目标，确保 Toast、弹窗和竖屏提示仍包含在全屏上下文中。
 // 目标元素用 computed 从 DOM 实时取 .game-stage（它位于 App.vue 根舞台，非本组件根元素），
@@ -100,67 +116,88 @@ function handleFullscreenToggle(): void {
 </script>
 
 <template>
-  <!-- 对局主骨架：仅在房间存在且对局未结束时渲染；
-       画框以外区域统一使用 paper（近白）语义色，与画布白底协调 -->
-  <main
-    v-if="store.room && game"
-    class="grid h-full grid-cols-[17%_minmax(0,61%)_22%] grid-rows-[11%_minmax(0,76%)_13%] bg-paper"
-  >
-    <!-- 顶栏 HUD：回合数、当前画家、答案、计时器、网络状态与暂停按钮 -->
+  <!-- 对局主骨架：仅在房间存在且对局未结束时渲染；画框以外区域统一使用 paper（近白）语义色 -->
+  <main v-if="store.room && game" class="relative flex h-full flex-col bg-paper">
+    <!-- 固定顶栏：回合 / 面板开关 / 题目 / 倒计时 / 网络 / 暂停·设置·全屏 -->
     <GameHud
+      v-model:players-open="playersOpen"
+      v-model:chat-open="chatOpen"
+      v-model:tools-open="toolsOpen"
       :is-fullscreen="isFullscreen"
       :game="game"
       :seconds-left="secondsLeft"
       :progress="progress"
-      :drawer="drawer"
+      :show-tools="store.isDrawer"
       @settings="showGameSettings = true"
       @toggle-fullscreen="handleFullscreenToggle"
     />
 
-    <!-- 左侧玩家得分条：列出全部成员、得分与画家/猜中标记 -->
-    <ScoreStrip />
-
-    <!-- 中央画布区：实时画板 + 非作画阶段的状态提示遮罩 -->
-    <section
-      class="relative min-w-0 min-h-0 m-[1.5cqh_1cqw] overflow-hidden border-[0.3cqh] border-navy bg-white shadow-block"
-    >
-      <GameCanvas
-        v-model:width="width"
-        :round-id="game.roundId"
-        :strokes="game.strokes"
-        :undone-stroke-ids="game.undoneStrokeIds"
-        :last-sequence="game.lastSequence"
-        :can-draw="store.isDrawer && store.room.phase === 'drawing'"
-        :tool="tool"
-        :color="color"
-        :revision="game.drawingRevision"
-        @stroke="submitStroke"
-        @stroke-failure="recoverAuthoritativeDrawing"
-        @fill="submitFill"
-        @fill-failure="recoverAuthoritativeDrawing"
-      />
-      <!-- 画布状态遮罩：选词/结算/暂停等非作画阶段覆盖在画布上 -->
+    <!-- 画布铺满顶栏以下整块：黑色描边 + 圆角（与浮层一致）+ 极微边距；
+         浮层面板与底部工具条都相对此容器定位与夹取 -->
+    <div class="min-h-0 flex-1 p-[0.7cqh_0.7cqw]">
       <div
-        v-if="store.room.phase !== 'drawing'"
-        class="absolute inset-0 flex flex-col items-center justify-center gap-[0.6cqh] bg-paper text-muted pointer-events-none"
+        class="relative h-full overflow-hidden rounded-[0.7em] border-[0.35cqh] border-black bg-white"
       >
-        <Brush class="h-[7cqh] w-[7cqh] text-blue" /><b class="text-fs-20">{{ phaseLabel }}</b>
-        <span v-if="store.room.phase === 'choosing_word' && !store.isDrawer" class="text-fs-12">{{
-          strings.game.choosingHint
-        }}</span>
+        <GameCanvas
+          v-model:width="width"
+          :round-id="game.roundId"
+          :strokes="game.strokes"
+          :undone-stroke-ids="game.undoneStrokeIds"
+          :last-sequence="game.lastSequence"
+          :can-draw="canDraw"
+          :tool="tool"
+          :color="color"
+          :revision="game.drawingRevision"
+          @stroke="submitStroke"
+          @stroke-failure="recoverAuthoritativeDrawing"
+          @fill="submitFill"
+          @fill-failure="recoverAuthoritativeDrawing"
+        />
+
+        <!-- 画布状态遮罩：选词/结算/暂停等非作画阶段覆盖在画布上（猜词者在画家选词时也能看到状态） -->
+        <div
+          v-if="store.room.phase !== 'drawing'"
+          class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-[0.6cqh] bg-paper text-muted"
+        >
+          <Brush class="h-[7cqh] w-[7cqh] text-blue" /><b class="text-fs-20">{{ phaseLabel }}</b>
+          <span v-if="store.room.phase === 'choosing_word' && !store.isDrawer" class="text-fs-12">{{
+            strings.game.choosingHint
+          }}</span>
+        </div>
+
+        <!-- 浮层玩家面板（贴左缘，默认打开，可拖动 / 关闭） -->
+        <FloatingPanel
+          v-model:open="playersOpen"
+          v-model:position="playersPosition"
+          :title="strings.game.playersPanelTitle"
+          width-class="w-[10cqw]"
+          height-class="h-full"
+        >
+          <PlayerPanel />
+        </FloatingPanel>
+
+        <!-- 浮层聊天面板（贴右缘，默认打开，可拖动 / 关闭） -->
+        <FloatingPanel
+          v-model:open="chatOpen"
+          v-model:position="chatPosition"
+          :title="strings.game.chatPanelTitle"
+          width-class="w-[24cqw]"
+          height-class="h-full"
+        >
+          <ChatPanel :can-guess="canGuess" />
+        </FloatingPanel>
+
+        <!-- 底部横向工具条：浮在画布底部居中，仅画家且开关为开时显示 -->
+        <CanvasToolbar
+          v-model:tool="tool"
+          v-model:color="color"
+          v-model:width="width"
+          :visible="showToolbar"
+          :can-draw="canDraw"
+          @clear="showClearConfirm = true"
+        />
       </div>
-    </section>
-
-    <!-- 右侧聊天区：消息列表 + 猜词输入 / 安全预设短语 -->
-    <ChatPanel :can-guess="canGuess" />
-
-    <!-- 底部绘图工具栏：工具 / 颜色 / 线宽 / 历史操作（非画家时整条禁用） -->
-    <DrawingToolbar
-      v-model:tool="tool"
-      v-model:color="color"
-      v-model:width="width"
-      @clear="showClearConfirm = true"
-    />
+    </div>
 
     <!-- 阶段遮罩：开局倒计时 / 画家选词 / 暂停 / 回合结算 / 最终结算 -->
     <PhaseOverlay

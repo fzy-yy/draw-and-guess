@@ -6,7 +6,7 @@ import { strings } from '@draw-guess/strings'
 import { useGameHud } from '@/composables/useGameHud'
 import GameHud from '@/components/game/GameHud.vue'
 import PhaseOverlay from '@/components/game/PhaseOverlay.vue'
-import ScoreStrip from '@/components/game/ScoreStrip.vue'
+import PlayerPanel from '@/components/game/PlayerPanel.vue'
 import { useGameStore } from '@/stores/game'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
@@ -107,14 +107,11 @@ describe('useGameHud 角色与计时派生', () => {
 })
 
 describe('GameHud 与 PhaseOverlay 角色差异', () => {
-  it('画家可切换答案明文，猜词者始终只看到遮罩', async () => {
+  it('画家可切换答案明文，猜词者始终只看到遮罩且顶栏提供面板开关', async () => {
     const roomStore = useRoomStore()
     const session = useSessionStore()
-    // 画家模式完整显示「提示 + 答案」；画家切到猜词者模式、或猜词者本人，只按时间逐渐披露提示
-    roomStore.room = createRoomFixture('drawing', {
-      wordHint: '完整提示',
-      revealedHints: ['渐显提示'],
-    })
+    // 结构化提示已移除：画家只有「明文 / 遮罩」两态，猜词者恒为服务端遮罩（见 ADR-0042）。
+    roomStore.room = createRoomFixture('drawing')
     session.playerId = HOST_ID
     useSettingsStore().settings.drawerDefaultReveal = false
     const game = roomStore.room.game!
@@ -123,27 +120,33 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
       game,
       secondsLeft: 30,
       progress: 0.5,
-      drawer: roomStore.room.members[0],
+      showTools: true,
+      playersOpen: true,
+      chatOpen: true,
+      toolsOpen: true,
     }) as VueWrapper
 
-    // 猜词者模式：答案遮罩 + 已披露提示
+    // 顶栏只保留回合/题目/系统操作与面板开关，不再有当前画家或提示区
+    expect(wrapper.find(`[aria-label="${strings.game.togglePlayers}"]`).exists()).toBe(true)
+    expect(wrapper.find(`[aria-label="${strings.game.toggleChat}"]`).exists()).toBe(true)
+    expect(wrapper.find(`[aria-label="${strings.game.toggleTools}"]`).exists()).toBe(true)
+
+    // 画家默认按本地偏好显示遮罩
     expect(wrapper.text()).toContain(game.answerMask)
     expect(wrapper.text()).not.toContain(game.answer)
-    expect(wrapper.text()).toContain('渐显提示')
-    expect(wrapper.text()).not.toContain('完整提示')
 
-    // 画家模式：答案明文 + 完整提示
+    // 点击题目胶囊切换为明文
     await wrapper.get(`[aria-label="${strings.game.toggleAnswerVisibilityAria}"]`).trigger('click')
     expect(wrapper.text()).toContain(game.answer)
-    expect(wrapper.text()).toContain('完整提示')
 
-    // 猜词者本人：答案遮罩 + 逐渐披露提示
+    // 猜词者本人：题目不可点击，恒为遮罩
     session.playerId = GUEST_ID
     await nextTick()
     expect(wrapper.text()).toContain(game.answerMask)
     expect(wrapper.text()).not.toContain(game.answer)
-    expect(wrapper.text()).toContain('渐显提示')
-    expect(wrapper.text()).not.toContain('完整提示')
+    expect(wrapper.find(`[aria-label="${strings.game.toggleAnswerVisibilityAria}"]`).exists()).toBe(
+      false,
+    )
     wrapper.unmount()
   })
 
@@ -217,9 +220,10 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
 
     roomStore.room.members[1]!.rematchReady = true
     await nextTick()
-    const strip = mountWithPinia(ScoreStrip, {}) as VueWrapper
-    expect(strip.text()).toContain(strings.status.roleRematchReady)
-    strip.unmount()
+    // 后台成员身份由玩家面板展示（原 ScoreStrip 已被 PlayerPanel 取代，见 ADR-0043）。
+    const panel = mountWithPinia(PlayerPanel, {}) as VueWrapper
+    expect(panel.text()).toContain(strings.status.roleRematchReady)
+    panel.unmount()
     overlay.unmount()
   })
 })

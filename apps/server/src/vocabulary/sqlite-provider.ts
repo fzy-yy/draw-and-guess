@@ -12,7 +12,7 @@
  *   level_config（难度 → 时限/权重映射，数组与对象统一存 JSON 文本）；
  * - words(id, text, category, difficulty, drawability, enabled, aliases, hint, updated_at)
  *   —— 单词条只有一个分类（category）；可绘制性 drawability 为词库作者标注（1~5）；
- *     hint 为对局结构化提示文案（≤10 字，空串合法）；别称以 JSON 数组文本存储；
+ *     hint 为词库元数据文案（≤10 字，空串合法），Provider 仅供解析与校验，不再进入对局；别称以 JSON 数组文本存储；
  *     enabled 为 0/1（1=进入候选池）；逐词 time_limit/score_weight 已废弃，
  *     由本 Provider 在加载期按 difficulty 查 level_config 派生到词条字段；
  *     逐词 updated_at 仅是词库作者的编辑时间，不进入运行时 DTO。

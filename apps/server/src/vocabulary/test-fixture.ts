@@ -112,7 +112,7 @@ export function createMinimalVocabularyDb(
         // 可绘制性在 1~5 内轮换，覆盖星级展示的各档位
         spec.drawability,
         '[]',
-        // 提示文案与正式词库同款形态（≤10 字），供 E2E 验证结构化提示链路
+        // 提示文案与正式词库同款形态（≤10 字），词库 Provider 仍会解析并校验该列
         spec.hint,
       )
     }

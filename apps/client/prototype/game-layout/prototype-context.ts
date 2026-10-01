@@ -7,7 +7,6 @@ import type {
   DrawingCommand,
   FillCommand,
   GameView,
-  RoomMember,
   Stroke,
   StrokeAck,
   ToolKind,
@@ -15,15 +14,11 @@ import type {
 import type { FillAck } from '@/composables/useFillSession'
 import type { RequestResult } from '@/stores/request'
 
-/** 布局变体标识（URL ?variant= 与切换条共用）。 */
-export type PrototypeVariantKey = 'A' | 'B' | 'C'
-
 export interface PrototypeGameContext {
   /** HUD 派生值（useGameHud，全舞台唯一 ticker）。 */
   game: ComputedRef<GameView | undefined>
   secondsLeft: ComputedRef<number>
   progress: ComputedRef<number>
-  drawer: ComputedRef<RoomMember | undefined>
   canGuess: ComputedRef<boolean>
   /** 画板工具状态（变体通过 v-model 绑定到工具栏与画布）。 */
   tool: Ref<ToolKind>

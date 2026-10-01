@@ -69,13 +69,12 @@ describe('房间规则与高级设置', () => {
     expect(wrapper.text()).toContain(strings.room.extraGuessSecondsField)
     expect(wrapper.text()).toContain(strings.room.toggleShowWordLength)
     expect(wrapper.text()).toContain(strings.room.toggleProgressiveHints)
-    expect(wrapper.text()).toContain(strings.room.toggleStructuredHints)
-    expect(wrapper.text()).toContain(strings.room.hintStartRatioField)
     expect(wrapper.text()).toContain(strings.room.guessBaseScoreField)
     expect(wrapper.text()).toContain(strings.room.togglePause)
-    // 滑块：轮数/选词时间/候选数 + 回退时长/额外时间/提示时机/基础分 = 7；开关 6
-    expect(wrapper.findAll('input[type="range"]')).toHaveLength(7)
-    expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(6)
+    // 滑块：轮数/选词时间/候选数 + 回退时长/额外时间/基础分 = 6；开关 5
+    //（结构化提示与提示出现时机已随 ADR-0042 一并移除）
+    expect(wrapper.findAll('input[type="range"]')).toHaveLength(6)
+    expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(5)
 
     // 额外猜词时间滑块区间：0~90、步进 5（来自配置，改上限只需改协议常量）；全场唯一 min=0 的滑块
     const extraSlider = wrapper

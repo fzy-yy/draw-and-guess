@@ -77,7 +77,7 @@ test.describe('05 - 对局控制、暂停与完整生命周期 (Game Lifecycle &
 
       await candidate.lobby.joinNextGame(roomName)
       const inGameCandidate = candidate.page
-        .getByLabel('玩家得分')
+        .getByLabel('玩家', { exact: true })
         .locator('article:has-text("下一局玩家")')
       await expect(inGameCandidate.getByText('0 分', { exact: true })).toBeVisible()
 

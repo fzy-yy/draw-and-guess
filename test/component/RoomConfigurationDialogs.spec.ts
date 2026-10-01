@@ -124,11 +124,9 @@ describe('RulesDialog 完整规则字段', () => {
       strings.room.toggleAllowWordReroll,
       strings.room.drawFallbackField,
       strings.room.extraGuessSecondsField,
-      strings.room.hintStartRatioField,
       strings.room.guessBaseScoreField,
       strings.room.toggleShowWordLength,
       strings.room.toggleProgressiveHints,
-      strings.room.toggleStructuredHints,
       strings.room.togglePause,
     ]
     for (const label of expectedLabels)

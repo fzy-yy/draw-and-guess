@@ -24,8 +24,8 @@
 | 渲染态 / 提交态两把锁（render / submit lock）            | 渲染态＝重放里有填充在算（归画布重放状态机）；提交态＝本地填充待权威修订追平（归 useFillSession）。合成 canFill 门禁                                                      | ADR-0009、ADR-0018                                     |
 | 填充降级（fill degradation）                             | Worker 失败终止重建 + 同一 ImageData 主线程降级恰一次；彻底失败请求权威快照                                                                                               | ADR-0009、`flood-fill-worker.ts`                       |
 | 笔画批次（pending stroke batch）                         | 一笔按 maxPointsPerBatch 分批上送、序号接续（startPointIndex）；批失败即该笔回滚并请求权威快照                                                                            | `useStrokeSession.ts`                                  |
-| 词库包 / 难度级配置（vocabulary package / level_config） | 词条按难度派生时限与权重（加载期查 level_config）；hint 揭示结构提示，空回退 category                                                                                     | ADR-0013、`vocabulary/`                                |
-| 提示揭示节奏（hint reveal schedule）                     | 按 hintStartRatio 与渐进间隔逐格揭示 hint 槽位；选词卡对画家不展示 hint                                                                                                   | ADR-0001、`hint-scheduler.ts`                          |
+| 词库包 / 难度级配置（vocabulary package / level_config） | 词条按难度派生时限与权重（加载期查 level_config）；hint 仅为词库元数据，不再进入对局                                                                                      | ADR-0013、`vocabulary/`                                |
+| 遮罩揭示节奏（mask reveal schedule）                     | 按渐进间隔逐格揭示答案字符（保留末尾非标点字符，避免直接泄露答案）；结构化提示已移除                                                                                      | ADR-0001、`hint-scheduler.ts`                          |
 | 成员事实（member facts）                                 | 房间成员状态的单一具名口径：占席 / 可玩 / 在线可玩 / 候场可玩 / 进榜，外加连接三态与阶段标称时长；计分、房主迁移、选画家、自动暂停与快照共用                              | ADR-0023、`domain/room/member-facts.ts`                |
 | 阶段事实（phase facts）                                  | 阶段分类白名单的单一具名口径：对局中（含暂停）/ 可暂停 / 可结算三组谓词；阶段标称时长仍归成员事实；时序写入（含暂停现场与结算事实）统一归 RoundMachine                    | ADR-0040、`domain/room/phase-facts.ts`                 |
 | 占席 vs 可玩（occupiesSeat / isActivePlayer）            | 占席＝未离局（含观战与离局占位，用于容量与大厅人数）；可玩＝非观战且未离局（用于准备 / 画家 / 计分）                                                                      | `domain/room/member-facts.ts`                          |
@@ -37,7 +37,9 @@
 | 客户端房间事实（client room facts）                      | 阶段文案、可玩成员判定与玩家人数选项的单一具名口径（与服务端 member-facts 对齐）；榜单与占席数是不同语义，不复用                                                          | ADR-0028、`utils/room-facts.ts`、`utils/phase-text.ts` |
 | 浅层包装（shallow wrappers）                             | 图标按钮与视觉包装组件（Base/Icon/Round/Tool、HudPill/OverlayCard/RuleRow/StageHeader/SectionHeader）是为消除调用点长串而抽取的；删除测试判定删除只会搬移复杂度，保持现状 | ADR-0029                                               |
 | 猜中礼花（guess confetti）                               | 本机反馈：`me.guessed` 严格跃迁（false→true）触发一次全屏礼花，不枚举阶段；`prev===false` 防止重载补放                                                                    | ADR-0031、ADR-0033、`useGuessConfetti.ts`              |
-| 结构化提示（structured hint）                            | 提示来源统一为词条 hint（空回退 category）：画家在「画家模式」完整显示提示（画家专属 `wordHint`）与答案；猜词者（含画家切到猜词者模式）按时间逐渐披露 `revealedHints[0]`  | ADR-0032、`GameHud.vue`                                |
+| 逐字遮罩（progressive mask）                             | 题目遮罩按节奏逐格揭示答案字符，是猜词者唯一的题目线索；结构化提示（词条 hint 文案）已从对局链路移除                                                                      | ADR-0042、ADR-0001                                     |
+| 浮层面板（floating panel）                               | 对局界面覆盖画布、可拖动可关闭的玩家/聊天面板；纵向撑满画布高，顶栏开关与面板内关闭双向同步                                                                               | ADR-0043                                               |
+| 底部工具条（bottom toolbar）                             | 浮在画布底部、单行 icon 化的绘图工具条；仅画笔大小显示数值，可由顶栏开关整体收起                                                                                          | ADR-0043                                               |
 
 ## 待打磨（deliberately unresolved）
 

@@ -18,8 +18,6 @@ export const roomSettingsDefaults = {
   optionCount: 3,
   showWordLength: true,
   progressiveHints: true,
-  structuredHintsEnabled: true,
-  hintStartRatio: 0.35,
   guessBaseScore: 300,
   /** 额外猜词时间：默认 0（不额外增加），叠加在难度派生时限之上。 */
   extraGuessSeconds: 0,
@@ -70,9 +68,6 @@ export const game = {
   warningSeconds: 10,
   /** 逐步提示时间窗口比例：在作画时间的后半程开始逐步揭示字符（0.5 = 后 50% 时间开始） */
   progressiveHintRatio: 0.5,
-  // —— 房间规则可设置项的区间与步进（默认值一律取 roomSettingsDefaults）——
-  /** 结构化提示开始时机滑块的合法区间（剩余时间比例 10%~90%，步进 5%）。 */
-  hintStartRatioRange: { ...ROOM_RULE_LIMITS.hintStartRatio, step: 0.05 },
   // 猜词比较固定为：NFKC 规范化 → 去首尾空白 → 折叠连续空白 → 忽略拉丁大小写（由 shared normalizeAnswer 内置）
   score: {
     defaultWordWeight: 5, // 词条 score_weight 缺省时的计分基准

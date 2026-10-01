@@ -1,6 +1,6 @@
 <!--
-  可拖动的原型面板窗口：所有布局变体共用交互骨架，但分别决定大小、位置、外观与入场方向。
-  面板状态由调用者持有；关闭按钮与顶栏图标都写同一个 open ref，所以两处能互相同步。
+  可拖动的原型面板窗口：标题栏拖动 + 关闭，显隐统一为「淡入淡出 + 轻微缩放」。
+  面板状态由调用者持有；顶栏开关与面板内关闭按钮都写同一个 open ref，所以两处能互相同步。
   拖动只绑定标题栏，正文里的输入框、聊天滚动和画布绘制不会被抢走指针事件。
 -->
 <script setup lang="ts">
@@ -16,37 +16,48 @@ export interface PanelPosition {
   y: number
 }
 
-type PanelMotion = 'scale' | 'from-left' | 'from-right' | 'from-bottom'
-type PanelAppearance = 'window' | 'drawer' | 'compact'
+type PanelAppearance = 'window' | 'hud'
 type TransitionElement = globalThis.Element
 
 const open = defineModel<boolean>('open', { required: true })
-const position = defineModel<PanelPosition>('position', { required: true })
+const position = defineModel<PanelPosition>('position')
 
 const props = withDefaults(
   defineProps<{
     title: string
-    widthClass: string
-    heightClass: string
-    motion?: PanelMotion
+    /** 面板尺寸类（宽 / 高，随舞台容器单位等比缩放）。 */
+    widthClass?: string
+    heightClass?: string
+    /** 外观：window 不透明白卡 / hud 半透明纸感。 */
     appearance?: PanelAppearance
   }>(),
-  { motion: 'scale', appearance: 'window' },
+  { widthClass: '', heightClass: '', appearance: 'window' },
 )
 
 const panelElement = ref<HTMLElement>()
 const zIndex = ref(35)
 const dragging = ref(false)
+
+const appearanceClass = computed(() =>
+  props.appearance === 'hud'
+    ? 'border-white/70 bg-white/55 rounded-[0.7em] shadow-float backdrop-blur-[0.35cqh]'
+    : 'border-navy bg-paper/95 rounded-[0.7em] shadow-float',
+)
+
 const rootClass = computed(() =>
   cn(
     'absolute flex min-h-0 flex-col overflow-hidden border-[0.28cqh] pointer-events-auto',
     props.widthClass,
     props.heightClass,
-    props.appearance === 'window' && 'rounded-[0.7em] border-navy bg-paper/95 shadow-float',
-    props.appearance === 'drawer' && 'rounded-[0.45em] border-yellow bg-paper/98 shadow-block',
-    props.appearance === 'compact' && 'rounded-[0.9em] border-blue bg-white/95 shadow-float',
+    appearanceClass.value,
   ),
 )
+
+const shellStyle = computed<Record<string, string>>(() => ({
+  left: `${position.value?.x ?? 0}%`,
+  top: `${position.value?.y ?? 0}%`,
+  zIndex: String(zIndex.value),
+}))
 
 let highestZIndex = 35
 let dragOrigin:
@@ -82,8 +93,8 @@ function beginDrag(event: PointerEvent): void {
   dragOrigin = {
     pointerX: event.clientX,
     pointerY: event.clientY,
-    positionX: position.value.x,
-    positionY: position.value.y,
+    positionX: position.value?.x ?? 0,
+    positionY: position.value?.y ?? 0,
   }
 }
 
@@ -115,27 +126,17 @@ function endDrag(event: PointerEvent): void {
   dragOrigin = undefined
 }
 
-/** 不引入动效依赖：WAAPI 让三个布局复用同一动画接口、各自选择不同入场方向。 */
-function motionTransform(): string {
-  switch (props.motion) {
-    case 'from-left':
-      return 'translateX(-2.5cqw) scale(0.98)'
-    case 'from-right':
-      return 'translateX(2.5cqw) scale(0.98)'
-    case 'from-bottom':
-      return 'translateY(2.5cqh) scale(0.98)'
-    case 'scale':
-      return 'scale(0.92)'
-  }
-}
-
+/**
+ * 统一显隐动画：淡入淡出 + 轻微缩放（不使用 WAAPI 之外的方向位移，
+ * 保证所有面板的进出场手感一致）。css=false 让 Transition 完全交给 WAAPI。
+ */
 function enter(element: TransitionElement, done: () => void): void {
   const animation = element.animate(
     [
-      { opacity: 0, transform: motionTransform() },
-      { opacity: 1, transform: 'translate(0, 0) scale(1)' },
+      { opacity: 0, transform: 'scale(0.94)' },
+      { opacity: 1, transform: 'scale(1)' },
     ],
-    { duration: 210, easing: 'cubic-bezier(0.2, 0.75, 0.25, 1)' },
+    { duration: 180, easing: 'cubic-bezier(0.2, 0.75, 0.25, 1)' },
   )
   void animation.finished.then(done, done)
 }
@@ -143,10 +144,10 @@ function enter(element: TransitionElement, done: () => void): void {
 function leave(element: TransitionElement, done: () => void): void {
   const animation = element.animate(
     [
-      { opacity: 1, transform: 'translate(0, 0) scale(1)' },
-      { opacity: 0, transform: motionTransform() },
+      { opacity: 1, transform: 'scale(1)' },
+      { opacity: 0, transform: 'scale(0.94)' },
     ],
-    { duration: 160, easing: 'ease-in' },
+    { duration: 140, easing: 'ease-in' },
   )
   void animation.finished.then(done, done)
 }
@@ -158,7 +159,7 @@ function leave(element: TransitionElement, done: () => void): void {
       v-if="open"
       ref="panelElement"
       :class="rootClass"
-      :style="{ left: `${position.x}%`, top: `${position.y}%`, zIndex }"
+      :style="shellStyle"
       @pointerdown="bringToFront"
     >
       <header

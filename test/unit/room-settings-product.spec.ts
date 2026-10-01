@@ -33,8 +33,6 @@ describe('房间规则产品闭环', () => {
       { optionCount: 2.5 },
       { showWordLength: 'yes' },
       { progressiveHints: 1 },
-      { structuredHintsEnabled: null },
-      { hintStartRatio: 0.95 },
       { guessBaseScore: 25 },
       { extraGuessSeconds: -5 },
       { extraGuessSeconds: 91 },

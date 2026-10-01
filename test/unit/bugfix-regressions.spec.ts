@@ -24,9 +24,6 @@ describe('缺陷修复回归：逐步提示间隔不再坍缩为零', () => {
       progressiveHints: true,
       wordText: '长'.repeat(120),
       revealedCount: 0,
-      structuredHintsEnabled: false,
-      structuredHintPending: false,
-      hintStartRatio: 0.35,
     })
     expect(schedule.progressiveDelays.length).toBe(60)
     // 每个 delay 互不相同且递增（首提示在后半窗起点，末提示临近回合结束）
@@ -44,25 +41,8 @@ describe('缺陷修复回归：逐步提示间隔不再坍缩为零', () => {
       progressiveHints: true,
       wordText: 'a，b，c，d',
       revealedCount: 0,
-      structuredHintsEnabled: false,
-      structuredHintPending: false,
-      hintStartRatio: 0.35,
     })
     expect(schedule.progressiveDelays.length).toBe(3)
-  })
-
-  it('结构化提示在剩余不足时以 0 延迟立即揭示（合并原不可达 else）', () => {
-    const schedule = createHintSchedule({
-      totalMs: 90_000,
-      currentRemainingMs: 3_000, // 剩余已不足 hintStartRatio 阈值
-      progressiveHints: false,
-      wordText: '词',
-      revealedCount: 0,
-      structuredHintsEnabled: true,
-      structuredHintPending: true,
-      hintStartRatio: 0.35,
-    })
-    expect(schedule.structuredDelay).toBe(0)
   })
 })
 

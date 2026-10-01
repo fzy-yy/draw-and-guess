@@ -16,25 +16,38 @@ test.describe('03 - 对局画板与绘图工具 (Game Drawing & Canvas)', () => 
       await expect(drawer.page.locator('canvas.bg-white')).toBeVisible()
       await expect(guesser.page.locator('canvas.bg-white')).toBeVisible()
 
-      // 3. 画家使用画笔在画布绘制线段
+      // 3. 新浮层布局：底部工具条与浮层面板均可由顶栏开关收起 / 重新打开
+      await expect(drawer.game.toolbar).toBeVisible()
+      await drawer.game.toggleToolbar()
+      await expect(drawer.game.toolbar).toBeHidden()
+      await drawer.game.toggleToolbar()
+      await expect(drawer.game.toolbar).toBeVisible()
+
+      await expect(drawer.game.playersPanel).toBeVisible()
+      await drawer.game.togglePlayersPanel()
+      await expect(drawer.game.playersPanel).toBeHidden()
+      await drawer.game.togglePlayersPanel()
+      await expect(drawer.game.playersPanel).toBeVisible()
+
+      // 4. 画家使用画笔在画布绘制线段
       await drawer.game.drawStroke([
         { x: 0.2, y: 0.2 },
         { x: 0.4, y: 0.4 },
         { x: 0.6, y: 0.2 },
       ])
 
-      // 4. 画家切换为橡皮擦并擦除一部分
+      // 5. 画家切换为橡皮擦并擦除一部分
       await drawer.game.selectTool('eraser')
       await drawer.game.drawStroke([
         { x: 0.35, y: 0.35 },
         { x: 0.45, y: 0.45 },
       ])
 
-      // 5. 撤销与重做
+      // 6. 撤销与重做
       await drawer.game.undo()
       await drawer.game.redo()
 
-      // 6. 清空画板
+      // 7. 清空画板
       await drawer.game.clearCanvas()
     } finally {
       await host.close()
@@ -64,7 +77,8 @@ test.describe('03 - 对局画板与绘图工具 (Game Drawing & Canvas)', () => 
       await drawer.page.waitForTimeout(500)
 
       // 2. 切换到红色色块并使用填充工具在左侧空白区 (x: 0.2, y: 0.5) 填充
-      await drawer.page.locator('button[aria-label*="#EF4444"]').click()
+      // 色块由 ColorSwatchButton 渲染为 role=button 的 label（统一选中环），不再是原生 button
+      await drawer.page.locator('[role="button"][aria-label*="#EF4444"]').click()
       await drawer.game.selectTool('fill')
       await drawer.game.clickCanvas({ x: 0.2, y: 0.5 })
 

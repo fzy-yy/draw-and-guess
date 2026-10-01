@@ -155,7 +155,7 @@ function reloadForProtocolUpdate(): void {
           >
             <!--
               倒计时数字用固定 2ch 宽度 + tabular-nums 承载：位数变化（10→9）时按钮宽度不变，
-              与画板线宽数字的防抖动方案一致（见 DrawingToolbar）。
+              与画板线宽数字的防抖动方案一致（见 CanvasToolbar 的 BrushSizeField）。
             -->
             {{ strings.common.decline
             }}<span class="inline-block min-w-[2ch] text-center tabular-nums">{{

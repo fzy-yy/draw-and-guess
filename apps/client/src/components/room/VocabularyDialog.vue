@@ -74,7 +74,6 @@ const allColumns = computed<DataTableColumn<VocabularyWord>[]>(() => [
     weight: 9,
     sortValue: (word) => word.drawability,
   },
-  { key: 'hint', label: strings.room.vocabColumnHint, weight: 14, sortValue: (word) => word.hint },
   {
     key: 'aliases',
     label: strings.room.vocabColumnAliases,

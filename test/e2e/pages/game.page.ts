@@ -12,6 +12,33 @@ export class GamePage {
     return text
   }
 
+  /** 底部绘图工具条（浮层布局版）与顶栏「绘图工具」开关。 */
+  get toolbar() {
+    return this.page.getByRole('toolbar', { name: '绘图工具栏' })
+  }
+
+  /** 浮层玩家面板（aria-label 来自玩家面板标题）。 */
+  get playersPanel() {
+    return this.page.getByLabel('玩家', { exact: true })
+  }
+
+  /** 浮层聊天面板（按标题文本定位，避免与玩家面板混淆）。 */
+  get chatPanel() {
+    return this.page.locator('section').filter({ hasText: '聊天' })
+  }
+
+  async togglePlayersPanel() {
+    await this.page.getByRole('button', { name: '玩家面板' }).click()
+  }
+
+  async toggleChatPanel() {
+    await this.page.getByRole('button', { name: '聊天面板' }).click()
+  }
+
+  async toggleToolbar() {
+    await this.page.getByRole('button', { name: '绘图工具' }).click()
+  }
+
   async selectTool(tool: 'pen' | 'eraser' | 'fill') {
     const toolMap = {
       pen: '画笔',

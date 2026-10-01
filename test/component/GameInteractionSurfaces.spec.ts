@@ -30,8 +30,8 @@ describe('GameHud 角色视图', () => {
     const user = userEvent.setup()
     const room = useRoomStore()
     const session = useSessionStore()
-    // 画家模式完整显示「提示 + 答案」；猜词者按时间逐渐披露提示
-    room.room = createRoomFixture('drawing', { wordHint: '完整提示', revealedHints: ['渐显提示'] })
+    // 结构化提示已移除：画家只有「明文 / 遮罩」两态，猜词者恒为服务端遮罩（见 ADR-0042）。
+    room.room = createRoomFixture('drawing')
     session.playerId = HOST_ID
     useSettingsStore().settings.drawerDefaultReveal = false
 
@@ -40,7 +40,10 @@ describe('GameHud 角色视图', () => {
       game: room.room.game,
       secondsLeft: 30,
       progress: 0.5,
-      drawer: room.room.members[0],
+      showTools: true,
+      playersOpen: true,
+      chatOpen: true,
+      toolsOpen: true,
     })
 
     const answerToggle = screen.getByRole('button', {
@@ -48,14 +51,10 @@ describe('GameHud 角色视图', () => {
     })
     expect(screen.getByText(room.room.game!.answerMask)).toBeTruthy()
     expect(screen.queryByText(room.room.game!.answer!)).toBeNull()
-    expect(screen.getByText('渐显提示')).toBeTruthy()
-    expect(screen.queryByText('完整提示')).toBeNull()
 
     answerToggle.focus()
     await user.keyboard('{Enter}')
     expect(screen.getByText(room.room.game!.answer!)).toBeTruthy()
-    // 画家模式显示完整提示
-    expect(screen.getByText('完整提示')).toBeTruthy()
 
     session.playerId = GUEST_ID
     await nextTick()
@@ -64,8 +63,6 @@ describe('GameHud 角色视图', () => {
     ).toBeNull()
     expect(screen.getByText(room.room.game!.answerMask)).toBeTruthy()
     expect(screen.queryByText(room.room.game!.answer!)).toBeNull()
-    expect(screen.getByText('渐显提示')).toBeTruthy()
-    expect(screen.queryByText('完整提示')).toBeNull()
   })
 
   it('暂停时仅房主能继续，普通成员仍可使用设置与全屏动作', async () => {
@@ -79,7 +76,10 @@ describe('GameHud 角色视图', () => {
       game: room.room.game,
       secondsLeft: 12,
       progress: 0.2,
-      drawer: room.room.members[0],
+      showTools: true,
+      playersOpen: true,
+      chatOpen: true,
+      toolsOpen: true,
     })
 
     expect(

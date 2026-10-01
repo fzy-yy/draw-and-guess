@@ -32,7 +32,7 @@ export const settings = {
   acceptsInvites: '接收房间邀请',
   acceptsInvitesHint: '关闭后其他玩家不能定向邀请你',
   drawerDefaultReveal: '画家默认显示答案',
-  drawerDefaultRevealHint: '开启后作画时默认显示答案与提示类别，关闭则与猜词玩家一致',
+  drawerDefaultRevealHint: '开启后作画时默认显示答案，关闭则与猜词玩家一致',
   shortcutsTitle: '画板工具快捷键',
   shortcutsIntro: '点击输入框后直接按下新按键；猜词框或其他输入控件聚焦时不会切换工具。',
   pen: '画笔',

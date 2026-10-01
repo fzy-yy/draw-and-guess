@@ -53,7 +53,8 @@ test.describe('06 - 跨浏览器、DPR 与后台标签页', () => {
         { x: 0.5, y: 0.05 },
       ])
       await drawer.page.waitForTimeout(700)
-      await drawer.page.locator('button[aria-label*="#EF4444"]').click()
+      // 色块由 ColorSwatchButton 渲染为 role=button 的 label（统一选中环），不再是原生 button
+      await drawer.page.locator('[role="button"][aria-label*="#EF4444"]').click()
       await drawer.game.selectTool('fill')
       await drawer.game.clickCanvas({ x: 0.2, y: 0.5 })
       await drawer.page.waitForTimeout(300)
@@ -96,7 +97,28 @@ test.describe('06 - 跨浏览器、DPR 与后台标签页', () => {
       ])
       expect(logicalRasters[0]).toEqual(logicalRasters[1])
       expect(logicalRasters[0]).toEqual(logicalRasters[2])
-      expect(logicalRasters[0]?.stableSampleHash).toBe('ef4444ff-1f2937ff-00000000')
+      // 固定采样行（左中 / 中 / 右中）语义：左中是被填充的红色，中点是保住的墨线（深浅随
+      // DPR 与画布尺寸略有抗锯齿差异，故只断言「有像素且为深色」，不锁死具体 RGB），
+      // 右中在封闭边界之外必须保持透明。画布铺满后逻辑宽度变化，逐像素定值会随 Chromium/Firefox
+      // 的抗锯齿实现漂移。
+      const parseChannel = (hex: string) => ({
+        r: Number.parseInt(hex.slice(0, 2), 16),
+        g: Number.parseInt(hex.slice(2, 4), 16),
+        b: Number.parseInt(hex.slice(4, 6), 16),
+        a: Number.parseInt(hex.slice(6, 8), 16),
+      })
+      const [fillSample, inkSample, outsideSample] = logicalRasters[0]!.stableSampleHash
+        .split('-')
+        .map(parseChannel)
+      expect(fillSample!.a).toBe(255)
+      expect(fillSample!.r).toBeGreaterThan(200)
+      expect(fillSample!.g).toBeLessThan(120)
+      expect(fillSample!.b).toBeLessThan(120)
+      expect(inkSample!.a).toBeGreaterThan(0)
+      expect(inkSample!.r).toBeLessThan(90)
+      expect(inkSample!.g).toBeLessThan(90)
+      expect(inkSample!.b).toBeLessThan(110)
+      expect(outsideSample!.a).toBe(0)
 
       const timer = drawer.page.locator('span:has-text("秒")').first().locator('..').locator('b')
       const before = Number(await timer.textContent())

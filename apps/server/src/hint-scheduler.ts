@@ -1,22 +1,17 @@
 import { APP_CONFIG } from './config/index.ts'
 import { isPunctuationOrSpace } from '@draw-guess/shared'
 
-/** 回合提示调度的纯计算层：不创建定时器、不修改房间状态，便于独立测试。 */
+/** 回合逐步提示调度的纯计算层：不创建定时器、不修改房间状态，便于独立测试。 */
 export interface HintScheduleInput {
   totalMs: number
   currentRemainingMs: number
   progressiveHints: boolean
   wordText: string
   revealedCount: number
-  structuredHintsEnabled: boolean
-  /** 是否存在尚未揭示的结构化提示：由调用方从答案 hint/分类与揭示状态判定后传入。 */
-  structuredHintPending: boolean
-  hintStartRatio: number
 }
 
 export interface HintSchedule {
   progressiveDelays: number[]
-  structuredDelay?: number
 }
 
 export function createHintSchedule(input: HintScheduleInput): HintSchedule {
@@ -42,10 +37,5 @@ export function createHintSchedule(input: HintScheduleInput): HintSchedule {
     }
   }
 
-  let structuredDelay: number | undefined
-  if (input.structuredHintsEnabled && input.structuredHintPending) {
-    const targetRemainingMs = Math.round(input.totalMs * input.hintStartRatio)
-    structuredDelay = Math.max(0, input.currentRemainingMs - targetRemainingMs)
-  }
-  return { progressiveDelays, ...(structuredDelay === undefined ? {} : { structuredDelay }) }
+  return { progressiveDelays }
 }

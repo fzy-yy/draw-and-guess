@@ -1,6 +1,6 @@
 <!--
   图标按钮基座（仅结构，不含视觉）：type=button + aria-label + disabled + 类名合并 + 点击转发 + 默认插槽。
-  IconButton / RoundIconButton / ToolButton 三个变体只保留各自的底座类与差异样式；
+  IconButton / RoundIconButton / SquareIconButton 三个变体只保留各自的底座类与差异样式；
   文字或更复杂内容请使用 AppButton。
 -->
 <script setup lang="ts">

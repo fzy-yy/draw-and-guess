@@ -52,7 +52,8 @@ test.describe('09 - 绘图历史上限', () => {
       await drawer.page.waitForTimeout(700)
 
       // 2. 后续填充：只填方框内部；边界一旦丢失，同一条填充会吞掉整张画布。
-      await drawer.page.locator(`button[aria-label*="${FILL_COLOR}"]`).click()
+      // 色块由 ColorSwatchButton 渲染为 role=button 的 label（统一选中环），不再是原生 button
+      await drawer.page.locator(`[role="button"][aria-label*="${FILL_COLOR}"]`).click()
       await drawer.game.selectTool('fill')
       await drawer.game.clickCanvas({ x: 0.2, y: 0.5 })
       await drawer.page.waitForTimeout(500)

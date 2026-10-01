@@ -42,31 +42,24 @@ describe('审查缺陷回归：共享规则与限频', () => {
     expect(() => enforceEventRate(player, 'guess', clock)).toThrow(GameError)
   })
 
-  it('提示调度纯函数读取房间比例并避免重复结构化提示', () => {
+  it('逐步提示调度按已揭示数量跳过已用槽位，只返回未来提示延迟', () => {
     const schedule = createHintSchedule({
       totalMs: 100_000,
       currentRemainingMs: 60_000,
       progressiveHints: true,
       wordText: '测试词语',
       revealedCount: 1,
-      structuredHintsEnabled: true,
-      structuredHintPending: true,
-      hintStartRatio: 0.35,
     })
-    expect(schedule.structuredDelay).toBe(25_000)
     expect(schedule.progressiveDelays.length).toBeGreaterThan(0)
-    expect(
-      createHintSchedule({
-        totalMs: 100_000,
-        currentRemainingMs: 60_000,
-        progressiveHints: true,
-        wordText: '测试词语',
-        revealedCount: 1,
-        structuredHintsEnabled: true,
-        structuredHintPending: false,
-        hintStartRatio: 0.35,
-      }).structuredDelay,
-    ).toBeUndefined()
+    // 已揭示 1 个后重算：调度出的延迟里不应再包含已消费的首个提示槽位。
+    const full = createHintSchedule({
+      totalMs: 100_000,
+      currentRemainingMs: 100_000,
+      progressiveHints: true,
+      wordText: '测试词语',
+      revealedCount: 0,
+    })
+    expect(schedule.progressiveDelays.length).toBe(full.progressiveDelays.length - 1)
   })
 
   it('画布 backing size 只由 CSS 宽高与逻辑分辨率决定', () => {

@@ -1,73 +1,55 @@
 <!--
-  原型底部切换条（原型工具，不属于被评估的设计本身）：
-  ← / → 循环切换布局变体（写入 ?variant=，可分享、刷新稳定），并切换「猜词者 / 画家」视角。
-  键盘 ←/→ 同样生效（输入框聚焦时不拦截，见 PrototypeApp）。
+  原型控制条（原型工具，不属于被评估的设计本身）：
+  固定在舞台外的视口底部，只保留「猜词者 / 画家」视角切换——
+  视角决定工具栏可用态、题目是否明文与聊天是否可输入，是评估布局的关键开关。
+  刻意用深色高对比与游戏界面拉开距离，一眼可辨「不是设计的一部分」。
 -->
 <script setup lang="ts">
-import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { labels } from './labels.ts'
 import type { PrototypeRole } from './prototype-store.ts'
-import type { PrototypeVariantKey } from './prototype-context.ts'
 
-defineProps<{ variant: PrototypeVariantKey; role: PrototypeRole }>()
-const emit = defineEmits<{
-  prev: []
-  next: []
-  'update:role': [role: PrototypeRole]
-}>()
+defineProps<{ role: PrototypeRole }>()
+const emit = defineEmits<{ 'update:role': [role: PrototypeRole] }>()
+
+const ROLES: ReadonlyArray<{ key: PrototypeRole; label: string }> = [
+  { key: 'guesser', label: labels.roleGuesser },
+  { key: 'drawer', label: labels.roleDrawer },
+]
+
+/** 分段控件的通用按钮样式。 */
+function segmentClass(active: boolean): string {
+  return [
+    'rounded-full px-[0.9em] py-[0.35em] text-fs-12 font-bold transition-colors',
+    active ? 'bg-white text-black' : 'text-white/70 hover:text-white',
+  ].join(' ')
+}
 </script>
 
 <template>
   <div
-    class="fixed bottom-[1.6vh] left-1/2 z-[999] flex -translate-x-1/2 items-center gap-[0.7em] rounded-full border border-white/25 bg-navy px-[1em] py-[0.55em] text-white shadow-float"
+    class="fixed bottom-[1.6vh] left-1/2 z-[999] flex -translate-x-1/2 items-center gap-[1em] whitespace-nowrap rounded-full border border-white/15 bg-black/85 px-[1.1em] py-[0.6em] text-white shadow-float backdrop-blur"
+    :aria-label="labels.controlBar"
   >
-    <button
-      type="button"
-      class="grid h-[2.2em] w-[2.2em] place-items-center rounded-full bg-white/10 hover:bg-blue"
-      :aria-label="labels.prevVariant"
-      :title="labels.prevVariant"
-      @click="emit('prev')"
-    >
-      <ChevronLeft />
-    </button>
-    <span class="flex items-baseline gap-[0.5em]">
-      <b class="text-fs-16">{{ variant }}</b>
-      <span class="text-fs-14 text-sky">{{ labels.variants[variant] }}</span>
-    </span>
-    <button
-      type="button"
-      class="grid h-[2.2em] w-[2.2em] place-items-center rounded-full bg-white/10 hover:bg-blue"
-      :aria-label="labels.nextVariant"
-      :title="labels.nextVariant"
-      @click="emit('next')"
-    >
-      <ChevronRight />
-    </button>
+    <span class="text-fs-12 font-bold tracking-wide text-white/45">{{ labels.controlBar }}</span>
 
-    <span class="mx-[0.3em] h-[1.6em] w-px bg-white/25" aria-hidden="true"></span>
+    <span class="h-[2.6cqh] w-px bg-white/20" />
 
-    <span class="text-fs-14 text-sky">{{ labels.roleLabel }}</span>
-    <span class="flex items-center gap-[0.3em]">
+    <!-- 视角切换 -->
+    <div class="flex items-center gap-[0.2em]">
+      <span class="mr-[0.3em] text-fs-12 text-white/45">{{ labels.roleLabel }}</span>
       <button
+        v-for="item in ROLES"
+        :key="item.key"
         type="button"
-        class="rounded-full px-[0.8em] py-[0.3em] text-fs-14 font-bold"
-        :class="role === 'guesser' ? 'bg-blue text-white' : 'bg-white/10 hover:bg-white/20'"
-        @click="emit('update:role', 'guesser')"
+        :class="segmentClass(role === item.key)"
+        @click="emit('update:role', item.key)"
       >
-        {{ labels.roleGuesser }}
+        {{ item.label }}
       </button>
-      <button
-        type="button"
-        class="rounded-full px-[0.8em] py-[0.3em] text-fs-14 font-bold"
-        :class="role === 'drawer' ? 'bg-blue text-white' : 'bg-white/10 hover:bg-white/20'"
-        @click="emit('update:role', 'drawer')"
-      >
-        {{ labels.roleDrawer }}
-      </button>
-    </span>
+    </div>
 
-    <span class="mx-[0.3em] h-[1.6em] w-px bg-white/25" aria-hidden="true"></span>
+    <span class="h-[2.6cqh] w-px bg-white/20" />
 
-    <span class="text-fs-12 text-sky/80">{{ labels.switcherNote }}</span>
+    <span class="text-fs-12 text-white/45">{{ labels.switcherNote }}</span>
   </div>
 </template>

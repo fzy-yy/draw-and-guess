@@ -27,16 +27,13 @@ const emit = defineEmits<{
 const store = useGameStore()
 
 /**
- * 提示规则的摘要文案：逐字遮罩与结构化提示是两个独立开关，
- * 按「双开 / 仅结构化 / 仅逐字 / 全关」四种组合展示，避免两个开关挤在一行。
+ * 提示规则的摘要文案：结构化提示已移除，只剩「逐步提示字符」一个开关，
+ * 只按开/关两态展示，不再出现任何结构化提示组合。
  */
 const hintsSummary = computed(() => {
   const settings = store.room?.settings
   if (!settings) return strings.room.hintsOff
-  if (settings.progressiveHints && settings.structuredHintsEnabled) return strings.room.hintsBothOn
-  if (settings.structuredHintsEnabled) return strings.room.hintsStructuredOnly
-  if (settings.progressiveHints) return strings.room.hintsMaskOnly
-  return strings.room.hintsOff
+  return settings.progressiveHints ? strings.room.hintsMaskOnly : strings.room.hintsOff
 })
 
 function enabled(value: boolean): string {
@@ -93,19 +90,13 @@ const summaryRows = computed(() => {
     strings.room.ruleOptionsDt,
     strings.room.ruleOptionsDd(settings.optionCount),
   )
-  if (differences.has('progressiveHints') || differences.has('structuredHintsEnabled'))
+  if (differences.has('progressiveHints'))
     rows.push({ key: 'hints', label: strings.room.ruleHintsDt, value: hintsSummary.value })
   addDifference(
     'showWordLength',
     strings.room.toggleShowWordLength,
     enabled(settings.showWordLength),
   )
-  if (settings.structuredHintsEnabled)
-    addDifference(
-      'hintStartRatio',
-      strings.room.ruleHintTimeDt,
-      strings.room.hintStartRatioUnit(settings.hintStartRatio),
-    )
   addDifference(
     'guessBaseScore',
     strings.room.guessBaseScoreField,

@@ -142,7 +142,7 @@ watch(
         </div>
       </details>
 
-      <!-- 高级设置：时长回退、提示时机与计分基数等低频项，默认收起 -->
+      <!-- 高级设置：时长回退与计分基数等低频项，默认收起 -->
       <details class="rounded-[0.7em] border-[0.16cqh] border-line bg-paper p-[1em]">
         <summary class="cursor-pointer font-bold text-blue">
           {{ strings.room.advancedSettings }}
@@ -167,15 +167,6 @@ watch(
             :hint="strings.room.extraGuessSecondsHint"
           />
           <RuleSliderField
-            v-model="localDraft.hintStartRatio"
-            :label="strings.room.hintStartRatioField"
-            :min="store.config.game.hintStartRatioRange.min"
-            :max="store.config.game.hintStartRatioRange.max"
-            :step="store.config.game.hintStartRatioRange.step"
-            :display="strings.room.hintStartRatioUnit(localDraft.hintStartRatio)"
-            :disabled="!localDraft.structuredHintsEnabled"
-          />
-          <RuleSliderField
             v-model="localDraft.guessBaseScore"
             :label="strings.room.guessBaseScoreField"
             :min="store.config.game.score.guessBaseRange.min"
@@ -191,12 +182,6 @@ watch(
             <RuleToggleField
               v-model="localDraft.progressiveHints"
               :label="strings.room.toggleProgressiveHints"
-            />
-          </div>
-          <div class="flex flex-col gap-[0.8cqh]">
-            <RuleToggleField
-              v-model="localDraft.structuredHintsEnabled"
-              :label="strings.room.toggleStructuredHints"
             />
             <RuleToggleField v-model="localDraft.allowPause" :label="strings.room.togglePause" />
           </div>

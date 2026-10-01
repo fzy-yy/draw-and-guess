@@ -320,9 +320,10 @@ for (const baseline of BASELINES) {
       await assertStageFitsViewport(gamePage, baseline)
       const hud = gamePage.locator('main > header').first()
       await assertNoOverflow(hud, '对局 HUD')
-      await assertNoOverflow(gamePage.locator('main > footer').first(), '对局工具栏')
-      await assertNoOverflow(gamePage.locator('main > aside').first(), '对局得分条')
-      await assertNoOverflow(gamePage.locator('main > aside').last(), '对局聊天区')
+      // 浮层布局：工具条是 role=toolbar，玩家/聊天面板是各自浮层内的 aside（不再固定在 main 网格列里）
+      await assertNoOverflow(gamePage.getByRole('toolbar', { name: '绘图工具栏' }), '对局工具栏')
+      await assertNoOverflow(gamePage.getByLabel('玩家', { exact: true }), '对局玩家面板')
+      await assertNoOverflow(gamePage.locator('aside:has(form:has(#guess-input))'), '对局聊天面板')
       await assertWithinStage(gamePage, gamePage.locator('form:has(#guess-input)'), '猜词输入区')
       await expect(gamePage.getByRole('button', { name: /画笔/ })).toBeVisible()
       await expect(gamePage.getByRole('button', { name: /橡皮擦/ })).toBeVisible()
@@ -334,8 +335,12 @@ for (const baseline of BASELINES) {
       await expect(gamePage.getByRole('button', { name: /设置/ })).toBeVisible()
       await expect(gamePage.getByRole('button', { name: /全屏/ })).toBeVisible()
       await expect(gamePage.locator('form:has(#guess-input) button')).toBeVisible()
-      // 画板色板属密集控件：视觉尺寸 ≥ minDenseTargetPx（其余情况随舞台等比缩放）
-      await assertDenseTarget(gamePage.locator('button[aria-label*="#"]').first(), '画板色板')
+      // 画板色板属密集控件：视觉尺寸 ≥ minDenseTargetPx（其余情况随舞台等比缩放）。
+      // 色块由 ColorSwatchButton 渲染为 role=button 的 label（统一选中环），不再是原生 button。
+      await assertDenseTarget(
+        gamePage.locator('[role="button"][aria-label*="#"]').first(),
+        '画板色板',
+      )
       await assertNotOccluded(gamePage.getByRole('button', { name: /画笔/ }), '工具栏画笔')
       await assertFontAtLeast(
         gamePage.locator('input#guess-input'),

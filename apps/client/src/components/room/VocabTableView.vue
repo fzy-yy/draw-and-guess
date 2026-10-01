@@ -99,13 +99,6 @@ defineExpose({
         :aria-label="strings.game.wordDrawabilityAria(row.drawability)"
       />
     </template>
-    <!-- 提示列：对局结构化提示文案（≤10 字），灰字省略，悬停可见全称 -->
-    <template #cell-hint="{ row }">
-      <span v-if="row.hint" class="block truncate text-muted" :title="row.hint">{{
-        row.hint
-      }}</span>
-      <span v-else class="text-muted">{{ strings.room.vocabAliasEmpty }}</span>
-    </template>
     <!-- 别称列：灰字省略，悬停可见全称 -->
     <template #cell-aliases="{ row }">
       <span

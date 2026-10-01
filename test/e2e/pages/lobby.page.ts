@@ -60,7 +60,7 @@ export class LobbyPage {
     await expect(row).toBeVisible({ timeout: 10_000 })
     await row.getByRole('button', { name: '加入候场' }).click()
     await expect(
-      this.page.getByLabel('玩家得分').getByText('等待下一局', { exact: true }),
+      this.page.getByLabel('玩家', { exact: true }).getByText('等待下一局', { exact: true }),
     ).toBeVisible({ timeout: 10_000 })
   }
 

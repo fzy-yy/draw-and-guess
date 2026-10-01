@@ -33,11 +33,6 @@ export const RoomSettingsSchema = z
       .max(ROOM_RULE_LIMITS.optionCount.max),
     showWordLength: z.boolean(),
     progressiveHints: z.boolean(),
-    structuredHintsEnabled: z.boolean(),
-    hintStartRatio: z
-      .number()
-      .min(ROOM_RULE_LIMITS.hintStartRatio.min)
-      .max(ROOM_RULE_LIMITS.hintStartRatio.max),
     guessBaseScore: z
       .number()
       .int()

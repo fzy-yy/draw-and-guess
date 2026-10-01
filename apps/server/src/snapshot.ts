@@ -102,12 +102,8 @@ export class SnapshotBuilder {
                 ? createAnswerMask(game.answer.text, game.revealedIndices)
                 : serverStrings.notices.answerHidden
             : '',
-          // 画家才可看到真实答案、完整提示与候选词（候选词携带难度供选词星级展示，以及换一组权限标识）；
-          // 完整提示与猜词者按时间披露的 revealedHints 同源（hint 优先、空回退 category），
-          // 供「画家模式」把提示与答案一并明文展示；猜词者视角始终只看 revealedHints。
-          ...(viewerIsDrawer && game.answer
-            ? { answer: game.answer.text, wordHint: game.answer.hint || game.answer.category }
-            : {}),
+          // 画家才可看到真实答案与候选词（候选词携带难度供选词星级展示，以及换一组权限标识）。
+          ...(viewerIsDrawer && game.answer ? { answer: game.answer.text } : {}),
           ...(viewerIsDrawer && room.phase === 'choosing_word'
             ? {
                 canReroll: !game.rerollUsed && room.settings.allowWordReroll,
@@ -118,11 +114,6 @@ export class SnapshotBuilder {
                   drawability: word.drawability,
                 })),
               }
-            : {}),
-          // 已揭示的结构化提示：词条 hint（hint 为空回退分类）只在揭示后下发一条，
-          // 客户端只渲染首值，且对全体猜词者一致；未揭示前该文案是服务端秘密，绝不出现。
-          ...(game.answer && game.structuredHintRevealed && game.structuredHint
-            ? { revealedHints: [game.structuredHint] }
             : {}),
           strokes: canOmitStrokes ? [] : game.strokes,
           ...(canOmitStrokes ? { strokesOmitted: true } : {}),

@@ -69,10 +69,9 @@ const FORBIDDEN_KEYS = [
   'fillCount',
   'correctOrder',
   'correctDetails',
+  // 逐字遮罩已揭示字符下标是服务端秘密簿记；公开视图只经 answerMask 表达，
+  // 键与值都不得进快照（结构化提示已移除，见 docs/adr/0042-remove-structured-hints.md）。
   'revealedIndices',
-  // 未揭示的结构化提示是秘密文案，键与值都不得进快照（揭示后只经 revealedHints 单条下发）
-  'structuredHint',
-  'structuredHintRevealed',
   'hostReturnRequested',
   'timer',
   'rematchTimer',
@@ -170,8 +169,6 @@ function makeGame(phase: RoomPhase, drawerId: string): GameSecret {
     correctOrder: [GUESSER_ID],
     correctDetails: [],
     revealedIndices: new Set([1]),
-    structuredHint: '提示',
-    structuredHintRevealed: true,
     drawingRevision: 2,
     // 结算阶段补全结算数据，覆盖更多裁剪分支
     ...(settled
@@ -342,17 +339,15 @@ describe('角色裁剪快照穷举矩阵', () => {
         }
         const gameView = snapshot.game
         expect(gameView).toBeDefined()
-        // 画家本人（房主与否无关）在任何阶段都收 answer/wordHint 真值；
+        // 画家本人（房主与否无关）在任何阶段都收 answer 真值；
         // 观战身份即使 ID 与 drawerId 相同也不算画家。
         const isViewerDrawer =
           (role === 'drawer' || role === 'drawer-host') && viewerId === roomDrawerId
-        // answer 与完整提示只发给画家本人（所有对局阶段一致）
+        // 答案明文只发给画家本人（所有对局阶段一致）；猜词者只有逐字遮罩
         if (isViewerDrawer) {
           expect(gameView?.answer).toBe(room.game?.answer?.text)
-          expect(gameView?.wordHint).toBeDefined()
         } else {
           expect(gameView?.answer).toBeUndefined()
-          expect(gameView?.wordHint).toBeUndefined()
         }
         // 选词选项仅画家本人在 choosing_word 可见
         if (isViewerDrawer && phase === 'choosing_word') {
@@ -396,22 +391,18 @@ describe('角色裁剪快照穷举矩阵', () => {
       expect(builder.snapshot(room, SPECTATOR_ID).privateJoinCode).toBeUndefined()
     })
 
-    it('结构化提示未揭示时是秘密，揭示后才以 revealedHints 单条下发', () => {
+    it('逐字遮罩只经 answerMask 下发，已揭示字符下标簿记不出现在序列化结果中', () => {
       const { room, players } = makeRoom('drawing', DRAWER_ID)
       const game = room.game!
-      // 未揭示：秘密文案既不下发 revealedHints，也不出现在序列化结果中
-      game.structuredHint = 'SENTINEL-未揭示提示'
-      delete game.structuredHintRevealed
+      game.revealedIndices = new Set([1, 3])
       const builder = new SnapshotBuilder(makePort(players, room))
-      const hidden = builder.snapshot(room, HOST_ID)
-      expect(hidden.game?.revealedHints).toBeUndefined()
-      expect(JSON.stringify(hidden)).not.toContain('SENTINEL-未揭示提示')
 
-      // 揭示后：同一文案经 revealedHints 下发，内部键名 structuredHint 仍不得出现
-      game.structuredHintRevealed = true
-      const revealed = builder.snapshot(room, HOST_ID)
-      expect(revealed.game?.revealedHints).toEqual(['SENTINEL-未揭示提示'])
-      expect(JSON.stringify(revealed)).not.toContain('"structuredHint"')
+      const snapshot = builder.snapshot(room, HOST_ID)
+      // 遮罩是唯一公开表达：未猜中玩家看到部分揭示的字符
+      expect(snapshot.game?.answerMask).toBeDefined()
+      expect(snapshot.game?.answerMask).not.toBe(game.answer?.text)
+      // 内部下标集合是秘密簿记，任何键位都不得泄漏
+      expect(JSON.stringify(snapshot)).not.toContain('"revealedIndices"')
     })
 
     it('canReturnWaiting 需要「房主 + game_result + 最短展示期已过」同时成立', () => {
