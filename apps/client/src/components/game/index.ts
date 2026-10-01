@@ -1,5 +1,6 @@
 export { default as BrushSizeField } from './BrushSizeField.vue'
 export { default as CanvasToolbar } from './CanvasToolbar.vue'
+export { default as CustomWordDialog } from './CustomWordDialog.vue'
 export { default as ChatPanel } from './ChatPanel.vue'
 export { default as FloatingPanel } from './FloatingPanel.vue'
 export type { PanelPosition } from './FloatingPanel.vue'

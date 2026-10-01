@@ -10,6 +10,7 @@ import {
   GuessWordSchema,
   PauseGameSchema,
   RerollWordsSchema,
+  CustomWordSchema,
   SendPresetSchema,
   StartGameSchema,
 } from './protocol/gameplay.ts'
@@ -60,6 +61,7 @@ export const EVENTS = {
   gameStart: 'game:start',
   gameChooseWord: 'game:chooseWord',
   gameRerollWords: 'game:rerollWords',
+  gameCustomWord: 'game:customWord',
   gamePauseRequest: 'game:pauseRequest',
   gameResume: 'game:resume',
   gameEndEarly: 'game:endEarly',
@@ -115,6 +117,7 @@ export const CLIENT_REQUEST_SCHEMAS = {
   [EVENTS.gameStart]: StartGameSchema,
   [EVENTS.gameChooseWord]: ChooseWordSchema,
   [EVENTS.gameRerollWords]: RerollWordsSchema,
+  [EVENTS.gameCustomWord]: CustomWordSchema,
   [EVENTS.gamePauseRequest]: PauseGameSchema,
   [EVENTS.gameResume]: RequestSchema,
   [EVENTS.gameEndEarly]: RequestSchema,

@@ -17,6 +17,9 @@ export function registerGameHandlers(socket: AppSocket, service: GameService): v
   bindRequest(socket, EVENTS.gameRerollWords, (input, playerId) =>
     service.rerollWordOptions(playerId, input.roundId),
   )
+  bindRequest(socket, EVENTS.gameCustomWord, (input, playerId) =>
+    service.chooseCustomWord(playerId, input.roundId, input.text),
+  )
   bindRequest(socket, EVENTS.gamePauseRequest, (input, playerId) =>
     service.pause(playerId, input.reason),
   )

@@ -206,6 +206,7 @@ describe('请求响应注册表与 ack 边界', () => {
       EVENTS.roomTransferHost,
       EVENTS.gameChooseWord,
       EVENTS.gameRerollWords,
+      EVENTS.gameCustomWord,
       EVENTS.gamePauseRequest,
       EVENTS.gameResume,
       EVENTS.gameEndEarly,

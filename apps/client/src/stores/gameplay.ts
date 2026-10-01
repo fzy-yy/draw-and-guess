@@ -53,6 +53,19 @@ export const useGameplayStore = defineStore('gameplay', () => {
     await request(EVENTS.gameRerollWords, { roundId: roomStore.room.game.roundId })
   }
 
+  /**
+   * 画家自定义题目：确认即进入作画。返回是否成功——失败（被规则拒绝、格式不合法、撞词）
+   * 时弹窗保持打开，让画家改词重试，错误文案由统一 ack 通道展示。
+   */
+  async function chooseCustomWord(text: string): Promise<boolean> {
+    if (!roomStore.room?.game) return false
+    const result = await request(EVENTS.gameCustomWord, {
+      roundId: roomStore.room.game.roundId,
+      text,
+    })
+    return result.ok
+  }
+
   async function submitGuess(text: string): Promise<boolean> {
     if (!roomStore.room?.game) return false
     const result = await request(EVENTS.guessSubmit, {
@@ -190,6 +203,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
     startGame,
     chooseWord,
     rerollWords,
+    chooseCustomWord,
     submitGuess,
     sendPreset,
     sendStroke,

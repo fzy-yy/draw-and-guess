@@ -23,6 +23,7 @@ export const roomSettingsDefaults = {
   allowPlayerInvite: true,
   allowPause: true,
   allowWordReroll: true,
+  allowCustomWord: false,
   joinPolicy: 'next_game',
 } as const satisfies Omit<RoomSettings, 'maxPlayers'>
 

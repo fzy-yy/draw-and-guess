@@ -130,6 +130,7 @@ export const useGameStore = defineStore('game', () => {
     startGame: gameplayStore.startGame,
     chooseWord: gameplayStore.chooseWord,
     rerollWords: gameplayStore.rerollWords,
+    chooseCustomWord: gameplayStore.chooseCustomWord,
     submitGuess: gameplayStore.submitGuess,
     sendPreset: gameplayStore.sendPreset,
     sendStroke: gameplayStore.sendStroke,

@@ -26,6 +26,7 @@ const settings: RoomSettings = {
   allowPlayerInvite: true,
   allowPause: true,
   allowWordReroll: true,
+  allowCustomWord: false,
   joinPolicy: 'forbid',
 }
 

@@ -156,6 +156,10 @@ watch(
               v-model="localDraft.allowWordReroll"
               :label="strings.room.toggleAllowWordReroll"
             />
+            <RuleToggleField
+              v-model="localDraft.allowCustomWord"
+              :label="strings.room.toggleAllowCustomWord"
+            />
           </div>
         </div>
       </details>

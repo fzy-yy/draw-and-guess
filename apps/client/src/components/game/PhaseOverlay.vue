@@ -7,9 +7,9 @@
   注：外层的 display:contents 只是为了让多个定位遮罩不参与父级 grid 布局，同时保留 TS 窄化。
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Brush, CirclePause, CirclePlay, RefreshCw, Trophy } from 'lucide-vue-next'
-import type { GameView } from '@draw-guess/shared'
+import { computed, ref } from 'vue'
+import { Brush, CirclePause, CirclePlay, PenLine, RefreshCw, Trophy } from 'lucide-vue-next'
+import { CUSTOM_WORD_MAX_LENGTH, type GameView } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
@@ -17,6 +17,7 @@ import { phaseTextFor } from '@/utils/phase-text'
 import type { RankedMember } from '@/composables/useGameHud'
 import AppButton from '@/components/common/AppButton.vue'
 import AvatarImage from '@/components/common/AvatarImage.vue'
+import CustomWordDialog from '@/components/game/CustomWordDialog.vue'
 import OverlayCard from '@/components/game/OverlayCard.vue'
 
 // 阶段遮罩需要的 HUD 派生值（剩余秒数、对局数据、最终排行）由父组件 GameView
@@ -46,6 +47,21 @@ function chooseWord(wordId: string): void {
   playInteractionSound('select')
   emit('choose-word', wordId)
 }
+
+/** 自定义题目弹窗：仅开关开启时渲染入口；提交失败时保持打开，让画家改词重试。 */
+const customWordOpen = ref(false)
+const customWordSubmitting = ref(false)
+const allowCustomWord = computed(() => store.room?.settings.allowCustomWord === true)
+
+async function submitCustomWord(text: string): Promise<void> {
+  customWordSubmitting.value = true
+  try {
+    const ok = await store.chooseCustomWord(text)
+    if (ok) customWordOpen.value = false
+  } finally {
+    customWordSubmitting.value = false
+  }
+}
 </script>
 
 <template>
@@ -71,17 +87,30 @@ function chooseWord(wordId: string): void {
       <p>{{ strings.game.yourTurn }}</p>
       <div class="relative flex w-full items-center justify-center min-h-[4.5cqh]">
         <h2>{{ strings.game.chooseWordTitle }}</h2>
-        <AppButton
-          v-if="store.room.settings.allowWordReroll"
-          variant="secondary"
-          class="absolute right-[1em] min-h-[4cqh] px-[0.9em] text-fs-14"
-          :disabled="!game.canReroll"
-          :title="game.canReroll ? strings.game.rerollWords : strings.game.rerollUsed"
-          @click="emit('reroll-words')"
-        >
-          <RefreshCw class="h-[2cqh] w-[2cqh]" />
-          {{ strings.game.rerollWords }}
-        </AppButton>
+        <!-- 右侧动作组：换一组与自定义并排（关闭对应规则时整颗按钮不渲染） -->
+        <div class="absolute right-[1em] flex items-center gap-[0.6em]">
+          <AppButton
+            v-if="store.room.settings.allowWordReroll"
+            variant="secondary"
+            class="min-h-[4cqh] px-[0.9em] text-fs-14"
+            :disabled="!game.canReroll"
+            :title="game.canReroll ? strings.game.rerollWords : strings.game.rerollUsed"
+            @click="emit('reroll-words')"
+          >
+            <RefreshCw class="h-[2cqh] w-[2cqh]" />
+            {{ strings.game.rerollWords }}
+          </AppButton>
+          <AppButton
+            v-if="allowCustomWord"
+            variant="secondary"
+            class="min-h-[4cqh] px-[0.9em] text-fs-14"
+            :title="strings.game.customWordHint(CUSTOM_WORD_MAX_LENGTH)"
+            @click="customWordOpen = true"
+          >
+            <PenLine class="h-[2cqh] w-[2cqh]" />
+            {{ strings.game.customWord }}
+          </AppButton>
+        </div>
       </div>
       <div class="flex gap-[1em] my-[2cqh]">
         <button
@@ -100,6 +129,11 @@ function chooseWord(wordId: string): void {
           ? strings.game.autoChoose(secondsLeft)
           : strings.game.chooseNoLimitHint
       }}</span>
+      <CustomWordDialog
+        v-model:open="customWordOpen"
+        :submitting="customWordSubmitting"
+        @confirm="submitCustomWord"
+      />
     </OverlayCard>
     <!-- 阶段遮罩：游戏暂停（房主可继续或提前结束） -->
     <OverlayCard v-else-if="store.room.phase === 'paused'">

@@ -54,6 +54,8 @@ export const RoomSettingsSchema = z
     allowPlayerInvite: z.boolean(),
     allowPause: z.boolean(),
     allowWordReroll: z.boolean(),
+    /** 是否允许画家在选词阶段自定义题目（默认关闭，见 ADR-0045）。 */
+    allowCustomWord: z.boolean(),
     joinPolicy: z.enum(['forbid', 'spectate', 'next_game']),
   })
   .strict()

@@ -59,6 +59,7 @@ expectTypeOf<BusinessKeys<ReturnType<typeof useGameStore>>>().toEqualTypeOf<
   | 'startGame'
   | 'chooseWord'
   | 'rerollWords'
+  | 'chooseCustomWord'
   | 'submitGuess'
   | 'sendPreset'
   | 'sendStroke'

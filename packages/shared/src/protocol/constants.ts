@@ -85,6 +85,13 @@ export const ROOM_RULE_LIMITS = {
   optionCount: { min: 2, max: 5 },
 } as const
 
+/**
+ * 画家自定义词的长度上限（grapheme 计数）。
+ * 与词库词面 24 字的上限刻意分开：词库是人工维护的长尾资产，自定义词是随手输入，
+ * 短词既好画也更好猜（见 docs/adr/0045-custom-word-and-untimed-choosing.md）。
+ */
+export const CUSTOM_WORD_MAX_LENGTH = 12
+
 export const PRIVATE_ROOM_CODE = {
   alphabet: '23456789ABCDEFGHJKLMNPQRSTUVWXYZ',
   length: 6,

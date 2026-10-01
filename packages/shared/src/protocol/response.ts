@@ -138,6 +138,7 @@ export const CLIENT_RESPONSE_SCHEMAS = {
   [EVENTS.gameStart]: eventAckSchema(RoomSnapshotSchema),
   [EVENTS.gameChooseWord]: emptyAckSchema,
   [EVENTS.gameRerollWords]: emptyAckSchema,
+  [EVENTS.gameCustomWord]: emptyAckSchema,
   [EVENTS.gamePauseRequest]: emptyAckSchema,
   [EVENTS.gameResume]: emptyAckSchema,
   [EVENTS.gameEndEarly]: emptyAckSchema,

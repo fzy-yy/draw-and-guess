@@ -35,6 +35,7 @@ import { DomainContext } from './domain/domain-context.ts'
 import { DrawingService } from './domain/drawing/drawing-service.ts'
 import { InviteService } from './domain/invite/invite-service.ts'
 import { RoomVocabularyService } from './domain/vocabulary/room-vocabulary-service.ts'
+import { buildCustomWord } from './domain/vocabulary/custom-word.ts'
 import type { PlayerLookupPorts, RoomEventPorts, RuntimePorts } from './domain/shared-ports.ts'
 import {
   activePlayers,
@@ -565,6 +566,46 @@ export class GameService {
     game.candidates = this.round.pickCandidates(room, game)
     game.rerollUsed = true
     this.emitRoom(room.id)
+  }
+
+  /**
+   * 画家自定义题目：校验规则开关、阶段与角色后，把输入合成为一条无元数据词条并直接开画。
+   * 与「换一组」并列的第三条选词出口；合成词条让 beginDrawing 的
+   * 「答案必须取自候选池」不变式继续成立（见 ADR-0045）。
+   */
+  chooseCustomWord(playerId: string, roundId: string, rawText: string): void {
+    const { room } = this.membership.requireMembership(playerId)
+    const game = this.requireGame(room)
+    if (room.phase !== 'choosing_word' || game.drawerId !== playerId || game.roundId !== roundId) {
+      throw new GameError('NOT_DRAWER', serverStrings.errors.NOT_DRAWER_CHOOSE)
+    }
+    if (isPhaseExpired(game, this.clock.now())) {
+      throw new GameError('PHASE_EXPIRED', serverStrings.errors.PHASE_EXPIRED)
+    }
+    if (!room.settings.allowCustomWord) {
+      throw new GameError('FORBIDDEN', serverStrings.errors.CUSTOM_WORD_DISABLED)
+    }
+    const word = buildCustomWord({ rawText, wordId: `custom:${game.roundId}` })
+    if (this.isCustomWordDuplicate(room, game, word.text)) {
+      throw new GameError('CUSTOM_WORD_DUPLICATE', serverStrings.errors.CUSTOM_WORD_DUPLICATE)
+    }
+    // 合成词条成为本回合唯一候选：候选池在本回合的另一处用途（换一组）此时已不可达
+    game.candidates = [word]
+    this.round.beginDrawing(room, word)
+  }
+
+  /**
+   * 自定义词撞词判定：与本局已展示过的词或当前候选词（规范化后）相同即视为重复，
+   * 避免同一局出现两次同一个词、破坏「整局不重复」的既有不变量。
+   */
+  private isCustomWordDuplicate(room: RoomSecret, game: GameSecret, text: string): boolean {
+    const normalized = normalizeAnswer(text)
+    const store = this.ports.getRoomVocabularyStore(room)
+    for (const id of game.offeredWordIds) {
+      const word = store.byId.get(id)
+      if (word && normalizeAnswer(word.text) === normalized) return true
+    }
+    return game.candidates.some((word) => normalizeAnswer(word.text) === normalized)
   }
 
   submitGuess(playerId: string, roundId: string, rawText: string): { correct: boolean } {

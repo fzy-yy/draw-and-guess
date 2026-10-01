@@ -105,6 +105,11 @@ const summaryRows = computed(() => {
     settings.allowWordReroll ? strings.room.ruleRerollOn : strings.room.ruleRerollOff,
   )
   addDifference(
+    'allowCustomWord',
+    strings.room.ruleCustomWordDt,
+    settings.allowCustomWord ? strings.room.ruleCustomWordOn : strings.room.ruleCustomWordOff,
+  )
+  addDifference(
     'joinPolicy',
     strings.room.joinPolicyField,
     settings.joinPolicy === 'forbid'
