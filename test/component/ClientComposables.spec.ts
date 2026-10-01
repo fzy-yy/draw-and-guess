@@ -77,9 +77,11 @@ describe('画布与浏览器生命周期 composables', () => {
     canvas.value = {
       getBoundingClientRect: () => ({ left: 5, top: 7, width: 360, height: 720 }),
     } as HTMLCanvasElement
-    cursor.cursorEnter()
-    cursor.cursorTrack({ clientX: 25, clientY: 37 } as PointerEvent)
+    // 进入画布即落点：模态弹窗关闭后浏览器不会补发 pointermove，位置必须由 enter 事件给出
+    cursor.cursorEnter({ clientX: 25, clientY: 37 } as PointerEvent)
     expect(cursor.cursorPos.value).toEqual({ x: 20, y: 30 })
+    cursor.cursorTrack({ clientX: 45, clientY: 57 } as PointerEvent)
+    expect(cursor.cursorPos.value).toEqual({ x: 40, y: 50 })
     expect(cursor.cursorDiameter.value).toBe(6)
     expect(cursor.showCursorDot.value).toBe(true)
     tool.value = 'eraser'

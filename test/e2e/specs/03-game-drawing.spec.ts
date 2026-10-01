@@ -45,8 +45,54 @@ test.describe('03 - 对局画板与绘图工具 (Game Drawing & Canvas)', () => 
       await drawer.game.undo()
       await drawer.game.redo()
 
-      // 7. 清空画板
-      await drawer.game.clearCanvas()
+      // 7. 清空画板（顺带回归光标落点）
+      // 回归：pointerenter 只置「可见」不落点时，清空确认弹窗关闭后浏览器只补发 pointerenter、
+      // 不补发 pointermove，跟随光标的圆点会停在离开画布前的旧位置（也就是清除按钮上方），
+      // 而此刻原生光标已被 cursor-none 隐藏 —— 玩家看到的就是「鼠标瞬移到了清除工具按钮旁边」。
+      const canvasLocator = drawer.page.locator('canvas[data-canvas-layer="display"]')
+      const cursorDot = canvasLocator.locator('xpath=../i')
+      const canvasBox = await canvasLocator.boundingBox()
+      if (!canvasBox) throw new Error('画布不可见')
+      // 先把指针停在画布左上区域：它就是「离开画布前的旧位置」，与确认按钮相距很远
+      // 同时记录真实指针坐标：断言「圆点必须在指针下」，而不是依赖按钮动画中的测量值。
+      await drawer.page.evaluate(() => {
+        const state = { x: -1, y: -1 }
+        Object.defineProperty(window, '__cursorProbe', { value: state, configurable: true })
+        window.addEventListener(
+          'pointerdown',
+          (event) => {
+            state.x = event.clientX
+            state.y = event.clientY
+          },
+          true,
+        )
+      })
+      await drawer.page.mouse.move(
+        canvasBox.x + canvasBox.width * 0.25,
+        canvasBox.y + canvasBox.height * 0.25,
+      )
+      await drawer.page.getByRole('button', { name: /清空/ }).click()
+      const clearDialog = drawer.page.getByRole('dialog')
+      const confirmClear = clearDialog.getByRole('button', { name: /确认清空/ })
+      await expect(confirmClear).toBeVisible({ timeout: 10_000 })
+      await confirmClear.click()
+      await expect(clearDialog).toBeHidden({ timeout: 10_000 })
+      const pointer = await drawer.page.evaluate(
+        () => (window as unknown as { __cursorProbe: { x: number; y: number } }).__cursorProbe,
+      )
+      // 确认后一动未动：圆点必须已经落在真实指针处（而不是旧位置）
+      await expect
+        .poll(
+          async () => {
+            const box = await cursorDot.boundingBox()
+            if (!box) return Number.POSITIVE_INFINITY
+            return Math.round(
+              Math.hypot(box.x + box.width / 2 - pointer.x, box.y + box.height / 2 - pointer.y),
+            )
+          },
+          { timeout: 5_000 },
+        )
+        .toBeLessThanOrEqual(2)
     } finally {
       await host.close()
       await guest.close()

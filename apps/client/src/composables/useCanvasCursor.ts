@@ -41,6 +41,17 @@ export function useCanvasCursor(options: {
     cursorPos.value = { x: event.clientX - rect.left, y: event.clientY - rect.top }
   }
 
+  /**
+   * 指针进入画布：置可见的同一次调用里必须用进入事件的坐标落点。
+   * 模态弹窗（如清空确认）关闭后，浏览器只补发 pointerenter、不会补发 pointermove；如果这里只置
+   * 可见，圆点会停在指针离开画布前的旧位置——而此刻原生光标已被 cursor-none 隐藏，玩家看到的就是
+   * 「鼠标瞬移到了刚才那个按钮旁边」。
+   */
+  function cursorEnter(event: PointerEvent): void {
+    cursorTrack(event)
+    cursorVisible.value = true
+  }
+
   return {
     // cursorVisible 对外为测试观测出口：内部已折算进 showCursorDot 供模板消费，
     // 生产组件不再单独读取该原始状态（GameCanvas 只用 showCursorDot 等派生值）；
@@ -50,7 +61,7 @@ export function useCanvasCursor(options: {
     cursorDiameter,
     cursorColor,
     showCursorDot,
-    cursorEnter: () => (cursorVisible.value = true),
+    cursorEnter,
     cursorLeave: () => (cursorVisible.value = false),
     cursorTrack,
   }
