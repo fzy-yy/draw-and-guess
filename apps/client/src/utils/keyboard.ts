@@ -1,11 +1,17 @@
 /**
- * 画板工具快捷键的共享判定逻辑。
+ * 单键快捷键的共享判定逻辑（画板工具切换 + 对局面板显隐）。
  * 设置页的「捕获校验」与对局内的「触发匹配」共用同一规则，
  * 避免出现「能保存但永远无法触发」的死快捷键（曾因捕获端未拒绝 Shift 导致）。
  */
 
-/** 快捷键设置键名类型（工具 → 本地设置字段），ShortcutsTab 与 SettingsView 共用。 */
-export type ShortcutSettingKey = 'penShortcut' | 'eraserShortcut' | 'fillShortcut'
+/** 快捷键设置键名类型（工具 / 面板 → 本地设置字段），ShortcutsTab 与 SettingsView 共用。 */
+export type ShortcutSettingKey =
+  | 'penShortcut'
+  | 'eraserShortcut'
+  | 'fillShortcut'
+  | 'playersPanelShortcut'
+  | 'chatPanelShortcut'
+  | 'toolsPanelShortcut'
 
 /** 快捷键比较口径：忽略大小写与首尾空白（与捕获存储口径一致）。 */
 export function normalizedShortcut(value: string): string {

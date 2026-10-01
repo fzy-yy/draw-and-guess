@@ -106,6 +106,12 @@ watch(
   },
   { immediate: true },
 )
+
+/** 供父层（对局面板快捷键）聚焦猜词输入框；输入原语仍是本组件内部实现细节。 */
+function focusInput(): void {
+  void nextTick(() => guessInput.value?.focus())
+}
+defineExpose({ focusInput })
 </script>
 
 <template>

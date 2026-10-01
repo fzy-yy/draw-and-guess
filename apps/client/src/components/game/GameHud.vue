@@ -3,6 +3,7 @@
   回合数、题目（画家明文 / 猜词者遮罩）、倒计时、网络状态与暂停/设置/全屏操作，
   并在 ROUND 之右并入玩家 / 聊天 / 工具三个面板开关。
   已删除「当前画家」信息块与结构化提示区：前者由玩家面板回答，后者随结构化提示一并移除（见 ADR-0042）。
+  高度取 11cqh，与大厅 / 房间 / 设置页顶栏（`grid-rows-[11%_…]`）保持一致，避免跨页面跳动。
   组件只读 store 的公开状态；HUD 派生值（计时/进度/答案）由父组件经 props 传入，整局 ticker 只在 GameView。
   面板开关状态经 v-model 与父组件共用，面板内关闭按钮写同一份 open，因此顶栏开关天然同步。
 -->
@@ -111,7 +112,7 @@ function handlePauseToggle(): void {
   <header
     v-if="store.room"
     :aria-label="strings.game.topBarAria"
-    class="grid h-[9cqh] shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[1cqw] border-b-[0.45cqh] border-yellow bg-navy px-[1.2cqw] text-white"
+    class="grid h-[11cqh] shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[1cqw] border-b-[0.45cqh] border-yellow bg-navy px-[1.2cqw] text-white"
   >
     <!-- 左：回合胶囊 + 玩家 / 聊天 / 工具面板开关 -->
     <div class="flex items-center gap-[0.5cqw]">

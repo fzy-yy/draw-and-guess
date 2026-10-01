@@ -24,6 +24,7 @@ import {
   type PanelPosition,
 } from '@/components/game'
 import { useGameHud } from '@/composables/useGameHud'
+import { usePanelShortcuts } from '@/composables/usePanelShortcuts'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { useGuessConfetti } from '@/composables/useGuessConfetti'
 // 填充 ack 类型与提交锁语义归 useFillSession 单点定义（GameCanvas 同源导入）。
@@ -64,6 +65,18 @@ const chatPosition = ref<PanelPosition>({ x: 76, y: 0 })
 const canDraw = computed(() => store.isDrawer && store.room?.phase === 'drawing')
 /** 底部工具条可见性：仅画家且顶栏「工具」开关为开。 */
 const showToolbar = computed(() => store.isDrawer && toolsOpen.value)
+
+// ---- 面板显隐快捷键：P / C / T（设置页可改）开关三个面板，回车固定只打开聊天或聚焦猜词框 ----
+// 对局内设置弹窗打开时让位，避免与设置页的输入控件冲突。
+const chatPanelRef = ref<{ focusInput: () => void }>()
+usePanelShortcuts({
+  store,
+  playersOpen,
+  chatOpen,
+  toolsOpen,
+  focusChatInput: () => chatPanelRef.value?.focusInput(),
+  enabled: () => !showGameSettings.value,
+})
 
 // 全屏以根游戏舞台为目标，确保 Toast、弹窗和竖屏提示仍包含在全屏上下文中。
 // 目标元素用 computed 从 DOM 实时取 .game-stage（它位于 App.vue 根舞台，非本组件根元素），
@@ -184,7 +197,7 @@ function handleFullscreenToggle(): void {
           width-class="w-[24cqw]"
           height-class="h-full"
         >
-          <ChatPanel :can-guess="canGuess" />
+          <ChatPanel ref="chatPanelRef" :can-guess="canGuess" />
         </FloatingPanel>
 
         <!-- 底部横向工具条：浮在画布底部居中，仅画家且开关为开时显示 -->

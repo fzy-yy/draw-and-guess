@@ -87,6 +87,11 @@ function findPanel(wrapper: VueWrapper, title: string): boolean {
   return wrapper.findAll('section').some((node) => node.text().includes(title))
 }
 
+/** 在 window 上派发按键：与 usePanelShortcuts 的监听目标一致，模拟全局快捷键。 */
+function pressKey(key: string): void {
+  window.dispatchEvent(new KeyboardEvent('keydown', { key }))
+}
+
 describe('GameView 新对局骨架', () => {
   it('渲染顶栏、铺满画布、两个浮层面板与底部工具条', () => {
     const wrapper = mountGameView()
@@ -128,6 +133,47 @@ describe('GameView 新对局骨架', () => {
     await wrapper.get(`[aria-label="${strings.game.toggleTools}"]`).trigger('click')
     await flushPromises()
     expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('面板快捷键：P/C/T 开关对应面板，回车只打开不隐藏，输入控件聚焦时让位', async () => {
+    const wrapper = mountGameView()
+
+    // P：玩家面板开 ↔ 关
+    pressKey('p')
+    await flushPromises()
+    expect(findPanel(wrapper, strings.game.playersPanelTitle)).toBe(false)
+    pressKey('p')
+    await flushPromises()
+    expect(findPanel(wrapper, strings.game.playersPanelTitle)).toBe(true)
+
+    // 回车：聊天已打开时只聚焦、不隐藏
+    pressKey('Enter')
+    await flushPromises()
+    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(true)
+
+    // C：关掉聊天后再用回车打开（回车永不隐藏）
+    pressKey('c')
+    await flushPromises()
+    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(false)
+    pressKey('Enter')
+    await flushPromises()
+    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(true)
+
+    // T：底部工具条开 ↔ 关（本机为画家）
+    pressKey('t')
+    await flushPromises()
+    expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
+    pressKey('t')
+    await flushPromises()
+    expect(wrapper.find('[role="toolbar"]').exists()).toBe(true)
+
+    // 输入控件聚焦时快捷键让位：事件目标是可编辑元素，面板不受影响
+    const input = wrapper.find('input').element
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', bubbles: true }))
+    await flushPromises()
+    expect(findPanel(wrapper, strings.game.playersPanelTitle)).toBe(true)
 
     wrapper.unmount()
   })

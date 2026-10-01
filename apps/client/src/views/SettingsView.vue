@@ -7,8 +7,11 @@ import {
   Eraser,
   Eye,
   Keyboard,
+  MessageSquare,
   PaintBucket,
+  Palette,
   SlidersHorizontal,
+  Users,
   Volume2,
 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
@@ -75,6 +78,24 @@ const shortcutRows: Array<{
     name: strings.settings.fill,
     detail: strings.settings.fillDetail,
     icon: PaintBucket,
+  },
+  {
+    setting: 'playersPanelShortcut',
+    name: strings.settings.panelPlayers,
+    detail: strings.settings.panelPlayersDetail,
+    icon: Users,
+  },
+  {
+    setting: 'chatPanelShortcut',
+    name: strings.settings.panelChat,
+    detail: strings.settings.panelChatDetail,
+    icon: MessageSquare,
+  },
+  {
+    setting: 'toolsPanelShortcut',
+    name: strings.settings.panelTools,
+    detail: strings.settings.panelToolsDetail,
+    icon: Palette,
   },
 ]
 

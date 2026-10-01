@@ -55,7 +55,7 @@ export function loadSettings(): LocalSettings {
         }
       }
 
-      // 字符串设置当前都是工具快捷键：统一小写后要求单字符且互不重复，任一不合法则整组回退默认。
+      // 字符串设置均为单键快捷键（画板工具 + 面板显隐）：统一小写后要求单字符且互不重复，任一不合法则整组回退默认。
       const shortcuts = shortcutKeys.map((key) => String(writable[key]).trim().toLocaleLowerCase())
       const shortcutsValid =
         shortcuts.every((shortcut) => shortcut.length === 1) &&

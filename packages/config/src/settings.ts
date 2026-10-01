@@ -8,14 +8,23 @@ export const localSettings = {
   /** 统一控制非必要的界面过渡与反馈动画；关闭后不影响倒计时和画布逻辑。 */
   animationsEnabled: true,
   showShortcuts: true,
-  /** 工具快捷键只保存单个可打印字符；客户端会阻止重复键覆盖其他工具。 */
+  /**
+   * 单键快捷键（画板工具 + 面板显隐）只保存单个可打印字符；
+   * 客户端会阻止重复键互相覆盖（工具之间、面板之间、工具与面板之间都不得重键）。
+   */
   penShortcut: 'b',
   eraserShortcut: 'e',
   fillShortcut: 'f',
+  /** 显示/隐藏玩家与得分面板。 */
+  playersPanelShortcut: 'p',
+  /** 显示/隐藏聊天面板（回车键固定用于打开聊天，见 usePanelShortcuts）。 */
+  chatPanelShortcut: 'c',
+  /** 显示/隐藏底部绘图工具条（仅画家生效）。 */
+  toolsPanelShortcut: 't',
   autoFocusGuess: true,
   discoverable: true,
   acceptsInvites: true,
-  /** 画家默认显示答案：开启后作画时默认显示答案与提示类别，关闭则与猜词玩家一致（下划线遮罩与未揭示提示）。 */
+  /** 画家默认显示答案：开启后作画时默认显示答案，关闭则与猜词玩家一致（只看到下划线遮罩）。 */
   drawerDefaultReveal: true,
 } as const
 

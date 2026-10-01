@@ -1,5 +1,5 @@
 <!--
-  快捷键设置页：展示三个工具各自的捕获输入框。
+  快捷键设置页：展示画板工具与面板显隐各自的捕获输入框。
   快捷键数据（rows）与捕获逻辑（capture）由父层 SettingsView 持有并下发，
   本组件只负责渲染卡片并把按键事件上抛，保证“脚本逻辑不删除、只做模板拆分”。
 -->
@@ -37,7 +37,7 @@ const store = useGameStore()
       :title="strings.settings.shortcutsTitle"
       :intro="strings.settings.shortcutsIntro"
     />
-    <!-- 三列快捷键卡片：随舞台等比缩放（紧凑模式单列化已随布局模式移除） -->
+    <!-- 快捷键卡片：画板工具 + 面板显隐，三列网格按行排布，随舞台等比缩放 -->
     <div class="grid grid-cols-3 gap-[1em]">
       <label
         v-for="row in rows"

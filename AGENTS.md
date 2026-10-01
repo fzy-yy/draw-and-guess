@@ -174,6 +174,7 @@ draw-and-guess/
 │       │   ├── useVirtualRows.ts # 通用行级虚拟化封装（@tanstack/vue-virtual；估算行高由调用方实测驱动）
 │       │   ├── useTableSort.ts / useSelectAllState.ts / useCopyWithFeedback.ts # 表格排序、全选三态与复制反馈（数据表格/词库表共用原语）
 │       │   ├── useShortcuts.ts    # 画板快捷键：自定义单键切换工具、撤销/重做组合键
+│       │   ├── usePanelShortcuts.ts # 面板显隐快捷键：P/C/T 开关玩家/聊天/工具条，回车固定只打开聊天（ADR-0044）
 │       │   ├── useGuessConfetti.ts # 猜中礼花反馈：严格跃迁触发、不枚举阶段（ADR-0031）
 │       │   ├── useContextMenu.ts  # 右键菜单单例状态层：任意场景 open(event, items)，配合 components/common/ContextMenu.vue
 │       │   ├── useVocabularyDialogSession.ts / useVocabularyQuery.ts / useVocabularySelection.ts / useVocabularyPackages.ts # 词库弹窗会话生命周期（打开/拉取/失效/关闭/保存）与查询、选择、包管理
@@ -204,7 +205,7 @@ draw-and-guess/
 │           ├── bounded-diagnostics.ts # 有界诊断列表与 Zod 问题格式化统一内核（ADR-0026）
 │           ├── phase-text.ts      # 阶段文案统一映射（HUD 标签与阶段播报共用，ADR-0028）
 │           ├── role-text.ts       # 成员局内角色文案统一映射（玩家面板与聊天标签共用）
-│           ├── keyboard.ts        # 画板快捷键共享判定（捕获校验与触发匹配同一规则，防「能存不能触发」死键）
+│           ├── keyboard.ts        # 单键快捷键共享判定（画板工具 + 面板显隐；捕获校验与触发匹配同一规则，防「能存不能触发」死键）
 │           ├── confetti.ts        # 礼花特效（canvas-confetti 按需动态加载 + 主线程渲染，ADR-0031/0033）
 │           ├── room-facts.ts      # 客户端房间事实：可玩成员谓词与玩家人数选项（ADR-0028）
 │           └── create-uuid.ts     # 多环境 UUID：nanoid 十六进制 + RFC 4122 v4 位点（兼容服务端 z.string().uuid()）
@@ -331,7 +332,7 @@ pnpm format:check  # 仅检查格式
 - **配色与对比度**：品牌基色固定为 `navy`/`muted`/`line`/`paper`/`blue`/`sky`/`yellow`/`green`/`red`/`purple`；为满足 WCAG AA，可使用 `success-fg`/`success-on-dark`/`warning-fg`/`danger-on-dark`/`control`/`focus` 等集中定义于 `style/tokens.css` 的无障碍语义令牌。`packages/config/src/room.ts` 的 `seatColors` 仍只取品牌基色；`#fff`/`#000`（及黑色变量 `--color-black`）与透明度衍生（如 `bg-blue/10`）不计入调色板。普通文字至少 4.5:1，大字号与非文字控件边界至少 3:1。**禁止**在组件/模板中硬编码任意 HEX（`bg-[#...]`/`text-[#...]`）或 Tailwind 默认色阶（`slate-*` 等）。`packages/config/src/drawing.ts` 的 `colors` 是**画板工具色**，属功能性工具配置，不纳入品牌调色板限制。
 - **动画一致性**：按钮/卡片交互动效统一为 160ms（复用 `.ui-feedback` / `.hover-tint` 共享类，或依赖 `@layer base` 中 `.game-stage button` 的全局过渡）；同类控件应复用同一动画，避免各自定制造成手感不一。浮层出入场（`FloatingPanel`/`CanvasToolbar` 的淡入淡出 + 缩放，进入 180ms / 退出 140ms）为独立动效，不属按钮/卡片交互动效，保留其手感。
 - **布局规范（外 Grid 骨架，内 Flex 排版）**：
-  - **Grid 宏观骨架与二维矩阵**：主页面二维行列骨架（`ProfileView`/`LobbyView`/`RoomView`/`SettingsView`）、二维固定席位/头像/卡片矩阵（`SeatGrid` 2×3、`AvatarPickerDialog` 8×5、`ShortcutsTab` 3 列、`RulesDialog` 3 列表单、`ChatPanel` 3 列表情）、三列对称顶栏（`StageHeader` `grid grid-cols-[1fr_auto_1fr]`）。**对局页 `GameView` 不属此类二维骨架**：它是「固定顶栏 + 铺满画布 + 绝对定位浮层面板 + 底部横向工具条」，画布铺满后由浮层覆盖（见 `docs/adr/0043-game-view-floating-layout.md`）；
+  - **Grid 宏观骨架与二维矩阵**：主页面二维行列骨架（`ProfileView`/`LobbyView`/`RoomView`/`SettingsView`）、二维固定席位/头像/卡片矩阵（`SeatGrid` 2×3、`AvatarPickerDialog` 8×5、`ShortcutsTab` 3 列、`RulesDialog` 3 列表单、`ChatPanel` 3 列表情）、三列对称顶栏（`StageHeader` `grid grid-cols-[1fr_auto_1fr]`）。**对局页 `GameView` 不属此类二维骨架**：它是「固定顶栏 + 铺满画布 + 绝对定位浮层面板 + 底部横向工具条」，画布铺满后由浮层覆盖；顶栏高度与大厅/房间/设置页一致（均为舞台高度的 `11%`，见 `docs/adr/0043-game-view-floating-layout.md` 与 `docs/adr/0044-panel-shortcuts-and-unified-topbar.md`）；
   - **Flex 微观流式排版**：一维线性排列（水平按钮内容 `inline-flex items-center gap-[...]`、导航 Tab、工具栏工具条、输入框组合；垂直消息流 `flex flex-col`、规则行列表、Toast 堆叠）；
   - **单元素绝对居中**：严格使用 `grid place-items-center`（如圆形头像底座 `AvatarImage`、独立图标按钮 `IconButton`/`RoundIconButton`、徽章 `HostCrownBadge`、模态遮罩居中），杜绝单元素使用 `flex items-center justify-center` 导致子项伸缩变形；
   - **保留专用布局**：弹窗/画布状态遮罩（`BaseDialog`/`ConfirmDialog`/`OverlayCard`/`PhaseOverlay`）、对局浮层面板与底部工具条（`FloatingPanel`/`CanvasToolbar`）与 Toast 悬浮层（`AppToaster`）保留 `absolute`/`fixed` 定位；吸顶表头保留 `sticky`；数据表格（`DataTable.vue`）保留原生 `table`/`table-fixed`；
