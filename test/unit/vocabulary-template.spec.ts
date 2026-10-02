@@ -15,9 +15,8 @@ const root = process.cwd()
 const BASE_DB = 'vocabulary/base_words.db'
 const TEMPLATE_DB = 'vocabulary/templates/example.db'
 
-/** 样板 metadata 允许出现的键（与基础词库口径一致，不含任何已删除字段的遗留键）。 */
-const TEMPLATE_META_KEYS = ['category_enum', 'description', 'name', 'updated_at', 'version']
-
+/** 样板 metadata 允许出现的键（与基础词库口径一致，category_enum 已移除）。 */
+const TEMPLATE_META_KEYS = ['description', 'name', 'updated_at', 'version']
 let directory = ''
 
 beforeEach(() => {
@@ -78,7 +77,7 @@ describe('空白词库样板与基础词库字段一致', () => {
     }
   })
 
-  it('样板是空库：0 词条，metadata 只有五个键，分类白名单沿用基础词库', () => {
+  it('样板是空库：0 词条，metadata 只有四个键，不强制 category_enum 白名单', () => {
     const base = openCopy(BASE_DB)
     const template = openCopy(TEMPLATE_DB)
     try {
@@ -89,8 +88,8 @@ describe('空白词库样板与基础词库字段一致', () => {
           .all() as Array<{ k: string }>
       ).map((row) => row.k)
       expect(keys).toEqual(TEMPLATE_META_KEYS)
-      expect(metaValue(template, 'category_enum')).toBe(metaValue(base, 'category_enum'))
-      expect(JSON.parse(metaValue(template, 'category_enum')).length).toBeGreaterThan(0)
+      expect(metaValue(template, 'category_enum')).toBe('')
+      expect(metaValue(base, 'category_enum')).toBe('')
     } finally {
       base.close()
       template.close()

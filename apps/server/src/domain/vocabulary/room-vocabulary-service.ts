@@ -33,7 +33,7 @@ export class RoomVocabularyService {
       items: store.items,
       selectedIds: [...room.selectedWordIds],
       version: store.version,
-      categories: store.meta.categoryEnum,
+      collections: store.meta.collections,
     }
   }
 

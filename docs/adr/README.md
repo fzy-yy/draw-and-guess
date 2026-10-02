@@ -75,6 +75,7 @@
 | [0044](0044-panel-shortcuts-and-unified-topbar.md)         | 对局面板显隐快捷键与顶栏高度统一                 | 已采纳                 |
 | [0041](0041-snapshot-gate-decision-narrowing.md)           | 快照门禁决策类型按裁决能力收窄                   | 已采纳                 |
 | [0051](0051-rules-dialog-flat-grid-and-dropdown-fields.md) | 规则弹窗平铺两列栅格、区间字段一律下拉           | 已采纳                 |
+| [0052](0052-stage-header-button-unification.md)            | 顶栏操作按钮统一为图文胶囊并收敛基座组件         | 已采纳                 |
 
 ### 词汇与提示
 
@@ -88,6 +89,7 @@
 | [0048](0048-vocabulary-schema-slimming.md)                 | 词库表结构落地瘦身：只留词面/分类/别称       | 已采纳                 |
 | [0032](0032-drawer-hint-full-and-progressive.md)           | 画家模式完整提示、猜词者逐渐披露（wordHint） | 已废弃（被 0042 取代） |
 | [0042](0042-remove-structured-hints.md)                    | 移除结构化提示：只保留逐字遮罩               | 已采纳                 |
+| [0053](0053-vocabulary-collection-and-toolbar-redesign.md) | 词库分类升级为自定义合集与工具栏图文胶囊化   | 已采纳                 |
 
 ### 本机反馈
 

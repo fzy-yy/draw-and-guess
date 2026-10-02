@@ -38,14 +38,14 @@ export const SessionRegistrationSchema = z
  * 单个词条：仅描述公开字段，来自词库 Provider 的规范化输出。
  * 难度、可绘制性、提示与「按难度派生的时限/权重」已随词库瘦身移除
  *（见 docs/adr/0046-vocabulary-slimming-and-unified-round-time.md）；
- * 词条只剩词面、分类、别称与稳定 ID。
+ * 词条只剩词面、合集、别称与稳定 ID（见 docs/adr/0053）。
  */
 export const VocabularyWordSchema = z
   .object({
     id: WordIdSchema,
     text: z.string().min(1),
     aliases: z.array(z.string()),
-    category: z.string().min(1),
+    collection: z.string().min(1),
   })
   .strict()
 
@@ -61,7 +61,7 @@ export const VocabularyPackageInfoSchema = z
   })
   .strict()
 
-/** 房间词库快照：当前包、全部可用包、词条列表、已选词条、版本与分类白名单。 */
+/** 房间词库快照：当前包、全部可用包、词条列表、已选词条、版本与自动检测聚合的合集列表。 */
 export const VocabularySnapshotSchema = z
   .object({
     packageId: z.string(),
@@ -69,7 +69,7 @@ export const VocabularySnapshotSchema = z
     items: z.array(VocabularyWordSchema),
     selectedIds: z.array(WordIdSchema),
     version: z.string(),
-    categories: z.array(z.string()),
+    collections: z.array(z.string()),
   })
   .strict()
 

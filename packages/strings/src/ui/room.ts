@@ -72,7 +72,8 @@ export const room = {
   confirmSelection: '确认选择',
   // —— 词库管理：筛选 / 表格列 ——
   vocabColumnText: '词面',
-  vocabColumnCategories: '分类',
+  vocabColumnCollections: '合集',
+  vocabColumnCategories: '合集',
   vocabColumnAliases: '别称',
   vocabSelectAllShort: '全选',
   vocabDeselectAllShort: '全不选',
@@ -81,6 +82,9 @@ export const room = {
   // —— 词库包选择与切换 ——
   vocabSwitchToPackages: '切换词库选择',
   vocabSwitchToWords: '返回词条列表',
+  vocabSwitchToPackagesBtn: '词库包',
+  vocabSwitchToWordsBtn: '词条列表',
+  vocabFilterCollectionsBtn: '合集筛选',
   vocabPackageColumnName: '词库名称',
   vocabPackageColumnWordCount: '词数',
   vocabPackageColumnDescription: '词库描述',
@@ -120,4 +124,5 @@ export const room = {
   leaveBody: '主动退出后当前座位会立即释放；房主退出时将迁移给最早加入的在线玩家。',
   stayInRoom: '继续留在房间',
   confirmLeave: '确认退出',
+  exit: '退出',
 } as const

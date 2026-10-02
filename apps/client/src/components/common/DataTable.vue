@@ -140,7 +140,7 @@ const visibleRows = computed(() =>
       ref="scrollContainer"
       class="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-gutter-stable"
     >
-      <table class="w-full table-fixed border-collapse text-left text-fs-12 text-navy">
+      <table class="w-full table-fixed border-collapse text-center text-fs-12 text-navy">
         <colgroup>
           <col v-if="props.selectedIds" :style="{ width: DATA_TABLE_SELECTION_COLUMN_WIDTH }" />
           <col
@@ -180,29 +180,31 @@ const visibleRows = computed(() =>
             class="border-t-[0.12cqh] border-t-line ui-feedback hover:bg-sky"
             :class="isSelected(item.row) ? 'bg-sky' : 'bg-white'"
           >
-            <!-- 行首选择列：多选用于词条批量管理，单选用于互斥的词库包选择。 -->
-            <td v-if="props.selectedIds" class="px-[0.5em] py-[0.4cqh]">
-              <input
-                :type="activeSelectionMode === 'single' ? 'radio' : 'checkbox'"
-                :name="activeSelectionMode === 'single' ? selectionGroupName : undefined"
-                class="h-[max(1.6cqh,16px)] w-[max(1.6cqh,16px)] accent-blue disabled:cursor-not-allowed disabled:opacity-60"
-                :class="{ 'rounded-none': activeSelectionMode === 'multiple' }"
-                :disabled="props.selectionDisabled"
-                :checked="isSelected(item.row)"
-                :aria-label="
-                  props.rowAria ? props.rowAria(item.row) : String(item.row[props.rowKey])
-                "
-                @change="toggle(String(item.row[props.rowKey]))"
-              />
+            <!-- 行首选择列：多选用于词条批量管理，单选用于互斥的词库包选择。水平垂直居中 -->
+            <td v-if="props.selectedIds" class="px-[0.5em] py-[0.4cqh] align-middle text-center">
+              <div class="grid place-items-center">
+                <input
+                  :type="activeSelectionMode === 'single' ? 'radio' : 'checkbox'"
+                  :name="activeSelectionMode === 'single' ? selectionGroupName : undefined"
+                  class="h-[max(1.6cqh,16px)] w-[max(1.6cqh,16px)] accent-blue disabled:cursor-not-allowed disabled:opacity-60"
+                  :class="{ 'rounded-none': activeSelectionMode === 'multiple' }"
+                  :disabled="props.selectionDisabled"
+                  :checked="isSelected(item.row)"
+                  :aria-label="
+                    props.rowAria ? props.rowAria(item.row) : String(item.row[props.rowKey])
+                  "
+                  @change="toggle(String(item.row[props.rowKey]))"
+                />
+              </div>
             </td>
             <td
               v-for="column in props.columns"
               :key="column.key"
-              class="min-w-0 px-[0.6em] py-[0.4cqh] align-middle"
+              class="min-w-0 px-[0.6em] py-[0.4cqh] align-middle text-center"
             >
-              <!-- 富内容插槽：调用方可为任意列提供自定义渲染（如分类徽章、别称列表） -->
+              <!-- 富内容插槽：调用方可为任意列提供自定义渲染（如合集徽章、别称列表） -->
               <slot :name="`cell-${column.key}`" :row="item.row" :value="item.row[column.key]">
-                <span class="block truncate" :title="displayValue(item.row, column)">{{
+                <span class="block truncate text-center" :title="displayValue(item.row, column)">{{
                   displayValue(item.row, column)
                 }}</span>
               </slot>

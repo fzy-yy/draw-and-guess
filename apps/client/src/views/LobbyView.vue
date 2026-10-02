@@ -19,6 +19,7 @@ import {
   SearchInput,
   SectionHeader,
   StageHeader,
+  StageHeaderButton,
 } from '@/components/common'
 import { CreateRoomDialog, JoinPrivateDialog } from '@/components/lobby'
 import { useGameStore } from '@/stores/game'
@@ -60,30 +61,23 @@ function openSettings(): void {
       </template>
       <template #center>
         <div class="flex items-center gap-[0.6em]">
-          <Gamepad2 class="h-[4.2cqh] w-[4.2cqh] text-yellow" />
-          <div class="flex flex-col leading-[1.05]">
-            <b class="text-fs-18">{{ store.config.app.name }}</b>
-            <span class="text-sky text-fs-10 tracking-[0.18em]">{{
-              strings.ui.lobby.lobbyEnglishTitle
-            }}</span>
-          </div>
+          <Gamepad2 class="h-[4.2cqh] w-[4.2cqh] text-yellow shrink-0" />
+          <h1 class="text-fs-18 font-bold leading-none">{{ strings.ui.lobby.lobbyTitle }}</h1>
         </div>
       </template>
       <template #trailing>
         <nav class="flex items-center gap-[0.7em]" :aria-label="strings.a11y.lobby.navAria">
           <NetworkStatusButton
+            size="lg"
             :connected="store.connected"
             :latency="store.latency"
             :connection-label="store.connectionLabel"
             :latency-good-ms="store.config.network.latencyGoodMs"
           />
-          <button
-            type="button"
-            class="flex items-center gap-[0.4em] rounded-[0.55em] bg-white/5 px-[0.8em] py-[0.8cqh] text-sky hover:bg-white/10 transition-colors"
-            @click="openSettings"
-          >
-            <Settings /> {{ strings.ui.lobby.settingsEntry }}
-          </button>
+          <StageHeaderButton @click="openSettings">
+            <Settings />
+            <span>{{ strings.ui.lobby.settingsEntry }}</span>
+          </StageHeaderButton>
         </nav>
       </template>
     </StageHeader>

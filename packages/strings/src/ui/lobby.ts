@@ -9,7 +9,7 @@ export const lobby = {
   fullscreenPromptBody: '是否开启全屏？提示：按 F11 可随时退出或进入全屏',
   fullscreenPromptConfirm: '确定',
   fullscreenPromptDismiss: '暂不',
-  lobbyEnglishTitle: 'ONLINE LOBBY',
+  lobbyTitle: '你画我猜游戏大厅',
   settingsEntry: '设置',
   roomsLabel: 'ROOMS',
   roomsTitle: '全部公开画室',

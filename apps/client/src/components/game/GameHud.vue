@@ -174,21 +174,24 @@ function handlePauseToggle(): void {
 
     <!-- 右：倒计时 + 网络状态 + 暂停 / 设置 / 全屏 -->
     <div class="flex items-center gap-[0.5cqw]">
+      <!--
+        倒计时胶囊：固定 3 位数字等宽容器（w-[3ch] text-center tabular-nums），
+        位数减少（120 至 99 至 8）时数字居中且组件长度恒定；不显示“秒”单位；不限时状态居中展示「---」大字号短横线。
+      -->
       <HudPill
-        class="relative box-border justify-center gap-[0.3em] overflow-hidden px-[0.55em]"
+        class="relative box-border justify-center gap-[0.35em] overflow-hidden px-[0.65em]"
         :class="{ 'bg-red': isUrgent }"
       >
         <Clock3 class="h-[2.5cqh] w-[2.5cqh] shrink-0" />
-        <template v-if="hasDeadline">
-          <b class="min-w-0 text-center text-fs-24 tabular-nums">{{ secondsLeft }}</b>
-          <span class="shrink-0 text-fs-10 text-sky">{{ strings.ui.game.secondsSuffix }}</span>
-          <i
-            class="absolute bottom-0 left-0 h-[0.45cqh] w-full origin-left"
-            :class="isUrgent ? 'bg-yellow' : 'bg-green'"
-            :style="{ transform: `scaleX(${progress})` }"
-          ></i>
-        </template>
-        <b v-else class="min-w-0 text-center text-fs-14">{{ strings.ui.game.chooseNoLimit }}</b>
+        <b class="w-[3ch] shrink-0 text-center text-fs-24 tabular-nums leading-none">
+          {{ hasDeadline ? secondsLeft : strings.ui.game.chooseNoLimit }}
+        </b>
+        <i
+          v-if="hasDeadline"
+          class="absolute bottom-0 left-0 h-[0.45cqh] w-full origin-left"
+          :class="isUrgent ? 'bg-yellow' : 'bg-green'"
+          :style="{ transform: `scaleX(${progress})` }"
+        ></i>
       </HudPill>
       <NetworkStatusButton
         :connected="store.connected"

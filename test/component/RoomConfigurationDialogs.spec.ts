@@ -28,7 +28,7 @@ function vocabularyFixture(packageId = 'basic'): VocabularySnapshot {
     id: `word-${index + 1}`,
     text: index === 0 ? '苹果' : `词语${index + 1}`,
     aliases: index === 0 ? ['红苹果'] : [],
-    category: index === 0 ? '水果' : '常识',
+    collection: index === 0 ? '水果' : '常识',
   }))
   return {
     packageId,
@@ -53,7 +53,7 @@ function vocabularyFixture(packageId = 'basic'): VocabularySnapshot {
     items,
     selectedIds: items.map(({ id }) => id),
     version: '1',
-    categories: ['水果', '常识'],
+    collections: ['水果', '常识'],
   }
 }
 

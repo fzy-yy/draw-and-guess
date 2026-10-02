@@ -1,5 +1,5 @@
 <!--
-  顶栏网络状态按钮（可复用）：Wifi 图标 + 当前延迟数值，按钮配色随连接质量变化。
+  顶栏网络状态按钮（业务组件）：Wifi 图标 + 当前延迟数值，底层复用 StageHeaderButton 原语组件。
   收敛大厅 / 房间 / 对局等各顶栏重复的「网络状态」写法，保证网络 UI 全站一致：
   - 绿色：已连接且延迟不高于调用方注入的阈值（连接良好）；
   - 橙色（yellow 语义令牌）：已连接但延迟高于阈值（网络较慢）；
@@ -14,7 +14,7 @@
 import { computed } from 'vue'
 import { Wifi } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
-
+import StageHeaderButton from '@/components/common/StageHeaderButton.vue'
 const props = withDefaults(
   defineProps<{
     connected: boolean
@@ -52,20 +52,16 @@ const detail = () => strings.a11y.common.connectionDetail(props.connectionLabel,
 </script>
 
 <template>
-  <button
-    type="button"
-    class="ui-feedback flex shrink-0 items-center gap-[0.4em] rounded-[0.6em] px-[0.65em]"
-    :class="[qualityClass[quality], props.size === 'lg' ? 'h-[4.6cqh]' : 'h-[4.4cqh]']"
+  <StageHeaderButton
+    :class="[qualityClass[quality], props.size === 'default' ? 'h-[4.4cqh]' : 'h-[4.6cqh]']"
     :aria-label="strings.a11y.common.networkStatusAria(props.connectionLabel, props.latency)"
     :title="detail()"
+    :audio-feedback="null"
   >
-    <Wifi
-      :class="props.size === 'lg' ? 'h-[2.8cqh] w-[2.8cqh]' : 'h-[2.6cqh] w-[2.6cqh]'"
-      class="shrink-0"
-    />
+    <Wifi class="shrink-0" />
     <!-- 延迟数值：tabular-nums 防止位数变化抖动；未测得时显示占位符「—」 -->
     <span class="min-w-[3ch] text-center text-fs-12 font-bold leading-none tabular-nums">{{
       props.latency ? strings.ui.common.latencyShort(props.latency) : strings.ui.common.emptyDash
     }}</span>
-  </button>
+  </StageHeaderButton>
 </template>

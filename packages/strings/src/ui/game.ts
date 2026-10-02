@@ -34,7 +34,7 @@ export const game = {
   customWordConfirm: '开始作画',
   customWordCancel: '取消',
   autoChoose: (seconds: number) => `${seconds} 秒后将自动选择`,
-  chooseNoLimit: '不限时',
+  chooseNoLimit: '---',
   chooseNoLimitHint: '本回合不限时，想好再开始',
   pausedTitle: '游戏已安全暂停',
   pausedSubtitle: '所有计时已由服务器冻结',

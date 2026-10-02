@@ -5,7 +5,6 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { EVENTS, type VocabularySnapshot } from '@draw-guess/shared'
-import { strings } from '@draw-guess/strings'
 import { useGameTransport } from '@/application/game-transport'
 import type { RequestResult } from './request.ts'
 import { useRoomStore } from './room.ts'
@@ -13,7 +12,7 @@ import { useSessionStore } from './session.ts'
 import { VocabularyRequestGuard } from './vocabulary-request-context.ts'
 
 export const useVocabularyStore = defineStore('vocabulary', () => {
-  const { request, notify } = useGameTransport()
+  const { request } = useGameTransport()
   const roomStore = useRoomStore()
   const sessionStore = useSessionStore()
   const vocabulary = ref<VocabularySnapshot>()
@@ -50,7 +49,6 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
   async function commitVocabulary(
     send: () => Promise<RequestResult<VocabularySnapshot>>,
     guardPackageId: string | undefined,
-    successText: string,
   ): Promise<boolean> {
     // 无房间时 begin 返回 undefined（context 缺 roomId），与原先显式的房空检查同义，
     // 因此房存在性守卫收敛在骨架一处即可。
@@ -60,7 +58,7 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
     if (!snapshot.ok || !requestGuard.accepts(context, state(), snapshot.data.packageId))
       return false
     vocabulary.value = snapshot.data
-    notify(successText)
+    // 词库修改或切包后，服务端会向全房间广播权威的 systemNotice，此处不重复弹本地通知（见 ADR-0053）
     return true
   }
 
@@ -70,7 +68,6 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
     return commitVocabulary(
       () => request(EVENTS.roomUpdateVocabulary, { ids, expectedVersion: room.stateVersion }),
       room.vocabularyPackageId,
-      strings.ui.store.vocabularyUpdated,
     )
   }
 
@@ -84,7 +81,6 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
           expectedVersion: room.stateVersion,
         }),
       packageId,
-      strings.ui.room.vocabPackageSwitched,
     )
   }
 

@@ -21,15 +21,15 @@ export function selectDiverseCandidates({
 
   const selected: VocabularyWord[] = []
   const usedIds = new Set<string>()
-  const usedCategories = new Set<string>()
+  const usedCollections = new Set<string>()
 
-  // 第一轮：优先挑选分类尚未出现的词，保持调用方给定的词池顺序
+  // 第一轮：优先挑选合集尚未出现的词，保持调用方给定的词池顺序
   for (const word of pool) {
     if (selected.length >= count) break
-    if (usedCategories.has(word.category)) continue
+    if (usedCollections.has(word.collection)) continue
     selected.push(word)
     usedIds.add(word.id)
-    usedCategories.add(word.category)
+    usedCollections.add(word.collection)
   }
   // 第二轮：分类已穷尽（候选数多于分类数）时按原顺序补齐
   for (const word of pool) {

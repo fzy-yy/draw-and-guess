@@ -13,8 +13,8 @@ import {
 import { serverStrings } from '@draw-guess/strings'
 import { GameError } from '../../errors.ts'
 
-/** 自定义词在候选池里的分类标记：不参与词库分类白名单，只为统一候选对象形状。 */
-const CUSTOM_WORD_CATEGORY = '自定义'
+/** 自定义词在候选池里的合集标记：只为统一候选对象形状。 */
+const CUSTOM_WORD_COLLECTION = '自定义'
 
 /**
  * 禁止出现的字符：控制字符、格式字符（含零宽连接符）与 emoji。
@@ -44,5 +44,5 @@ export function buildCustomWord(input: { rawText: string; wordId: string }): Voc
   if (characters.every((character) => isPunctuationOrSpace(character))) {
     throw new GameError('INVALID_CUSTOM_WORD', serverStrings.errors.CUSTOM_WORD_ONLY_PUNCTUATION)
   }
-  return { id: input.wordId, text, aliases: [], category: CUSTOM_WORD_CATEGORY }
+  return { id: input.wordId, text, aliases: [], collection: CUSTOM_WORD_COLLECTION }
 }

@@ -16,7 +16,7 @@ import { useGameStore } from '@/stores/game'
 import { ColorSwatchButton, GroupDivider, SquareIconButton } from '@/components/common'
 import { scaleFadeEnter, scaleFadeLeave } from '@/components/game/scale-fade.ts'
 import BrushSizeField from '@/components/game/BrushSizeField.vue'
-
+import { focusToolbar, toolbarZIndex } from '@/components/game/floating-panel-z'
 const props = defineProps<{
   /** 是否可绘制（非画家或非作画阶段时整条置灰）。 */
   canDraw: boolean
@@ -80,7 +80,11 @@ function runHistory(key: HistoryKey): void {
 </script>
 
 <template>
-  <div class="absolute bottom-[1.2cqh] left-1/2 z-[25] -translate-x-1/2">
+  <div
+    class="absolute bottom-[1.2cqh] left-1/2 -translate-x-1/2"
+    :style="{ zIndex: toolbarZIndex }"
+    @pointerdown.stop="focusToolbar"
+  >
     <Transition :css="false" @enter="scaleFadeEnter" @leave="scaleFadeLeave">
       <div
         v-if="visible"

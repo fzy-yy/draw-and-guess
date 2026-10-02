@@ -11,7 +11,7 @@ import { strings } from '@draw-guess/strings'
 import { cn } from '@/utils/cn'
 import { scaleFadeEnter, scaleFadeLeave } from '@/components/game/scale-fade.ts'
 import {
-  bringPanelToFront,
+  focusPanel,
   registerPanelLayer,
   unregisterPanelLayer,
 } from '@/components/game/floating-panel-z'
@@ -67,9 +67,9 @@ let dragOrigin:
     }
   | undefined
 
-/** 点击面板或开始拖动时置顶，避免后打开的面板被已有面板遮住。 */
+/** 点击面板或开始拖动时置顶面板（高于工具栏），避免被工具栏或其他面板遮住。 */
 function bringToFront(): void {
-  bringPanelToFront(layer.id)
+  focusPanel(layer.id)
 }
 
 function beginDrag(event: PointerEvent): void {
@@ -132,7 +132,7 @@ function endDrag(event: PointerEvent): void {
       ref="panelElement"
       :class="rootClass"
       :style="shellStyle"
-      @pointerdown="bringToFront"
+      @pointerdown.stop="bringToFront"
     >
       <header
         class="flex shrink-0 touch-none cursor-grab items-center gap-[0.6em] border-b-[0.18cqh] border-line px-[0.75em] py-[0.55cqh] active:cursor-grabbing"

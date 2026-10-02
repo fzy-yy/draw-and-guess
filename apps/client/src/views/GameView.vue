@@ -32,7 +32,7 @@ import type { FillAck } from '@/composables/useFillSession'
 import type { RequestResult } from '@/stores/request'
 // 对局内设置页复用同一个静态导入的视图组件（静态导入取舍见 docs/adr/0049-lan-first-drop-size-and-coverage-gates.md）
 import SettingsView from '@/views/SettingsView.vue'
-
+import { focusToolbar } from '@/components/game/floating-panel-z'
 const store = useGameStore()
 
 // 自己猜中时触发全屏礼花（含「最后一人猜中」时阶段已切到 round_result 的情况，
@@ -151,7 +151,10 @@ function handleFullscreenToggle(): void {
           <PlayerPanel />
         </aside>
 
-        <div class="relative min-w-0 flex-1 overflow-hidden border-[0.35cqh] border-black bg-white">
+        <div
+          class="relative min-w-0 flex-1 overflow-hidden border-[0.35cqh] border-black bg-white"
+          @pointerdown="focusToolbar"
+        >
           <GameCanvas
             v-model:width="width"
             :round-id="game.roundId"

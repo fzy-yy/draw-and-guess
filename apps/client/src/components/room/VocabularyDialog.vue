@@ -20,7 +20,6 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import SectionHeader from '@/components/common/SectionHeader.vue'
 import SearchInput from '@/components/common/SearchInput.vue'
-import RoundIconButton from '@/components/common/RoundIconButton.vue'
 import type { ScrollableTable } from '@/components/common/data-table.types'
 import MultiSelectPopover, {
   type MultiSelectOption,
@@ -66,7 +65,7 @@ const allWordIds = computed(() => (store.vocabulary?.items ?? []).map((item) => 
  */
 const allColumns = computed<DataTableColumn<VocabularyWord>[]>(() => [
   { key: 'text', label: strings.ui.room.vocabColumnText, weight: 18 },
-  { key: 'category', label: strings.ui.room.vocabColumnCategories, weight: 11 },
+  { key: 'collection', label: strings.ui.room.vocabColumnCollections, weight: 11 },
   {
     key: 'aliases',
     label: strings.ui.room.vocabColumnAliases,
@@ -117,18 +116,19 @@ function toggleSelectAll(): void {
   selection.toggleAll(filteredWords.value)
 }
 
-/** 字段筛选定义：只有分类（来自词库白名单 categoryEnum）——难度与可绘制性已随词库瘦身移除。 */
+/** 字段筛选定义：合集（由词库自动聚合的 collections）——供玩家一键筛选快速启用某组词。 */
 const filterDefs = computed<
   Array<{ key: string; label: string; icon: Component; options: MultiSelectOption[] }>
 >(() => {
+  const collectionList = store.vocabulary?.collections ?? []
   return [
     {
-      key: 'category',
-      label: strings.ui.room.vocabColumnCategories,
+      key: 'collection',
+      label: strings.ui.room.vocabColumnCollections,
       icon: Tags,
-      options: (store.vocabulary?.categories ?? []).map((category) => ({
-        value: category,
-        label: category,
+      options: collectionList.map((col) => ({
+        value: col,
+        label: col,
       })),
     },
   ]
@@ -212,29 +212,37 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
 
     <template v-if="store.vocabulary">
       <div class="flex min-h-0 flex-1 flex-col">
-        <!-- 工具栏：搜索框占左半行（含切换词库选择的圆形小按钮），右半行为功能区 -->
+        <!-- 工具栏：固定长度搜索框 + 竖向分隔线 + 图文胶囊操作按钮区 -->
         <div
-          class="flex items-center gap-[0.6em] py-[1.1cqh] px-[1.7em] border-b-[0.18cqh] border-b-line"
+          class="flex items-center gap-[0.7em] border-b-[0.18cqh] border-b-line px-[1.7em] py-[1.1cqh]"
         >
-          <div class="flex w-1/2 min-w-0 items-center gap-[0.6em]">
-            <div class="min-w-0 flex-1">
-              <SearchInput
-                v-model="search"
-                :placeholder="
-                  viewMode === 'words'
-                    ? strings.ui.room.vocabSearchPlaceholder
-                    : strings.ui.room.vocabPackageSearchPlaceholder
-                "
-                :aria-label="
-                  viewMode === 'words'
-                    ? strings.a11y.room.vocabSearchAria
-                    : strings.a11y.room.vocabPackageSearchAria
-                "
-              />
-            </div>
-            <!-- 圆形切换小按钮：在词条管理与词库包选择之间切换 -->
-            <RoundIconButton
-              :label="
+          <!-- 搜索框：固定宽度（w-[22em]），不受界面切换或右侧操作区显隐影响 -->
+          <div class="w-[22em] shrink-0">
+            <SearchInput
+              v-model="search"
+              :placeholder="
+                viewMode === 'words'
+                  ? strings.ui.room.vocabSearchPlaceholder
+                  : strings.ui.room.vocabPackageSearchPlaceholder
+              "
+              :aria-label="
+                viewMode === 'words'
+                  ? strings.a11y.room.vocabSearchAria
+                  : strings.a11y.room.vocabPackageSearchAria
+              "
+            />
+          </div>
+
+          <!-- 搜索框与按钮之间的竖向分隔线 -->
+          <div class="h-[2.8cqh] w-[0.16cqh] shrink-0 bg-line" aria-hidden="true" />
+
+          <!-- 图文胶囊操作按钮组：icon 加文字，清晰自解释 -->
+          <div class="flex min-w-0 items-center gap-[0.6em]">
+            <!-- 视图模式切换按钮（词条管理 ↔ 词库包选择） -->
+            <button
+              type="button"
+              class="ui-feedback inline-flex h-[4.2cqh] shrink-0 items-center justify-center gap-[0.4em] rounded-[0.55em] border border-control bg-white px-[0.75em] text-fs-12 font-bold text-navy transition-colors hover:bg-sky"
+              :aria-label="
                 viewMode === 'words'
                   ? strings.a11y.room.vocabSwitchToPackages
                   : strings.a11y.room.vocabSwitchToWords
@@ -244,29 +252,39 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
                   ? strings.a11y.room.vocabSwitchToPackages
                   : strings.a11y.room.vocabSwitchToWords
               "
-              audio-feedback="select"
               @click="switchViewMode(viewMode === 'words' ? 'packages' : 'words')"
             >
-              <Library v-if="viewMode === 'words'" class="h-[2.2cqh] w-[2.2cqh]" />
-              <ListFilter v-else class="h-[2.2cqh] w-[2.2cqh]" />
-            </RoundIconButton>
-          </div>
-          <!-- 字段筛选：分类（多选，仅词条模式可用）；纯图标 + 悬浮说明 -->
-          <div v-if="viewMode === 'words'" class="flex w-1/2 min-w-0 items-center gap-[0.45em]">
-            <MultiSelectPopover
-              v-for="filter in filterDefs"
-              :key="filter.key"
-              :label="filter.label"
-              :trigger-aria="strings.a11y.room.vocabFilterAria(filter.label)"
-              :select-all-label="strings.ui.room.vocabSelectAllShort"
-              :deselect-all-label="strings.ui.room.vocabDeselectAllShort"
-              :options="filter.options"
-              :selected="filterSelections[filter.key] ?? []"
-              :icon="filter.icon"
-              :highlight="true"
-              placement="bottom"
-              @update:selected="updateFilter(filter.key, $event)"
-            />
+              <Library
+                v-if="viewMode === 'words'"
+                class="h-[2.2cqh] w-[2.2cqh] shrink-0 text-blue"
+              />
+              <ListFilter v-else class="h-[2.2cqh] w-[2.2cqh] shrink-0 text-blue" />
+              <span>{{
+                viewMode === 'words'
+                  ? strings.ui.room.vocabSwitchToPackagesBtn
+                  : strings.ui.room.vocabSwitchToWordsBtn
+              }}</span>
+            </button>
+
+            <!-- 字段筛选：合集多选（仅在词条管理模式可用），图文胶囊形态 -->
+            <template v-if="viewMode === 'words'">
+              <MultiSelectPopover
+                v-for="filter in filterDefs"
+                :key="filter.key"
+                variant="pill"
+                :label="filter.label"
+                :trigger-text="strings.ui.room.vocabFilterCollectionsBtn"
+                :trigger-aria="strings.a11y.room.vocabFilterAria(filter.label)"
+                :select-all-label="strings.ui.room.vocabSelectAllShort"
+                :deselect-all-label="strings.ui.room.vocabDeselectAllShort"
+                :options="filter.options"
+                :selected="filterSelections[filter.key] ?? []"
+                :icon="filter.icon"
+                :highlight="true"
+                placement="bottom"
+                @update:selected="updateFilter(filter.key, $event)"
+              />
+            </template>
           </div>
         </div>
 

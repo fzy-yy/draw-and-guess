@@ -65,33 +65,37 @@ defineExpose({
     @sort="emit('sort', $event)"
     @toggle="emit('select', $event)"
   >
-    <!-- 词库名称：当前状态由行首单选按钮与选中行底色统一表达。 -->
+    <!-- 词库名称：加粗居中展示 -->
     <template #cell-name="{ row }">
-      <span class="block truncate font-bold text-navy" :title="row.name">{{ row.name }}</span>
+      <span class="block truncate text-center font-bold text-navy" :title="row.name">{{
+        row.name
+      }}</span>
     </template>
 
-    <!-- 词数：等宽数字展示 -->
+    <!-- 词数：等宽数字居中展示 -->
     <template #cell-wordCount="{ row }">
-      <b class="tabular-nums text-blue font-bold">{{ row.wordCount }}</b>
+      <span class="block text-center font-bold tabular-nums text-blue">{{ row.wordCount }}</span>
     </template>
 
-    <!-- 词库描述：灰字说明 -->
+    <!-- 词库描述：灰字居中说明 -->
     <template #cell-description="{ row }">
       <span
-        class="block truncate text-muted"
+        class="block truncate text-center text-muted"
         :title="row.description || strings.a11y.common.emptyDash"
         >{{ row.description || strings.ui.common.emptyDash }}</span
       >
     </template>
 
-    <!-- 版本号：等宽显示 -->
+    <!-- 版本号：等宽居中显示 -->
     <template #cell-version="{ row }">
-      <span class="tabular-nums text-navy">{{ row.version || strings.ui.common.emptyDash }}</span>
+      <span class="block text-center tabular-nums text-navy">{{
+        row.version || strings.ui.common.emptyDash
+      }}</span>
     </template>
 
-    <!-- 更新日期：切换操作统一由行首单选按钮承载。 -->
+    <!-- 更新日期：等宽居中显示 -->
     <template #cell-updatedAt="{ row }">
-      <span class="tabular-nums text-muted">{{
+      <span class="block text-center tabular-nums text-muted">{{
         row.updatedAt || strings.ui.common.emptyDash
       }}</span>
     </template>

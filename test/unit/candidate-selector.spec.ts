@@ -6,7 +6,7 @@ const pool: VocabularyWord[] = Array.from({ length: 10 }, (_, index) => ({
   id: String(index),
   text: `词${index}`,
   aliases: [],
-  category: `类${index % 5}`,
+  collection: `类${index % 5}`,
 }))
 
 describe('CandidateSelector 纯函数契约', () => {
@@ -16,7 +16,7 @@ describe('CandidateSelector 纯函数契约', () => {
     expect(first).toEqual(selectDiverseCandidates({ pool, count }))
     expect(first).toHaveLength(count)
     expect(new Set(first.map((word) => word.id)).size).toBe(count)
-    expect(new Set(first.map((word) => word.category)).size).toBe(count)
+    expect(new Set(first.map((word) => word.collection)).size).toBe(count)
     expect(pool).toEqual(before)
   })
   it('词池不足返回副本，同分类时按词池原顺序补齐', () => {
@@ -24,9 +24,9 @@ describe('CandidateSelector 纯函数契约', () => {
     const small = pool.slice(0, 2)
     expect(selectDiverseCandidates({ pool: small, count: 3 })).toEqual(small)
     expect(selectDiverseCandidates({ pool: small, count: 3 })).not.toBe(small)
-    const singleCategory = pool.map((word) => ({ ...word, category: '同类' }))
+    const singleCollection = pool.map((word) => ({ ...word, collection: '同类' }))
     expect(
-      selectDiverseCandidates({ pool: singleCategory, count: 3 }).map((word) => word.id),
+      selectDiverseCandidates({ pool: singleCollection, count: 3 }).map((word) => word.id),
     ).toEqual(['0', '1', '2'])
   })
   it('候选数多于分类数时，剩余名额按词池原顺序补齐', () => {

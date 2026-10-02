@@ -298,13 +298,13 @@ describe('表格、选择与词库 composables', () => {
       id: 'a',
       text: '苹果',
       aliases: ['红苹果'],
-      category: '水果',
+      collection: '水果',
     },
     {
       id: 'b',
       text: '巴士',
       aliases: ['公交车'],
-      category: '交通',
+      collection: '交通',
     },
   ]
   const packages: VocabularyPackageInfo[] = [
@@ -350,9 +350,9 @@ describe('表格、选择与词库 composables', () => {
     await vi.advanceTimersByTimeAsync(10)
     expect(query.filteredWords.value.map(({ id }) => id)).toEqual(['b'])
     query.clearSearch()
-    query.updateFilter('category', ['水果'])
+    query.updateFilter('collection', ['水果'])
     expect(query.filteredWords.value.map(({ id }) => id)).toEqual(['a'])
-    query.updateFilter('category', [])
+    query.updateFilter('collection', [])
     // 按 ID 升序再降序：localeCompare 与中文排序无关，结果确定
     query.handleSort('id')
     expect(query.wordRows.value.map(({ id }) => id)).toEqual(['a', 'b'])

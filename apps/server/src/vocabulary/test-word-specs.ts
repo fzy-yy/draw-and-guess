@@ -9,14 +9,16 @@
  */
 import { MIN_SELECTED_VOCABULARY_WORDS } from '@draw-guess/shared'
 
-/** 测试词库分类轮转表（与 SqliteProvider/快照的分类白名单校验对齐）。 */
-export const TEST_WORD_CATEGORIES = ['物品', '动物', '动作'] as const
+/** 测试词库合集轮转表（与 SqliteProvider/快照的合集聚合对齐）。 */
+export const TEST_WORD_COLLECTIONS = ['物品', '动物', '动作'] as const
+/** 保持向后兼容别名 */
+export const TEST_WORD_CATEGORIES = TEST_WORD_COLLECTIONS
 
-/** 一条测试词面规格：编号/词面/分类（难度/可绘制性/提示已随词库瘦身移除）。 */
+/** 一条测试词面规格：编号/词面/合集（难度/可绘制性/提示已随词库瘦身移除）。 */
 interface TestWordSpec {
   index: number
   text: string
-  category: string
+  collection: string
 }
 
 /**
@@ -29,7 +31,7 @@ export function buildWordSpecs(count = MIN_SELECTED_VOCABULARY_WORDS): TestWordS
     specs.push({
       index,
       text: `测试词${String(index).padStart(3, '0')}`,
-      category: TEST_WORD_CATEGORIES[(index - 1) % TEST_WORD_CATEGORIES.length] ?? '物品',
+      collection: TEST_WORD_COLLECTIONS[(index - 1) % TEST_WORD_COLLECTIONS.length] ?? '物品',
     })
   }
   return specs

@@ -25,17 +25,20 @@ const props = withDefaults(
     triggerTitle?: string
     /** 追加到面板的扩展类（宽度/最大高度等按场景覆盖默认约束）。 */
     panelClass?: string
+    /** 触发按钮形态：round 为默认圆形图标，pill 为图文胶囊按钮 */
+    variant?: 'round' | 'pill'
   }>(),
   {
     disabled: false,
     placement: 'top',
     triggerTitle: undefined,
     panelClass: '',
+    variant: 'round',
   },
 )
 
 const root = ref<HTMLElement>()
-const trigger = ref<InstanceType<typeof RoundIconButton>>()
+const trigger = ref<{ focus: () => void }>()
 const panel = ref<HTMLElement>()
 const panelId = `action-popover-${useId()}`
 const open = ref(false)
@@ -80,7 +83,23 @@ watch(
     document 级监听。回退本 .stop 前请先读 BaseDialog 侧注释。
   -->
   <div ref="root" class="relative inline-flex" @keydown.esc.stop="close(true)">
+    <button
+      v-if="variant === 'pill'"
+      ref="trigger"
+      type="button"
+      class="ui-feedback inline-flex h-[4.2cqh] shrink-0 items-center justify-center gap-[0.4em] rounded-[0.55em] border border-control bg-white px-[0.75em] text-fs-12 font-bold text-navy transition-colors hover:bg-sky disabled:cursor-not-allowed disabled:opacity-40"
+      :aria-label="triggerLabel"
+      :disabled="disabled"
+      :title="triggerTitle"
+      :aria-expanded="open"
+      :aria-controls="panelId"
+      aria-haspopup="dialog"
+      @click="toggle"
+    >
+      <slot name="trigger" />
+    </button>
     <RoundIconButton
+      v-else
       ref="trigger"
       :label="triggerLabel"
       :disabled="disabled"

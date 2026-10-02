@@ -70,24 +70,26 @@ defineExpose({
     @toggle="emit('toggle', $event)"
     @toggle-all="emit('toggle-all')"
   >
-    <!-- 词面列：主文字加粗突出 -->
+    <!-- 词面列：主文字加粗居中突出 -->
     <template #cell-text="{ row }">
-      <span class="block truncate font-bold text-navy" :title="row.text">{{ row.text }}</span>
+      <span class="block truncate text-center font-bold text-navy" :title="row.text">{{
+        row.text
+      }}</span>
     </template>
-    <!-- 分类列：蓝色小方角徽章（词库单词条仅一个分类） -->
-    <template #cell-category="{ row }">
-      <span v-if="row.category" class="inline-block max-w-full">
+    <!-- 合集群：居中展示蓝色小方角徽章 -->
+    <template #cell-collection="{ row }">
+      <div v-if="row.collection" class="flex items-center justify-center">
         <span class="rounded-none bg-sky px-[0.5em] py-[0.08cqh] text-fs-10 font-bold text-blue">{{
-          row.category
+          row.collection
         }}</span>
-      </span>
+      </div>
       <span v-else class="text-muted">{{ strings.ui.room.vocabAliasEmpty }}</span>
     </template>
-    <!-- 别称列：灰字省略，悬停可见全称 -->
+    <!-- 别称列：灰字居中省略，悬停可见全称 -->
     <template #cell-aliases="{ row }">
       <span
         v-if="row.aliases.length"
-        class="block truncate text-muted"
+        class="block truncate text-center text-muted"
         :title="row.aliases.join(strings.a11y.common.listSeparator)"
         >{{ row.aliases.join(strings.ui.common.listSeparator) }}</span
       >

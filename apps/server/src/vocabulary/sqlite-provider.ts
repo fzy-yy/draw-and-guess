@@ -1,21 +1,17 @@
 /**
  * SQLite 词库 Provider（当前默认实现）。
  *
- * 职责链：定位并读取词库数据库 → 读取 metadata 构造分类白名单 →
- * 读 words 表逐词条严格校验（category ⊆ category_enum、词面长度、别称合法、主键不重复）→
- * 规范化（ID 生成 / 去重）→ 内容哈希版本号。
+ * 职责链：定位并读取词库数据库 → 读 words 表逐词条严格校验（collection 非空、词面长度、别称合法、主键不重复）→
+ * 自动检测并聚合全部合集（collections）→ 规范化（ID 生成 / 去重）→ 内容哈希版本号。
  * 任何异常数据都以带中文文案的 Error 阻止启动，绝不带病运行。
  *
  * 库表结构（见 vocabulary/base_words.db）：
- * - metadata(meta_data_key PRIMARY KEY, meta_data_value)：版本、更新时间与分类枚举集合
- *  （数组统一存 JSON 文本）；
- * - words(id, text, category, aliases)——单词条只有一个分类（category）；
+ * - metadata(meta_data_key PRIMARY KEY, meta_data_value)：版本、更新时间等键值对；
+ * - words(id, text, collection, aliases)——单词条归属一个合集（collection）；
  *   别称以 JSON 数组文本存储。
  *
- * 难度、可绘制性、提示、难度级时限/权重与「是否启用」位已随词库瘦身退出领域模型，库文件也已
- * 删列（见 docs/adr/0046-vocabulary-slimming-and-unified-round-time.md 与
- * docs/adr/0048-vocabulary-schema-slimming.md）；旧词库文件里若仍残留这些列，本 Provider
- * 既不读取也不校验。
+ * 难度、可绘制性、提示、是否启用与 category_enum 白名单已移除（见 docs/adr/0046、0048、0053）；
+ * 本 Provider 对旧词库文件的 category 列自动降级读取映射。
  */
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -37,7 +33,8 @@ interface MetadataRow {
 interface WordRow {
   id: number
   text: string
-  category: string
+  collection?: string
+  category?: string
   aliases: string
 }
 
@@ -60,28 +57,33 @@ export class SqliteProvider implements VocabularyProvider {
     const database = new Database(resolved, { readonly: true, fileMustExist: true })
     try {
       const meta = this.readMeta(database)
-      const categorySet = new Set(meta.categoryEnum)
       const usedIds = new Set<number>()
       const parsedWords: VocabularyWord[] = []
+      const collectionsSet = new Set<string>()
 
-      // 哈希版本号按数组顺序逐词拼接：SQL 不保证行序（VACUUM 重写文件、查询计划变化都会改序），
-      // 必须显式 ORDER BY id，才能保证「内容不变则版本号不变」的确定性。
-      const rows = database
-        .prepare(
-          `SELECT id, text, category, aliases
-           FROM words
-           ORDER BY id`,
-        )
-        .all() as WordRow[]
+      // 检查 words 表结构以兼容 collection 与遗留 category 列
+      const columns = database.prepare('PRAGMA table_info(words)').all() as Array<{ name: string }>
+      const hasCollection = columns.some((col) => col.name === 'collection')
+      const selectSql = hasCollection
+        ? `SELECT id, text, collection, aliases FROM words ORDER BY id`
+        : `SELECT id, text, category AS collection, aliases FROM words ORDER BY id`
+      const rows = database.prepare(selectSql).all() as Array<{
+        id: number
+        text: string
+        collection: string
+        aliases: string
+      }>
 
       for (const row of rows) {
         const aliases = this.parseAliases(row)
-        this.assertWordShape(row, aliases, categorySet, usedIds)
+        this.assertWordShape(row, aliases, usedIds)
+        const collection = row.collection.trim()
+        collectionsSet.add(collection)
         parsedWords.push({
           id: canonicalWordId(this.sourceId, row.id),
           text: row.text,
           aliases,
-          category: row.category,
+          collection,
         })
       }
 
@@ -108,7 +110,7 @@ export class SqliteProvider implements VocabularyProvider {
           description: meta.description || '',
           fileVersion: meta.version,
           updatedAt: meta.updatedAt,
-          categoryEnum: meta.categoryEnum,
+          collections: Array.from(collectionsSet),
           wordCount: parsedWords.length,
         },
       }
@@ -117,63 +119,39 @@ export class SqliteProvider implements VocabularyProvider {
     }
   }
 
-  /** 读取元数据表：分类枚举解析为数组；任何缺失/畸形都以中文错误阻止启动。 */
+  /** 读取元数据表：仅保留 name / description / version / updated_at。 */
   private readMeta(database: Database.Database): {
     name?: string
     description?: string
     version?: string
     updatedAt?: string
-    categoryEnum: string[]
   } {
     const rows = database
       .prepare('SELECT meta_data_key, meta_data_value FROM metadata')
       .all() as MetadataRow[]
     const map = new Map(rows.map((row) => [row.meta_data_key, row.meta_data_value]))
-    const parseList = (key: string): string[] => {
-      const raw = map.get(key)
-      if (!raw) return []
-      try {
-        const value: unknown = JSON.parse(raw)
-        return Array.isArray(value) ? value.map(String).filter(Boolean) : []
-      } catch {
-        return []
-      }
-    }
-    // 必填非空白名单：category_enum 缺失/畸形时若静默返回空集，逐词校验会把错误指向
-    // 词条本身（「分类不在白名单内」）而非元数据，排查方向被误导；这里直接点名元数据键 fail-fast。
-    const parseRequiredList = (key: string): string[] => {
-      const list = parseList(key)
-      if (list.length === 0) {
-        throw new Error(`词库元数据缺少合法的 ${key}（应为非空 JSON 数组），请修正词库数据。`)
-      }
-      return list
-    }
     return {
       name: map.get('name')?.trim(),
       description: map.get('description')?.trim(),
       version: map.get('version'),
       updatedAt: map.get('updated_at'),
-      categoryEnum: parseRequiredList('category_enum'),
     }
   }
 
   /**
-   * 单条词条的形状交叉校验：分类 ∈ category_enum、词面与别称长度合法、主键不重复。
+   * 单条词条的形状校验：合集非空、词面与别称长度合法、主键不重复。
    */
   private assertWordShape(
-    row: WordRow,
+    row: { id: number; text: string; collection: string },
     aliases: string[],
-    categorySet: Set<string>,
     usedIds: Set<number>,
   ): void {
-    // 重复主键检查：正式库与测试 fixture 的 words.id 都是 INTEGER PRIMARY KEY，重复本不可能出现；
-    // 保留此检查是为将来「未声明主键的自定义词库」兜底（Provider 是异常数据的最后防线）。
     if (usedIds.has(row.id)) {
       throw new Error(`词库存在重复主键：「${row.id}」，请修正词库数据。`)
     }
     usedIds.add(row.id)
-    if (!categorySet.has(row.category)) {
-      throw new Error(`词条「${row.text}」的分类「${row.category}」不在 category_enum 白名单内`)
+    if (!row.collection || !row.collection.trim()) {
+      throw new Error(`词条「${row.text}」的合集（collection）不能为空，请修正词库数据。`)
     }
     const length = Array.from(row.text).length
     if (length < 1 || length > APP_CONFIG.vocabulary.maxWordLength) {

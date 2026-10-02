@@ -46,7 +46,7 @@ export function createMinimalVocabularyDb(
       CREATE TABLE words(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         text TEXT NOT NULL UNIQUE,
-        category TEXT NOT NULL,
+        collection TEXT NOT NULL,
         aliases TEXT NOT NULL DEFAULT '[]'
       );
     `)
@@ -56,7 +56,6 @@ export function createMinimalVocabularyDb(
       ['description', description],
       ['version', version],
       ['updated_at', updatedAt],
-      ['category_enum', JSON.stringify(['物品', '动物', '动作'])],
     ]
     const insertMeta = db.prepare(
       'INSERT INTO metadata(meta_data_key, meta_data_value) VALUES(?, ?)',
@@ -64,10 +63,10 @@ export function createMinimalVocabularyDb(
     for (const [key, value] of metaRows) insertMeta.run(key, value)
 
     const insertWord = db.prepare(
-      'INSERT INTO words(id, text, category, aliases) VALUES(?, ?, ?, ?)',
+      'INSERT INTO words(id, text, collection, aliases) VALUES(?, ?, ?, ?)',
     )
     for (const spec of buildWordSpecs(wordCount)) {
-      insertWord.run(spec.index, spec.text, spec.category, '[]')
+      insertWord.run(spec.index, spec.text, spec.collection, '[]')
     }
   } finally {
     db.close()

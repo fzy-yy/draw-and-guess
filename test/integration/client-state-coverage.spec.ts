@@ -443,12 +443,12 @@ describe('大厅、房间与词库权威请求', () => {
               id: 'word-1',
               text: '苹果',
               aliases: [],
-              category: '水果',
+              collection: '水果',
             },
           ],
           selectedIds: ['word-1'],
           version: '1',
-          categories: ['水果'],
+          collections: ['水果'],
         },
       }
     })

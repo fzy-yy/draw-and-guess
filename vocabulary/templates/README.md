@@ -1,7 +1,7 @@
 # 空白词库样板
 
 `example.db` 与内置 `vocabulary/base_words.db` **字段完全一致**，但 `words` 表里没有任何词条，
-`metadata` 只填好了 `name` / `description` / `version` / `updated_at` / `category_enum`。
+`metadata` 只填好了 `name` / `description` / `version` / `updated_at`。
 
 ## 用它做一份自己的词库
 
@@ -10,12 +10,13 @@
    - 源码运行：放进仓库根 `vocabulary/`（源码模式只扫描该目录）。
 2. 用任意 SQLite 工具（如 DBX）打开复制出来的文件，往 `words` 表填词：
 
-   | 列         | 说明                                                             |
-   | ---------- | ---------------------------------------------------------------- |
-   | `id`       | 留空即自增，不用手填                                             |
-   | `text`     | 词面，全库唯一                                                   |
-   | `category` | 必须是 `metadata.category_enum` 里的某一项（可以自行扩充该数组） |
-   | `aliases`  | 别称数组的 JSON 文本，如 `["小猫","喵星人"]`；没有别称就填 `[]`  |
+   | 列     | 说明                 |
+   | ------ | -------------------- |
+   | `id`   | 留空即自增，不用手填 |
+   | `text` | 词面，全库唯一       |
+
+| `collection` | 合集名，由玩家自定义该组词的合集名称（如“动物”、“成语”、“食物”等），用于界面一键筛选 |
+| `aliases` | 别称数组的 JSON 文本，如 `["小猫","喵星人"]`；没有别称就填 `[]` |
 
 3. 顺手改掉 `metadata` 里的 `name` / `description` / `version` / `updated_at`——它们会显示在
    房间的「词库」弹窗里。
@@ -29,5 +30,6 @@
 
 ## 字段口径
 
-难度、可绘制性、提示、是否启用等列已随词库瘦身删除（见 `docs/adr/0046`、`docs/adr/0048`）。
+分类已升级为自定义「合集」（collection），原有 `category_enum` 枚举限制已移除；
+难度、可绘制性、提示、是否启用等列已随词库瘦身删除（见 `docs/adr/0046`、`docs/adr/0048`、`docs/adr/0053`）。
 多余的列与 `metadata` 键虽然不会被读取，但既然从样板开始，就不要再加回来。

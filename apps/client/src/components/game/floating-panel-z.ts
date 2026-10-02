@@ -11,18 +11,36 @@
  *
  * 当前对局只有聊天一个浮层面板（玩家面板为常驻左栏、不参与层级竞争），压缩后的下限区远小于上限，重排不会触顶。
  */
-import { computed, reactive, type ComputedRef } from 'vue'
+import { computed, reactive, ref, type ComputedRef } from 'vue'
 
-/** 起始层级：低于阶段遮罩（z-30），也低于底部工具条（z-25），默认不压住工具条。 */
+export type ActiveSurface = 'toolbar' | 'panel'
+
+/** 起始层级：低于阶段遮罩（z-30），也低于底部工具条。 */
 const BASE_Z_INDEX = 20
-/** 固定上限（阶段遮罩 = z-30）：浮层层级不允许追平或超过。 */
-const CEILING_Z_INDEX = 30
+/** 固定上限：浮层层级不允许超过 27，为工具栏置顶（z-28）与阶段遮罩（z-30）预留空间。 */
+const CEILING_Z_INDEX = 27
+
+/** 当前获得焦点的交互表面，默认工具栏在上（方便作画）。 */
+const activeSurface = ref<ActiveSurface>('toolbar')
+
+/** 工具条当前的动态 z-index：焦点在工具栏时为 28（压住浮层），焦点在面板时为 20（沉在浮层后）。 */
+export const toolbarZIndex = computed(() => (activeSurface.value === 'toolbar' ? 28 : 20))
+
+/** 将工具栏置顶（点击画布作画或点击工具条本身时调用）。 */
+export function focusToolbar(): void {
+  activeSurface.value = 'toolbar'
+}
+
+/** 将悬浮面板置顶（点击悬浮面板或其内部任意控件时调用）。 */
+export function focusPanel(id?: symbol): void {
+  activeSurface.value = 'panel'
+  if (id) bringPanelToFront(id)
+}
 
 /** 当前存活面板 → 层级；响应式以便整体重排时其它面板同步降级。 */
 const layers = reactive(new Map<symbol, number>())
 /** 下一条待分配的层级，单调递增；接近上限时经重排回落。 */
 let nextZIndex = BASE_Z_INDEX
-
 interface PanelLayer {
   /** 面板实例的稳定标识（模块内部用于定位该面板的层级）。 */
   id: symbol
@@ -36,7 +54,7 @@ export function registerPanelLayer(): PanelLayer {
   layers.set(id, allocateZIndex())
   return {
     id,
-    zIndex: computed(() => layers.get(id) ?? BASE_Z_INDEX),
+    zIndex: computed(() => layers.get(id) ?? BASE_Z_INDEX + 1),
   }
 }
 
@@ -46,9 +64,12 @@ export function bringPanelToFront(id: symbol): void {
   layers.set(id, allocateZIndex())
 }
 
-/** 面板卸载时注销，避免 Map 随反复开关面板无限增长。 */
+/** 面板卸载时注销，避免 Map 随反复开关面板无限增长；全清空时重置层级起始点。 */
 export function unregisterPanelLayer(id: symbol): void {
   layers.delete(id)
+  if (layers.size === 0) {
+    nextZIndex = BASE_Z_INDEX
+  }
 }
 
 /** 分配下一个层级；若继续递增会触顶，先把现有面板压缩到下限区再分配。 */

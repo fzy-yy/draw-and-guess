@@ -22,7 +22,7 @@ import {
   normalizedShortcut,
   type ShortcutSettingKey,
 } from '@/utils/keyboard'
-import { StageHeader, SideNav, type SideNavItem } from '@/components/common'
+import { StageHeader, StageHeaderButton, SideNav, type SideNavItem } from '@/components/common'
 // 诊断页同样静态导入（前端已无懒加载，随设置页一并进主入口，见 ADR-0049）
 import { AccessibilityTab, AudioTab, DiagnosticsTab, ShortcutsTab } from '@/components/settings'
 
@@ -157,13 +157,10 @@ function goBack(): void {
     <!-- 顶栏：复用 StageHeader 统一步调骨架，返回动作可配置。 -->
     <StageHeader>
       <template #leading>
-        <button
-          type="button"
-          class="flex items-center gap-[0.45em] rounded-[0.55em] bg-white/10 px-[0.8em] py-[0.8cqh] text-white"
-          @click="goBack"
-        >
-          <ArrowLeft /> {{ props.backLabel }}
-        </button>
+        <StageHeaderButton @click="goBack">
+          <ArrowLeft />
+          <span>{{ props.backLabel }}</span>
+        </StageHeaderButton>
       </template>
       <template #center>
         <div class="text-center">

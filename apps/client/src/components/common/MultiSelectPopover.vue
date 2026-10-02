@@ -42,12 +42,18 @@ const props = withDefaults(
     highlight?: boolean
     /** 弹出方向：缺省向上；位于对话框/页面顶部时传 'bottom' 避免被裁剪（见 ActionPopover） */
     placement?: 'top' | 'bottom'
+    /** 触发按钮形态：round 为默认圆形，pill 为图文胶囊 */
+    variant?: 'round' | 'pill'
+    /** 触发按钮文本（通常配合 pill 变体展示可见文字） */
+    triggerText?: string
   }>(),
   {
     disabled: false,
     icon: undefined,
     highlight: false,
     placement: 'top',
+    variant: 'round',
+    triggerText: undefined,
   },
 )
 
@@ -97,14 +103,21 @@ function toggleSelectAll(): void {
     :disabled="disabled"
     :placement="placement"
     :trigger-title="triggerTitle"
+    :variant="variant"
   >
     <template #trigger>
-      <!-- 纯图标触发：语义见触发按钮 title 与 trigger-aria；筛选生效时图标高亮 -->
       <span
-        class="flex items-center"
-        :class="highlight && selectedCount ? 'text-blue' : 'text-muted'"
+        class="inline-flex items-center gap-[0.4em]"
+        :class="
+          highlight && selectedCount ? 'text-blue' : variant === 'pill' ? 'text-navy' : 'text-muted'
+        "
       >
-        <component :is="props.icon ?? Filter" class="h-[2.4cqh] w-[2.4cqh]" aria-hidden="true" />
+        <component
+          :is="props.icon ?? Filter"
+          class="h-[2.2cqh] w-[2.2cqh] shrink-0 text-blue"
+          aria-hidden="true"
+        />
+        <span v-if="triggerText" class="text-fs-12 font-bold leading-none">{{ triggerText }}</span>
       </span>
     </template>
     <template #default>

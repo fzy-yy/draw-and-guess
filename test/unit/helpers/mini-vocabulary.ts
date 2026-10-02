@@ -11,7 +11,7 @@ import type { VocabularyWord } from '@draw-guess/shared'
 import type { VocabularyRegistry } from '../../../apps/server/src/vocabulary/index.ts'
 import {
   buildWordSpecs,
-  TEST_WORD_CATEGORIES,
+  TEST_WORD_COLLECTIONS,
 } from '../../../apps/server/src/vocabulary/test-word-specs.ts'
 
 /** 把共享词面规格映射为内存 VocabularyWord（id 前缀 sqlite: 贴合 Provider 产出的编号形态）。 */
@@ -20,7 +20,7 @@ function buildWords(count?: number): VocabularyWord[] {
     id: `sqlite:${spec.index}`,
     text: spec.text,
     aliases: [],
-    category: spec.category,
+    collection: spec.collection,
   }))
 }
 
@@ -43,7 +43,7 @@ export function createMemoryVocabularyRegistry(wordCount?: number): VocabularyRe
       description: '内存单测词库',
       fileVersion: '1.0.0',
       updatedAt: '2026-01-01T00:00:00.000Z',
-      categoryEnum: [...TEST_WORD_CATEGORIES],
+      collections: [...TEST_WORD_COLLECTIONS],
       wordCount: items.length,
     },
   }

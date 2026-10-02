@@ -29,26 +29,28 @@ const emit = defineEmits<{ sort: [key: string]; 'toggle-all': [] }>()
     <tr>
       <th
         v-if="hasSelection"
-        class="px-[0.5em] py-[0.55cqh]"
+        class="px-[0.5em] py-[0.55cqh] align-middle text-center"
         :style="{ width: DATA_TABLE_SELECTION_COLUMN_WIDTH }"
       >
         <!-- 表格内密集控件：视觉尺寸设 16px 下限（responsive.minDenseTargetPx），避免小舞台下缩到看不见 -->
-        <input
-          v-if="selectionMode === 'multiple'"
-          type="checkbox"
-          class="h-[max(1.6cqh,16px)] w-[max(1.6cqh,16px)] rounded-none accent-blue"
-          :disabled="selectionDisabled"
-          :checked="selectAllState === 'all'"
-          :indeterminate="selectAllState === 'some'"
-          :aria-label="selectAllAria"
-          @change="emit('toggle-all')"
-        />
-        <span v-else class="sr-only">{{ selectAllAria }}</span>
+        <div class="grid place-items-center">
+          <input
+            v-if="selectionMode === 'multiple'"
+            type="checkbox"
+            class="h-[max(1.6cqh,16px)] w-[max(1.6cqh,16px)] rounded-none accent-blue"
+            :disabled="selectionDisabled"
+            :checked="selectAllState === 'all'"
+            :indeterminate="selectAllState === 'some'"
+            :aria-label="selectAllAria"
+            @change="emit('toggle-all')"
+          />
+          <span v-else class="sr-only">{{ selectAllAria }}</span>
+        </div>
       </th>
       <th
         v-for="column in columns"
         :key="column.key"
-        class="whitespace-nowrap px-[0.6em] py-[0.55cqh] font-bold text-muted"
+        class="whitespace-nowrap px-[0.6em] py-[0.55cqh] font-bold text-muted align-middle text-center"
         :style="{ width: widths.get(column.key) }"
         :aria-sort="
           sortKey === column.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'
@@ -58,7 +60,7 @@ const emit = defineEmits<{ sort: [key: string]; 'toggle-all': [] }>()
         <button
           v-if="column.sortable !== false"
           type="button"
-          class="inline-flex items-center gap-[0.25em] rounded-none px-[0.25em] py-[max(0.1cqh,0.3em)] hover:bg-line"
+          class="inline-flex items-center justify-center gap-[0.25em] rounded-none px-[0.25em] py-[max(0.1cqh,0.3em)] hover:bg-line"
           :aria-label="strings.a11y.common.sortByAria(column.label)"
           @click="emit('sort', column.key)"
         >
@@ -75,7 +77,7 @@ const emit = defineEmits<{ sort: [key: string]; 'toggle-all': [] }>()
           />
           <ArrowUpDown v-else class="h-[1.2cqh] w-[1.2cqh] text-muted" aria-hidden="true" />
         </button>
-        <span v-else>{{ column.label }}</span>
+        <span v-else class="inline-block text-center">{{ column.label }}</span>
       </th>
     </tr>
   </thead>

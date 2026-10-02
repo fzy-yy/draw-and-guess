@@ -5,11 +5,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { strings } from '@draw-guess/strings'
 import FloatingPanel from '@/components/game/FloatingPanel.vue'
 import GameHud from '@/components/game/GameHud.vue'
+import { focusToolbar, toolbarZIndex } from '@/components/game/floating-panel-z'
 import type { PanelPosition } from '@/components/game'
 import { useRoomStore } from '@/stores/room'
 import { createRoomFixture } from '../client/room-fixture'
 import { createPiniaWithFakeTransport } from '../client/fake-game-transport'
-
 /**
  * 浮层面板壳的对外行为：
  * 开合（v-model:open）、标题栏拖动的位置夹取、关闭按钮、与顶栏开关共用同一份开关状态。
@@ -226,5 +226,32 @@ describe('FloatingPanel 跨面板层级（模块级共享）', () => {
 
     first.unmount()
     second.unmount()
+  })
+
+  it('工具栏与悬浮面板焦点联动：点击面板则面板在上，点击工具栏/画布则工具栏在上', async () => {
+    const panel = mount(FloatingPanel, {
+      props: { open: true, title: strings.ui.game.chatPanelTitle },
+    })
+    const panelSection = panel.get('section').element as HTMLElement
+    const zIndex = (element: HTMLElement): number => Number(element.style.zIndex)
+
+    // 默认工具栏处于焦点（28），面板（<= 24）在其下
+    focusToolbar()
+    await nextTick()
+    expect(toolbarZIndex.value).toBe(28)
+    expect(toolbarZIndex.value).toBeGreaterThan(zIndex(panelSection))
+
+    // 点击面板 → 焦点转移到面板，面板置顶，工具栏沉底（20）
+    await panel.get('section').trigger('pointerdown')
+    expect(toolbarZIndex.value).toBe(20)
+    expect(zIndex(panelSection)).toBeGreaterThan(toolbarZIndex.value)
+
+    // 点击工具栏/画布 → 工具栏恢复置顶（28）
+    focusToolbar()
+    await nextTick()
+    expect(toolbarZIndex.value).toBe(28)
+    expect(toolbarZIndex.value).toBeGreaterThan(zIndex(panelSection))
+
+    panel.unmount()
   })
 })

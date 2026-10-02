@@ -30,8 +30,8 @@ export interface VocabularyMeta {
   fileVersion?: string
   /** 词库最后更新日期（SQLite metadata 的 updated_at 行；无则缺省） */
   updatedAt?: string
-  /** 分类白名单（category_enum）：词条分类必须是其子集，并透传给管理 UI 做筛选下拉 */
-  categoryEnum: string[]
+  /** 词库自动检测聚合出的全部合集列表（供管理 UI 做筛选下拉） */
+  collections: string[]
   /** 词库词数（words 表有效词数，服务端预先检查并保存；供测试核验） */
   wordCount?: number
 }

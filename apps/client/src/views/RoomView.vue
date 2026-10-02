@@ -9,9 +9,9 @@ import { useCopyWithFeedback } from '@/composables/useCopyWithFeedback'
 import {
   AppButton,
   ConfirmDialog,
-  IconButton,
   NetworkStatusButton,
   StageHeader,
+  StageHeaderButton,
 } from '@/components/common'
 import {
   InviteDialog,
@@ -100,25 +100,28 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
       </template>
       <template #center>
         <div
-          class="flex items-center justify-self-center gap-[0.6em] text-fs-12 font-bold"
+          class="flex items-center justify-self-center gap-[0.6em] text-fs-18 font-bold leading-none"
           :class="store.room.visibility === 'private' ? 'text-danger-on-dark' : 'text-yellow'"
         >
-          <KeyRound v-if="store.room.visibility === 'private'" />
-          <ShieldCheck v-else />
-          {{
+          <KeyRound
+            v-if="store.room.visibility === 'private'"
+            class="h-[4.2cqh] w-[4.2cqh] shrink-0"
+          />
+          <ShieldCheck v-else class="h-[4.2cqh] w-[4.2cqh] shrink-0" />
+          <span>{{
             store.room.visibility === 'private'
               ? strings.ui.room.privateRoomBadge
               : strings.ui.room.publicRoomBadge
-          }}
+          }}</span>
           <button
             v-if="store.room.privateJoinCode"
             type="button"
-            class="flex items-center gap-[0.4em] py-[0.55cqh] px-[0.75em] text-navy bg-yellow rounded-[0.55em] tracking-[0.16em]"
+            class="flex items-center gap-[0.4em] rounded-[0.55em] bg-yellow px-[0.75em] py-[0.55cqh] tracking-[0.16em] text-navy"
             :aria-label="strings.a11y.room.copyPrivateCodeAria"
             @click="handleCopyPrivateCode"
           >
             <b>{{ store.room.privateJoinCode }}</b>
-            <ClipboardCopy />
+            <ClipboardCopy class="h-[2.2cqh] w-[2.2cqh] shrink-0" />
           </button>
         </div>
       </template>
@@ -131,15 +134,16 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           :connection-label="store.connectionLabel"
           :latency-good-ms="store.config.network.latencyGoodMs"
         />
-        <IconButton
-          size="lg"
-          :label="strings.a11y.common.exit"
+        <!-- 退出按钮：统一复用 StageHeaderButton，带图标与可见文字「退出」，与大厅/设置页顶栏一致 -->
+        <StageHeaderButton
           :title="strings.a11y.common.exit"
+          :aria-label="strings.a11y.common.exit"
           :audio-feedback="null"
           @click="showLeaveConfirm = true"
         >
-          <LogOut class="h-[2.6cqh] w-[2.6cqh]" />
-        </IconButton>
+          <LogOut />
+          <span>{{ strings.ui.room.exit }}</span>
+        </StageHeaderButton>
       </template>
     </StageHeader>
 

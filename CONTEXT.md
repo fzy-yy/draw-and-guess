@@ -27,7 +27,8 @@
 | 渲染态 / 提交态两把锁（render / submit lock） | 渲染态＝重放里有填充在算（归画布重放状态机）；提交态＝本地填充待权威修订追平（归 useFillSession）。合成 canFill 门禁                                                        | ADR-0009、ADR-0018                                                 |
 | 填充降级（fill degradation）                  | Worker 失败终止重建 + 同一 ImageData 主线程降级恰一次；彻底失败请求权威快照                                                                                                 | ADR-0009、`flood-fill-worker.ts`                                   |
 | 笔画批次（pending stroke batch）              | 一笔按 maxPointsPerBatch 分批上送、序号接续（startPointIndex）；批失败即该笔回滚并请求权威快照                                                                              | `useStrokeSession.ts`                                              |
-| 词库包（vocabulary package）                  | 词条只剩词面/别称/唯一分类；难度、可绘制性、提示、难度级配置与启用位已删除（库表已删列，旧库遗留列不读不校验）                                                              | ADR-0046、ADR-0048、`vocabulary/`                                  |
+| 词库包（vocabulary package）                  | 词条只剩词面/合集/别称；分类白名单（category_enum）与难度、可绘制性、提示、启用位均已删除，合集由服务端自动聚合                                                             | ADR-0046、ADR-0048、ADR-0053、`vocabulary/`                        |
+| 词条合集（word collection）                   | 词条归属的一组词集合名称（玩家可自定义）；取消枚举限制，服务端自动检测并聚合，供前端筛选并配合全选快速启用一组词                                                            | ADR-0053、`sqlite-provider.ts`                                     |
 | 单回合时长（round duration）                  | 房主在 60/90/120/150 四档里选一个（默认 120），它是作画与猜词的唯一时长口径，词条不再参与                                                                                   | ADR-0046、`packages/config/src/game.ts`                            |
 | 自定义题目（custom word）                     | 画家在选词阶段输入自己的词直接开画；房主开关 `allowCustomWord`（默认关），服务端合成无元数据词条并拒绝撞词                                                                  | ADR-0045、`domain/vocabulary/custom-word.ts`                       |
 | 选词阶段不限时（untimed choosing）            | `allowChooseTimeLimit` 关闭时不写截止时间（`phaseEndsAt = 0`）、不自动代选，唯一兜底是画家离开/掉线                                                                         | ADR-0045、`round-machine.ts`                                       |
@@ -47,6 +48,8 @@
 | 逐字遮罩（progressive mask）                  | 题目遮罩按节奏逐格揭示答案字符，是猜词者唯一的题目线索；结构化提示（词条 hint 文案）已从对局链路移除                                                                        | ADR-0042、ADR-0001                                                 |
 | 浮层面板（floating panel）                    | 对局界面覆盖画布、可拖动可关闭的聊天面板；玩家面板为常驻左栏（在流内占位、不浮动）；面板纵向撑满画布高，顶栏开关与面板内关闭双向同步                                        | ADR-0043                                                           |
 | 底部工具条（bottom toolbar）                  | 浮在画布底部、单行 icon 化的绘图工具条；仅画笔大小显示数值，可由顶栏开关整体收起                                                                                            | ADR-0043                                                           |
+| 顶栏按钮（StageHeaderButton）                 | StageHeader 顶栏内的统一操作与状态按钮原语（设置、退出、返回与网络状态底层呈现）；统一 4.6cqh 高度、rounded-[0.6em] 圆角与图标文字水平排版                                  | ADR-0052、`StageHeaderButton.vue`                                  |
+| 固定等宽倒计时（fixed-width timer pill）      | 对局顶栏倒计时胶囊固定为三位字符等宽容器（`w-[3ch]`），数字居中，不限时以 '---' 居中占位，避免数字位数变化导致胶囊抖动                                                      | ADR-0052、`GameHud.vue`                                            |
 
 ## 待打磨（deliberately unresolved）
 

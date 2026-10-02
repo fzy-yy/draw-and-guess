@@ -25,12 +25,12 @@ const customWordId = (index = 1) =>
   `custom:00000000-0000-4000-8000-${String(index).padStart(12, '0')}`
 
 describe('自定义词的词面校验（纯函数）', () => {
-  it('折叠空白并保留原文，分类标记为「自定义」', () => {
+  it('折叠空白并保留原文，合集标记为「自定义」', () => {
     expect(buildCustomWord({ rawText: '  屋顶  上的猫 ', wordId: customWordId() })).toEqual({
       id: customWordId(),
       text: '屋顶 上的猫',
       aliases: [],
-      category: '自定义',
+      collection: '自定义',
     })
   })
 
