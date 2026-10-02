@@ -353,7 +353,7 @@ pnpm format:check  # 仅检查格式
     - **禁止硬编码**：严禁在组件内书写 `text-[0.68em]`、`text-[1.85cqh]` 等任意数值的临时字号；
   - **二元字重规范（非 normal 即 bold）**：全项目字重仅允许两种状态：常规（默认或 `font-normal`，400）与加粗（`font-bold`，700）。**严禁**使用 `font-semibold` (600)、`font-extrabold` (800)、`font-black` (900) 或 `font-[1000]`。所有历史极端字重均收敛为 `font-bold`，所有次要正文为常规字重，确保视觉层级分明、渲染抗锯齿细腻、不同操作系统字体表现一致。
 - **Vue 3.4+ `defineModel()` 统一双向绑定规范**：
-  - 表单组件值绑定（`AppInput` / `SearchInput` 的 `modelValue`、`RuleSliderField` / `SettingSliderRow` 的数字值、`RuleToggleField` / `SettingSwitchRow` 的布尔值）；
+  - 表单组件值绑定（`AppInput` / `SearchInput` 的 `modelValue`、`RuleSelectField` / `SettingSliderRow` 的数字值、`RuleToggleField` / `SettingSwitchRow` 的布尔值）；
   - 模态弹窗显隐控制统一命名为 `open`（`v-model:open="isOpen"`），所有弹窗组件（`BaseDialog` / `ConfirmDialog` / `AvatarPickerDialog` / `RulesDialog` / `VocabularyDialog` / `InviteDialog` / `CreateRoomDialog` / `JoinPrivateDialog`）均遵循该标准宏接口；
   - 工具参数绑定（`CanvasToolbar` 与 `GameCanvas` 的 `v-model:width="strokeWidth"`）；
   - **严禁**使用已淘汰的手写 `props: { modelValue }` + `emit('update:modelValue')` 样板代码。

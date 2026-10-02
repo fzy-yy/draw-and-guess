@@ -21,6 +21,15 @@ export function activeMembers(members: readonly RoomMember[]): RoomMember[] {
 }
 
 /**
+ * 是否仍占席位：未主动离局（观战者仍占席，离局者为成绩卡保留的占位不再占席）。
+ * 与服务端 `domain/room/member-facts.ts` 的 `occupiesSeat` 同口径——容量与房间规则里的
+ * 「最大玩家数下限」都认它，不要改用 `activeMembers`（口径见 docs/adr/0023-member-facts-single-source.md）。
+ */
+export function occupiesSeatMember(member: RoomMember): boolean {
+  return !member.leftGame
+}
+
+/**
  * 在线可玩身份：非观战且连接在线。
  * 用于「准备就绪」「可猜词」「可发送互动」这类要求当前身份即时在线的判定。
  * 与 `isActiveMember` 的差异：本谓词不排除 leftGame——调用点本身就是当前在线身份场景，

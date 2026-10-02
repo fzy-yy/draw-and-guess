@@ -21,7 +21,7 @@ beforeEach(() => {
 
 /**
  * 房间规则产品（旧「玩法预设」与「计分方式」已移除）：
- * 建房提交唯一默认组、规则弹窗字段完整（含新增「额外猜词时间」滑块）、
+ * 建房提交唯一默认组、规则弹窗平铺全部字段（区间用下拉、开关用复选框）、
  * 摘要按「默认组差异」裁剪展示。
  */
 describe('房间规则与高级设置', () => {
@@ -53,31 +53,30 @@ describe('房间规则与高级设置', () => {
     wrapper.unmount()
   })
 
-  it('编辑 UI 覆盖全部规则字段（含单回合时长档位与选词阶段限时），保存原样上抛草稿', async () => {
+  it('编辑 UI 覆盖全部规则字段（含单回合时长档位与选词时间），保存原样上抛草稿', async () => {
     const draft = defaultRoomSettings(6)
     const wrapper = mount(RulesDialog, {
       props: { open: true, draft },
       global: { plugins: [pinia] },
     })
 
-    // 收纳结构：基础设置 + 高级设置；计分方式与玩法预设均不再出现
-    expect(wrapper.text()).toContain(strings.ui.room.basicSettings)
-    expect(wrapper.text()).toContain(strings.ui.room.advancedSettings)
+    // 字段全部平铺（无「基础设置 / 高级设置」收纳）；计分方式与玩法预设均不再出现
     expect(wrapper.text()).not.toContain('玩法预设')
     expect(wrapper.text()).not.toContain('计分方式')
     expect(wrapper.text()).toContain(strings.ui.room.drawSecondsField)
-    expect(wrapper.text()).toContain(strings.ui.room.toggleChooseTimeLimit)
     expect(wrapper.text()).toContain(strings.ui.room.toggleAllowCustomWord)
     expect(wrapper.text()).toContain(strings.ui.room.toggleShowWordLength)
     expect(wrapper.text()).toContain(strings.ui.room.toggleProgressiveHints)
     expect(wrapper.text()).toContain(strings.ui.room.togglePause)
-    // 滑块：轮数/选词时间/候选数 = 3；开关 7（选词阶段限时 + 画家自定义题目）
+    // 区间字段一律下拉：滑块 0；开关 6（「选词阶段限时」已并入「选词时间」下拉）
     //（结构化提示、提示出现时机、额外猜词时间与猜词基础分均已移除）
-    expect(wrapper.findAll('input[type="range"]')).toHaveLength(3)
-    expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(7)
-    // 下拉：最大玩家数 / 单回合时长 / 中途加入 = 3；单回合时长默认显示 120 秒
-    expect(wrapper.findAll('button[aria-haspopup="listbox"]')).toHaveLength(3)
+    expect(wrapper.findAll('input[type="range"]')).toHaveLength(0)
+    expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(6)
+    // 下拉：最大玩家数 / 每人作画次数 / 单回合时长 / 选词时间 / 候选词数量 / 中途加入 = 6
+    // 单回合时长默认显示 120 秒；选词阶段默认不限时
+    expect(wrapper.findAll('button[aria-haspopup="listbox"]')).toHaveLength(6)
     expect(wrapper.text()).toContain(strings.ui.common.secondsUnit(draft.drawSeconds))
+    expect(wrapper.text()).toContain(strings.ui.room.chooseTimeUnlimited)
 
     await wrapper.get('button[aria-haspopup="listbox"]').trigger('click')
     await wrapper
@@ -90,6 +89,62 @@ describe('房间规则与高级设置', () => {
       .trigger('click')
     const saved = wrapper.emitted('save')?.[0]?.[0]
     expect(saved).toEqual({ ...draft, maxPlayers: 4 })
+    wrapper.unmount()
+  })
+
+  it('「选词时间」合并下拉与两个协议字段往返一致，切回不限时保留已选秒数', async () => {
+    const draft = defaultRoomSettings(6)
+    const wrapper = mount(RulesDialog, {
+      props: { open: true, draft },
+      global: { plugins: [pinia] },
+    })
+    // 模板顺序固定：最大玩家数 / 每人作画次数 / 单回合时长 / 选词时间 / 候选词数量 / 中途加入
+    const chooseTimeCombo = wrapper.findAll('button[aria-haspopup="listbox"]')[3]!
+    const pick = async (label: string): Promise<void> => {
+      await chooseTimeCombo.trigger('click')
+      await wrapper
+        .findAll('[role="option"]')
+        .find((option) => option.text() === label)!
+        .trigger('click')
+    }
+
+    // 默认不限时（allowChooseTimeLimit=false）→ 选具体秒数：开限时并写入 chooseSeconds
+    await pick(strings.ui.common.secondsUnit(20))
+    // 再选回不限时：只关开关，上次秒数保留（下次开限时沿用同一值）
+    await pick(strings.ui.room.chooseTimeUnlimited)
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes(strings.ui.room.saveRules))!
+      .trigger('click')
+    expect(wrapper.emitted('save')?.[0]?.[0]).toEqual({
+      ...draft,
+      chooseSeconds: 20,
+      allowChooseTimeLimit: false,
+    })
+    wrapper.unmount()
+  })
+
+  it('最大玩家数下拉剔除低于当前占席数的档位（与服务端校验同口径）', async () => {
+    const fixture = createRoomFixture('waiting')
+    const extra = [0, 1].map((index) => ({
+      ...fixture.members[0]!,
+      id: `00000000-0000-4000-8000-00000000001${index}`,
+      nickname: `玩家${index}`,
+      isHost: false,
+    }))
+    const roomStore = useRoomStore()
+    roomStore.room = { ...fixture, members: [...fixture.members, ...extra] }
+    const wrapper = mount(RulesDialog, {
+      props: { open: true, draft: fixture.settings },
+      global: { plugins: [pinia] },
+    })
+
+    // 占席 4 人：下限抬到 4（1~3 人可直接选到、只能被服务端拒绝的档位不再出现）
+    await wrapper.findAll('button[aria-haspopup="listbox"]')[0]!.trigger('click')
+    expect(wrapper.findAll('[role="option"]').map((option) => option.text())).toEqual(
+      [4, 5, 6].map((count) => strings.ui.common.playersUnit(count)),
+    )
     wrapper.unmount()
   })
 

@@ -1,7 +1,6 @@
 <!--
-  规则/表单下拉字段（标签 + SelectDropdown 的最小通用结构，与 RuleSliderField/RuleToggleField 同组）。
-  v-model 绑定字段值，options 为统一选项数组（值类型与字段一致：数字选项保留 number 语义）；
-  额外的辅助说明（如最大值提示）经默认插槽放在选择框下方。
+  规则/表单下拉字段（标签 + SelectDropdown 的最小通用结构，与 RuleToggleField 同组）。
+  v-model 绑定字段值，options 为统一选项数组（值类型与字段一致：数字选项保留 number 语义）。
   内部控件已从原生 <select> 换为手写 SelectDropdown 原语（统一视觉与键盘交互）；
   字段标签经 span id + aria-labelledby 关联到 combobox。
 -->
@@ -24,6 +23,5 @@ const labelId = `${useId()}-label`
   <div class="min-w-0 flex flex-col gap-[0.5cqh] text-fs-14 font-bold">
     <span :id="labelId">{{ label }}</span>
     <SelectDropdown v-model="model" :options="options" :labelledby="labelId" />
-    <slot />
   </div>
 </template>

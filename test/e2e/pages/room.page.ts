@@ -38,10 +38,8 @@ export class RoomPage {
   async updateChooseSeconds(seconds: number) {
     await this.openRules()
     const dialog = this.page.getByRole('dialog')
-    // 选词阶段默认不限时（allowChooseTimeLimit=false）：先打开开关，滑块才可编辑（见 ADR-0045）
-    const limitToggle = dialog.getByLabel('选词阶段限时')
-    if (!(await limitToggle.isChecked())) await limitToggle.check()
-    await dialog.getByLabel('选词时间').fill(String(seconds))
+    // 选词时间已合并成单个下拉（默认「不限时」）：选具体秒数即同时开启限时（见 ADR-0045、ADR-0051）
+    await selectDropdownOption(dialog, '选词时间', `${seconds} 秒`)
     await dialog.getByRole('button', { name: /保存规则/ }).click()
     await expect(dialog).toBeHidden({ timeout: 10_000 })
   }

@@ -5,6 +5,7 @@ import { phaseTextFor } from '../../apps/client/src/utils/phase-text.ts'
 import {
   activeMembers,
   isActiveMember,
+  occupiesSeatMember,
   playerCountOptions,
 } from '../../apps/client/src/utils/room-facts.ts'
 import { createRoomFixture } from '../client/room-fixture'
@@ -30,6 +31,12 @@ describe('客户端房间事实单一口径', () => {
     expect(isActiveMember(spectator)).toBe(false)
     expect(isActiveMember(departed)).toBe(false)
     expect(activeMembers([active, spectator, departed]).map((item) => item.id)).toEqual(['a'])
+  })
+
+  it('occupiesSeatMember 只排除离局者：观战者仍占席', () => {
+    // 占席是容量口径（ADR-0023）：观战者仍占座位，只有主动离局者不再占席
+    expect(occupiesSeatMember(member({ spectating: true }))).toBe(true)
+    expect(occupiesSeatMember(member({ leftGame: true }))).toBe(false)
   })
 
   it('playerCountOptions 生成闭区间选项且文案走 strings', () => {

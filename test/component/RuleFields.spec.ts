@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/vue'
+import { render, screen } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { playInteractionSound } from '@/audio'
 import RuleSelectField from '@/components/common/RuleSelectField.vue'
-import RuleSliderField from '@/components/common/RuleSliderField.vue'
 import RuleToggleField from '@/components/common/RuleToggleField.vue'
 
 describe('规则字段原语', () => {
@@ -45,28 +44,5 @@ describe('规则字段原语', () => {
 
     expect(onUpdate).toHaveBeenCalledWith(true)
     expect(playInteractionSound).toHaveBeenCalledWith('toggle')
-  })
-
-  it('滑块输入即时更新，提交变化时只播放一次反馈', async () => {
-    const onUpdate = vi.fn()
-    render(RuleSliderField, {
-      props: {
-        display: '60 秒',
-        label: '作画时间',
-        max: 120,
-        min: 30,
-        modelValue: 60,
-        step: 10,
-        'onUpdate:modelValue': onUpdate,
-      },
-    })
-    const slider = screen.getByRole('slider')
-
-    await fireEvent.input(slider, { target: { value: '90' } })
-    await fireEvent.change(slider)
-
-    expect(onUpdate).toHaveBeenLastCalledWith(90)
-    expect(playInteractionSound).toHaveBeenCalledOnce()
-    expect(playInteractionSound).toHaveBeenCalledWith('select')
   })
 })

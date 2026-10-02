@@ -115,7 +115,6 @@ describe('RulesDialog 完整规则字段', () => {
       strings.ui.room.chooseTimeField,
       strings.ui.room.optionCountField,
       strings.ui.room.joinPolicyField,
-      strings.ui.room.toggleChooseTimeLimit,
       strings.ui.room.toggleAllowCustomWord,
       strings.ui.room.togglePlayerInvite,
       strings.ui.room.toggleAllowWordReroll,

@@ -1,14 +1,15 @@
 <!--
-  房间规则编辑弹窗（房主）——滑块与开关修改规则，保存前可取消。
+  房间规则编辑弹窗（房主）——两列等高栅格陈列全部规则字段，保存前可取消。
   原 RoomView.vue 规则弹窗迁入本组件，基于 BaseDialog 复用外壳。
   父组件持有草稿（draft prop），本组件用本地副本编辑（避免修改 props），保存时把副本通过 save 上抛。
 
-  布局约定：
-  - 卡片固定高度（h-[82cqh]）+ 表单区 flex-1 滚动：展开/收起收纳卡时弹窗大小不变，
-    内容超高由表单区滚动条容纳（旧「展开把弹窗撑大」缺陷的修复点）；
-  - 规则分「基础设置 / 高级设置」两个可收纳 <details>，基础默认展开；
+  布局与控件约定（取舍见 docs/adr/0051-rules-dialog-flat-grid-and-dropdown-fields.md）：
+  - 取消「基础设置 / 高级设置」收纳：字段本就不多，收纳只多一次点击，平铺后一行两个更整齐；
+  - 下拉字段排在前、复选框字段排在后，同类同行；区间字段（作画次数/选词时间/候选词）一律用下拉而非
+    滑块——档位只有 4~6 档，下拉能一次列出全部取值，比滑块更精确也更省纵向空间；
+  - 卡片固定高度（h-[82cqh]）+ 表单区滚动：弹窗尺寸恒定，不做「展开撑大」；
   - 旧「玩法预设」与「计分方式」下拉已移除：预设取消（唯一默认组见 config roomSettingsDefaults），
-    计分固定为固定 100 分制（见 ADR-0047）。
+    计分固定为固定 100 分制（见 docs/adr/0047-fixed-100-point-scoring.md）。
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
@@ -18,11 +19,13 @@ import { defaultRoomSettings } from '@draw-guess/config'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import SectionHeader from '@/components/common/SectionHeader.vue'
-import RuleSliderField from '@/components/common/RuleSliderField.vue'
 import RuleSelectField, { type RuleSelectOption } from '@/components/common/RuleSelectField.vue'
 import RuleToggleField from '@/components/common/RuleToggleField.vue'
 import { useGameStore } from '@/stores/game'
-import { playerCountOptions } from '@/utils/room-facts'
+import { occupiesSeatMember, playerCountOptions } from '@/utils/room-facts'
+
+/** 「选词时间」合并下拉的值域：不限时，或具体秒数（见下方 chooseTime 代理）。 */
+type ChooseTimeValue = 'unlimited' | number
 
 const open = defineModel<boolean>('open', { default: false })
 const props = defineProps<{ draft?: RoomSettings }>()
@@ -34,13 +37,37 @@ function handleClose(): void {
   open.value = false
 }
 
-/** 下拉选项：数值范围/枚举值一律来自公开配置与 strings，禁止另写一套。 */
+/**
+ * 把「最小值 / 最大值 / 步进」区间展开为取值列表。
+ * 区间与步进一律取自公开配置（packages/config/src/game.ts），禁止在组件里另写一套数值范围；
+ * 展开后用 strings 的格式化函数拼标签，保证与摘要、提示文案同一口径。
+ */
+function rangeValues(range: { min: number; max: number; step: number }): number[] {
+  const values: number[] = []
+  for (let value = range.min; value <= range.max; value += range.step) values.push(value)
+  return values
+}
+
+/**
+ * 下拉选项：数值范围/枚举值一律来自公开配置与 strings。
+ * 最大玩家数的下限不得低于当前占席数（与服务端 updateSettings 的校验同口径，见 ADR-0023）：
+ * 非法值不出现在下拉里，因此这个字段不需要额外的容量提示文案。
+ */
 const maxPlayerOptions = computed(() =>
   playerCountOptions({
-    min: store.config.player.minPlayers,
+    min: Math.max(
+      store.config.player.minPlayers,
+      (store.room?.members ?? []).filter(occupiesSeatMember).length,
+    ),
     max: store.config.player.maxPlayers,
   }),
 )
+const roundsOptions: Array<RuleSelectOption<number>> = rangeValues(
+  store.config.game.roundsPerPlayer,
+).map((rounds) => ({ value: rounds, label: strings.ui.common.roundsUnit(rounds) }))
+const optionCountOptions: Array<RuleSelectOption<number>> = rangeValues(
+  store.config.game.optionCount,
+).map((count) => ({ value: count, label: strings.ui.room.optionCountUnit(count) }))
 // 显式标注选项值类型为协议联合：不加标注时 value 会被拓宽为 string，
 // RuleSelectField 的 v-model 与 options 泛型配对即失效（strictTemplates 试点抓出的真实缺陷）。
 const joinPolicyOptions: RuleSelectOption<RoomSettings['joinPolicy']>[] = [
@@ -57,6 +84,14 @@ const drawSecondsOptions: RuleSelectOption<RoomSettings['drawSeconds']>[] =
     value: seconds,
     label: strings.ui.common.secondsUnit(seconds),
   }))
+/** 选词时间：把 allowChooseTimeLimit 与 chooseSeconds 合成一个下拉（见下方 chooseTime）。 */
+const chooseTimeOptions: Array<RuleSelectOption<ChooseTimeValue>> = [
+  { value: 'unlimited', label: strings.ui.room.chooseTimeUnlimited },
+  ...rangeValues(store.config.game.chooseSeconds).map((seconds) => ({
+    value: seconds,
+    label: strings.ui.common.secondsUnit(seconds),
+  })),
+]
 
 // 本地编辑副本：所有字段均为原始值，浅拷贝即可；每次打开（draft 变化）时重新同步。
 // 初值用配置工厂生成完整合法对象，避免用类型断言绕过 RoomSettings 的字段约束。
@@ -68,10 +103,27 @@ watch(
   },
   { immediate: true },
 )
+
+/**
+ * 「选词时间」的读写代理：协议里它是 allowChooseTimeLimit + chooseSeconds 两个字段，
+ * 界面上只是「多久」一个问题——选「不限时」即关闭开关，选具体秒数才打开开关并写入秒数；
+ * 切回「不限时」时保留原 chooseSeconds，下次再开限时沿用用户上次的选择（见 ADR-0045）。
+ */
+const chooseTime = computed<ChooseTimeValue>({
+  get: () => (localDraft.value.allowChooseTimeLimit ? localDraft.value.chooseSeconds : 'unlimited'),
+  set: (value) => {
+    if (value === 'unlimited') {
+      localDraft.value.allowChooseTimeLimit = false
+      return
+    }
+    localDraft.value.allowChooseTimeLimit = true
+    localDraft.value.chooseSeconds = value
+  },
+})
 </script>
 
 <template>
-  <!-- 规则编辑表单：数值字段用滑块，开关用复选框；中途加入策略为下拉框 -->
+  <!-- 规则编辑表单：两列等高栅格；下拉字段在前、复选框字段在后（同类同行，逐行左→右填充） -->
   <BaseDialog
     v-model:open="open"
     width-class="w-[68cqw]"
@@ -87,107 +139,81 @@ watch(
       ></SectionHeader>
     </template>
 
-    <!-- 表单区在弹窗内自行滚动：卡片固定高度，展开收纳卡只增滚动内容、不改弹窗尺寸 -->
+    <!-- 表单区在弹窗内自行滚动：卡片高度固定，内容超出才由滚动条容纳。
+         行高用 minmax 下限而非写死 h：下拉字段的自然高约 8.4cqh（1280×720）～8.6cqh（1024×576，
+         字号像素下限在低高度舞台下占比更大），下限取 8.7cqh 既高于该自然高（6 行严格等高），
+         又让「6 行 + 行距 + 上下内边距」正好收在卡片可用高度内（不出现无谓滚动条）；
+         极小舞台下字号下限把内容撑高时，该行自行变高而不裁切。 -->
     <div
-      class="grid min-h-0 flex-1 auto-rows-min grid-cols-1 gap-[1.5cqh] overflow-y-auto py-[2.2cqh] px-[2em] overscroll-contain"
+      class="grid min-h-0 flex-1 auto-rows-[minmax(8.7cqh,auto)] grid-cols-2 content-start gap-x-[1.8em] gap-y-[1.5cqh] overflow-y-auto py-[1.6cqh] px-[2em] overscroll-contain"
     >
-      <!-- 基础设置：常用规则，默认展开；与高级设置一样可点击标题收纳 -->
-      <details class="rounded-[0.7em] border-[0.16cqh] border-line bg-paper p-[1em]" open>
-        <summary class="cursor-pointer font-bold text-blue">
-          {{ strings.ui.room.basicSettings }}
-        </summary>
-        <div class="mt-[1.5cqh] grid grid-cols-2 gap-[1.5cqh_1.8em]">
-          <RuleSelectField
-            v-model="localDraft.maxPlayers"
-            :label="strings.ui.room.maxPlayersField"
-            :options="maxPlayerOptions"
-          >
-            <small class="text-muted text-fs-12">{{ strings.ui.room.maxPlayersNote }}</small>
-          </RuleSelectField>
+      <RuleSelectField
+        v-model="localDraft.maxPlayers"
+        :label="strings.ui.room.maxPlayersField"
+        :options="maxPlayerOptions"
+      />
 
-          <RuleSliderField
-            v-model="localDraft.roundsPerPlayer"
-            :label="strings.ui.common.roundsField"
-            :min="store.config.game.roundsPerPlayer.min"
-            :max="store.config.game.roundsPerPlayer.max"
-            :step="store.config.game.roundsPerPlayer.step"
-            :display="strings.ui.common.roundsUnit(localDraft.roundsPerPlayer)"
-          />
+      <RuleSelectField
+        v-model="localDraft.roundsPerPlayer"
+        :label="strings.ui.common.roundsField"
+        :options="roundsOptions"
+      />
 
-          <RuleSliderField
-            v-model="localDraft.chooseSeconds"
-            :label="strings.ui.room.chooseTimeField"
-            :min="store.config.game.chooseSeconds.min"
-            :max="store.config.game.chooseSeconds.max"
-            :step="store.config.game.chooseSeconds.step"
-            :display="
-              localDraft.allowChooseTimeLimit
-                ? strings.ui.common.secondsUnit(localDraft.chooseSeconds)
-                : strings.ui.room.chooseTimeUnlimited
-            "
-            :disabled="!localDraft.allowChooseTimeLimit"
-          />
+      <RuleSelectField
+        v-model="localDraft.drawSeconds"
+        :label="strings.ui.room.drawSecondsField"
+        :options="drawSecondsOptions"
+      />
 
-          <RuleSliderField
-            v-model="localDraft.optionCount"
-            :label="strings.ui.room.optionCountField"
-            :min="store.config.game.optionCount.min"
-            :max="store.config.game.optionCount.max"
-            :step="store.config.game.optionCount.step"
-            :display="strings.ui.room.optionCountUnit(localDraft.optionCount)"
-          />
+      <RuleSelectField
+        v-model="chooseTime"
+        :label="strings.ui.room.chooseTimeField"
+        :options="chooseTimeOptions"
+      />
 
-          <RuleSelectField
-            v-model="localDraft.joinPolicy"
-            :label="strings.ui.room.joinPolicyField"
-            :options="joinPolicyOptions"
-          />
+      <RuleSelectField
+        v-model="localDraft.optionCount"
+        :label="strings.ui.room.optionCountField"
+        :options="optionCountOptions"
+      />
 
-          <div class="flex flex-col justify-center gap-[1.2cqh]">
-            <RuleToggleField
-              v-model="localDraft.allowChooseTimeLimit"
-              :label="strings.ui.room.toggleChooseTimeLimit"
-            />
-            <RuleToggleField
-              v-model="localDraft.allowPlayerInvite"
-              :label="strings.ui.room.togglePlayerInvite"
-            />
-            <RuleToggleField
-              v-model="localDraft.allowWordReroll"
-              :label="strings.ui.room.toggleAllowWordReroll"
-            />
-            <RuleToggleField
-              v-model="localDraft.allowCustomWord"
-              :label="strings.ui.room.toggleAllowCustomWord"
-            />
-          </div>
-        </div>
-      </details>
+      <RuleSelectField
+        v-model="localDraft.joinPolicy"
+        :label="strings.ui.room.joinPolicyField"
+        :options="joinPolicyOptions"
+      />
 
-      <!-- 高级设置：时长回退与计分基数等低频项，默认收起 -->
-      <details class="rounded-[0.7em] border-[0.16cqh] border-line bg-paper p-[1em]">
-        <summary class="cursor-pointer font-bold text-blue">
-          {{ strings.ui.room.advancedSettings }}
-        </summary>
-        <div class="mt-[1.5cqh] grid grid-cols-3 gap-[1.5cqh_1.4em]">
-          <RuleSelectField
-            v-model="localDraft.drawSeconds"
-            :label="strings.ui.room.drawSecondsField"
-            :options="drawSecondsOptions"
-          />
-          <div class="flex flex-col gap-[0.8cqh]">
-            <RuleToggleField
-              v-model="localDraft.showWordLength"
-              :label="strings.ui.room.toggleShowWordLength"
-            />
-            <RuleToggleField
-              v-model="localDraft.progressiveHints"
-              :label="strings.ui.room.toggleProgressiveHints"
-            />
-            <RuleToggleField v-model="localDraft.allowPause" :label="strings.ui.room.togglePause" />
-          </div>
-        </div>
-      </details>
+      <!-- 复选框字段保持自身高度，在固定行高里垂直居中（self-center），不随行高拉伸 -->
+      <RuleToggleField
+        v-model="localDraft.allowPlayerInvite"
+        class="self-center"
+        :label="strings.ui.room.togglePlayerInvite"
+      />
+      <RuleToggleField
+        v-model="localDraft.allowWordReroll"
+        class="self-center"
+        :label="strings.ui.room.toggleAllowWordReroll"
+      />
+      <RuleToggleField
+        v-model="localDraft.allowCustomWord"
+        class="self-center"
+        :label="strings.ui.room.toggleAllowCustomWord"
+      />
+      <RuleToggleField
+        v-model="localDraft.showWordLength"
+        class="self-center"
+        :label="strings.ui.room.toggleShowWordLength"
+      />
+      <RuleToggleField
+        v-model="localDraft.progressiveHints"
+        class="self-center"
+        :label="strings.ui.room.toggleProgressiveHints"
+      />
+      <RuleToggleField
+        v-model="localDraft.allowPause"
+        class="self-center"
+        :label="strings.ui.room.togglePause"
+      />
     </div>
 
     <template #footer>
