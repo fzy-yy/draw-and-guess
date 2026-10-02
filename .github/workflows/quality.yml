@@ -43,8 +43,8 @@ jobs:
         run: pnpm lint
       - name: Type-check
         run: pnpm typecheck
-      - name: Run Vitest with coverage and JUnit
-        run: pnpm test:coverage:ci
+      - name: Run Vitest with JUnit
+        run: pnpm test:ci
       - name: Build
         run: pnpm build
 
@@ -73,16 +73,6 @@ jobs:
           path: test/test-results/vitest/junit.xml
           if-no-files-found: ignore
           retention-days: 3
-
-      - name: Upload coverage report
-        continue-on-error: true
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: coverage-report-node-22
-          path: coverage/
-          if-no-files-found: ignore
-          retention-days: 7
 
   e2e-node-22:
     name: Node 22 Playwright

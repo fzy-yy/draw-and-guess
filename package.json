@@ -18,8 +18,7 @@
     "test:unit": "vitest run --project unit",
     "test:component": "vitest run --project component",
     "test:integration": "vitest run --project integration",
-    "test:coverage": "vitest run --coverage",
-    "test:coverage:ci": "vitest run --coverage --reporter=default --reporter=junit --outputFile.junit=test/test-results/vitest/junit.xml"
+    "test:ci": "vitest run --reporter=default --reporter=junit --outputFile.junit=test/test-results/vitest/junit.xml"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -30,7 +29,6 @@
     "@types/node": "^24.10.0",
     "@typescript-eslint/parser": "^8.46.0",
     "@vitejs/plugin-vue": "^6.0.8",
-    "@vitest/coverage-v8": "^5.0.0",
     "@vue/test-utils": "^2.5.0",
     "axe-core": "^4.13.0",
     "concurrently": "^10.0.5",

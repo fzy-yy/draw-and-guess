@@ -34,7 +34,7 @@
 
 ```text
 draw-and-guess/
-├── package.json                  # 根工程 scripts（开发/质量 + unit/component/integration/coverage/e2e）
+├── package.json                  # 根工程 scripts（开发/质量 + unit/component/integration/ci/e2e）
 ├── pnpm-workspace.yaml           # pnpm workspace：apps/* 与 packages/*（勿手改）
 ├── pnpm-lock.yaml                # 依赖锁文件（勿手改）
 ├── tsconfig.json                 # 根 TS 严格配置 + 路径别名（@draw-guess/shared / @draw-guess/config / @draw-guess/strings / @/）
@@ -49,7 +49,7 @@ draw-and-guess/
 ├── packages/config/              # @draw-guess/config：仅浏览器安全的应用默认值与 UI/音频配置
 ├── packages/strings/             # @draw-guess/strings：唯一 UI/服务端展示文案表
 ├── vocabulary/                   # ★唯一权威词库目录：SQLite 数据库（metadata/words 表）
-├── vitest.config.ts               # Vitest projects：Node 单元 + happy-dom 组件/集成 + V8 覆盖率
+├── vitest.config.ts               # Vitest projects：Node 单元 + happy-dom 组件/集成
 ├── test/                          # 自动化测试目录（隔离环境）
 │   ├── unit/                      # Vitest 单元/规则测试（test:unit）
 │   │   ├── game.deadline.spec.ts  # 假时钟下 submitGuess 截止校验示例
@@ -63,7 +63,7 @@ draw-and-guess/
 │       ├── launcher.mts           # 隔离 webServer：临时目录 + fixture 词库 + 前端构建 + 清理/清扫
 │       ├── pages/                 # 页面封装（profile/lobby/room/game）+ responsive.page.ts（响应式与触控验收断言辅助）+ dropdown.ts（手写下拉操作封装）
 │       ├── fixtures/              # 测试基类 test-base.ts（建玩家/连接）与 canvas-probe.ts（逻辑栅格哈希探针）
-│       └── specs/                 # 01-profile-session / 02-lobby-room-seats / 03-game-drawing / 04-game-guessing / 05-game-lifecycle / 06-browser-compatibility / 07-responsive-touch / 08-performance-budget / 09-drawing-history-limit
+│       └── specs/                 # 01-profile-session / 02-lobby-room-seats / 03-game-drawing / 04-game-guessing / 05-game-lifecycle / 06-browser-compatibility / 07-responsive-touch / 08-static-asset-cache / 09-drawing-history-limit
 ├── README.md                     # 项目总览、十分钟启动（依赖/结构/样式/持久化/版本章节与代码保持一致）
 ├── docs/adr/                     # 架构决策记录：每条含背景 / 决策 / 后果，源码注释只链接此处
 ├── AGENTS.md                     # 本文件：导读、硬性限制、启动方法、编码/测试/提交流程
@@ -120,7 +120,7 @@ draw-and-guess/
 ├── apps/client/                   # 客户端（Vue 3 + Pinia + Vite + Tailwind4 + Socket.IO）
 │   ├── package.json               # 依赖见「技术栈与运行环境」
 │   ├── tsconfig.json              # 继承根配置 + DOM/vite 类型
-│   ├── vite.config.ts             # Vite 配置：@draw-guess/config 虚拟公开模块裁剪、/@、@draw-guess/strings 别名、开发代理（/api 与 /socket.io → 5174）；build.outDir 可经 CLIENT_OUT_DIR 覆盖（测试用）；BUNDLE_REPORT=1 时输出模块体积报告
+│   ├── vite.config.ts             # Vite 配置：@draw-guess/config 虚拟公开模块裁剪、/@、@draw-guess/strings 别名、开发代理（/api 与 /socket.io → 5174）；build.outDir 可经 CLIENT_OUT_DIR 覆盖（测试用）
 │   ├── index.html                 # 入口 HTML（#app 挂载点，标题/描述由 vite.config 从 strings.ts 注入）
 │   └── src/
 │       ├── main.ts                # 客户端入口：创建 App 并挂载 #app；仅引入 ./style/index.css（Toast 为自建，无需第三方样式）
@@ -190,7 +190,7 @@ draw-and-guess/
 │       │   ├── game/              # 对局组件（提供 index.ts）：GameCanvas / GameHud / ChatPanel / PlayerPanel / FloatingPanel / CanvasToolbar / BrushSizeField / PhaseOverlay / OverlayCard / HudPill；scale-fade.ts 为浮层出入场过渡（浮层布局见 docs/adr/0043-game-view-floating-layout.md）
 │       │   ├── room/              # 房间组件（提供 index.ts）：SeatGrid / RuleSummary / RuleRow / RulesDialog / InviteDialog / VocabularyDialog / VocabTableView / VocabPackageTableView
 │       │   ├── lobby/             # 大厅组件（提供 index.ts）：CreateRoomDialog / JoinPrivateDialog
-│       │   ├── common/            # 通用原语组件（提供 index.ts）：含 DataTable 与 DataTableHeader、AsyncModuleFallback（懒加载占位/失败重试）、ContextMenu（右键菜单，白底浮层）、SelectDropdown（手写下拉，替代原生 select）、SquareIconButton / ColorSwatchButton / GroupDivider 等共享原语、各输入/按钮/规则原语
+│       │   ├── common/            # 通用原语组件（提供 index.ts）：含 DataTable 与 DataTableHeader、ContextMenu（右键菜单，白底浮层）、SelectDropdown（手写下拉，替代原生 select）、SquareIconButton / ColorSwatchButton / GroupDivider 等共享原语、各输入/按钮/规则原语
 │       │   └── settings/          # 设置页组件（提供 index.ts）：AudioTab / ShortcutsTab / AccessibilityTab / DiagnosticsTab / SettingsSectionHeader
 │       ├── views/
 │       │   ├── ProfileView.vue    # 资料确认页（随机昵称/内置 SVG 头像选择，无上传）
@@ -201,7 +201,6 @@ draw-and-guess/
 │       └── utils/
 │           ├── avatar.ts          # Vite SVG 静态资源白名单编号到 URL 映射
 │           ├── cn.ts              # 类名合并：clsx + tailwind-merge（注册 @theme 自定义语义色）
-│           ├── lazy-component.ts  # 低频模块懒加载工厂（动态 import + 轻量 loading/失败重试）
 │           ├── bounded-diagnostics.ts # 有界诊断列表与 Zod 问题格式化统一内核（ADR-0026）
 │           ├── phase-text.ts      # 阶段文案统一映射（HUD 标签与阶段播报共用，ADR-0028）
 │           ├── role-text.ts       # 成员局内角色文案统一映射（玩家面板与聊天标签共用）
@@ -278,7 +277,7 @@ pnpm format        # Prettier 写入
 pnpm format:check  # 仅检查格式
 ```
 
-> 各子包也带独立脚本：`apps/client` 含 `dev/build/typecheck`；`apps/server` 含 `dev/start/typecheck`；`packages/shared` 含 `typecheck`。根工程提供 `test:unit`、`test:component`、`test:integration`、`test:coverage` 与 `test:e2e`。
+> 各子包也带独立脚本：`apps/client` 含 `dev/build/typecheck`；`apps/server` 含 `dev/start/typecheck`；`packages/shared` 含 `typecheck`。根工程提供 `test:unit`、`test:component`、`test:integration`、`test:ci` 与 `test:e2e`。
 >
 > **构建临时目录固定在仓库内**：客户端 `build` 经 `scripts/with-local-temp.mjs` 包装，把子进程的
 > `TEMP`/`TMP`/`TMPDIR` 指向仓库内 `node_modules/.cache/draw-guess-tmp`（已被忽略）。原因是部分
@@ -388,12 +387,12 @@ pnpm format:check  # 仅检查格式
 
 ## 测试规范
 
-> **测试框架已登记**：① Node 单元/规则测试使用 **Vitest 5**；② Vue 组件测试使用 **happy-dom + @vue/test-utils + @testing-library/vue + user-event**；③ 客户端集成测试使用 **@pinia/testing + MSW**；④ 覆盖率使用 **@vitest/coverage-v8**；⑤ 端到端使用 **Playwright**。全部测试均为隔离环境：SQLite 用例只写系统临时目录；MSW 拒绝未声明的真实 HTTP 请求；Socket 使用测试替身；E2E 使用唯一临时数据库、词库与前端产物，**不连接/不停真实 5174 服务、不改真实数据库与词库**。
+> **测试框架已登记**：① Node 单元/规则测试使用 **Vitest 5**；② Vue 组件测试使用 **happy-dom + @vue/test-utils + @testing-library/vue + user-event**；③ 客户端集成测试使用 **@pinia/testing + MSW**；④ 端到端使用 **Playwright**。全部测试均为隔离环境：SQLite 用例只写系统临时目录；MSW 拒绝未声明的真实 HTTP 请求；Socket 使用测试替身；E2E 使用唯一临时数据库、词库与前端产物，**不连接/不停真实 5174 服务、不改真实数据库与词库**。
 
 - **单元测试（`pnpm test:unit`，Vitest）**：`vitest.config.ts` 通过 `resolve.alias` 复刻 `@draw-guess/*` 与 `@/` 路径。内存仓储与完整假运行时见 `test/unit/helpers/`；`fake-clock.ts` 同时控制 Clock/Scheduler/RandomSource，可同步推进完整对局。`persistence.spec.ts` 使用系统临时 SQLite 并在每例后关闭、删除；`documentation.consistency.spec.ts` 校验 AGENTS 关键路径与根质量命令存在性。单元测试已纳入 `pnpm typecheck`。
 - **组件测试（`pnpm test:component`）**：运行于 happy-dom，优先用 Testing Library 的角色/名称查询与 `userEvent.setup()` 模拟真实操作；只有需要精确校验 Vue emit / v-model 契约时使用 Vue Test Utils。音频播放与 focus-trap 已有独立测试，组件 setup 只验证调用意图。
 - **集成测试（`pnpm test:integration`）**：使用真实 Pinia 或 `createTestingPinia({ createSpy: vi.fn })`；Socket.IO 由统一替身隔离，MSW 以 `onUnhandledRequest: 'error'` 守住 HTTP 边界。禁止访问真实服务。
-- **覆盖率（`pnpm test:coverage`）**：V8 汇总全部 Vitest projects，统计 `apps/client/src`（`views/**` 除外，由 E2E 覆盖）、`apps/server/src`、`packages/{shared,config,strings}/src`，输出 text/json-summary/html/lcov 到 `coverage/`，并执行贴近实测的全局与关键文件阈值；分层门禁与最新结果见 `test/COVERAGE.md`，新增测试应提高而非降低阈值。
+- **全量运行（`pnpm test:ci`）**：一次跑完 unit / component / integration 三个 Vitest projects，并输出 JUnit 供 CI 失败诊断；覆盖率采集与阈值门禁已移除（见 `docs/adr/0049-lan-first-drop-size-and-coverage-gates.md`）。
 - **端到端测试（`pnpm test:e2e`，Playwright）**：launcher 承担 webServer（构建前端 → 生成 fixture → 建库 → 监听）。默认词库 fixture 含 5,000 词，用于虚拟表格压力验收；兼容性项目覆盖 Chromium DPR 1/1.5、Firefox DPR 2 和后台标签页恢复（设备向触屏验收已随手机/平板适配一并移除）。页面封装在 `test/e2e/pages/`，fixtures 在 `test/e2e/fixtures/test-base.ts`，spec 在 `test/e2e/specs/`。CI 上 `retries=1`（本地 0 重试以暴露不稳定用例）；launcher 构建时注入 `VITE_EXPOSE_LOGICAL_CANVAS=1` 开启跨端栅格哈希探针（默认生产构建不包含该探针）。
 - 可作为将来单测目标的纯函数（注释已注明「可独立单测」）：`packages/shared/src/pure.ts`、`apps/server/src/scoring.ts`、`apps/server/src/snapshot.ts`；仓储接口（`repositories/`）可注入内存实现测试。
 - **修改代码后的最低验证要求**：依次运行
@@ -403,7 +402,7 @@ pnpm format:check  # 仅检查格式
   pnpm typecheck
   pnpm build
   ```
-  修改客户端组件/Store/组合式函数时额外运行 `pnpm test:component`、`pnpm test:integration` 与 `pnpm test:coverage`；覆盖率不得低于配置门禁。
+  修改客户端组件/Store/组合式函数时额外运行 `pnpm test:component` 与 `pnpm test:integration`。
   涉及规则/状态机/绘图/持久化等关键逻辑时，额外运行 `pnpm test:unit` 与 `pnpm test:e2e`（隔离环境，不污染真实数据）。
 - 涉及关键逻辑（状态机、计分、快照裁剪、画布同步、限频、私有房间访问控制、持久化落盘）时，建议额外做人工/浏览器端到端验证（可用 Playwright MCP 等驱动真实浏览器）。
 - **Windows 注意**：Playwright 结束 webServer 时用 `taskkill /T /F` 强杀进程树，launcher 收不到 SIGTERM，因此「先前运行」的临时目录由**下一次运行启动时的清扫**回收（`launcher.mts` 会清除超过 5 分钟的旧 `draw-guess-e2e-*` 目录）。
@@ -453,42 +452,24 @@ pnpm format:check  # 仅检查格式
 
 ---
 
-## 首屏性能与静态资源缓存
+## 静态资源缓存
 
-> 阈值唯一来源：`packages/config/src/settings.ts` 的 `performance`；门禁用例：`test/e2e/specs/08-performance-budget.spec.ts`。
-
-### 预算门禁
-
-| 项             | 预算      | 现状       | 度量方式                                    |
-| -------------- | --------- | ---------- | ------------------------------------------- |
-| 主入口 JS gzip | ≤ 176 KiB | ~166.0 KiB | 资源计时 `encodedBodySize`                  |
-| 首屏实际下载   | ≤ 192 KiB | ~176.4 KiB | 同源非 Socket.IO 资源的 `transferSize` 求和 |
-
-预算触顶时**先看体积报告再决定取舍**，不要靠调大阈值或把 vendor 硬拆成多个 chunk 来消除告警：
-
-```bash
-BUNDLE_REPORT=1 pnpm --filter @draw-guess/client build   # 产物 raw/gzip 表 + 各 chunk 模块占比
-```
-
-### 懒加载约定
-
-- 低频模块统一用 `utils/lazy-component.ts` 的 `defineLazyComponent()`：动态 import + `AsyncModuleFallback`（轻量占位 + 失败重试）；实现为**自管理包装组件**而非 Vue `defineAsyncComponent`——后者既不向 errorComponent 注入 `retry`，`fail()` 后其 retry 也无法恢复当前实例（见 `docs/adr/0014`）；
-- **仅限组件级**：`defineLazyComponent()` 只允许用于视图内部低频组件，**禁止**用于整页视图——懒加载整页会在 `v-else-if` 视图切换时产生「视图真空帧」露出舞台近白底板（首开白闪，取舍见 `docs/adr/0014-settings-view-static-import.md`，守卫在 `test/unit/bundle-splitting.spec.ts`）；
-- 已懒加载：`VocabularyDialog`、`canvas-confetti`（礼花库）；`SettingsView`/`DiagnosticsTab` 已改为静态导入（见 ADR-0014）；
-- **核心对局链路保持静态导入**（画布 / 工具栏 / 聊天 / 阶段遮罩），避免关键路径多一次网络往返；
-- 懒加载模块**禁止**再经各 `components/*/index.ts` 静态 re-export——会被入口静态图捕获，切分随之失效；
-- 常驻渲染的弹窗（`v-model:open` 但组件始终在模板里）一挂载就会下载 chunk：需要真正延后时加 `v-if` 闸门，
-  首次打开后再常驻，以保留关闭过渡动画（见 `RoomView` 的 `vocabularyMounted`）；
-- 占位组件绝对定位铺满「最近的定位祖先」，因此宿主容器需为 `relative`。
-- **独立 bundle 的轻量导入约束**：Worker、独立 HTML 入口等会被单独打成一个 chunk 的模块，只允许从 `@draw-guess/shared/protocol/constants` 子路径取协议常量，**禁止**在此基础上引入 `@draw-guess/config` / `@draw-guess/strings` barrel 或 `@draw-guess/shared` barrel——后两者会把整份配置与 zod schema 复制进独立 chunk（洪泛填充 Worker 曾因此多出 21.4 KiB gzip）。这三个 workspace 包已声明 `sideEffects: false`。
-- 预算余量由 `test/e2e/specs/08-performance-budget.spec.ts` 在通过时一并打印（含「余量 x KiB」），逼近预算时先看该输出再看体积报告。
-
-### 静态资源缓存（服务端）
+> 时长唯一来源：`packages/config/src/settings.ts` 的 `staticAssets`；
+> 断言在 `test/e2e/specs/08-static-asset-cache.spec.ts`（真实响应头）与 `test/unit/bundle-boundary.spec.ts`（静态守卫）。
 
 `apps/server/src/app.ts` 按文件名是否含内容哈希分流：
 
 - `/assets/**` 中形如 `name-<hash8>.ext` 的产物 → `Cache-Control: public, max-age=31536000, immutable`（内容变则改名，可安全长缓存）；
 - `index.html` 与 SPA 回退 → `no-cache`（入口必须每次校验，否则发版后仍会引用已删除的旧哈希产物）。
+
+首屏体积预算与组件级懒加载已随「局域网优先」移除（见 `docs/adr/0049-lan-first-drop-size-and-coverage-gates.md`）：
+前端不再有动态 import 的视图或组件，新增模块一律静态导入；也不再为 chunk 切分维护 barrel 约定。
+
+**独立 bundle 的轻量导入约束**：Worker、独立 HTML 入口等会被单独打成一个 chunk 的模块，只允许从
+`@draw-guess/shared/protocol/constants` 子路径取协议常量，**禁止**在此基础上引入 `@draw-guess/config` /
+`@draw-guess/strings` barrel 或 `@draw-guess/shared` barrel——后两者会把整份配置与 zod schema 复制进
+独立 chunk（洪泛填充 Worker 曾因此多出 21.4 KiB gzip）。守卫在 `test/unit/bundle-boundary.spec.ts`；
+这三个 workspace 包已声明 `sideEffects: false`。
 
 ---
 

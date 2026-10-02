@@ -58,30 +58,20 @@ export const responsive = {
 } as const
 
 /**
- * 首屏性能门禁与静态资源缓存策略（唯一来源）。
+ * 静态资源缓存策略（唯一来源）。
  *
- * 消费方：
- * - `apps/server/src/app.ts` 按本表设置静态资源缓存响应头；
- * - `test/e2e/specs/08-performance-budget.spec.ts` 按本表断言「主入口 gzip」与
- *   「首屏实际下载」两项预算，并校验缓存响应头。
- * 调整预算时必须先看 `BUNDLE_REPORT=1 pnpm --filter @draw-guess/client build`
- * 的模块占比报告，确认变化来自真实取舍而不是把 vendor 硬拆成多个 chunk 掩盖体积。
+ * 消费方：`apps/server/src/app.ts` 按本表设置静态资源缓存响应头，
+ * 由 `test/e2e/specs/08-static-asset-cache.spec.ts` 与 `test/unit/bundle-boundary.spec.ts` 断言。
+ *
+ * 首屏体积预算与组件级懒加载已随「局域网优先」移除
+ * （见 docs/adr/0049-lan-first-drop-size-and-coverage-gates.md），这里只保留功能性缓存时长。
  */
-export const performance = {
+export const staticAssets = {
   /**
    * 带内容哈希的构建产物（`/assets/**`）缓存时长（秒）：一年 + immutable。
    * 文件名含内容哈希，内容变化必然改名，因此可安全长缓存。
    */
-  immutableAssetMaxAgeSeconds: 31_536_000,
-  /**
-   * 首屏预算：入口 JS chunk 的 gzip 体积上限（KiB，按资源计时 encodedBodySize 计）。
-   * 现状约 166 KiB（框架 + zod 校验 + socket.io + 共享原语 + 静态导入的设置页，
-   * 设置页不再懒加载的取舍见 docs/adr/0014-settings-view-static-import.md），留约 6% 余量；
-   * 触顶说明有新的重量级依赖进了主 chunk，应先看体积报告再决定是否懒加载，而不是调大本值。
-   */
-  mainEntryGzipKib: 176,
-  /** 首屏预算：进入资料页为止实际下载的传输体积上限（KiB，按资源计时 transferSize 求和）。现状约 176 KiB。 */
-  firstScreenTransferKib: 192,
+  immutableMaxAgeSeconds: 31_536_000,
 } as const
 
 export const ui = {

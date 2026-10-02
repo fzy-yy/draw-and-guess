@@ -369,16 +369,14 @@ export default tseslint.config([
     },
   },
   {
-    // 控制台只在进程入口、启动提示、开发期资源诊断、构建报告与测试运行器中使用。
+    // 控制台只在进程入口、启动提示、开发期资源诊断与测试运行器中使用。
     files: [
       'apps/server/src/index.ts',
       'apps/server/src/startup/lan-addresses.ts',
       'apps/client/src/audio/manifest.ts',
       'apps/client/src/audio/runtime.ts',
       'apps/client/src/utils/avatar.ts',
-      'apps/client/vite.config.ts',
       'test/e2e/launcher.mts',
-      'test/e2e/specs/08-performance-budget.spec.ts',
       'test/e2e/specs/09-drawing-history-limit.spec.ts',
     ],
     rules: {

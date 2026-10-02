@@ -1,6 +1,6 @@
 <!-- 房间等待界面：固定六个游戏席位、权威准备门槛、房主规则与本局词库管理。 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { Check, ClipboardCopy, KeyRound, LogOut, Play, ShieldCheck } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
@@ -13,13 +13,15 @@ import {
   NetworkStatusButton,
   StageHeader,
 } from '@/components/common'
-import { InviteDialog, RuleSummary, RulesDialog, SeatGrid } from '@/components/room'
-import { defineLazyComponent } from '@/utils/lazy-component'
+import {
+  InviteDialog,
+  RuleSummary,
+  RulesDialog,
+  SeatGrid,
+  VocabularyDialog,
+} from '@/components/room'
 import { activeMembers, isOnlineActiveMember } from '@/utils/room-facts'
 import type { RoomSettings } from '@draw-guess/shared'
-
-// 词库管理弹窗低频且体积较大（含虚拟表格依赖）：懒加载，不进首屏包。
-const VocabularyDialog = defineLazyComponent(() => import('@/components/room/VocabularyDialog.vue'))
 
 const store = useGameStore()
 // ---- 弹窗开关状态 ----
@@ -29,13 +31,6 @@ const showInvite = ref(false) // 邀请弹窗（可用玩家计算与发送在 I
 const showLeaveConfirm = ref(false) // 退出确认弹窗
 const settingsDraft = ref<RoomSettings>() // 规则编辑草稿：打开弹窗时以当前规则初始化，作为 RulesDialog 本地副本的种子（保存直接用回传的 draft）
 const vocabularyLoading = ref(false) // 词库拉取中（RuleSummary 禁用按钮 + VocabularyDialog v-model）
-
-// 词库弹窗首次打开后才挂载：否则常驻渲染会在进入房间时就把 chunk 拉下来；
-// 挂载后保持常驻，以保留 BaseDialog 的关闭过渡动画。
-const vocabularyMounted = ref(false)
-watch(showVocabulary, (open) => {
-  if (open) vocabularyMounted.value = true
-})
 
 // 可玩成员集合（非观战且未离局，口径见 utils/room-facts）：allSet 与下方提示文案共用。
 const activePlayers = computed(() => activeMembers(store.room?.members ?? []))
@@ -86,7 +81,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
 
 <template>
   <!-- 房间等待界面骨架：左侧席位区 + 右侧控制区，顶栏含房间名与退出 -->
-  <!-- relative：为懒加载词库弹窗的 loading/error 占位提供定位容器（见 utils/lazy-component.ts） -->
+  <!-- relative：BaseDialog 的遮罩是 absolute inset-0，需要最近的定位祖先（本视图的弹窗与浮层都挂在这里） -->
   <main
     v-if="store.room"
     class="relative grid h-full grid-cols-[minmax(0,67%)_33%] grid-rows-[11%_89%] bg-sky"
@@ -218,11 +213,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
       弹窗一：本局词库管理（房主）——搜索、批量选择、确认保存。
       只由 v-model:open 控制显隐。
     -->
-    <VocabularyDialog
-      v-if="vocabularyMounted"
-      v-model:open="showVocabulary"
-      v-model:loading="vocabularyLoading"
-    />
+    <VocabularyDialog v-model:open="showVocabulary" v-model:loading="vocabularyLoading" />
 
     <!-- 弹窗二：房间规则编辑（房主）——滑块与开关修改规则（动画由 BaseDialog 内部负责） -->
     <RulesDialog v-model:open="showSettings" :draft="settingsDraft" @save="saveSettings" />

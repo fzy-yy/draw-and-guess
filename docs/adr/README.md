@@ -61,19 +61,19 @@
 
 ### 客户端架构与 UI 原语
 
-| 编号                                               | 主题                                             | 状态   |
-| :------------------------------------------------- | :----------------------------------------------- | :----- |
-| [0008](0008-context-menu-singleton-vs-teleport.md) | 右键菜单用舞台内单例状态，不用 Teleport          | 已采纳 |
-| [0014](0014-settings-view-static-import.md)        | 设置页静态导入消除首开白闪；懒加载重试桥         | 已采纳 |
-| [0015](0015-select-dropdown-fixed-anchoring.md)    | 下拉面板 fixed 视口锚定、祖先滚动即关闭          | 已采纳 |
-| [0025](0025-resync-module.md)                      | 重连/重同步独立成 resync 模块                    | 已采纳 |
-| [0026](0026-client-diagnostics-core.md)            | 客户端诊断内核单一口径                           | 已采纳 |
-| [0027](0027-vocabulary-dialog-session.md)          | 词库弹窗会话生命周期独立成 composable            | 已采纳 |
-| [0028](0028-client-room-facts.md)                  | 客户端房间事实单一口径：阶段文案与可玩成员       | 已采纳 |
-| [0029](0029-shallow-wrappers-kept.md)              | 客户端浅层包装保持现状：删除测试判定不复用折叠   | 已采纳 |
-| [0043](0043-game-view-floating-layout.md)          | 对局界面改为浮层布局：顶栏 + 铺满画布 + 浮层面板 | 已采纳 |
-| [0044](0044-panel-shortcuts-and-unified-topbar.md) | 对局面板显隐快捷键与顶栏高度统一                 | 已采纳 |
-| [0041](0041-snapshot-gate-decision-narrowing.md)   | 快照门禁决策类型按裁决能力收窄                   | 已采纳 |
+| 编号                                               | 主题                                             | 状态                   |
+| :------------------------------------------------- | :----------------------------------------------- | :--------------------- |
+| [0008](0008-context-menu-singleton-vs-teleport.md) | 右键菜单用舞台内单例状态，不用 Teleport          | 已采纳                 |
+| [0014](0014-settings-view-static-import.md)        | 设置页静态导入消除首开白闪；懒加载重试桥         | 已废弃（被 0049 取代） |
+| [0015](0015-select-dropdown-fixed-anchoring.md)    | 下拉面板 fixed 视口锚定、祖先滚动即关闭          | 已采纳                 |
+| [0025](0025-resync-module.md)                      | 重连/重同步独立成 resync 模块                    | 已采纳                 |
+| [0026](0026-client-diagnostics-core.md)            | 客户端诊断内核单一口径                           | 已采纳                 |
+| [0027](0027-vocabulary-dialog-session.md)          | 词库弹窗会话生命周期独立成 composable            | 已采纳                 |
+| [0028](0028-client-room-facts.md)                  | 客户端房间事实单一口径：阶段文案与可玩成员       | 已采纳                 |
+| [0029](0029-shallow-wrappers-kept.md)              | 客户端浅层包装保持现状：删除测试判定不复用折叠   | 已采纳                 |
+| [0043](0043-game-view-floating-layout.md)          | 对局界面改为浮层布局：顶栏 + 铺满画布 + 浮层面板 | 已采纳                 |
+| [0044](0044-panel-shortcuts-and-unified-topbar.md) | 对局面板显隐快捷键与顶栏高度统一                 | 已采纳                 |
+| [0041](0041-snapshot-gate-decision-narrowing.md)   | 快照门禁决策类型按裁决能力收窄                   | 已采纳                 |
 
 ### 词汇与提示
 
@@ -105,12 +105,13 @@
 
 ### 构建、分发与 CI
 
-| 编号                                                       | 主题                                           | 状态   |
-| :--------------------------------------------------------- | :--------------------------------------------- | :----- |
-| [0030](0030-ci-artifact-quota-and-capacity-test-window.md) | CI 工件配额兜底与容量用例的回合窗口            | 已采纳 |
-| [0034](0034-node-single-file-distribution.md)              | Node 单文件分发与 Windows slim/full 双包交付   | 已采纳 |
-| [0038](0038-repo-local-build-temp-dir.md)                  | 构建临时目录固定到仓库内，规避 %TEMP% 删除拦截 | 已采纳 |
-| [0039](0039-ci-gate-scope-and-trigger.md)                  | CI 触发面收敛、Windows 构建冒烟与审计不作门禁  | 已采纳 |
+| 编号                                                       | 主题                                             | 状态   |
+| :--------------------------------------------------------- | :----------------------------------------------- | :----- |
+| [0030](0030-ci-artifact-quota-and-capacity-test-window.md) | CI 工件配额兜底与容量用例的回合窗口              | 已采纳 |
+| [0034](0034-node-single-file-distribution.md)              | Node 单文件分发与 Windows slim/full 双包交付     | 已采纳 |
+| [0038](0038-repo-local-build-temp-dir.md)                  | 构建临时目录固定到仓库内，规避 %TEMP% 删除拦截   | 已采纳 |
+| [0049](0049-lan-first-drop-size-and-coverage-gates.md)     | 局域网优先：取消首屏体积与覆盖率门禁、移除懒加载 | 已采纳 |
+| [0039](0039-ci-gate-scope-and-trigger.md)                  | CI 触发面收敛、Windows 构建冒烟与审计不作门禁    | 已采纳 |
 
 ### 已废弃
 

@@ -22,4 +22,3 @@ test/playwright-report/
 **/test-results/
 **/playwright-report/
 **/blob-report/
-coverage/

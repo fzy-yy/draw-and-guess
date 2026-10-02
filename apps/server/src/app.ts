@@ -220,7 +220,7 @@ export async function createApplication(options: {
   // 静态托管前端构建产物（生产模式由 pnpm start 拉起同一进程）。
   // 测试可注入 clientDist 指向本次构建到临时目录的产物；默认托管 ../client/dist。
   //
-  // 缓存策略（阈值见 packages/config/src/settings.ts 的 performance）：
+  // 缓存策略（时长见 packages/config/src/settings.ts 的 staticAssets）：
   // - /assets/** 的产物文件名由 Vite 写入内容哈希（name-<hash8>.ext），内容一变名字就变，
   //   因此可长缓存 + immutable，局域网重复进入时不再回源；
   // - 其余文件（index.html 等）用 no-cache，保证入口 HTML 每次校验，
@@ -235,7 +235,7 @@ export async function createApplication(options: {
         response.setHeader(
           'Cache-Control',
           hashedAssetPattern.test(normalized)
-            ? `public, max-age=${APP_CONFIG.performance.immutableAssetMaxAgeSeconds}, immutable`
+            ? `public, max-age=${APP_CONFIG.staticAssets.immutableMaxAgeSeconds}, immutable`
             : 'no-cache',
         )
       },
