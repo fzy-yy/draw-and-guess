@@ -1,16 +1,15 @@
 /**
- * 构建 Windows 分发产物（slim / full 两包）。
+ * 构建 Windows 分发产物（单一自带 Node 包）。
  *
  * 产出：
- *   release/slim/draw-and-guess/   → release/draw-and-guess-<version>-win-x64-slim.zip
- *   release/full/draw-and-guess/   → release/draw-and-guess-<version>-win-x64-full.zip
+ *   release/draw-and-guess/   → release/draw-and-guess-<version>-win-x64.zip
  *
- * 两包共有：server.mjs（依赖内联，better-sqlite3 外置）、client/ 前端、vocabulary/ 内置词库、
- * node_modules/better-sqlite3/（Node-API 预编译）、start.cmd、使用说明.txt。
- * full 额外携带 runtime/node.exe（+ Node LICENSE），让未安装 Node 的用户开箱即用。
+ * 产物内容：server.mjs（依赖内联，better-sqlite3 外置）、client/ 前端、vocabulary/ 内置词库、
+ * node_modules/better-sqlite3/（Node-API 预编译）、runtime/node.exe（+ Node LICENSE，零依赖用户开箱即用）、
+ * start.cmd、使用说明.txt。
  *
  * 内置 Node 的下载带同源 SHASUMS256 校验（写缓存与命中时都比对，损坏自动重下一次；
- * 校验文件缺失/无条目按 fail-fast 中止），信任边界与取舍见 docs/adr/0034。
+ * 校验文件缺失/无条目按 fail-fast 中止），信任边界与取舍见 docs/adr/0034、docs/adr/0050。
  * 文本模板（start.cmd / 使用说明）与 Node 版本解析都是 src/build/ 下的纯函数，可单测。
  *
  * 数据目录（game.db / logs / vocabulary/custom / .env）由 server.mjs 首次启动时在其旁创建。
@@ -33,14 +32,14 @@ import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { APP_CONFIG } from '@draw-guess/config'
-import { buildStartScript, buildUsageNotes, type DistVariant } from '../src/build/dist-templates.ts'
+import { buildStartScript, buildUsageNotes } from '../src/build/dist-templates.ts'
 import { serverPrivateConfig } from '../src/config/private.ts'
 import {
+  BUNDLED_NODE_MAJOR,
   buildNodeDistUrl,
   buildNodeIndexUrl,
   buildNodeShasumsUrl,
   buildNodeZipName,
-  MIN_NODE_MAJOR,
   parseNodeShasumsEntry,
   pickLatestBundledNode,
 } from '../src/build/node-dist.ts'
@@ -71,8 +70,8 @@ async function bundleServer(appDir: string): Promise<void> {
     bundle: true,
     platform: 'node',
     format: 'esm',
-    // 最低系统 Node 主版本单一来源（node-dist 常量），start.cmd 检测与之联动。
-    target: `node${MIN_NODE_MAJOR}`,
+    // 编译目标与内置运行时主版本单一来源（node-dist 常量）联动。
+    target: `node${BUNDLED_NODE_MAJOR}`,
     sourcemap: false,
     external: ['better-sqlite3', 'bufferutil', 'utf-8-validate'],
     // ESM 产物内联的 CJS 依赖（如 safe-buffer）会做动态 require('buffer')，需要提供真实 require。
@@ -218,19 +217,16 @@ function zipApp(appDir: string, zipPath: string): void {
   )
 }
 
-/** 落盘一个变体的两份文本产物；内容生成在 dist-templates 纯函数里（有单测锁定）。 */
-function writeVariantTexts(appDir: string, version: string, variant: DistVariant): void {
-  writeFileSync(join(appDir, 'start.cmd'), buildStartScript(variant), 'utf8')
+/** 落盘两份文本产物；内容生成在 dist-templates 纯函数里（有单测锁定）。 */
+function writeTexts(appDir: string, version: string): void {
+  writeFileSync(join(appDir, 'start.cmd'), buildStartScript(), 'utf8')
   // 使用说明里的默认端口从私有配置派生（唯一来源），改端口时文档自动跟随。
   writeFileSync(
     join(appDir, '使用说明.txt'),
-    buildUsageNotes(version, variant, serverPrivateConfig.network.port),
+    buildUsageNotes(version, serverPrivateConfig.network.port),
     'utf8',
   )
 }
-
-/** 两个分发变体的固定构建顺序（先 slim 后 full）。 */
-const VARIANTS: readonly DistVariant[] = ['slim', 'full']
 
 async function main(): Promise<void> {
   // 版本唯一权威源在 @draw-guess/config（直接 import：格式变动时编译即失败，绝不静默错读）。
@@ -239,25 +235,21 @@ async function main(): Promise<void> {
   if (!existsSync(join(repoRoot, 'vocabulary'))) throw new Error('缺少 vocabulary/ 词库目录')
 
   buildClient()
-  // 预先解析、下载并校验内置 Node（full 包用），失败即整体失败，避免产出不完整的 full 包。
+  // 预先解析、下载并校验内置 Node，失败即整体失败，避免产出不完整的包。
   const nodeVersion = await resolveNodeVersion(mirror)
   const nodeZipPath = await ensureVerifiedNodeZip(mirror, nodeVersion)
 
-  for (const variant of VARIANTS) {
-    const withNode = variant === 'full'
-    const outDir = join(releaseRoot, variant)
-    const appDir = join(outDir, 'draw-and-guess')
-    rmSync(outDir, { recursive: true, force: true })
-    mkdirSync(appDir, { recursive: true })
+  const appDir = join(releaseRoot, 'draw-and-guess')
+  rmSync(appDir, { recursive: true, force: true })
+  mkdirSync(appDir, { recursive: true })
 
-    await bundleServer(appDir)
-    copyAssets(appDir)
-    if (withNode) installNodeRuntime(appDir, nodeVersion, nodeZipPath)
-    writeVariantTexts(appDir, version, variant)
-    const zipPath = join(releaseRoot, `draw-and-guess-${version}-win-x64-${variant}.zip`)
-    zipApp(appDir, zipPath)
-    process.stdout.write(`已生成 ${variant} 包：${zipPath}\n`)
-  }
+  await bundleServer(appDir)
+  copyAssets(appDir)
+  installNodeRuntime(appDir, nodeVersion, nodeZipPath)
+  writeTexts(appDir, version)
+  const zipPath = join(releaseRoot, `draw-and-guess-${version}-win-x64.zip`)
+  zipApp(appDir, zipPath)
+  process.stdout.write(`已生成分发包：${zipPath}\n`)
 
   process.stdout.write(
     `分发产物构建完成（版本 ${version}，内置 Node v${nodeVersion}，已通过 sha256 校验）。\n`,

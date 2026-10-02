@@ -1,6 +1,6 @@
 # 你画我猜
 
-基于 Vue 3、TypeScript、Socket.IO 与 Express 的 2～6 人局域网实时派对游戏。支持大厅公开房间和短码私密房间；服务端权威维护身份、访问控制、答案、计时、绘图资格和分数。除源码运行外，还可打成 **Windows 分发包**（服务端单 JS + 前端产物）：`slim` 包需系统 Node，`full` 包自带 Node 运行时，解压双击 `start.cmd` 即可用。
+基于 Vue 3、TypeScript、Socket.IO 与 Express 的 2～6 人局域网实时派对游戏。支持大厅公开房间和短码私密房间；服务端权威维护身份、访问控制、答案、计时、绘图资格和分数。除源码运行外，还可打成 **Windows 分发包**（服务端单 JS + 前端产物 + 内置 Node 运行时），解压双击 `start.cmd` 即可用，无需预装 Node。
 
 ## 运行环境
 
@@ -28,27 +28,24 @@ pnpm start
 
 终端会醒目输出主机地址、端口和一个或多个局域网 IPv4 URL。其他玩家连接同一局域网后，在浏览器输入其中可用的 `http://局域网IP:5174`。若无法连接，请依次确认：IP/端口与终端输出一致、设备处于同一网段、防火墙放行 Node.js 专用网络通信，并避免将服务开放到公网。
 
-## Windows 分发包（slim / full 双包）
+## Windows 分发包
 
 ```bash
-pnpm package:dist   # 构建前端 + 服务端单文件，产出 slim 与 full 两个可运行目录与 zip
+pnpm package:dist   # 构建前端 + 服务端单文件 + 内置 Node，产出一个可运行目录与 zip
 ```
 
-| 包       | zip                                         | 体积    | 运行要求                                     |
-| -------- | ------------------------------------------- | ------- | -------------------------------------------- |
-| **slim** | `draw-and-guess-<version>-win-x64-slim.zip` | 约 2MB  | 本机需 Node.js 22+                           |
-| **full** | `draw-and-guess-<version>-win-x64-full.zip` | 约 37MB | **无需安装 Node**（自带 Node 24 LTS 运行时） |
-
-两包内容相同（`server.mjs` 依赖已内联、`client/` 前端、`vocabulary/` 内置词库、
-`node_modules/better-sqlite3/` Node-API 预编译模块、`start.cmd`、`使用说明.txt`），
-仅 full 额外带 `runtime/node.exe`。解压后双击 `start.cmd` 即启动服务并自动打开浏览器，
+产物为一个 zip：`draw-and-guess-<version>-win-x64.zip`（约 37MB，**无需安装 Node**，
+自带 Node 24 LTS 运行时）。内容：`server.mjs`（依赖已内联）、`client/` 前端、`vocabulary/` 内置词库、
+`node_modules/better-sqlite3/` Node-API 预编译模块、`runtime/node.exe`（内置 Node 运行时）、
+`start.cmd`、`使用说明.txt`。解压后双击 `start.cmd` 即启动服务并自动打开浏览器，
 其他玩家用浏览器访问窗口里列出的局域网地址即可。运行数据写在 `data/`（`game.db`、`logs/`、
 `vocabulary/custom/`、可选 `.env`）；默认端口被占用会自动顺延。内置 Node 从镜像下载
 （默认国内镜像，可用 `NODE_DIST_MIRROR` 覆盖、`NODE_VERSION` 钉死版本），下载经同源
 SHASUMS256.txt 的 sha256 校验，缓存损坏会自动重下一次；产物启动后自动打开浏览器，
 `DRAW_GUESS_OPEN_BROWSER=false` 可关闭。
 分发包仅面向 Windows x64 与可信局域网，详见
-[`docs/adr/0034-node-single-file-distribution.md`](docs/adr/0034-node-single-file-distribution.md)。
+[`docs/adr/0034-node-single-file-distribution.md`](docs/adr/0034-node-single-file-distribution.md)
+与 [`docs/adr/0050-single-dist-package.md`](docs/adr/0050-single-dist-package.md)。
 
 ## 可用命令
 
@@ -65,7 +62,7 @@ pnpm test:component   # happy-dom 中的 Vue 组件测试
 pnpm test:integration # Pinia + MSW 客户端集成测试
 pnpm test:ci          # 三层 Vitest 全量（unit/component/integration，CI 用，含 JUnit 输出）
 pnpm test:e2e         # Playwright 跨浏览器端到端测试
-pnpm package:dist     # 构建 Windows 分发包（slim/full 两个可运行目录 + zip）
+pnpm package:dist     # 构建 Windows 分发包（一个可运行目录 + zip）
 ```
 
 > 测试分为 Vitest 单元、组件、集成三层及 Playwright E2E；CI 运行三层全量（`pnpm test:ci`）与 Playwright。
@@ -100,7 +97,7 @@ apps/server/       Express、Socket.IO、权威领域状态与 SQLite 本地持�
   └─ src/runtime-layout.ts      # 源码 / 分发产物两种运行布局（data、client、vocabulary、.env）
   └─ src/build/node-dist.ts     # 分发内置 Node 版本解析与 SHASUMS 校验条目提取（纯函数，可单测）
   └─ src/build/dist-templates.ts # 分发文本模板：start.cmd / 使用说明（纯函数，两包启动差异有单测锁定）
-  └─ scripts/package-dist.ts    # 构建 slim/full Windows 分发包（esbuild 单文件 + 资源 + Node + zip）
+  └─ scripts/package-dist.ts    # 构建 Windows 分发包（esbuild 单文件 + 资源 + 内置 Node + zip）
 packages/shared/   DTO、Zod schema、协议常量、事件名和领域纯函数（完全自包含）
 packages/config/   浏览器安全的公开应用配置 workspace 包
 packages/strings/  客户端与服务端展示文案 workspace 包

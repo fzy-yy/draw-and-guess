@@ -105,13 +105,14 @@
 
 ### 构建、分发与 CI
 
-| 编号                                                       | 主题                                             | 状态   |
-| :--------------------------------------------------------- | :----------------------------------------------- | :----- |
-| [0030](0030-ci-artifact-quota-and-capacity-test-window.md) | CI 工件配额兜底与容量用例的回合窗口              | 已采纳 |
-| [0034](0034-node-single-file-distribution.md)              | Node 单文件分发与 Windows slim/full 双包交付     | 已采纳 |
-| [0038](0038-repo-local-build-temp-dir.md)                  | 构建临时目录固定到仓库内，规避 %TEMP% 删除拦截   | 已采纳 |
-| [0049](0049-lan-first-drop-size-and-coverage-gates.md)     | 局域网优先：取消首屏体积与覆盖率门禁、移除懒加载 | 已采纳 |
-| [0039](0039-ci-gate-scope-and-trigger.md)                  | CI 触发面收敛、Windows 构建冒烟与审计不作门禁    | 已采纳 |
+| 编号                                                       | 主题                                             | 状态                           |
+| :--------------------------------------------------------- | :----------------------------------------------- | :----------------------------- |
+| [0030](0030-ci-artifact-quota-and-capacity-test-window.md) | CI 工件配额兜底与容量用例的回合窗口              | 已采纳                         |
+| [0034](0034-node-single-file-distribution.md)              | Node 单文件分发与 Windows 双包交付               | 已采纳（双包部分被 0050 取代） |
+| [0038](0038-repo-local-build-temp-dir.md)                  | 构建临时目录固定到仓库内，规避 %TEMP% 删除拦截   | 已采纳                         |
+| [0049](0049-lan-first-drop-size-and-coverage-gates.md)     | 局域网优先：取消首屏体积与覆盖率门禁、移除懒加载 | 已采纳                         |
+| [0050](0050-single-dist-package.md)                        | 分发产物收敛为单一自带 Node 包                   | 已采纳                         |
+| [0039](0039-ci-gate-scope-and-trigger.md)                  | CI 触发面收敛、Windows 构建冒烟与审计不作门禁    | 已采纳                         |
 
 ### 已废弃
 

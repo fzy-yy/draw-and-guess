@@ -2,13 +2,10 @@
  * 分发构建期工具：解析要内置的 Node 版本、拼接镜像下载地址、校验下载完整性。
  *
  * 纯函数（不触碰网络/文件系统），供 `scripts/package-dist.ts` 使用并单独单测。
- * 内置 Node 只用于「full」分发包，让没有安装 Node 的用户也能直接运行。
+ * 分发包始终内置 Node，让没有安装 Node 的用户也能直接运行。
  */
 
-/** 分发产物（slim）要求的最低系统 Node 主版本；start.cmd 检测与 esbuild target 共用。 */
-export const MIN_NODE_MAJOR = 22
-
-/** 内置 Node 的主版本线（Active LTS）；镜像索引解析与下载地址共用。 */
+/** 内置 Node 的主版本线（Active LTS）；镜像索引解析、下载地址与 esbuild target 共用。 */
 export const BUNDLED_NODE_MAJOR = 24
 
 /** 内置 Node 主版本线的稳定版本号形如 `v24.1.2`（排除 `-rc`/`-nightly` 等预发布后缀）。 */

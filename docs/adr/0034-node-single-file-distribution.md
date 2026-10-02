@@ -1,6 +1,6 @@
 # 0034 · Node 单文件分发与 Windows 双包交付
 
-**状态**：已采纳
+**状态**：已采纳（其中「双包交付与按包区分 `start.cmd`」的部分已被 [ADR-0050](0050-single-dist-package.md) 取代，其余决策仍有效）
 
 ## 背景
 
@@ -88,3 +88,4 @@ CI 的 runner 在境外，显式改走官网）。完整性用同版本目录的
 - 测试：`test/unit/runtime-layout.spec.ts`、`test/unit/vocabulary-multi-dir.spec.ts`、
   `test/unit/node-dist.spec.ts`、`test/unit/dist-templates.spec.ts`
 - 相关：ADR-0004（词库默认包选择）、ADR-0005（日志保留顺序）
+- 取代：决策一/二/七中的「双包交付与按包区分 `start.cmd`」被 [ADR-0050](0050-single-dist-package.md) 取代

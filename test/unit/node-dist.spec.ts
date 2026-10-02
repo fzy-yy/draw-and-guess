@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   BUNDLED_NODE_MAJOR,
-  MIN_NODE_MAJOR,
   buildNodeDistUrl,
   buildNodeIndexUrl,
   buildNodeShasumsUrl,
@@ -29,7 +28,6 @@ describe('分发内置 Node 版本解析', () => {
 
   it('主版本线两位数时正则随常量联动（不会误配 v240 之类）', () => {
     expect(BUNDLED_NODE_MAJOR).toBe(24)
-    expect(MIN_NODE_MAJOR).toBe(22)
     // 把 24 的候选混进带歧义前缀的假版本号：正则按段精确匹配，不会选中 240/24x 形式。
     const index = [{ version: 'v240.1.0' }, { version: 'v24.1.0' }, { version: 'v24x.1.0' }]
     expect(pickLatestBundledNode(index)).toBe('24.1.0')
