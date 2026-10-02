@@ -31,7 +31,7 @@ function randomize(): void {
   <main class="relative grid h-full grid-cols-[43%_57%]">
     <section
       class="relative flex flex-col items-start justify-center overflow-hidden bg-navy px-[7cqw] py-[8cqh] text-white before:absolute before:right-[-12cqh] before:top-[-10cqh] before:h-[34cqh] before:w-[34cqh] before:rounded-full before:border-[0.5cqh] before:border-white/10 before:content-[''] after:absolute after:bottom-[-7cqh] after:left-[-9cqh] after:h-[22cqh] after:w-[22cqh] after:rounded-full after:border-[0.5cqh] after:border-white/10 after:content-['']"
-      :aria-label="strings.profile.brandAria"
+      :aria-label="strings.a11y.profile.brandAria"
     >
       <div
         class="relative h-[13cqh] w-[13cqh] rounded-[2.4cqh] border-[0.55cqh] border-white bg-yellow shadow-block -rotate-3"
@@ -46,11 +46,11 @@ function randomize(): void {
         >
       </div>
       <p class="mt-[3cqh] eyebrow-light">
-        {{ strings.profile.brandEyebrow }}
+        {{ strings.ui.profile.brandEyebrow }}
       </p>
       <h1 class="mt-[0.8cqh] text-fs-48">{{ store.config.app.name }}</h1>
       <p class="mx-0 mb-[3.2cqh] mt-[1.8cqh] max-w-[25em] leading-[1.8] text-sky">
-        {{ strings.profile.brandCopy }}
+        {{ strings.ui.profile.brandCopy }}
       </p>
       <div
         class="inline-flex items-center gap-[0.55em] rounded-full px-[1.05em] py-[0.65cqh] text-fs-14 font-bold"
@@ -70,46 +70,46 @@ function randomize(): void {
       <header class="mb-[2.7cqh] flex items-center justify-between">
         <div>
           <p class="eyebrow">
-            {{ strings.profile.sectionLabel }}
+            {{ strings.ui.profile.sectionLabel }}
           </p>
           <h2 id="profile-title" class="mt-[0.5cqh] text-fs-28">
-            {{ strings.profile.sectionTitle }}
+            {{ strings.ui.profile.sectionTitle }}
           </h2>
         </div>
         <!-- 换一组：复用统一按钮组件 AppButton（secondary 白底描边），保证与全站按钮风格一致 -->
         <AppButton
           variant="secondary"
           type="button"
-          :aria-label="strings.profile.randomizeAria"
+          :aria-label="strings.a11y.profile.randomizeAria"
           @click="randomize"
         >
-          <RefreshCw /> {{ strings.profile.randomize }}
+          <RefreshCw /> {{ strings.ui.profile.randomize }}
         </AppButton>
       </header>
 
       <!-- 大头像位于资料区顶部；整个圆形按钮均可打开头像选择弹窗。 -->
       <div class="flex flex-col items-center mb-[2.2cqh]">
         <span class="mb-[0.65cqh] block text-navy font-bold">{{
-          strings.profile.avatarLabel
+          strings.ui.profile.avatarLabel
         }}</span>
         <button
           class="flex flex-col items-center gap-[0.8cqh] bg-transparent text-blue text-fs-12 font-bold"
           type="button"
-          :aria-label="strings.profile.changeAvatarAria"
+          :aria-label="strings.a11y.profile.changeAvatarAria"
           @click="showAvatarPicker = true"
         >
           <AvatarImage
             :avatar-id="store.profile.avatarId"
-            :label="strings.common.myAvatarAria"
+            :label="strings.a11y.common.myAvatarAria"
             class="h-[15cqh] w-[15cqh]"
           />
-          <span>{{ strings.profile.changeAvatar }}</span>
+          <span>{{ strings.ui.profile.changeAvatar }}</span>
         </button>
       </div>
 
       <!-- 昵称位于头像下方，保留自定义输入和 Enter 提交。 -->
       <label class="mb-[0.65cqh] block text-navy font-bold" for="nickname">{{
-        strings.profile.nicknameLabel
+        strings.ui.profile.nicknameLabel
       }}</label>
       <div>
         <AppInput
@@ -125,7 +125,7 @@ function randomize(): void {
             <CheckCircle2
               v-if="nicknameValid"
               class="text-success-fg"
-              :aria-label="strings.profile.nicknameValidAria"
+              :aria-label="strings.a11y.profile.nicknameValidAria"
             />
           </template>
         </AppInput>
@@ -133,7 +133,7 @@ function randomize(): void {
       <!-- 昵称规则说明：常驻显示（紧凑模式折叠已随布局模式移除）。 -->
       <p class="mt-[0.6cqh] text-muted text-fs-12">
         {{
-          strings.profile.nicknameHelp(
+          strings.ui.profile.nicknameHelp(
             store.config.player.nicknameMinLength,
             store.config.player.nicknameMaxLength,
           )
@@ -147,10 +147,10 @@ function randomize(): void {
         :disabled="!nicknameValid || !store.connected || store.busy"
         @click="store.register()"
       >
-        {{ store.busy ? strings.profile.busy : strings.profile.enterLobby }}<ArrowRight />
+        {{ store.busy ? strings.ui.profile.busy : strings.ui.profile.enterLobby }}<ArrowRight />
       </AppButton>
       <p v-if="!store.connected" class="mt-[0.75cqh] text-red text-fs-12 font-bold">
-        {{ strings.profile.offlineWarning }}
+        {{ strings.ui.profile.offlineWarning }}
       </p>
     </section>
 

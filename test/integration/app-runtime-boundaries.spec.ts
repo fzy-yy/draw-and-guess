@@ -81,7 +81,7 @@ describe('AppBootstrap 与重连接管', () => {
     fakeTransport.emit('disconnect', 'transport close')
     expect(session.connected).toBe(false)
     expect(session.sessionState).toBe('disconnected')
-    expect(session.connectionLabel).toBe(strings.connection.reconnecting)
+    expect(session.connectionLabel).toBe(strings.ui.connection.reconnecting)
 
     fakeTransport.emitManager('reconnect_attempt')
     expect(session.sessionState).toBe('disconnected')

@@ -15,10 +15,10 @@ function member(overrides: Partial<RoomMember> = {}): RoomMember {
 
 describe('客户端房间事实单一口径', () => {
   it('phaseTextFor 覆盖阶段并缺省回退 waiting', () => {
-    expect(phaseTextFor('drawing')).toBe(strings.status.phaseDrawing)
-    expect(phaseTextFor('paused')).toBe(strings.status.phasePaused)
-    expect(phaseTextFor('closed')).toBe(strings.status.phaseClosed)
-    expect(phaseTextFor(undefined)).toBe(strings.status.phaseWaiting)
+    expect(phaseTextFor('drawing')).toBe(strings.ui.status.phaseDrawing)
+    expect(phaseTextFor('paused')).toBe(strings.ui.status.phasePaused)
+    expect(phaseTextFor('closed')).toBe(strings.ui.status.phaseClosed)
+    expect(phaseTextFor(undefined)).toBe(strings.ui.status.phaseWaiting)
   })
 
   it('isActiveMember / activeMembers 排除观战与离局', () => {
@@ -34,9 +34,9 @@ describe('客户端房间事实单一口径', () => {
 
   it('playerCountOptions 生成闭区间选项且文案走 strings', () => {
     expect(playerCountOptions({ min: 2, max: 4 })).toEqual([
-      { value: 2, label: strings.common.playersUnit(2) },
-      { value: 3, label: strings.common.playersUnit(3) },
-      { value: 4, label: strings.common.playersUnit(4) },
+      { value: 2, label: strings.ui.common.playersUnit(2) },
+      { value: 3, label: strings.ui.common.playersUnit(3) },
+      { value: 4, label: strings.ui.common.playersUnit(4) },
     ])
   })
 })

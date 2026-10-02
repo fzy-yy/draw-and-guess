@@ -1,14 +1,15 @@
 /**
- * 大厅页（LobbyView.vue）、建房弹窗、私密加入弹窗与在线玩家发现相关文案。
+ * 可见文案（按用途分层）：界面直接可见。
+ *
+ * 分类口径见 .scratch/strings-layering-and-maintenance/spec.md。
  */
+
 export const lobby = {
   fullscreenPromptHeading: '全屏体验推荐',
   fullscreenPromptBody: '是否开启全屏？提示：按 F11 可随时退出或进入全屏',
   fullscreenPromptConfirm: '确定',
   fullscreenPromptDismiss: '暂不',
-  fullscreenPromptAria: '全屏体验推荐提示',
   lobbyEnglishTitle: 'ONLINE LOBBY',
-  navAria: '辅助页面',
   settingsEntry: '设置',
   roomsLabel: 'ROOMS',
   roomsTitle: '全部公开画室',
@@ -17,7 +18,6 @@ export const lobby = {
   createRoomHint: '创建公开或私密画室',
   joinPrivateTitle: '加入私密房间',
   joinPrivateHint: '使用房主分享的房间码加入',
-  roomListAria: '全部公开房间列表',
   roomMeta: (host: string, rounds: number, seconds: number) =>
     `房主 ${host} · ${rounds} 轮 · ${seconds} 秒`,
   joinButton: '加入',
@@ -28,13 +28,11 @@ export const lobby = {
   playersLabel: 'PLAYERS',
   playersTitle: '在线玩家',
   playerFilterPlaceholder: '按昵称筛选',
-  playerFilterAria: '筛选在线玩家',
   discoveryEmpty: '其他玩家需先访问本主机地址并确认资料，之后会自动显示在这里。',
   lanTipTitle: '局域网发现说明',
   lanTipBody: '这里只展示已经连接到当前主机服务且允许被发现的玩家。',
   newRoomLabel: 'NEW ROOM',
   createDialogTitle: '创建画室',
-  createDialogCloseAria: '关闭创建房间弹窗',
   roomNameField: '房间名称',
   maxPlayersField: '最大人数',
   visibilityField: '房间类型',
@@ -47,9 +45,7 @@ export const lobby = {
   createAndEnter: '创建并进入',
   privateJoinLabel: 'PRIVATE ROOM',
   privateJoinTitle: '输入房间码',
-  privateJoinCloseAria: '关闭私密房加入弹窗',
   privateJoinBody: '请输入私密房房主分享的房间码。字母不区分大小写。',
   privateCodePlaceholder: '例如 A2B3C4',
-  privateCodeAria: '私密房间码',
   joinPrivateConfirm: '加入房间',
 } as const

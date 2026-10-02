@@ -48,11 +48,11 @@ describe('CanvasToolbar 交互', () => {
     const wrapper = mountToolbar()
 
     expect(
-      wrapper.find(`[role="toolbar"][aria-label="${strings.game.toolbarAria}"]`).exists(),
+      wrapper.find(`[role="toolbar"][aria-label="${strings.a11y.game.toolbarAria}"]`).exists(),
     ).toBe(true)
 
     await wrapper
-      .get(`[aria-label="${strings.game.eraserAria(store.settings.eraserShortcut)}"]`)
+      .get(`[aria-label="${strings.a11y.game.eraserAria(store.settings.eraserShortcut)}"]`)
       .trigger('click')
     expect(wrapper.emitted('update:tool')?.[0]).toEqual(['eraser'])
     wrapper.unmount()
@@ -63,7 +63,9 @@ describe('CanvasToolbar 交互', () => {
     const nextColor = store.config.drawing.colors.find((paint) => paint !== '#1F2937')!
     const wrapper = mountToolbar()
 
-    await wrapper.get(`[aria-label="${strings.game.presetColorAria(nextColor)}"]`).trigger('click')
+    await wrapper
+      .get(`[aria-label="${strings.a11y.game.presetColorAria(nextColor)}"]`)
+      .trigger('click')
     expect(wrapper.emitted('update:color')?.[0]).toEqual([nextColor])
     wrapper.unmount()
   })
@@ -73,12 +75,12 @@ describe('CanvasToolbar 交互', () => {
     const drawAction = vi.spyOn(store, 'drawAction').mockResolvedValue(true as never)
     const wrapper = mountToolbar()
 
-    await wrapper.get(`[aria-label="${strings.game.undoAria}"]`).trigger('click')
-    await wrapper.get(`[aria-label="${strings.game.redoAria}"]`).trigger('click')
+    await wrapper.get(`[aria-label="${strings.a11y.game.undoAria}"]`).trigger('click')
+    await wrapper.get(`[aria-label="${strings.a11y.game.redoAria}"]`).trigger('click')
     expect(drawAction).toHaveBeenNthCalledWith(1, EVENTS.drawUndo)
     expect(drawAction).toHaveBeenNthCalledWith(2, EVENTS.drawRedo)
 
-    await wrapper.get(`[aria-label="${strings.game.clearAria}"]`).trigger('click')
+    await wrapper.get(`[aria-label="${strings.a11y.game.clearAria}"]`).trigger('click')
     expect(wrapper.emitted('clear')).toHaveLength(1)
     wrapper.unmount()
   })
@@ -90,22 +92,22 @@ describe('CanvasToolbar 交互', () => {
     const presetColor = store.config.drawing.colors[0]!
 
     expect(
-      (wrapper.get(`[aria-label="${strings.game.undoAria}"]`).element as HTMLButtonElement)
+      (wrapper.get(`[aria-label="${strings.a11y.game.undoAria}"]`).element as HTMLButtonElement)
         .disabled,
     ).toBe(true)
     expect(
       (
-        wrapper.get(`[aria-label="${strings.game.eraserAria(store.settings.eraserShortcut)}"]`)
+        wrapper.get(`[aria-label="${strings.a11y.game.eraserAria(store.settings.eraserShortcut)}"]`)
           .element as HTMLButtonElement
       ).disabled,
     ).toBe(true)
     expect(
       wrapper
-        .get(`[aria-label="${strings.game.presetColorAria(presetColor)}"]`)
+        .get(`[aria-label="${strings.a11y.game.presetColorAria(presetColor)}"]`)
         .attributes('aria-disabled'),
     ).toBe('true')
 
-    await wrapper.get(`[aria-label="${strings.game.undoAria}"]`).trigger('click')
+    await wrapper.get(`[aria-label="${strings.a11y.game.undoAria}"]`).trigger('click')
     expect(drawAction).not.toHaveBeenCalled()
     wrapper.unmount()
   })

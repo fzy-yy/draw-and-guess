@@ -44,19 +44,19 @@ const showClearProfileConfirm = ref(false)
         type="button"
         class="flex flex-col items-center gap-[0.7cqh] text-blue bg-transparent text-fs-12 font-bold"
         :disabled="profileEditingDisabled"
-        :aria-label="strings.profile.changeAvatarAria"
+        :aria-label="strings.a11y.profile.changeAvatarAria"
         @click="showAvatarPicker = true"
       >
         <AvatarImage
           :avatar-id="store.profile.avatarId"
-          :label="strings.common.myAvatarAria"
+          :label="strings.a11y.common.myAvatarAria"
           class="h-[13cqh] w-[13cqh]"
         />
-        <span>{{ strings.settings.avatarField }}</span>
+        <span>{{ strings.ui.settings.avatarField }}</span>
       </button>
 
       <label class="flex w-full flex-col items-center gap-[0.6cqh] font-bold text-fs-14">
-        {{ strings.settings.nicknameField }}
+        {{ strings.ui.settings.nicknameField }}
         <div class="w-full">
           <AppInput
             v-model="store.profile.nickname"
@@ -76,18 +76,18 @@ const showClearProfileConfirm = ref(false)
         :disabled="profileEditingDisabled"
         @click="store.updateProfile"
       >
-        {{ strings.settings.saveProfile }}
+        {{ strings.ui.settings.saveProfile }}
       </AppButton>
     </div>
 
     <!-- 诊断区 -->
     <div class="border-t-[0.4cqh] border-blue bg-white p-[2cqh_1.5em]">
-      <h2>{{ strings.settings.diagnosticsTitle }}</h2>
+      <h2>{{ strings.ui.settings.diagnosticsTitle }}</h2>
       <pre
         class="my-[1.4cqh] rounded-[0.6em] bg-navy p-[1.2cqh_1em] text-sky font-mono text-fs-12 leading-normal whitespace-pre-wrap"
         >{{ diagnostic }}</pre>
       <AppButton variant="secondary" type="button" @click="emit('copy')">
-        <Clipboard />{{ strings.settings.copyDiagnostics }}
+        <Clipboard />{{ strings.ui.settings.copyDiagnostics }}
       </AppButton>
     </div>
 
@@ -100,7 +100,7 @@ const showClearProfileConfirm = ref(false)
         :audio-feedback="null"
         @click="showResetConfirm = true"
       >
-        <RotateCcw />{{ strings.settings.resetSettings }}
+        <RotateCcw />{{ strings.ui.settings.resetSettings }}
       </AppButton>
       <AppButton
         variant="danger"
@@ -110,7 +110,7 @@ const showClearProfileConfirm = ref(false)
         :audio-feedback="null"
         @click="showClearProfileConfirm = true"
       >
-        <Trash2 />{{ strings.settings.clearProfile }}
+        <Trash2 />{{ strings.ui.settings.clearProfile }}
       </AppButton>
     </div>
   </section>
@@ -118,10 +118,10 @@ const showClearProfileConfirm = ref(false)
   <!-- 确认弹窗：恢复默认设置 -->
   <ConfirmDialog
     v-model:open="showResetConfirm"
-    :title="strings.settings.resetSettingsTitle"
-    :body="strings.settings.resetSettingsBody"
-    :confirm-label="strings.settings.confirmResetSettings"
-    :cancel-label="strings.common.cancel"
+    :title="strings.ui.settings.resetSettingsTitle"
+    :body="strings.ui.settings.resetSettingsBody"
+    :confirm-label="strings.ui.settings.confirmResetSettings"
+    :cancel-label="strings.ui.common.cancel"
     confirm-variant="primary"
     :icon="RotateCcw"
     @confirm="store.resetSettings"
@@ -130,10 +130,10 @@ const showClearProfileConfirm = ref(false)
   <!-- 确认弹窗：清除本地资料 -->
   <ConfirmDialog
     v-model:open="showClearProfileConfirm"
-    :title="strings.settings.clearProfileTitle"
-    :body="strings.settings.clearProfileBody"
-    :confirm-label="strings.settings.confirmClearProfile"
-    :cancel-label="strings.common.cancel"
+    :title="strings.ui.settings.clearProfileTitle"
+    :body="strings.ui.settings.clearProfileBody"
+    :confirm-label="strings.ui.settings.confirmClearProfile"
+    :cancel-label="strings.ui.common.cancel"
     :icon="Trash2"
     @confirm="store.clearProfile"
   />

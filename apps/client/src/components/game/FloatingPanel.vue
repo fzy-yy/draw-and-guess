@@ -146,8 +146,8 @@ function endDrag(event: PointerEvent): void {
         <button
           type="button"
           class="grid h-[3.4cqh] w-[3.4cqh] shrink-0 place-items-center rounded-full bg-line text-navy hover:bg-sky"
-          :aria-label="strings.game.closePanelAria"
-          :title="strings.game.closePanelAria"
+          :aria-label="strings.a11y.game.closePanelAria"
+          :title="strings.a11y.game.closePanelAria"
           @click="open = false"
         >
           <X />

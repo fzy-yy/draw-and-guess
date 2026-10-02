@@ -32,12 +32,12 @@ const store = useGameStore()
  */
 const hintsSummary = computed(() => {
   const settings = store.room?.settings
-  if (!settings) return strings.room.hintsOff
-  return settings.progressiveHints ? strings.room.hintsMaskOnly : strings.room.hintsOff
+  if (!settings) return strings.ui.room.hintsOff
+  return settings.progressiveHints ? strings.ui.room.hintsMaskOnly : strings.ui.room.hintsOff
 })
 
 function enabled(value: boolean): string {
-  return value ? strings.room.ruleEnabled : strings.room.ruleDisabled
+  return value ? strings.ui.room.ruleEnabled : strings.ui.room.ruleDisabled
 }
 
 const summaryRows = computed(() => {
@@ -52,27 +52,27 @@ const summaryRows = computed(() => {
   const rows: Array<{ key: string; label: string; value: string }> = [
     {
       key: 'maxPlayers',
-      label: strings.room.ruleCapacityDt,
-      value: strings.common.playersUnit(settings.maxPlayers),
+      label: strings.ui.room.ruleCapacityDt,
+      value: strings.ui.common.playersUnit(settings.maxPlayers),
     },
     {
       key: 'roundsPerPlayer',
-      label: strings.room.ruleRoundsDt,
-      value: strings.room.ruleRoundsDd(settings.roundsPerPlayer),
+      label: strings.ui.room.ruleRoundsDt,
+      value: strings.ui.room.ruleRoundsDd(settings.roundsPerPlayer),
     },
     {
       key: 'drawSeconds',
-      label: strings.room.ruleDrawDt,
-      value: strings.room.ruleDrawValue(settings.drawSeconds),
+      label: strings.ui.room.ruleDrawDt,
+      value: strings.ui.room.ruleDrawValue(settings.drawSeconds),
     },
   ]
   // 选词阶段是否计时是本局的关键行为（默认为不限时），常驻展示而不是按差异判定。
   rows.push({
     key: 'chooseTime',
-    label: strings.room.ruleChooseTimeDt,
+    label: strings.ui.room.ruleChooseTimeDt,
     value: settings.allowChooseTimeLimit
-      ? strings.common.secondsUnit(settings.chooseSeconds)
-      : strings.room.chooseTimeUnlimited,
+      ? strings.ui.common.secondsUnit(settings.chooseSeconds)
+      : strings.ui.room.chooseTimeUnlimited,
   })
   const addDifference = (
     field: keyof Omit<RoomSettings, 'maxPlayers'>,
@@ -83,40 +83,40 @@ const summaryRows = computed(() => {
   }
   addDifference(
     'optionCount',
-    strings.room.ruleOptionsDt,
-    strings.room.ruleOptionsDd(settings.optionCount),
+    strings.ui.room.ruleOptionsDt,
+    strings.ui.room.ruleOptionsDd(settings.optionCount),
   )
   if (differences.has('progressiveHints'))
-    rows.push({ key: 'hints', label: strings.room.ruleHintsDt, value: hintsSummary.value })
+    rows.push({ key: 'hints', label: strings.ui.room.ruleHintsDt, value: hintsSummary.value })
   addDifference(
     'showWordLength',
-    strings.room.toggleShowWordLength,
+    strings.ui.room.toggleShowWordLength,
     enabled(settings.showWordLength),
   )
   addDifference(
     'allowPlayerInvite',
-    strings.room.togglePlayerInvite,
+    strings.ui.room.togglePlayerInvite,
     enabled(settings.allowPlayerInvite),
   )
-  addDifference('allowPause', strings.room.togglePause, enabled(settings.allowPause))
+  addDifference('allowPause', strings.ui.room.togglePause, enabled(settings.allowPause))
   addDifference(
     'allowWordReroll',
-    strings.room.ruleRerollDt,
-    settings.allowWordReroll ? strings.room.ruleRerollOn : strings.room.ruleRerollOff,
+    strings.ui.room.ruleRerollDt,
+    settings.allowWordReroll ? strings.ui.room.ruleRerollOn : strings.ui.room.ruleRerollOff,
   )
   addDifference(
     'allowCustomWord',
-    strings.room.ruleCustomWordDt,
-    settings.allowCustomWord ? strings.room.ruleCustomWordOn : strings.room.ruleCustomWordOff,
+    strings.ui.room.ruleCustomWordDt,
+    settings.allowCustomWord ? strings.ui.room.ruleCustomWordOn : strings.ui.room.ruleCustomWordOff,
   )
   addDifference(
     'joinPolicy',
-    strings.room.joinPolicyField,
+    strings.ui.room.joinPolicyField,
     settings.joinPolicy === 'forbid'
-      ? strings.room.joinPolicyForbid
+      ? strings.ui.room.joinPolicyForbid
       : settings.joinPolicy === 'spectate'
-        ? strings.room.joinPolicySpectate
-        : strings.room.joinPolicyNextGame,
+        ? strings.ui.room.joinPolicySpectate
+        : strings.ui.room.joinPolicyNextGame,
   )
   return rows
 })
@@ -128,16 +128,16 @@ const summaryRows = computed(() => {
     <div>
       <div class="grid grid-cols-[1fr_auto] items-center">
         <p class="col-start-1 eyebrow">
-          {{ strings.room.rulesEyebrow }}
+          {{ strings.ui.room.rulesEyebrow }}
         </p>
-        <h2 class="col-start-1">{{ strings.room.rulesTitle }}</h2>
+        <h2 class="col-start-1">{{ strings.ui.room.rulesTitle }}</h2>
         <button
           v-if="store.isHost"
           type="button"
           class="col-start-2 row-[1/3] flex items-center gap-[0.4em] text-blue bg-transparent font-bold"
           @click="emit('edit-rules')"
         >
-          <Settings2 /> {{ strings.room.rulesEdit }}
+          <Settings2 /> {{ strings.ui.room.rulesEdit }}
         </button>
       </div>
       <dl class="my-[1.4cqh] border-t-[0.16cqh] border-t-line">
@@ -155,19 +155,19 @@ const summaryRows = computed(() => {
       @click="emit('open-vocabulary')"
     >
       <BookOpenCheck class="h-[3.4cqh] w-[3.4cqh]" /><span class="flex-1 flex flex-col"
-        ><b>{{ strings.room.vocabularyTitle }}</b>
+        ><b>{{ strings.ui.room.vocabularyTitle }}</b>
         <small class="text-muted truncate">
           <span v-if="store.room?.vocabularyPackageName" class="font-bold text-navy mr-[0.3em]"
             >[{{ store.room.vocabularyPackageName }}]</span
           >{{
-            strings.room.vocabularyCount(
+            strings.ui.room.vocabularyCount(
               store.room?.selectedWordCount ?? 0,
               store.room?.totalWordCount ?? 0,
             )
           }}</small
         ></span
       ><span class="text-fs-12 font-bold">{{
-        store.isHost ? strings.room.vocabularyManage : strings.room.vocabularyReadOnly
+        store.isHost ? strings.ui.room.vocabularyManage : strings.ui.room.vocabularyReadOnly
       }}</span>
     </button>
 
@@ -182,15 +182,15 @@ const summaryRows = computed(() => {
         "
         :title="
           (store.room?.members.length ?? 0) >= (store.room?.settings.maxPlayers ?? 0)
-            ? strings.room.inviteDisabledFull
+            ? strings.ui.room.inviteDisabledFull
             : !store.isHost && !(store.room?.settings.allowPlayerInvite ?? false)
-              ? strings.room.inviteDisabledHostOnly
-              : strings.room.inviteDisabledTip
+              ? strings.ui.room.inviteDisabledHostOnly
+              : strings.ui.room.inviteDisabledTip
         "
         :audio-feedback="null"
         @click="emit('open-invite')"
       >
-        <Send /> {{ strings.room.invitePlayers }}
+        <Send /> {{ strings.ui.room.invitePlayers }}
       </AppButton>
     </div>
   </template>

@@ -31,11 +31,11 @@ const emit = defineEmits<{
 }>()
 
 const columns: DataTableColumn<VocabularyPackageInfo>[] = [
-  { key: 'name', label: strings.room.vocabPackageColumnName, weight: 22 },
-  { key: 'wordCount', label: strings.room.vocabPackageColumnWordCount, weight: 12 },
-  { key: 'description', label: strings.room.vocabPackageColumnDescription, weight: 34 },
-  { key: 'version', label: strings.room.vocabPackageColumnVersion, weight: 12 },
-  { key: 'updatedAt', label: strings.room.vocabPackageColumnUpdatedAt, weight: 20 },
+  { key: 'name', label: strings.ui.room.vocabPackageColumnName, weight: 22 },
+  { key: 'wordCount', label: strings.ui.room.vocabPackageColumnWordCount, weight: 12 },
+  { key: 'description', label: strings.ui.room.vocabPackageColumnDescription, weight: 34 },
+  { key: 'version', label: strings.ui.room.vocabPackageColumnVersion, weight: 12 },
+  { key: 'updatedAt', label: strings.ui.room.vocabPackageColumnUpdatedAt, weight: 20 },
 ]
 
 /** DataTable 以 Set 作为统一受控选择接口；词库包只允许一个激活项。 */
@@ -59,9 +59,9 @@ defineExpose({
     :selected-ids="selectedPackageIds"
     selection-mode="single"
     :selection-disabled="props.isReadOnly || props.selectionPending"
-    :select-all-aria="strings.room.vocabPackageSelectionColumn"
-    :empty-text="strings.room.vocabPackagesEmpty"
-    :row-aria="(row) => strings.room.vocabPackageSelectAria(row.name)"
+    :select-all-aria="strings.a11y.room.vocabPackageSelectionColumn"
+    :empty-text="strings.ui.room.vocabPackagesEmpty"
+    :row-aria="(row) => strings.a11y.room.vocabPackageSelectAria(row.name)"
     @sort="emit('sort', $event)"
     @toggle="emit('select', $event)"
   >
@@ -79,19 +79,21 @@ defineExpose({
     <template #cell-description="{ row }">
       <span
         class="block truncate text-muted"
-        :title="row.description || strings.common.emptyDash"
-        >{{ row.description || strings.common.emptyDash }}</span
+        :title="row.description || strings.a11y.common.emptyDash"
+        >{{ row.description || strings.ui.common.emptyDash }}</span
       >
     </template>
 
     <!-- 版本号：等宽显示 -->
     <template #cell-version="{ row }">
-      <span class="tabular-nums text-navy">{{ row.version || strings.common.emptyDash }}</span>
+      <span class="tabular-nums text-navy">{{ row.version || strings.ui.common.emptyDash }}</span>
     </template>
 
     <!-- 更新日期：切换操作统一由行首单选按钮承载。 -->
     <template #cell-updatedAt="{ row }">
-      <span class="tabular-nums text-muted">{{ row.updatedAt || strings.common.emptyDash }}</span>
+      <span class="tabular-nums text-muted">{{
+        row.updatedAt || strings.ui.common.emptyDash
+      }}</span>
     </template>
   </DataTable>
 </template>

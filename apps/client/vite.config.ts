@@ -15,10 +15,10 @@ function appMetadataPlugin(): Plugin {
     // 用统一文案包注入 index.html 的标题与描述，避免 HTML 内硬编码
     transformIndexHtml(html) {
       return html
-        .replace(/<title>[^<]*<\/title>/, `<title>${strings.meta.title}</title>`)
+        .replace(/<title>[^<]*<\/title>/, `<title>${strings.ui.meta.title}</title>`)
         .replace(
           /<meta name="description" content="[^"]*"/,
-          `<meta name="description" content="${strings.meta.description}"`,
+          `<meta name="description" content="${strings.ui.meta.description}"`,
         )
     },
   }

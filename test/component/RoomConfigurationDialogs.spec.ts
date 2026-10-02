@@ -81,7 +81,7 @@ const VocabularyPackageTableStub = defineComponent({
             type: 'radio',
             checked: item.id === props.selectedPackageId,
             disabled: props.isReadOnly || props.selectionPending,
-            'aria-label': strings.room.vocabPackageSelectAria(item.name),
+            'aria-label': strings.a11y.room.vocabPackageSelectAria(item.name),
             onChange: () => emit('select', item.id),
           }),
         ),
@@ -110,19 +110,19 @@ describe('RulesDialog 完整规则字段', () => {
     })
 
     const expectedLabels = [
-      strings.room.maxPlayersField,
-      strings.common.roundsField,
-      strings.room.chooseTimeField,
-      strings.room.optionCountField,
-      strings.room.joinPolicyField,
-      strings.room.toggleChooseTimeLimit,
-      strings.room.toggleAllowCustomWord,
-      strings.room.togglePlayerInvite,
-      strings.room.toggleAllowWordReroll,
-      strings.room.drawSecondsField,
-      strings.room.toggleShowWordLength,
-      strings.room.toggleProgressiveHints,
-      strings.room.togglePause,
+      strings.ui.room.maxPlayersField,
+      strings.ui.common.roundsField,
+      strings.ui.room.chooseTimeField,
+      strings.ui.room.optionCountField,
+      strings.ui.room.joinPolicyField,
+      strings.ui.room.toggleChooseTimeLimit,
+      strings.ui.room.toggleAllowCustomWord,
+      strings.ui.room.togglePlayerInvite,
+      strings.ui.room.toggleAllowWordReroll,
+      strings.ui.room.drawSecondsField,
+      strings.ui.room.toggleShowWordLength,
+      strings.ui.room.toggleProgressiveHints,
+      strings.ui.room.togglePause,
     ]
     for (const label of expectedLabels)
       expect(screen.getByLabelText(new RegExp(label))).toBeTruthy()
@@ -132,8 +132,8 @@ describe('RulesDialog 完整规则字段', () => {
     await user.click(await screen.findByRole('option', { name: '4 人' }))
     await user.click(screen.getByLabelText(/中途加入/))
     await user.click(await screen.findByRole('option', { name: '禁止' }))
-    await user.click(screen.getByLabelText(strings.room.togglePause))
-    await user.click(screen.getByRole('button', { name: strings.room.saveRules }))
+    await user.click(screen.getByLabelText(strings.ui.room.togglePause))
+    await user.click(screen.getByRole('button', { name: strings.ui.room.saveRules }))
 
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -160,22 +160,22 @@ describe('VocabularyDialog 权限与竞态', () => {
 
     renderVocabularyDialog()
 
-    const dialog = await screen.findByRole('dialog', { name: strings.room.vocabTitleReadonly })
-    expect(screen.getByText(strings.room.vocabReadonlyHint)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: strings.room.confirmSelection })).toBeNull()
+    const dialog = await screen.findByRole('dialog', { name: strings.ui.room.vocabTitleReadonly })
+    expect(screen.getByText(strings.ui.room.vocabReadonlyHint)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: strings.ui.room.confirmSelection })).toBeNull()
     expect(screen.queryByRole('checkbox')).toBeNull()
 
-    await user.type(screen.getByLabelText(strings.room.vocabSearchAria), '苹果')
+    await user.type(screen.getByLabelText(strings.a11y.room.vocabSearchAria), '苹果')
     await waitFor(() =>
-      expect((screen.getByLabelText(strings.room.vocabSearchAria) as HTMLInputElement).value).toBe(
-        '苹果',
-      ),
+      expect(
+        (screen.getByLabelText(strings.a11y.room.vocabSearchAria) as HTMLInputElement).value,
+      ).toBe('苹果'),
     )
     expect(dialog).toBeTruthy()
 
-    await user.click(screen.getByRole('button', { name: strings.room.vocabSwitchToPackages }))
+    await user.click(screen.getByRole('button', { name: strings.a11y.room.vocabSwitchToPackages }))
     const packageChoice = await screen.findByRole('radio', {
-      name: strings.room.vocabPackageSelectAria('进阶词库'),
+      name: strings.a11y.room.vocabPackageSelectAria('进阶词库'),
     })
     expect((packageChoice as HTMLInputElement).disabled).toBe(true)
   })
@@ -223,10 +223,10 @@ describe('VocabularyDialog 权限与竞态', () => {
     })
 
     renderVocabularyDialog()
-    await screen.findByRole('dialog', { name: strings.room.vocabTitle })
-    await user.click(screen.getByRole('button', { name: strings.room.vocabSwitchToPackages }))
+    await screen.findByRole('dialog', { name: strings.ui.room.vocabTitle })
+    await user.click(screen.getByRole('button', { name: strings.a11y.room.vocabSwitchToPackages }))
     const advanced = await screen.findByRole('radio', {
-      name: strings.room.vocabPackageSelectAria('进阶词库'),
+      name: strings.a11y.room.vocabPackageSelectAria('进阶词库'),
     })
     await user.click(advanced)
 

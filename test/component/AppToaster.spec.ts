@@ -17,7 +17,7 @@ describe('AppToaster 键盘关闭', () => {
 
     expect((await screen.findByRole('alert')).textContent).toContain('网络连接不稳定')
     const close = screen.getByRole('button', {
-      name: strings.common.dismissToastAria('网络连接不稳定'),
+      name: strings.a11y.common.dismissToastAria('网络连接不稳定'),
     })
     close.focus()
     await user.keyboard('{Enter}')
@@ -33,7 +33,7 @@ describe('AppToaster 键盘关闭', () => {
     notify('等待其他玩家', 'warning')
 
     const firstClose = await screen.findByRole('button', {
-      name: strings.common.dismissToastAria('规则已保存'),
+      name: strings.a11y.common.dismissToastAria('规则已保存'),
     })
     firstClose.focus()
     await user.keyboard(' ')

@@ -1,38 +1,22 @@
 /**
- * 通用元信息、交互词、网络连接状态与玩家/阶段状态标签。
+ * 可见文案（按用途分层）：界面直接可见。
+ *
+ * 分类口径见 .scratch/strings-layering-and-maintenance/spec.md。
  */
+import { clampLatency } from '../internal/latency.ts'
+
 export const meta = {
   title: '你画我猜',
   description: '实时多人你画我猜游戏',
 } as const
-
-/**
- * 延迟展示上限（毫秒）：局域网抖动或弱网下往返可能远超四位数，顶栏网络徽章只需容纳三位数。
- * 超过上限一律封顶显示；只影响文案与徽章数字，不影响真实测量值与连接质量配色
- * （配色仍按真实延迟判定，见 components/common/NetworkStatusButton.vue）。
- */
-export const LATENCY_DISPLAY_MAX_MS = 999
-
-/** 展示用延迟值：统一按 {@link LATENCY_DISPLAY_MAX_MS} 封顶，供全部延迟文案共用。 */
-const clampLatency = (latency: number): number => Math.min(latency, LATENCY_DISPLAY_MAX_MS)
-
 export const common = {
   cancel: '取消',
   accept: '接受',
   decline: '拒绝',
-  declineCountdown: (seconds: number) => `拒绝(${seconds})`,
-  dismissToastAria: (text: string) => `关闭提示：${text}`,
-  clearSearchAria: '清除搜索内容',
   listSeparator: '、',
-  sortByAria: (name: string) => `按${name}排序`,
   emptyDash: '—',
-  networkStatusAria: (label: string, latency: number) =>
-    `${label} · 延迟 ${latency ? clampLatency(latency) : common.emptyDash} 毫秒`,
-  connectionDetail: (label: string, latency: number) =>
-    `${label} · ${latency ? clampLatency(latency) : common.emptyDash} ms`,
   /** 网络徽章上的延迟短文本（已封顶），与悬浮/无障碍文案共用同一口径。 */
   latencyShort: (latency: number) => `${clampLatency(latency)}ms`,
-  exit: '退出',
   scoreUnit: (score: number) => `${score} 分`,
   playersUnit: (count: number) => `${count} 人`,
   roundsUnit: (count: number) => `${count} 轮`,
@@ -40,12 +24,7 @@ export const common = {
   percentUnit: (value: number) => `${value}%`,
   countBadge: (label: string, count: number) => `${label} · ${count}`,
   roundsField: '每人作画次数',
-  myAvatarAria: '我的 SVG 头像',
-  playerAvatarAria: (nickname: string) => `${nickname}的 SVG 头像`,
-  // 通用右键菜单的默认无障碍名称（具体场景可用 ariaLabel 覆盖，见 ContextMenu.vue）
-  contextMenuAria: '右键菜单',
 } as const
-
 export const connection = {
   connecting: '正在连接',
   connected: '已连接',
@@ -54,7 +33,6 @@ export const connection = {
   reconnecting: '正在重连',
   unavailable: '无法连接',
 } as const
-
 export const status = {
   playerIdle: '空闲',
   playerInRoom: '房间中',

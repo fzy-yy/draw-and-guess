@@ -89,7 +89,7 @@ function findPanel(wrapper: VueWrapper, title: string): boolean {
 
 /** 定位常驻玩家左栏：它是普通 aside（不是浮层 section），按 aria-label 判定。 */
 function hasPlayersColumn(wrapper: VueWrapper): boolean {
-  return wrapper.find(`aside[aria-label="${strings.game.playersPanelTitle}"]`).exists()
+  return wrapper.find(`aside[aria-label="${strings.a11y.game.playersPanelTitle}"]`).exists()
 }
 
 /** 在 window 上派发按键：与 usePanelShortcuts 的监听目标一致，模拟全局快捷键。 */
@@ -101,12 +101,12 @@ describe('GameView 新对局骨架', () => {
   it('渲染顶栏、铺满画布、玩家常驻左栏、聊天浮层与底部工具条', () => {
     const wrapper = mountGameView()
 
-    expect(wrapper.find(`header[aria-label="${strings.game.topBarAria}"]`).exists()).toBe(true)
+    expect(wrapper.find(`header[aria-label="${strings.a11y.game.topBarAria}"]`).exists()).toBe(true)
     expect(wrapper.find('canvas').exists()).toBe(true)
     expect(hasPlayersColumn(wrapper)).toBe(true)
-    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(true)
+    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(true)
     expect(
-      wrapper.find(`[role="toolbar"][aria-label="${strings.game.toolbarAria}"]`).exists(),
+      wrapper.find(`[role="toolbar"][aria-label="${strings.a11y.game.toolbarAria}"]`).exists(),
     ).toBe(true)
 
     wrapper.unmount()
@@ -117,25 +117,25 @@ describe('GameView 新对局骨架', () => {
 
     // 玩家面板是常驻左栏：不参与开关，始终在 DOM 中
     expect(hasPlayersColumn(wrapper)).toBe(true)
-    expect(wrapper.find(`[aria-label="${strings.game.toggleChat}"]`).exists()).toBe(true)
+    expect(wrapper.find(`[aria-label="${strings.a11y.game.toggleChat}"]`).exists()).toBe(true)
 
-    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(true)
+    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(true)
 
     // 顶栏「聊天面板」开关 → 收起聊天面板
-    await wrapper.get(`[aria-label="${strings.game.toggleChat}"]`).trigger('click')
+    await wrapper.get(`[aria-label="${strings.a11y.game.toggleChat}"]`).trigger('click')
     await flushPromises()
-    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(false)
+    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(false)
     // 收起聊天不影响常驻玩家左栏
     expect(hasPlayersColumn(wrapper)).toBe(true)
 
     // 再次点击同一开关 → 重新打开聊天面板
-    await wrapper.get(`[aria-label="${strings.game.toggleChat}"]`).trigger('click')
+    await wrapper.get(`[aria-label="${strings.a11y.game.toggleChat}"]`).trigger('click')
     await flushPromises()
-    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(true)
+    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(true)
 
     // 顶栏「绘图工具」开关 → 收起底部工具条
     expect(wrapper.find('[role="toolbar"]').exists()).toBe(true)
-    await wrapper.get(`[aria-label="${strings.game.toggleTools}"]`).trigger('click')
+    await wrapper.get(`[aria-label="${strings.a11y.game.toggleTools}"]`).trigger('click')
     await flushPromises()
     expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
 
@@ -148,15 +148,15 @@ describe('GameView 新对局骨架', () => {
     // 回车：聊天已打开时只聚焦、不隐藏
     pressKey('Enter')
     await flushPromises()
-    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(true)
+    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(true)
 
     // C：关掉聊天后再用回车打开（回车永不隐藏）
     pressKey('c')
     await flushPromises()
-    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(false)
+    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(false)
     pressKey('Enter')
     await flushPromises()
-    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(true)
+    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(true)
 
     // T：底部工具条开 ↔ 关（本机为画家）
     pressKey('t')
@@ -170,7 +170,7 @@ describe('GameView 新对局骨架', () => {
     const input = wrapper.find('input').element
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }))
     await flushPromises()
-    expect(findPanel(wrapper, strings.game.chatPanelTitle)).toBe(true)
+    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(true)
 
     wrapper.unmount()
   })

@@ -34,21 +34,21 @@ function rect(left: number, top: number, width: number, height: number): DOMRect
 describe('FloatingPanel 开合与关闭', () => {
   it('默认渲染标题与内容，关闭按钮写回 open=false', async () => {
     const wrapper = mount(FloatingPanel, {
-      props: { open: true, title: strings.game.playersPanelTitle },
+      props: { open: true, title: strings.a11y.game.playersPanelTitle },
       slots: { default: '成员列表' },
     })
 
-    expect(wrapper.get('section').text()).toContain(strings.game.playersPanelTitle)
+    expect(wrapper.get('section').text()).toContain(strings.a11y.game.playersPanelTitle)
     expect(wrapper.text()).toContain('成员列表')
 
-    await wrapper.get(`[aria-label="${strings.game.closePanelAria}"]`).trigger('click')
+    await wrapper.get(`[aria-label="${strings.a11y.game.closePanelAria}"]`).trigger('click')
     expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
     wrapper.unmount()
   })
 
   it('open 为假时不渲染面板', () => {
     const wrapper = mount(FloatingPanel, {
-      props: { open: false, title: strings.game.chatPanelTitle },
+      props: { open: false, title: strings.ui.game.chatPanelTitle },
     })
     expect(wrapper.find('section').exists()).toBe(false)
     wrapper.unmount()
@@ -69,7 +69,7 @@ describe('FloatingPanel 标题栏拖动', () => {
 
   it('拖动被夹取在工作区内，不会把面板拖出画布', async () => {
     const wrapper = mount(FloatingPanel, {
-      props: { open: true, position: { x: 0, y: 0 }, title: strings.game.playersPanelTitle },
+      props: { open: true, position: { x: 0, y: 0 }, title: strings.a11y.game.playersPanelTitle },
     })
     const panel = wrapper.get('section').element as HTMLElement
     const workspace = panel.parentElement as HTMLElement
@@ -94,7 +94,7 @@ describe('FloatingPanel 标题栏拖动', () => {
 
   it('正文区不响应拖动，只有标题栏是拖动手柄', async () => {
     const wrapper = mount(FloatingPanel, {
-      props: { open: true, position: { x: 0, y: 0 }, title: strings.game.chatPanelTitle },
+      props: { open: true, position: { x: 0, y: 0 }, title: strings.ui.game.chatPanelTitle },
       slots: { default: '<p class="content">正文</p>' },
     })
     const panel = wrapper.get('section').element as HTMLElement
@@ -152,7 +152,7 @@ describe('FloatingPanel 与顶栏开关联动', () => {
               {
                 open: chatOpen.value,
                 'onUpdate:open': (value: boolean) => (chatOpen.value = value),
-                title: strings.game.chatPanelTitle,
+                title: strings.ui.game.chatPanelTitle,
               },
               { default: () => h('p', '聊天消息') },
             ),
@@ -165,8 +165,8 @@ describe('FloatingPanel 与顶栏开关联动', () => {
 
   it('顶栏按钮可收起面板，面板内关闭按钮也能收起同一份状态', async () => {
     const wrapper = mountSharedOpen()
-    const toggle = wrapper.get(`[aria-label="${strings.game.toggleChat}"]`)
-    const panelTitle = strings.game.chatPanelTitle
+    const toggle = wrapper.get(`[aria-label="${strings.a11y.game.toggleChat}"]`)
+    const panelTitle = strings.ui.game.chatPanelTitle
 
     // 顶栏开关 → 收起
     await toggle.trigger('click')
@@ -180,7 +180,7 @@ describe('FloatingPanel 与顶栏开关联动', () => {
 
     // 面板内关闭按钮 → 同样收起（证明两处写的是同一份 open）
     const panel = wrapper.findAll('section').find((node) => node.text().includes(panelTitle))!
-    await panel.get(`[aria-label="${strings.game.closePanelAria}"]`).trigger('click')
+    await panel.get(`[aria-label="${strings.a11y.game.closePanelAria}"]`).trigger('click')
     await flushPromises()
     expect(wrapper.findAll('section').some((node) => node.text().includes(panelTitle))).toBe(false)
     wrapper.unmount()
@@ -194,10 +194,10 @@ describe('FloatingPanel 跨面板层级（模块级共享）', () => {
    */
   it('后点击的面板置顶，且层级始终低于阶段遮罩', async () => {
     const first = mount(FloatingPanel, {
-      props: { open: true, title: strings.game.playersPanelTitle },
+      props: { open: true, title: strings.a11y.game.playersPanelTitle },
     })
     const second = mount(FloatingPanel, {
-      props: { open: true, title: strings.game.chatPanelTitle },
+      props: { open: true, title: strings.ui.game.chatPanelTitle },
     })
     const firstSection = first.get('section').element as HTMLElement
     const secondSection = second.get('section').element as HTMLElement

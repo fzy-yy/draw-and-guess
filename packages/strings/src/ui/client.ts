@@ -1,6 +1,9 @@
 /**
- * 客户端 Store、组合函数与请求层文案（Toast 反馈、错误与超时提示）。
+ * 可见文案（按用途分层）：界面直接可见。
+ *
+ * 分类口径见 .scratch/strings-layering-and-maintenance/spec.md。
  */
+
 export const store = {
   notConnected: '尚未连接到主机服务，请稍候再试',
   restored: '身份已恢复',
@@ -18,7 +21,6 @@ export const store = {
   inviteSent: '邀请已发送',
   pauseReasonHost: '房主暂停了游戏',
 } as const
-
 export const request = {
   genericFailure: '请求失败，请检查主机服务与局域网连接',
   timeoutMessage: '服务器响应超时；当前操作未确认，请检查连接后重试',

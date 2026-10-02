@@ -54,8 +54,8 @@ function openVocabulary(): void {
 // 与成功/失败提示；模板 v-if 已保证按钮只在有短码时渲染（服务端仅向当前房主下发该字段）。
 const copyPrivateCode = useCopyWithFeedback({
   text: () => store.room?.privateJoinCode ?? '',
-  success: strings.room.privateCodeCopied,
-  failure: strings.room.privateCodeCopyFailed,
+  success: strings.ui.room.privateCodeCopied,
+  failure: strings.ui.room.privateCodeCopyFailed,
   notify: (text, type) => store.notify(text, type),
 })
 
@@ -90,7 +90,9 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
     <StageHeader>
       <template #leading>
         <div class="flex items-baseline gap-[0.8em] min-w-0">
-          <span class="text-sky text-fs-12 tracking-[0.15em]">{{ strings.room.roomEyebrow }}</span>
+          <span class="text-sky text-fs-12 tracking-[0.15em]">{{
+            strings.ui.room.roomEyebrow
+          }}</span>
           <h1 class="overflow-hidden text-ellipsis whitespace-nowrap text-fs-20">
             {{ store.room.name }}
           </h1>
@@ -105,14 +107,14 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           <ShieldCheck v-else />
           {{
             store.room.visibility === 'private'
-              ? strings.room.privateRoomBadge
-              : strings.room.publicRoomBadge
+              ? strings.ui.room.privateRoomBadge
+              : strings.ui.room.publicRoomBadge
           }}
           <button
             v-if="store.room.privateJoinCode"
             type="button"
             class="flex items-center gap-[0.4em] py-[0.55cqh] px-[0.75em] text-navy bg-yellow rounded-[0.55em] tracking-[0.16em]"
-            :aria-label="strings.room.copyPrivateCodeAria"
+            :aria-label="strings.a11y.room.copyPrivateCodeAria"
             @click="handleCopyPrivateCode"
           >
             <b>{{ store.room.privateJoinCode }}</b>
@@ -131,8 +133,8 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
         />
         <IconButton
           size="lg"
-          :label="strings.common.exit"
-          :title="strings.common.exit"
+          :label="strings.a11y.common.exit"
+          :title="strings.a11y.common.exit"
           :audio-feedback="null"
           @click="showLeaveConfirm = true"
         >
@@ -156,22 +158,22 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
       <!-- 房主只显示开始按钮；其他玩家保留准备按钮，观战者不能参与准备。 -->
       <div class="mt-auto pt-[1.3cqh] border-t-[0.2cqh] border-t-line text-center">
         <p v-if="store.me?.spectating" class="min-h-[1.6em] text-muted text-fs-12">
-          {{ strings.room.spectatorReadyHint }}
+          {{ strings.ui.room.spectatorReadyHint }}
         </p>
         <p v-else-if="!allSet" class="min-h-[1.6em] text-muted text-fs-12">
           {{
             activePlayers.length < store.config.player.minPlayers
-              ? strings.room.needMorePlayers
+              ? strings.ui.room.needMorePlayers
               : store.isHost
-                ? strings.room.waitForGuestsReady
-                : strings.room.waitForReady
+                ? strings.ui.room.waitForGuestsReady
+                : strings.ui.room.waitForReady
           }}
         </p>
         <p
           v-else
           class="min-h-[1.6em] flex items-center justify-center gap-[0.3em] text-success-fg text-fs-12"
         >
-          <Check /> {{ strings.room.allReady }}
+          <Check /> {{ strings.ui.room.allReady }}
         </p>
         <!-- 准备按钮：复用 AppButton secondary（白底描边），已准备时经外部类切换为绿色高亮。 -->
         <AppButton
@@ -183,7 +185,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           :audio-feedback="store.me?.ready ? 'activate' : null"
           @click="store.setReady(!store.me?.ready)"
         >
-          {{ store.me?.ready ? strings.room.cancelReady : strings.room.readyGo }}
+          {{ store.me?.ready ? strings.ui.room.cancelReady : strings.ui.room.readyGo }}
         </AppButton>
         <AppButton
           v-else-if="!store.isHost"
@@ -191,9 +193,9 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           type="button"
           class="w-full my-[0.8cqh]"
           disabled
-          :title="strings.room.spectatorReadyTitle"
+          :title="strings.a11y.room.spectatorReadyTitle"
         >
-          {{ strings.room.spectatorReadyButton }}
+          {{ strings.ui.room.spectatorReadyButton }}
         </AppButton>
         <AppButton
           v-if="store.isHost"
@@ -204,7 +206,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           :audio-feedback="null"
           @click="store.startGame"
         >
-          <Play /> {{ strings.room.startGame }}
+          <Play /> {{ strings.ui.room.startGame }}
         </AppButton>
       </div>
     </aside>
@@ -224,10 +226,10 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
     <!-- 弹窗四：退出房间确认（复用通用 ConfirmDialog：图标 + 标题 + 正文 + 取消/确认） -->
     <ConfirmDialog
       v-model:open="showLeaveConfirm"
-      :title="strings.room.leaveTitle"
-      :body="strings.room.leaveBody"
-      :confirm-label="strings.room.confirmLeave"
-      :cancel-label="strings.room.stayInRoom"
+      :title="strings.ui.room.leaveTitle"
+      :body="strings.ui.room.leaveBody"
+      :confirm-label="strings.ui.room.confirmLeave"
+      :cancel-label="strings.ui.room.stayInRoom"
       :icon="LogOut"
       @confirm="store.leaveRoom"
     />

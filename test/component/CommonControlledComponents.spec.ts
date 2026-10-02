@@ -14,21 +14,21 @@ describe('受控通用组件', () => {
       props: {
         connected: true,
         latency: 24,
-        connectionLabel: strings.connection.connected,
+        connectionLabel: strings.ui.connection.connected,
         latencyGoodMs: 50,
       },
     })
 
     const button = screen.getByRole('button', {
-      name: strings.common.networkStatusAria(strings.connection.connected, 24),
+      name: strings.a11y.common.networkStatusAria(strings.ui.connection.connected, 24),
     })
-    expect(button.textContent).toContain(strings.common.latencyShort(24))
+    expect(button.textContent).toContain(strings.ui.common.latencyShort(24))
     expect(button.classList.contains('text-success-on-dark')).toBe(true)
 
     await view.rerender({
       connected: false,
       latency: 24,
-      connectionLabel: strings.connection.disconnected,
+      connectionLabel: strings.ui.connection.disconnected,
       latencyGoodMs: 50,
     })
     expect(button.classList.contains('text-danger-on-dark')).toBe(true)
@@ -39,13 +39,13 @@ describe('受控通用组件', () => {
       props: {
         connected: true,
         latency: 4321,
-        connectionLabel: strings.connection.connected,
+        connectionLabel: strings.ui.connection.connected,
         latencyGoodMs: 50,
       },
     })
 
     const button = screen.getByRole('button', {
-      name: strings.common.networkStatusAria(strings.connection.connected, 4321),
+      name: strings.a11y.common.networkStatusAria(strings.ui.connection.connected, 4321),
     })
     expect(button.textContent).toContain('999ms')
     expect(button.textContent).not.toContain('4321')
@@ -70,7 +70,9 @@ describe('受控通用组件', () => {
     })
 
     expect(screen.getAllByRole('button', { name: /选择第 \d+ 号头像/u })).toHaveLength(2)
-    await user.click(screen.getByRole('button', { name: strings.profile.avatarOptionAria('02') }))
+    await user.click(
+      screen.getByRole('button', { name: strings.a11y.profile.avatarOptionAria('02') }),
+    )
 
     expect(playInteractionSound).toHaveBeenCalledWith('select')
     expect(updateAvatar).toHaveBeenCalledWith('02')
@@ -89,7 +91,9 @@ describe('受控通用组件', () => {
       },
     })
 
-    expect(screen.getByRole('button', { name: strings.common.sortByAria('名称') })).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: strings.a11y.common.sortByAria('名称') }),
+    ).toBeTruthy()
     expect(screen.getByText('暂无数据')).toBeTruthy()
   })
 })

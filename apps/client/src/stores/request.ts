@@ -144,7 +144,7 @@ function cancellationFailure(): RequestFailure {
   return {
     ok: false,
     failureKind: 'transport',
-    error: strings.request.cancelled,
+    error: strings.ui.request.cancelled,
     timeout: false,
     cancelled: true,
   }
@@ -153,8 +153,8 @@ function cancellationFailure(): RequestFailure {
 /** 传输失败统一映射为中文安全文案；只有本模块的超时哨兵能产生 timeout 语义。 */
 function classifyTransportError(error: unknown): { message: string; timeout: boolean } {
   if (error instanceof RequestTimeoutError)
-    return { message: strings.request.timeoutMessage, timeout: true }
-  return { message: strings.request.genericFailure, timeout: false }
+    return { message: strings.ui.request.timeoutMessage, timeout: true }
+  return { message: strings.ui.request.genericFailure, timeout: false }
 }
 
 /** 创建带统一错误翻译的请求函数：不抛错，返回可判别结果对象。 */
@@ -219,11 +219,12 @@ export function createRequester(options: {
           // 既不重试也不回显任何原始内容，调用方得到 ok:false，绝不会把脏数据写进 Pinia。
           const decoded = decodeClientResponse(event, rawAck, requestId)
           if (decoded.status === 'invalid') {
-            if (requestOptions.notify !== 'silent') notify(strings.request.protocolFailure, 'error')
+            if (requestOptions.notify !== 'silent')
+              notify(strings.ui.request.protocolFailure, 'error')
             return {
               ok: false,
               failureKind: 'protocol',
-              error: strings.request.protocolFailure,
+              error: strings.ui.request.protocolFailure,
               timeout: false,
             }
           }

@@ -30,14 +30,14 @@ export function isOnlineActiveMember(member: RoomMember): boolean {
   return !member.spectating && member.connection === 'online'
 }
 
-/** 玩家人数下拉选项（min..max 闭区间，文案经 strings.common.playersUnit）。 */
+/** 玩家人数下拉选项（min..max 闭区间，文案经 strings.ui.common.playersUnit）。 */
 export function playerCountOptions(range: { min: number; max: number }): Array<{
   value: number
   label: string
 }> {
   const options: Array<{ value: number; label: string }> = []
   for (let count = range.min; count <= range.max; count += 1) {
-    options.push({ value: count, label: strings.common.playersUnit(count) })
+    options.push({ value: count, label: strings.ui.common.playersUnit(count) })
   }
   return options
 }

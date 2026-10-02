@@ -63,8 +63,8 @@ defineExpose({
     :sort-dir="props.sortDir"
     :selected-ids="props.selectedIds"
     :select-all-state="selectAllState"
-    :select-all-aria="strings.room.vocabToggleAllAria"
-    :empty-text="strings.room.vocabNoMatch"
+    :select-all-aria="strings.a11y.room.vocabToggleAllAria"
+    :empty-text="strings.ui.room.vocabNoMatch"
     :row-aria="(row) => row.text"
     @sort="emit('sort', $event)"
     @toggle="emit('toggle', $event)"
@@ -81,17 +81,17 @@ defineExpose({
           row.category
         }}</span>
       </span>
-      <span v-else class="text-muted">{{ strings.room.vocabAliasEmpty }}</span>
+      <span v-else class="text-muted">{{ strings.ui.room.vocabAliasEmpty }}</span>
     </template>
     <!-- 别称列：灰字省略，悬停可见全称 -->
     <template #cell-aliases="{ row }">
       <span
         v-if="row.aliases.length"
         class="block truncate text-muted"
-        :title="row.aliases.join(strings.common.listSeparator)"
-        >{{ row.aliases.join(strings.common.listSeparator) }}</span
+        :title="row.aliases.join(strings.a11y.common.listSeparator)"
+        >{{ row.aliases.join(strings.ui.common.listSeparator) }}</span
       >
-      <span v-else class="text-muted">{{ strings.room.vocabAliasEmpty }}</span>
+      <span v-else class="text-muted">{{ strings.ui.room.vocabAliasEmpty }}</span>
     </template>
   </DataTable>
 </template>

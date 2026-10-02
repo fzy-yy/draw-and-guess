@@ -43,8 +43,8 @@ function cooldownSeconds(playerId: string): number {
 /** 邀请按钮的语义文案：冷却期展示「冷却 N 秒」，可邀请时展示「邀请 昵称」（label 与 title 共用）。 */
 function inviteButtonLabel(player: { id: string; nickname: string }): string {
   return cooldownSeconds(player.id) > 0
-    ? strings.room.inviteCooldownAria(cooldownSeconds(player.id))
-    : strings.room.inviteSendTo(player.nickname)
+    ? strings.a11y.room.inviteCooldownAria(cooldownSeconds(player.id))
+    : strings.ui.room.inviteSendTo(player.nickname)
 }
 
 /** 发送邀请：进入冷却并交给 store（失败也会 Toast，冷却照常走完防止连点）。 */
@@ -79,13 +79,13 @@ onBeforeUnmount(() => window.clearInterval(tickTimer))
     v-model:open="open"
     width-class="w-[52cqw]"
     labelledby="invite-title"
-    :close-aria="strings.room.inviteCloseAria"
+    :close-aria="strings.a11y.room.inviteCloseAria"
   >
     <template #header>
       <SectionHeader
         id="invite-title"
-        :eyebrow="strings.room.inviteLabel"
-        :title="strings.room.inviteTitle"
+        :eyebrow="strings.ui.room.inviteLabel"
+        :title="strings.ui.room.inviteTitle"
       ></SectionHeader>
     </template>
 
@@ -101,7 +101,7 @@ onBeforeUnmount(() => window.clearInterval(tickTimer))
           <AvatarImage
             class="h-[4.7cqh] w-[4.7cqh]"
             :avatar-id="player.avatarId"
-            :label="strings.common.playerAvatarAria(player.nickname)"
+            :label="strings.a11y.common.playerAvatarAria(player.nickname)"
           />
           <b class="flex-1">{{ player.nickname }}</b>
           <RoundIconButton
@@ -117,7 +117,7 @@ onBeforeUnmount(() => window.clearInterval(tickTimer))
             <Send v-else />
           </RoundIconButton>
         </div>
-        <p v-if="!availablePlayers.length">{{ strings.room.inviteEmpty }}</p>
+        <p v-if="!availablePlayers.length">{{ strings.ui.room.inviteEmpty }}</p>
       </div>
     </div>
   </BaseDialog>

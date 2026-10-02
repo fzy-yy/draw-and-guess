@@ -54,42 +54,42 @@ function handleEnter(event: KeyboardEvent): void {
     v-model:open="open"
     width-class="w-[42cqw]"
     labelledby="custom-word-title"
-    :close-aria="strings.game.customWordCancel"
+    :close-aria="strings.a11y.game.customWordCancel"
   >
     <template #header>
-      <p class="eyebrow-light">{{ strings.game.customWord }}</p>
-      <h2 id="custom-word-title">{{ strings.game.customWordTitle }}</h2>
+      <p class="eyebrow-light">{{ strings.ui.game.customWord }}</p>
+      <h2 id="custom-word-title">{{ strings.ui.game.customWordTitle }}</h2>
     </template>
 
     <div class="grid justify-items-center gap-[1.5cqh] px-[3cqw] py-[3cqh] text-center">
       <PenLine class="h-[6cqh] w-[6cqh] text-blue" />
-      <p class="text-muted">{{ strings.game.customWordHint(CUSTOM_WORD_MAX_LENGTH) }}</p>
+      <p class="text-muted">{{ strings.ui.game.customWordHint(CUSTOM_WORD_MAX_LENGTH) }}</p>
       <div class="w-[26cqw]">
         <AppInput
           v-model="draft"
           align="center"
           input-class="font-bold text-fs-20"
           :maxlength="CUSTOM_WORD_MAX_LENGTH * 4"
-          :placeholder="strings.game.customWordPlaceholder"
-          :aria-label="strings.game.customWordTitle"
+          :placeholder="strings.ui.game.customWordPlaceholder"
+          :aria-label="strings.a11y.game.customWordTitle"
           @enter="handleEnter"
         />
       </div>
       <small class="font-bold" :class="tooLong ? 'text-red' : 'text-muted'">
         {{
           tooLong
-            ? strings.game.customWordTooLong(CUSTOM_WORD_MAX_LENGTH)
-            : strings.game.customWordLength(length, CUSTOM_WORD_MAX_LENGTH)
+            ? strings.ui.game.customWordTooLong(CUSTOM_WORD_MAX_LENGTH)
+            : strings.ui.game.customWordLength(length, CUSTOM_WORD_MAX_LENGTH)
         }}
       </small>
     </div>
 
     <template #footer>
       <AppButton variant="secondary" type="button" audio-feedback="close" @click="open = false">
-        {{ strings.game.customWordCancel }}
+        {{ strings.ui.game.customWordCancel }}
       </AppButton>
       <AppButton type="button" :disabled="!canSubmit" @click="submit">
-        {{ strings.game.customWordConfirm }}
+        {{ strings.ui.game.customWordConfirm }}
       </AppButton>
     </template>
   </BaseDialog>

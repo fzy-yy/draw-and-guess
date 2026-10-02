@@ -47,7 +47,7 @@ function clear(): void {
         v-if="model"
         type="button"
         class="grid h-[3.2cqh] w-[3.2cqh] place-items-center rounded-full text-muted hover:bg-line/60 hover:text-navy transition-colors"
-        :aria-label="strings.common.clearSearchAria"
+        :aria-label="strings.a11y.common.clearSearchAria"
         @click="clear"
       >
         <X class="h-[2.4cqh] w-[2.4cqh]" />

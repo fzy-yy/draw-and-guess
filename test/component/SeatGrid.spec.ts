@@ -51,8 +51,8 @@ describe('SeatGrid 席位右键菜单', () => {
     const { state } = useContextMenu()
     expect(state.open).toBe(true)
     expect(state.items.map((item) => item.label)).toEqual([
-      strings.room.transferHostAria,
-      strings.room.kickAria,
+      strings.a11y.room.transferHostAria,
+      strings.a11y.room.kickAria,
     ])
     expect(state.items[1]?.danger).toBe(true)
     wrapper.unmount()
@@ -81,7 +81,7 @@ describe('SeatGrid 席位右键菜单', () => {
     // 避免在陷阱挂载前 unmount 造成 focus-trap 竞态报错
     await new Promise((resolve) => setTimeout(resolve, 0))
     await wrapper.vm.$nextTick()
-    expect(wrapper.text()).toContain(strings.room.kickTitle)
+    expect(wrapper.text()).toContain(strings.ui.room.kickTitle)
     wrapper.unmount()
   })
 })

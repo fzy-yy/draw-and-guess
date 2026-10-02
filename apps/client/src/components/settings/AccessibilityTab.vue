@@ -16,50 +16,50 @@ const store = useGameStore()
   <section class="min-h-0 px-[5cqw] py-[3cqh]">
     <SettingsSectionHeader
       :icon="Eye"
-      :title="strings.settings.accessibilityTitle"
-      :intro="strings.settings.accessibilityIntro"
+      :title="strings.ui.settings.accessibilityTitle"
+      :intro="strings.ui.settings.accessibilityIntro"
     />
     <div class="grid grid-cols-2 gap-[1.2cqh_1em]">
       <SettingSwitchRow
         v-model="store.settings.animationsEnabled"
         class="border-l-[0.35cqh] border-line"
-        :title="strings.settings.animations"
-        :hint="strings.settings.animationsHint"
+        :title="strings.ui.settings.animations"
+        :hint="strings.ui.settings.animationsHint"
         @save="store.saveSettings"
       />
       <SettingSwitchRow
         v-model="store.settings.showShortcuts"
         class="border-l-[0.35cqh] border-line"
-        :title="strings.settings.showShortcuts"
-        :hint="strings.settings.showShortcutsHint"
+        :title="strings.ui.settings.showShortcuts"
+        :hint="strings.ui.settings.showShortcutsHint"
         @save="store.saveSettings"
       />
       <SettingSwitchRow
         v-model="store.settings.autoFocusGuess"
         class="border-l-[0.35cqh] border-line"
-        :title="strings.settings.autoFocus"
-        :hint="strings.settings.autoFocusHint"
+        :title="strings.ui.settings.autoFocus"
+        :hint="strings.ui.settings.autoFocusHint"
         @save="store.saveSettings"
       />
       <SettingSwitchRow
         v-model="store.settings.discoverable"
         class="border-l-[0.35cqh] border-line"
-        :title="strings.settings.discoverable"
-        :hint="strings.settings.discoverableHint"
+        :title="strings.ui.settings.discoverable"
+        :hint="strings.ui.settings.discoverableHint"
         @save="store.saveSettings"
       />
       <SettingSwitchRow
         v-model="store.settings.acceptsInvites"
         class="border-l-[0.35cqh] border-line"
-        :title="strings.settings.acceptsInvites"
-        :hint="strings.settings.acceptsInvitesHint"
+        :title="strings.ui.settings.acceptsInvites"
+        :hint="strings.ui.settings.acceptsInvitesHint"
         @save="store.saveSettings"
       />
       <SettingSwitchRow
         v-model="store.settings.drawerDefaultReveal"
         class="border-l-[0.35cqh] border-line"
-        :title="strings.settings.drawerDefaultReveal"
-        :hint="strings.settings.drawerDefaultRevealHint"
+        :title="strings.ui.settings.drawerDefaultReveal"
+        :hint="strings.ui.settings.drawerDefaultRevealHint"
         @save="store.saveSettings"
       />
     </div>

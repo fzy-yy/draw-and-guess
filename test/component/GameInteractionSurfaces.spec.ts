@@ -46,7 +46,7 @@ describe('GameHud 角色视图', () => {
     })
 
     const answerToggle = screen.getByRole('button', {
-      name: strings.game.toggleAnswerVisibilityAria,
+      name: strings.a11y.game.toggleAnswerVisibilityAria,
     })
     expect(screen.getByText(room.room.game!.answerMask)).toBeTruthy()
     expect(screen.queryByText(room.room.game!.answer!)).toBeNull()
@@ -58,7 +58,7 @@ describe('GameHud 角色视图', () => {
     session.playerId = GUEST_ID
     await nextTick()
     expect(
-      screen.queryByRole('button', { name: strings.game.toggleAnswerVisibilityAria }),
+      screen.queryByRole('button', { name: strings.a11y.game.toggleAnswerVisibilityAria }),
     ).toBeNull()
     expect(screen.getByText(room.room.game!.answerMask)).toBeTruthy()
     expect(screen.queryByText(room.room.game!.answer!)).toBeNull()
@@ -81,16 +81,17 @@ describe('GameHud 角色视图', () => {
     })
 
     expect(
-      (screen.getByRole('button', { name: strings.game.resumeAria }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: strings.a11y.game.resumeAria }) as HTMLButtonElement)
+        .disabled,
     ).toBe(true)
     expect(
-      (screen.getByRole('button', { name: strings.game.settingsAria }) as HTMLButtonElement)
+      (screen.getByRole('button', { name: strings.a11y.game.settingsAria }) as HTMLButtonElement)
         .disabled,
     ).toBe(false)
     expect(
       (
         screen.getByRole('button', {
-          name: strings.game.enterFullscreenAria,
+          name: strings.a11y.game.enterFullscreenAria,
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(false)
@@ -98,7 +99,8 @@ describe('GameHud 角色视图', () => {
     session.playerId = HOST_ID
     await nextTick()
     expect(
-      (screen.getByRole('button', { name: strings.game.resumeAria }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: strings.a11y.game.resumeAria }) as HTMLButtonElement)
+        .disabled,
     ).toBe(false)
   })
 })
@@ -117,8 +119,8 @@ describe('ChatPanel 输入与快捷互动', () => {
       .mockResolvedValueOnce(true)
 
     renderWithPinia(ChatPanel, { canGuess: true })
-    const input = screen.getByLabelText(strings.game.guessLabel)
-    const send = screen.getByRole('button', { name: strings.game.sendGuessAria })
+    const input = screen.getByLabelText(strings.ui.game.guessLabel)
+    const send = screen.getByRole('button', { name: strings.a11y.game.sendGuessAria })
 
     await user.type(input, '  苹果  ')
     await user.click(send)
@@ -140,26 +142,32 @@ describe('ChatPanel 输入与快捷互动', () => {
     const sendPreset = vi.spyOn(game, 'sendPreset').mockResolvedValue(true)
 
     const view = renderWithPinia(ChatPanel, { canGuess: false })
-    expect((screen.getByLabelText(strings.game.guessLabel) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByLabelText(strings.ui.game.guessLabel) as HTMLInputElement).disabled).toBe(
+      true,
+    )
     expect(
-      (screen.getByRole('button', { name: strings.game.sendGuessAria }) as HTMLButtonElement)
+      (screen.getByRole('button', { name: strings.a11y.game.sendGuessAria }) as HTMLButtonElement)
         .disabled,
     ).toBe(true)
 
     const phrase = game.config.presets.safeChat[0]!
-    await user.click(screen.getByRole('button', { name: strings.game.quickPhrasePickerAria }))
-    const panel = await screen.findByRole('dialog', { name: strings.game.quickPhrasePanelAria })
+    await user.click(screen.getByRole('button', { name: strings.a11y.game.quickPhrasePickerAria }))
+    const panel = await screen.findByRole('dialog', {
+      name: strings.a11y.game.quickPhrasePanelAria,
+    })
     await user.click(
-      within(panel).getByRole('button', { name: strings.game.sendQuickPhraseAria(phrase) }),
+      within(panel).getByRole('button', { name: strings.a11y.game.sendQuickPhraseAria(phrase) }),
     )
 
     await waitFor(() => expect(sendPreset).toHaveBeenCalledWith(phrase))
     await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: strings.game.quickPhrasePanelAria })).toBeNull(),
+      expect(
+        screen.queryByRole('dialog', { name: strings.a11y.game.quickPhrasePanelAria }),
+      ).toBeNull(),
     )
 
     await view.rerender({ canGuess: true })
-    expect((screen.getByLabelText(strings.game.guessLabel) as HTMLInputElement).disabled).toBe(
+    expect((screen.getByLabelText(strings.ui.game.guessLabel) as HTMLInputElement).disabled).toBe(
       false,
     )
   })
@@ -184,7 +192,7 @@ describe('PhaseOverlay 阶段分支', () => {
       onRerollWords,
       onResume,
     })
-    expect(screen.getByText(strings.game.countdownTitle)).toBeTruthy()
+    expect(screen.getByText(strings.ui.game.countdownTitle)).toBeTruthy()
 
     room.room.phase = 'choosing_word'
     room.room.game!.wordOptions = [
@@ -194,7 +202,7 @@ describe('PhaseOverlay 阶段分支', () => {
     room.room.game!.canReroll = true
     await nextTick()
     await user.click(screen.getByRole('button', { name: /苹果/ }))
-    await user.click(screen.getByRole('button', { name: strings.game.rerollWords }))
+    await user.click(screen.getByRole('button', { name: strings.ui.game.rerollWords }))
     expect(onChooseWord).toHaveBeenCalledWith('word-1')
     expect(onRerollWords).toHaveBeenCalledOnce()
 
@@ -205,7 +213,7 @@ describe('PhaseOverlay 阶段分支', () => {
     room.room.phase = 'paused'
     session.playerId = HOST_ID
     await nextTick()
-    await user.click(screen.getByRole('button', { name: strings.game.resumeGame }))
+    await user.click(screen.getByRole('button', { name: strings.ui.game.resumeGame }))
     expect(onResume).toHaveBeenCalledOnce()
   })
 
@@ -231,14 +239,14 @@ describe('PhaseOverlay 阶段分支', () => {
       onReturnWaiting,
       onLeaveRoom,
     })
-    expect(screen.getByText(strings.game.roundAnswerLabel)).toBeTruthy()
-    expect(screen.getByText(strings.game.scoreOrderLabel(1))).toBeTruthy()
-    expect(screen.getByText(strings.game.scoreTotal(100))).toBeTruthy()
+    expect(screen.getByText(strings.ui.game.roundAnswerLabel)).toBeTruthy()
+    expect(screen.getByText(strings.ui.game.scoreOrderLabel(1))).toBeTruthy()
+    expect(screen.getByText(strings.ui.game.scoreTotal(100))).toBeTruthy()
 
     room.room.phase = 'game_result'
     await nextTick()
-    await user.click(screen.getByRole('button', { name: strings.game.rematch }))
-    await user.click(screen.getByRole('button', { name: strings.game.leaveRoom }))
+    await user.click(screen.getByRole('button', { name: strings.ui.game.rematch }))
+    await user.click(screen.getByRole('button', { name: strings.ui.game.leaveRoom }))
     expect(onReturnWaiting).toHaveBeenCalledOnce()
     expect(onLeaveRoom).toHaveBeenCalledOnce()
 
@@ -247,7 +255,7 @@ describe('PhaseOverlay 阶段分支', () => {
     expect(
       (
         screen.getByRole('button', {
-          name: strings.game.hostReturnWaiting,
+          name: strings.ui.game.hostReturnWaiting,
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(false)

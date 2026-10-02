@@ -23,7 +23,7 @@ const memberBadgeClass =
   <aside
     v-if="store.room"
     class="flex h-full min-w-0 flex-col gap-[0.5cqh] overflow-y-auto overscroll-contain px-[0.5em] py-[0.7cqh]"
-    :aria-label="strings.game.playersPanelTitle"
+    :aria-label="strings.a11y.game.playersPanelTitle"
   >
     <article
       v-for="member in store.room.members"
@@ -45,7 +45,7 @@ const memberBadgeClass =
         <AvatarImage
           class="h-[4.6cqh] w-[4.6cqh]"
           :avatar-id="member.avatarId"
-          :label="strings.common.playerAvatarAria(member.nickname)"
+          :label="strings.a11y.common.playerAvatarAria(member.nickname)"
         />
         <Brush v-if="member.isDrawer" :class="memberBadgeClass" /><Eye
           v-else-if="member.guessed"
@@ -55,7 +55,7 @@ const memberBadgeClass =
       <div class="flex min-w-0 flex-col leading-tight">
         <b class="truncate text-fs-12 text-navy">{{ member.nickname }}</b>
         <span class="text-blue text-fs-12 font-bold">{{
-          strings.common.scoreUnit(member.score)
+          strings.ui.common.scoreUnit(member.score)
         }}</span>
         <span
           class="truncate text-fs-10 font-bold"

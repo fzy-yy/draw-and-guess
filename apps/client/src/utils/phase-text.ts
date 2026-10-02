@@ -9,14 +9,14 @@ import { strings } from '@draw-guess/strings'
 import type { RoomPhase } from '@draw-guess/shared'
 
 const PHASE_TEXT: Record<RoomPhase, string> = {
-  starting: strings.status.phaseStarting,
-  choosing_word: strings.status.phaseChoosing,
-  drawing: strings.status.phaseDrawing,
-  round_result: strings.status.phaseRoundResult,
-  paused: strings.status.phasePaused,
-  game_result: strings.status.phaseGameResult,
-  waiting: strings.status.phaseWaiting,
-  closed: strings.status.phaseClosed,
+  starting: strings.ui.status.phaseStarting,
+  choosing_word: strings.ui.status.phaseChoosing,
+  drawing: strings.ui.status.phaseDrawing,
+  round_result: strings.ui.status.phaseRoundResult,
+  paused: strings.ui.status.phasePaused,
+  game_result: strings.ui.status.phaseGameResult,
+  waiting: strings.ui.status.phaseWaiting,
+  closed: strings.ui.status.phaseClosed,
 }
 
 /** 阶段文案；缺省阶段按 waiting 展示（与服务端快照缺省一致）。 */

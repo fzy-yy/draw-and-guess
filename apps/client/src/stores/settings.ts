@@ -96,7 +96,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function resetSettings(playerId?: string): void {
     settings.value = { ...PUBLIC_CONFIG.localSettings }
     saveSettings(playerId)
-    notify(strings.store.settingsReset)
+    notify(strings.ui.store.settingsReset)
   }
 
   return {

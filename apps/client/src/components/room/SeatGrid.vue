@@ -57,7 +57,7 @@ function openSeatMenu(event: MouseEvent, member: RoomMember): void {
     [
       {
         id: 'transfer-host',
-        label: strings.room.transferHostAria,
+        label: strings.a11y.room.transferHostAria,
         icon: Crown,
         action: () => {
           pendingHostId.value = member.id
@@ -65,7 +65,7 @@ function openSeatMenu(event: MouseEvent, member: RoomMember): void {
       },
       {
         id: 'kick',
-        label: strings.room.kickAria,
+        label: strings.a11y.room.kickAria,
         icon: X,
         danger: true,
         separatorBefore: true,
@@ -74,7 +74,7 @@ function openSeatMenu(event: MouseEvent, member: RoomMember): void {
         },
       },
     ],
-    { ariaLabel: strings.room.seatMenuAria },
+    { ariaLabel: strings.a11y.room.seatMenuAria },
   )
 }
 </script>
@@ -87,13 +87,13 @@ function openSeatMenu(event: MouseEvent, member: RoomMember): void {
   >
     <div>
       <SectionHeader
-        :eyebrow="strings.room.playersEyebrow"
-        :title="strings.room.playersTitle"
+        :eyebrow="strings.ui.room.playersEyebrow"
+        :title="strings.ui.room.playersTitle"
       ></SectionHeader>
       <span class="flex items-center gap-[0.45em] text-muted font-bold"
         ><Users />
         {{
-          strings.room.seatCount(
+          strings.ui.room.seatCount(
             store.room?.members.length ?? 0,
             store.room?.settings.maxPlayers ?? store.config.player.defaultMaxPlayers,
           )
@@ -122,12 +122,12 @@ function openSeatMenu(event: MouseEvent, member: RoomMember): void {
             <AvatarImage
               class="h-full w-full"
               :avatar-id="member.avatarId"
-              :label="strings.common.playerAvatarAria(member.nickname)"
+              :label="strings.a11y.common.playerAvatarAria(member.nickname)"
             />
             <!-- 房主皇冠：淡色圆形衬底保证任何底色上都可见；外扩留出完整圆形不被裁剪 -->
             <HostCrownBadge
               v-if="member.isHost"
-              :label="strings.room.hostCrownAria"
+              :label="strings.a11y.room.hostCrownAria"
               class="absolute right-[-1cqh] top-[-1cqh] h-[3.4cqh] w-[3.4cqh]"
             />
           </div>
@@ -136,7 +136,7 @@ function openSeatMenu(event: MouseEvent, member: RoomMember): void {
             ><span
               v-if="member.id === store.playerId"
               class="py-[0.1cqh] px-[0.45em] text-white bg-blue rounded-[99em] text-fs-10"
-              >{{ strings.room.meTag }}</span
+              >{{ strings.ui.room.meTag }}</span
             >
           </div>
           <!-- 准备状态标签：观战 / 已准备 / 重连中 / 未准备 -->
@@ -146,21 +146,21 @@ function openSeatMenu(event: MouseEvent, member: RoomMember): void {
             :class="member.ready ? 'text-success-fg bg-green/10' : 'text-muted bg-line'"
             >{{
               member.waitingForNextGame
-                ? strings.status.roleWaitingNextGame
+                ? strings.ui.status.roleWaitingNextGame
                 : member.spectating
-                  ? strings.status.roleSpectating
+                  ? strings.ui.status.roleSpectating
                   : member.ready
-                    ? strings.status.roleReady
+                    ? strings.ui.status.roleReady
                     : member.connection === 'reconnecting'
-                      ? strings.status.roleReconnecting
-                      : strings.status.roleNotReady
+                      ? strings.ui.status.roleReconnecting
+                      : strings.ui.status.roleNotReady
             }}</span
           >
         </template>
         <!-- 空席位占位提示 -->
         <template v-else
-          ><UserPlus class="h-[5cqh] w-[5cqh]" /><b>{{ strings.room.emptySeatTitle }}</b
-          ><span class="text-fs-12">{{ strings.room.emptySeatHint }}</span></template
+          ><UserPlus class="h-[5cqh] w-[5cqh]" /><b>{{ strings.ui.room.emptySeatTitle }}</b
+          ><span class="text-fs-12">{{ strings.ui.room.emptySeatHint }}</span></template
         >
       </article>
     </div>
@@ -168,10 +168,10 @@ function openSeatMenu(event: MouseEvent, member: RoomMember): void {
     <!-- 踢人确认弹窗：复用通用 ConfirmDialog；目标已离房（成员列表找不到）时自动不渲染。 -->
     <ConfirmDialog
       :open="Boolean(kickTarget)"
-      :title="strings.room.kickTitle"
-      :body="strings.room.kickBody(kickTarget?.nickname ?? '')"
-      :confirm-label="strings.room.kickConfirm"
-      :cancel-label="strings.common.cancel"
+      :title="strings.ui.room.kickTitle"
+      :body="strings.ui.room.kickBody(kickTarget?.nickname ?? '')"
+      :confirm-label="strings.ui.room.kickConfirm"
+      :cancel-label="strings.ui.common.cancel"
       :icon="X"
       @cancel="pendingKickId = undefined"
       @confirm="
@@ -183,10 +183,10 @@ function openSeatMenu(event: MouseEvent, member: RoomMember): void {
     />
     <ConfirmDialog
       :open="Boolean(hostTarget)"
-      :title="strings.room.transferHostTitle"
-      :body="strings.room.transferHostBody(hostTarget?.nickname ?? '')"
-      :confirm-label="strings.room.transferHostConfirm"
-      :cancel-label="strings.common.cancel"
+      :title="strings.ui.room.transferHostTitle"
+      :body="strings.ui.room.transferHostBody(hostTarget?.nickname ?? '')"
+      :confirm-label="strings.ui.room.transferHostConfirm"
+      :cancel-label="strings.ui.common.cancel"
       :icon="Crown"
       @cancel="pendingHostId = undefined"
       @confirm="

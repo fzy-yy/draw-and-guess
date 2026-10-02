@@ -12,7 +12,7 @@ import { useProfileStore } from './profile.ts'
 import { useSettingsStore } from './settings.ts'
 import { getErrorRecoveryAction } from './error-recovery.ts'
 
-export type ConnectionLabel = (typeof strings.connection)[keyof typeof strings.connection]
+export type ConnectionLabel = (typeof strings.ui.connection)[keyof typeof strings.ui.connection]
 export type ShellPage = 'profile' | 'lobby' | 'settings'
 export type SessionState = 'idle' | 'ready' | 'disconnected' | 'restoring'
 
@@ -26,7 +26,7 @@ export const useSessionStore = defineStore('session', () => {
   const page = ref<ShellPage>('profile')
   const connected = ref(transport.socket.connected)
   const sessionState = ref<SessionState>(profileStore.profile.recoveryToken ? 'restoring' : 'idle')
-  const connectionLabel = ref<ConnectionLabel>(strings.connection.connecting)
+  const connectionLabel = ref<ConnectionLabel>(strings.ui.connection.connecting)
   const latency = ref(0)
   const clockOffset = ref(0)
   const busy = ref(false)
@@ -75,7 +75,7 @@ export const useSessionStore = defineStore('session', () => {
     if (busy.value) return
     if (!transport.socket.connected) {
       if (profileStore.profile.recoveryToken || playerId.value) sessionState.value = 'disconnected'
-      if (!automatic) notify(strings.store.notConnected, 'warning')
+      if (!automatic) notify(strings.ui.store.notConnected, 'warning')
       return
     }
     if (automatic) sessionState.value = 'restoring'
@@ -143,9 +143,9 @@ export const useSessionStore = defineStore('session', () => {
       notify(
         result.data.restored
           ? result.data.room
-            ? strings.store.gameRestored
-            : strings.store.restored
-          : strings.store.enteredLobby,
+            ? strings.ui.store.gameRestored
+            : strings.ui.store.restored
+          : strings.ui.store.enteredLobby,
       )
     } finally {
       busy.value = false

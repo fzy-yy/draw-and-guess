@@ -7,7 +7,7 @@
   - 中性色：已连接但延迟尚未测得（进入页面后的首个探测周期内）。
   延迟一旦测得就一直展示到下一次探测（失败时是否沿用旧值由调用方决定），
   切换页面不丢失；颜色只取 index.css @theme 的语义令牌（green/yellow/red/sky），
-  悬浮/无障碍文案统一来自 strings.common.networkStatusAria / connectionDetail，
+  悬浮/无障碍文案统一来自 strings.a11y.common.networkStatusAria / connectionDetail，
   禁止硬编码色值与文案。
 -->
 <script setup lang="ts">
@@ -48,7 +48,7 @@ const qualityClass = {
 } as const
 
 // 悬浮与无障碍详情共用同一文案（状态 + 延迟），禁止在组件内拼装单位。
-const detail = () => strings.common.connectionDetail(props.connectionLabel, props.latency)
+const detail = () => strings.a11y.common.connectionDetail(props.connectionLabel, props.latency)
 </script>
 
 <template>
@@ -56,7 +56,7 @@ const detail = () => strings.common.connectionDetail(props.connectionLabel, prop
     type="button"
     class="ui-feedback flex shrink-0 items-center gap-[0.4em] rounded-[0.6em] px-[0.65em]"
     :class="[qualityClass[quality], props.size === 'lg' ? 'h-[4.6cqh]' : 'h-[4.4cqh]']"
-    :aria-label="strings.common.networkStatusAria(props.connectionLabel, props.latency)"
+    :aria-label="strings.a11y.common.networkStatusAria(props.connectionLabel, props.latency)"
     :title="detail()"
   >
     <Wifi
@@ -65,7 +65,7 @@ const detail = () => strings.common.connectionDetail(props.connectionLabel, prop
     />
     <!-- 延迟数值：tabular-nums 防止位数变化抖动；未测得时显示占位符「—」 -->
     <span class="min-w-[3ch] text-center text-fs-12 font-bold leading-none tabular-nums">{{
-      props.latency ? strings.common.latencyShort(props.latency) : strings.common.emptyDash
+      props.latency ? strings.ui.common.latencyShort(props.latency) : strings.ui.common.emptyDash
     }}</span>
   </button>
 </template>

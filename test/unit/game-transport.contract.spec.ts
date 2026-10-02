@@ -54,7 +54,7 @@ describe('GameTransport 请求契约', () => {
     await expect(pending).resolves.toMatchObject({
       ok: false,
       failureKind: 'transport',
-      error: strings.request.timeoutMessage,
+      error: strings.ui.request.timeoutMessage,
       timeout: true,
     })
     expect(notify).toHaveBeenCalledOnce()
@@ -122,7 +122,7 @@ describe('GameTransport 请求契约', () => {
     ).resolves.toMatchObject({
       ok: false,
       failureKind: 'transport',
-      error: strings.request.genericFailure,
+      error: strings.ui.request.genericFailure,
       timeout: false,
     })
     expect(emitWithAck).toHaveBeenCalledOnce()
@@ -194,13 +194,13 @@ describe('请求响应运行时 Schema 边界', () => {
     ).resolves.toMatchObject({
       ok: false,
       failureKind: 'protocol',
-      error: strings.request.protocolFailure,
+      error: strings.ui.request.protocolFailure,
       timeout: false,
     })
     // 协议损坏是确定性结果：默认重试开启也不得重复发送。
     expect(emitWithAck).toHaveBeenCalledOnce()
     expect(notify).toHaveBeenCalledOnce()
-    expect(notify).toHaveBeenCalledWith(strings.request.protocolFailure, 'error')
+    expect(notify).toHaveBeenCalledWith(strings.ui.request.protocolFailure, 'error')
     const diagnostic = getResponseDiagnostics().at(-1)
     expect(diagnostic).toMatchObject({ event: EVENTS.gameStart })
     expect(diagnostic?.reason).toContain('data')

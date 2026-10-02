@@ -75,7 +75,7 @@ export const useGameStore = defineStore('game', () => {
     roomStore.clearLocalRoomState()
     vocabularyStore.clear()
     lobbyStore.invites = []
-    notify(strings.store.profileCleared, 'warning')
+    notify(strings.ui.store.profileCleared, 'warning')
   }
 
   async function respondInvite(inviteId: string, accept: boolean): Promise<void> {

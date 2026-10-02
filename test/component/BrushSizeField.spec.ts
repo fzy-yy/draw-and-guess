@@ -29,7 +29,7 @@ describe('BrushSizeField', () => {
   it('显示当前粗细数值与单位', () => {
     const wrapper = mountField({ modelValue: 12 })
     expect(wrapper.text()).toContain('12')
-    expect(wrapper.text()).toContain(strings.game.brushUnit)
+    expect(wrapper.text()).toContain(strings.ui.game.brushUnit)
     wrapper.unmount()
   })
 

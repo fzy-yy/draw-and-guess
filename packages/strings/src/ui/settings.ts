@@ -1,12 +1,14 @@
 /**
- * 设置页（SettingsView.vue）、声音、无障碍、快捷键与连接诊断汇总相关文案。
+ * 可见文案（按用途分层）：界面直接可见。
+ *
+ * 分类口径见 .scratch/strings-layering-and-maintenance/spec.md。
  */
+
 export const settings = {
   backToLobby: '返回大厅',
   backToGame: '返回游戏',
   label: 'SETTINGS',
   title: '游戏设置',
-  categoryAria: '设置分类',
   tabAudio: '声音',
   tabAccessibility: '显示与操作',
   tabShortcuts: '快捷键',
@@ -46,7 +48,6 @@ export const settings = {
   panelChatDetail: '显示或隐藏聊天面板',
   panelTools: '绘图工具条',
   panelToolsDetail: '显示或隐藏底部绘图工具条（仅画家）',
-  setShortcutAria: (name: string) => `设置${name}快捷键`,
   shortcutErrorSimple: '请直接按一个字母、数字或符号，不要同时按 Ctrl、Alt、Shift 或 Command。',
   shortcutErrorConflict: (key: string, name: string) => `“${key}”已用于${name}，请换一个按键。`,
   shortcutNote:

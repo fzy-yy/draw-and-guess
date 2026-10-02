@@ -42,7 +42,7 @@ export const useLobbyStore = defineStore('lobby', () => {
   async function invite(targetId: string): Promise<void> {
     const result = await request(EVENTS.inviteSend, { targetId })
     if (!result.ok) return
-    notify(strings.store.inviteSent)
+    notify(strings.ui.store.inviteSent)
   }
 
   async function respondInvite(

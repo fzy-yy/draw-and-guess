@@ -7,12 +7,12 @@ import { strings } from '@draw-guess/strings'
 import type { RoomMember } from '@draw-guess/shared'
 
 export function roleTextFor(member: RoomMember | undefined): string {
-  if (!member) return strings.status.roleGuessing
-  if (member.leftGame) return strings.status.roleLeftGame
-  if (member.rematchReady) return strings.status.roleRematchReady
-  if (member.waitingForNextGame) return strings.status.roleWaitingNextGame
-  if (member.isDrawer) return strings.status.roleDrawing
-  if (member.guessed) return strings.status.roleGuessed
-  if (member.spectating) return strings.status.roleSpectating
-  return strings.status.roleGuessing
+  if (!member) return strings.ui.status.roleGuessing
+  if (member.leftGame) return strings.ui.status.roleLeftGame
+  if (member.rematchReady) return strings.ui.status.roleRematchReady
+  if (member.waitingForNextGame) return strings.ui.status.roleWaitingNextGame
+  if (member.isDrawer) return strings.ui.status.roleDrawing
+  if (member.guessed) return strings.ui.status.roleGuessed
+  if (member.spectating) return strings.ui.status.roleSpectating
+  return strings.ui.status.roleGuessing
 }

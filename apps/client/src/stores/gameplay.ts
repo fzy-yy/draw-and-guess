@@ -92,7 +92,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
     return {
       ok: false,
       failureKind: 'business',
-      error: strings.request.genericFailure,
+      error: strings.ui.request.genericFailure,
       code: ERROR_CODES.STALE_DRAWING_CONTEXT,
       timeout: false,
     }
@@ -140,7 +140,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
     )
   }
 
-  async function pause(reason: string = strings.store.pauseReasonHost): Promise<void> {
+  async function pause(reason: string = strings.ui.store.pauseReasonHost): Promise<void> {
     await request(EVENTS.gamePauseRequest, { reason })
   }
 
@@ -157,7 +157,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
     if (!result.ok) return
     roomStore.clearLocalRoomState()
     sessionStore.page = 'lobby'
-    notify(strings.store.roomLeft)
+    notify(strings.ui.store.roomLeft)
   }
 
   async function returnWaiting(): Promise<void> {

@@ -88,7 +88,7 @@ onBeforeUnmount(unbindBump)
       <button
         type="button"
         class="grid w-[4.4cqh] shrink-0 place-items-center border-l-[0.18cqh] border-control bg-white text-muted hover:bg-line"
-        :aria-label="strings.common.dismissToastAria(toast.text)"
+        :aria-label="strings.a11y.common.dismissToastAria(toast.text)"
         @click.stop="dismissWithSound(toast.id)"
       >
         <X class="h-[2.2cqh] w-[2.2cqh]" aria-hidden="true" />

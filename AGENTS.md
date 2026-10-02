@@ -47,7 +47,7 @@ draw-and-guess/
 ├── .env                          # 本地部署覆盖（已被 .gitignore 忽略，不入库）
 ├── .gitignore                    # 忽略 node_modules/dist/日志/数据库/.env/.pi/.playwright-mcp 等
 ├── packages/config/              # @draw-guess/config：仅浏览器安全的应用默认值与 UI/音频配置
-├── packages/strings/             # @draw-guess/strings：唯一 UI/服务端展示文案表
+├── packages/strings/             # @draw-guess/strings：唯一展示文案表（strings.ui 可见 / strings.a11y 无障碍 / serverStrings 服务端）
 ├── vocabulary/                   # ★唯一权威词库目录：SQLite 数据库（metadata/words 表）
 ├── vitest.config.ts               # Vitest projects：Node 单元 + happy-dom 组件/集成
 ├── test/                          # 自动化测试目录（隔离环境）
@@ -306,7 +306,7 @@ pnpm format:check  # 仅检查格式
 - **持久化分层**：每个应用由 `createDatabase(filePath)` 创建独占 `DatabaseContext`，迁移、身份/战报仓储和事务显式绑定同一连接，不允许模块级数据库单例或路径覆盖；恢复令牌落盘时只存 SHA-256 摘要且成功恢复必须旋转，运行期房间禁止写穿数据库。`RunningApplication.close()` 负责关闭自身 Socket、HTTP 和数据库。
 - **注销是持久化优先的原子操作**：先原子删除持久化记录（失败即整体不生效：内存身份与当前连接保持可用，抛统一 `INTERNAL_ERROR` 并记白名单日志），再离房、最后清内存；注销只允许身份当前所属的连接执行（被接管的旧 socket 迟到注销只解绑自己）。顺序与取舍见 `docs/adr/0011-session-logout-atomicity.md`，禁止改回「先清内存、再尽力删库」。
 - **本地运维指标**：服务端只在进程内按有限事件名/错误码聚合连接数、房间数、invalid push/resync、绘图预算拒绝和平均 ack 延迟，不保存 ID 列表、恢复令牌、答案、聊天正文或完整 payload。`/api/health` 默认仅返回安全摘要；详细指标必须显式开启且仅回环请求可见（见 `docs/adr/0007-local-observability-privacy.md`）。
-- **配置单一来源**：线上协议范围只写在 `packages/shared/src/protocol/constants.ts`；浏览器安全默认值写在 `packages/config/src/`；限频、数据库路径与清理策略写在 `apps/server/src/config/`；UI 文案只写在 `packages/strings/src/`；词库数据只写在 `vocabulary/`。
+- **配置单一来源**：线上协议范围只写在 `packages/shared/src/protocol/constants.ts`；浏览器安全默认值写在 `packages/config/src/`；限频、数据库路径与清理策略写在 `apps/server/src/config/`；UI 文案只写在 `packages/strings/src/`（`ui/` 为界面可见文案、`a11y/` 为 aria/悬浮文案、`server.ts` 为服务端文案）；词库数据只写在 `vocabulary/`。
 
 ---
 
@@ -526,7 +526,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
    - 猜词判定固定用 `normalizeAnswer`（NFKC + 去空白 + 折叠空白 + 忽略拉丁大小写），不要在别处另写一套比较。
 4. **配置治理**
    - 协议公开约束**只允许**写在 shared protocol constants；公开默认值与服务端私有策略按包边界分别维护，禁止复制同一协议常量。
-   - UI 文案**只允许**写在 `packages/strings/src/`，组件与业务代码严禁硬编码展示字符。
+   - UI 文案**只允许**写在 `packages/strings/src/`，组件与业务代码严禁硬编码展示字符。文案分 `strings.a11y`（aria-* 与悬浮 `title`）与 `strings.ui`（界面可见）两个命名空间，由 `test/unit/strings-layering.spec.ts` 源码扫描守护：无障碍绑定不得引用 `strings.ui.*`；双用途文本拆成两个 key。
    - 不要把配置明文写死进业务代码（协议版本集中在 shared constants，应用默认值集中在 `@draw-guess/config`）。
 5. **联机与部署**
    - 服务监听默认 `0.0.0.0`；前端构建产物托管与 Socket.IO 必须在**同一 Node 服务**（端口分离仅限开发代理）。

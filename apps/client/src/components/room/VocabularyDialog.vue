@@ -65,11 +65,11 @@ const allWordIds = computed(() => (store.vocabulary?.items ?? []).map((item) => 
  * weight：列宽相对权重，配合 DataTable 的权重归一化铺满整表。
  */
 const allColumns = computed<DataTableColumn<VocabularyWord>[]>(() => [
-  { key: 'text', label: strings.room.vocabColumnText, weight: 18 },
-  { key: 'category', label: strings.room.vocabColumnCategories, weight: 11 },
+  { key: 'text', label: strings.ui.room.vocabColumnText, weight: 18 },
+  { key: 'category', label: strings.ui.room.vocabColumnCategories, weight: 11 },
   {
     key: 'aliases',
-    label: strings.room.vocabColumnAliases,
+    label: strings.ui.room.vocabColumnAliases,
     weight: 20,
     sortValue: (word) => word.aliases.join(','),
   },
@@ -124,7 +124,7 @@ const filterDefs = computed<
   return [
     {
       key: 'category',
-      label: strings.room.vocabColumnCategories,
+      label: strings.ui.room.vocabColumnCategories,
       icon: Tags,
       options: (store.vocabulary?.categories ?? []).map((category) => ({
         value: category,
@@ -193,19 +193,19 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
     width-class="w-[88cqw]"
     section-class="h-[84cqh]"
     labelledby="vocab-title"
-    :close-aria="strings.room.vocabCloseAria"
+    :close-aria="strings.a11y.room.vocabCloseAria"
     @close="handleClose"
   >
     <template #header>
       <SectionHeader
         id="vocab-title"
-        :eyebrow="strings.room.vocabLabel"
+        :eyebrow="strings.ui.room.vocabLabel"
         :title="
           viewMode === 'packages'
-            ? strings.room.vocabSwitchToPackages
+            ? strings.a11y.room.vocabSwitchToPackages
             : isReadOnly
-              ? strings.room.vocabTitleReadonly
-              : strings.room.vocabTitle
+              ? strings.ui.room.vocabTitleReadonly
+              : strings.ui.room.vocabTitle
         "
       ></SectionHeader>
     </template>
@@ -222,13 +222,13 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
                 v-model="search"
                 :placeholder="
                   viewMode === 'words'
-                    ? strings.room.vocabSearchPlaceholder
-                    : strings.room.vocabPackageSearchPlaceholder
+                    ? strings.ui.room.vocabSearchPlaceholder
+                    : strings.ui.room.vocabPackageSearchPlaceholder
                 "
                 :aria-label="
                   viewMode === 'words'
-                    ? strings.room.vocabSearchAria
-                    : strings.room.vocabPackageSearchAria
+                    ? strings.a11y.room.vocabSearchAria
+                    : strings.a11y.room.vocabPackageSearchAria
                 "
               />
             </div>
@@ -236,13 +236,13 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
             <RoundIconButton
               :label="
                 viewMode === 'words'
-                  ? strings.room.vocabSwitchToPackages
-                  : strings.room.vocabSwitchToWords
+                  ? strings.a11y.room.vocabSwitchToPackages
+                  : strings.a11y.room.vocabSwitchToWords
               "
               :title="
                 viewMode === 'words'
-                  ? strings.room.vocabSwitchToPackages
-                  : strings.room.vocabSwitchToWords
+                  ? strings.a11y.room.vocabSwitchToPackages
+                  : strings.a11y.room.vocabSwitchToWords
               "
               audio-feedback="select"
               @click="switchViewMode(viewMode === 'words' ? 'packages' : 'words')"
@@ -257,9 +257,9 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
               v-for="filter in filterDefs"
               :key="filter.key"
               :label="filter.label"
-              :trigger-aria="strings.room.vocabFilterAria(filter.label)"
-              :select-all-label="strings.room.vocabSelectAllShort"
-              :deselect-all-label="strings.room.vocabDeselectAllShort"
+              :trigger-aria="strings.a11y.room.vocabFilterAria(filter.label)"
+              :select-all-label="strings.ui.room.vocabSelectAllShort"
+              :deselect-all-label="strings.ui.room.vocabDeselectAllShort"
               :options="filter.options"
               :selected="filterSelections[filter.key] ?? []"
               :icon="filter.icon"
@@ -302,7 +302,7 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
       <!-- 词库包模式底部操作 -->
       <template v-if="viewMode === 'packages'">
         <p class="mr-auto min-w-0 text-muted text-fs-12" role="status">
-          {{ strings.room.vocabPackageTotal(store.vocabulary?.packages.length ?? 0) }}
+          {{ strings.ui.room.vocabPackageTotal(store.vocabulary?.packages.length ?? 0) }}
         </p>
         <AppButton
           variant="secondary"
@@ -310,38 +310,38 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
           audio-feedback="select"
           @click="switchViewMode('words')"
         >
-          {{ strings.room.vocabSwitchToWords }}
+          {{ strings.a11y.room.vocabSwitchToWords }}
         </AppButton>
       </template>
       <!-- 词条管理模式：只读玩家仅提示不可编辑 -->
       <template v-else-if="isReadOnly">
         <p class="mr-auto text-muted text-fs-12" role="status">
-          {{ strings.room.vocabReadonlyHint }}
+          {{ strings.ui.room.vocabReadonlyHint }}
         </p>
       </template>
       <template v-else>
         <!-- 统计：全部 / 搜索结果 / 已选（移到页脚左侧，数字固定 4 位等宽防抖） -->
         <p class="mr-auto min-w-0 text-muted text-fs-12" role="status">
-          {{ strings.room.vocabAll }}
+          {{ strings.ui.room.vocabAll }}
           <b class="inline-block min-w-[4ch] text-center tabular-nums text-blue">{{
             store.vocabulary?.items.length ?? 0
           }}</b>
-          {{ strings.common.listSeparator }} {{ strings.room.vocabResults }}
+          {{ strings.ui.common.listSeparator }} {{ strings.ui.room.vocabResults }}
           <b class="inline-block min-w-[4ch] text-center tabular-nums text-blue">{{
             filteredWords.length
           }}</b>
-          {{ strings.common.listSeparator }} {{ strings.room.vocabSelected }}
+          {{ strings.ui.common.listSeparator }} {{ strings.ui.room.vocabSelected }}
           <b class="inline-block min-w-[4ch] text-center tabular-nums text-blue">{{
             selectedIds.size
           }}</b>
           <span
             v-if="selectedIds.size < MIN_SELECTED_VOCABULARY_WORDS"
             class="ml-[1em] font-bold text-red"
-            >{{ strings.room.vocabMinHint(MIN_SELECTED_VOCABULARY_WORDS) }}</span
+            >{{ strings.ui.room.vocabMinHint(MIN_SELECTED_VOCABULARY_WORDS) }}</span
           >
         </p>
         <AppButton variant="secondary" type="button" @click="setSelection(allWordIds, true)">
-          {{ strings.room.restoreDefault }}
+          {{ strings.ui.room.restoreDefault }}
         </AppButton>
         <AppButton
           variant="primary"
@@ -349,7 +349,7 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
           :disabled="selectedIds.size < MIN_SELECTED_VOCABULARY_WORDS"
           @click="saveVocabulary"
         >
-          {{ strings.room.confirmSelection }}
+          {{ strings.ui.room.confirmSelection }}
         </AppButton>
       </template>
     </template>

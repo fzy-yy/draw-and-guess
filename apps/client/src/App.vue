@@ -55,7 +55,7 @@ function reloadForProtocolUpdate(): void {
     <!-- 游戏舞台：16:9 容器，全部游戏内容都在此内部（投影用语义令牌 shadow-float） -->
     <section
       class="game-stage relative aspect-video h-[min(99vh,calc(99vw*9/16))] w-[min(99vw,calc(99vh*16/9))] overflow-hidden rounded-[clamp(6px,1cqh,14px)] border-[max(1px,0.28cqh)] border-navy bg-paper shadow-float"
-      :aria-label="strings.app.stageAriaLabel(store.config.app.name)"
+      :aria-label="strings.a11y.app.stageAriaLabel(store.config.app.name)"
     >
       <!-- 五个页面视图按状态互斥渲染：对局 > 房间 > 设置 > 大厅 > 资料 -->
       <GameView v-if="store.room && store.room.phase !== 'waiting'" />
@@ -71,7 +71,7 @@ function reloadForProtocolUpdate(): void {
         overlay-class="z-[100]"
         width-class="w-[47cqw]"
         section-class="items-center gap-[1em] px-[2.2em] py-[4.5cqh] text-center"
-        :aria-label="strings.app.protocolMismatchAria"
+        :aria-label="strings.a11y.app.protocolMismatchAria"
       >
         <div
           class="grid h-[10cqh] w-[10cqh] place-items-center rounded-full bg-red/10 text-red"
@@ -79,13 +79,13 @@ function reloadForProtocolUpdate(): void {
         >
           <RotateCw class="h-[5cqh] w-[5cqh]" />
         </div>
-        <h2 class="text-fs-24 font-bold text-navy">{{ strings.app.protocolMismatchTitle }}</h2>
+        <h2 class="text-fs-24 font-bold text-navy">{{ strings.ui.app.protocolMismatchTitle }}</h2>
         <p class="max-w-[37cqw] text-fs-14 font-bold leading-relaxed text-muted" role="alert">
-          {{ strings.app.protocolMismatchBody }}
+          {{ strings.ui.app.protocolMismatchBody }}
         </p>
         <template #footer>
           <AppButton type="button" @click="reloadForProtocolUpdate">
-            <RotateCw />{{ strings.app.protocolMismatchAction }}
+            <RotateCw />{{ strings.ui.app.protocolMismatchAction }}
           </AppButton>
         </template>
       </BaseDialog>
@@ -96,7 +96,7 @@ function reloadForProtocolUpdate(): void {
         overlay-class="z-[90]"
         width-class="w-[47cqw]"
         section-class="items-center gap-[1em] px-[2.2em] py-[4.5cqh] text-center"
-        :aria-label="strings.app.disconnectDialogAria"
+        :aria-label="strings.a11y.app.disconnectDialogAria"
       >
         <div
           class="grid h-[10cqh] w-[10cqh] place-items-center rounded-full bg-red/10 text-red"
@@ -108,15 +108,15 @@ function reloadForProtocolUpdate(): void {
         <h2 class="text-fs-24 font-bold text-navy">
           {{
             store.sessionState === 'disconnected'
-              ? strings.app.disconnectedTitle
-              : strings.app.restoringTitle
+              ? strings.ui.app.disconnectedTitle
+              : strings.ui.app.restoringTitle
           }}
         </h2>
         <p class="max-w-[37cqw] text-fs-14 font-bold leading-relaxed text-muted" role="status">
           {{
             store.sessionState === 'disconnected'
-              ? strings.app.disconnectedBody
-              : strings.app.restoringBody
+              ? strings.ui.app.disconnectedBody
+              : strings.ui.app.restoringBody
           }}
         </p>
       </BaseDialog>
@@ -128,10 +128,10 @@ function reloadForProtocolUpdate(): void {
       <!-- 房间邀请横幅：不在房间时收到邀请才会显示，可接受或拒绝 -->
       <ActionBanner
         :open="Boolean(store.invites.length && !store.room)"
-        :aria-label="strings.app.inviteDialogAria"
-        :heading="strings.app.inviteHeading"
+        :aria-label="strings.a11y.app.inviteDialogAria"
+        :heading="strings.ui.app.inviteHeading"
         :message="
-          strings.app.inviteReceived(
+          strings.ui.app.inviteReceived(
             store.invites[0]?.from.nickname ?? '',
             store.invites[0]?.roomName ?? '',
           )
@@ -141,7 +141,7 @@ function reloadForProtocolUpdate(): void {
           <!-- 邀请者内置 SVG 头像 -->
           <AvatarImage
             :avatar-id="store.invites[0]?.from.avatarId"
-            :label="strings.app.inviterAvatarAria"
+            :label="strings.a11y.app.inviterAvatarAria"
             class="h-[6.5cqh] w-[6.5cqh]"
           />
         </template>
@@ -149,7 +149,7 @@ function reloadForProtocolUpdate(): void {
           <AppButton
             variant="secondary"
             :aria-label="
-              strings.common.declineCountdown(Math.max(0, inviteQueue.rejectCountdown.value))
+              strings.a11y.common.declineCountdown(Math.max(0, inviteQueue.rejectCountdown.value))
             "
             @click="inviteQueue.decline"
           >
@@ -157,17 +157,17 @@ function reloadForProtocolUpdate(): void {
               倒计时数字用固定 2ch 宽度 + tabular-nums 承载：位数变化（10→9）时按钮宽度不变，
               与画板线宽数字的防抖动方案一致（见 CanvasToolbar 的 BrushSizeField）。
             -->
-            {{ strings.common.decline
+            {{ strings.ui.common.decline
             }}<span class="inline-block min-w-[2ch] text-center tabular-nums">{{
               Math.max(0, inviteQueue.rejectCountdown.value)
             }}</span>
           </AppButton>
           <AppButton
-            :aria-label="strings.common.accept"
+            :aria-label="strings.a11y.common.accept"
             :disabled="!store.invites[0]"
             @click="inviteQueue.accept"
           >
-            <Gamepad2 />{{ strings.common.accept }}
+            <Gamepad2 />{{ strings.ui.common.accept }}
           </AppButton>
         </template>
       </ActionBanner>
@@ -175,9 +175,9 @@ function reloadForProtocolUpdate(): void {
       <!-- 大厅首次全屏提示横幅：首次进入大厅且当前未全屏时弹出 -->
       <ActionBanner
         :open="fullscreenPrompt.showFullscreenPrompt.value"
-        :aria-label="strings.lobby.fullscreenPromptAria"
-        :heading="strings.lobby.fullscreenPromptHeading"
-        :message="strings.lobby.fullscreenPromptBody"
+        :aria-label="strings.a11y.lobby.fullscreenPromptAria"
+        :heading="strings.ui.lobby.fullscreenPromptHeading"
+        :message="strings.ui.lobby.fullscreenPromptBody"
       >
         <template #leading>
           <div
@@ -189,10 +189,10 @@ function reloadForProtocolUpdate(): void {
         </template>
         <template #actions>
           <AppButton variant="secondary" @click="fullscreenPrompt.dismiss">
-            {{ strings.lobby.fullscreenPromptDismiss }}
+            {{ strings.ui.lobby.fullscreenPromptDismiss }}
           </AppButton>
           <AppButton @click="fullscreenPrompt.confirm">
-            <Maximize />{{ strings.lobby.fullscreenPromptConfirm }}
+            <Maximize />{{ strings.ui.lobby.fullscreenPromptConfirm }}
           </AppButton>
         </template>
       </ActionBanner>
@@ -214,11 +214,11 @@ function reloadForProtocolUpdate(): void {
         >
           <LogOut class="h-[4.5cqh] w-[4.5cqh]" />
         </div>
-        <h2 id="kicked-title">{{ strings.app.kickedTitle }}</h2>
-        <p class="max-w-[30em] text-muted leading-[1.6]">{{ strings.app.kickedBody }}</p>
+        <h2 id="kicked-title">{{ strings.ui.app.kickedTitle }}</h2>
+        <p class="max-w-[30em] text-muted leading-[1.6]">{{ strings.ui.app.kickedBody }}</p>
         <template #footer>
           <AppButton variant="primary" type="button" @click="store.dismissKickedNotice">
-            {{ strings.app.kickedConfirm }}
+            {{ strings.ui.app.kickedConfirm }}
           </AppButton>
         </template>
       </BaseDialog>
@@ -237,8 +237,8 @@ function reloadForProtocolUpdate(): void {
       <!-- 竖屏警告：手机竖屏时全屏提示旋转设备（见 style/other.css） -->
       <div class="portrait-warning">
         <RotateCw />
-        <h2>{{ strings.app.portraitTitle }}</h2>
-        <p>{{ strings.app.portraitHint }}</p>
+        <h2>{{ strings.ui.app.portraitTitle }}</h2>
+        <p>{{ strings.ui.app.portraitHint }}</p>
       </div>
     </section>
   </div>

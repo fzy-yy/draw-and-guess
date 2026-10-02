@@ -81,7 +81,7 @@ export const useProfileStore = defineStore('profile', () => {
     if (!result.ok) return
     profile.value = { ...profile.value, ...result.data }
     saveProfile()
-    notify(strings.store.profileUpdated)
+    notify(strings.ui.store.profileUpdated)
   }
 
   return {

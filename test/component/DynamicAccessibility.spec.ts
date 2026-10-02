@@ -26,7 +26,7 @@ describe('动态 UI 无障碍语义', () => {
     expect(container.firstElementChild?.hasAttribute('aria-live')).toBe(false)
 
     const close = screen.getByRole('button', {
-      name: strings.common.dismissToastAria('保存成功'),
+      name: strings.a11y.common.dismissToastAria('保存成功'),
     })
     close.focus()
     await user.keyboard('{Enter}')
@@ -88,7 +88,7 @@ describe('动态 UI 无障碍语义', () => {
     input.focus()
 
     await user.tab()
-    const clear = screen.getByRole('button', { name: strings.common.clearSearchAria })
+    const clear = screen.getByRole('button', { name: strings.a11y.common.clearSearchAria })
     expect(document.activeElement).toBe(clear)
     await user.keyboard('{Enter}')
 

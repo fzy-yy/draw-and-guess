@@ -44,9 +44,9 @@ const maxPlayerOptions = computed(() =>
 // 显式标注选项值类型为协议联合：不加标注时 value 会被拓宽为 string，
 // RuleSelectField 的 v-model 与 options 泛型配对即失效（strictTemplates 试点抓出的真实缺陷）。
 const joinPolicyOptions: RuleSelectOption<RoomSettings['joinPolicy']>[] = [
-  { value: 'forbid', label: strings.room.joinPolicyForbid },
-  { value: 'spectate', label: strings.room.joinPolicySpectate },
-  { value: 'next_game', label: strings.room.joinPolicyNextGame },
+  { value: 'forbid', label: strings.ui.room.joinPolicyForbid },
+  { value: 'spectate', label: strings.ui.room.joinPolicySpectate },
+  { value: 'next_game', label: strings.ui.room.joinPolicyNextGame },
 ]
 /**
  * 单回合时长档位：合法值来自公开配置（唯一来源是协议常量），
@@ -55,7 +55,7 @@ const joinPolicyOptions: RuleSelectOption<RoomSettings['joinPolicy']>[] = [
 const drawSecondsOptions: RuleSelectOption<RoomSettings['drawSeconds']>[] =
   store.config.game.drawSeconds.options.map((seconds) => ({
     value: seconds,
-    label: strings.common.secondsUnit(seconds),
+    label: strings.ui.common.secondsUnit(seconds),
   }))
 
 // 本地编辑副本：所有字段均为原始值，浅拷贝即可；每次打开（draft 变化）时重新同步。
@@ -77,13 +77,13 @@ watch(
     width-class="w-[68cqw]"
     section-class="h-[82cqh]"
     labelledby="rules-title"
-    :close-aria="strings.room.settingsCloseAria"
+    :close-aria="strings.a11y.room.settingsCloseAria"
   >
     <template #header>
       <SectionHeader
         id="rules-title"
-        :eyebrow="strings.room.settingsLabel"
-        :title="strings.room.settingsTitle"
+        :eyebrow="strings.ui.room.settingsLabel"
+        :title="strings.ui.room.settingsTitle"
       ></SectionHeader>
     </template>
 
@@ -94,71 +94,71 @@ watch(
       <!-- 基础设置：常用规则，默认展开；与高级设置一样可点击标题收纳 -->
       <details class="rounded-[0.7em] border-[0.16cqh] border-line bg-paper p-[1em]" open>
         <summary class="cursor-pointer font-bold text-blue">
-          {{ strings.room.basicSettings }}
+          {{ strings.ui.room.basicSettings }}
         </summary>
         <div class="mt-[1.5cqh] grid grid-cols-2 gap-[1.5cqh_1.8em]">
           <RuleSelectField
             v-model="localDraft.maxPlayers"
-            :label="strings.room.maxPlayersField"
+            :label="strings.ui.room.maxPlayersField"
             :options="maxPlayerOptions"
           >
-            <small class="text-muted text-fs-12">{{ strings.room.maxPlayersNote }}</small>
+            <small class="text-muted text-fs-12">{{ strings.ui.room.maxPlayersNote }}</small>
           </RuleSelectField>
 
           <RuleSliderField
             v-model="localDraft.roundsPerPlayer"
-            :label="strings.common.roundsField"
+            :label="strings.ui.common.roundsField"
             :min="store.config.game.roundsPerPlayer.min"
             :max="store.config.game.roundsPerPlayer.max"
             :step="store.config.game.roundsPerPlayer.step"
-            :display="strings.common.roundsUnit(localDraft.roundsPerPlayer)"
+            :display="strings.ui.common.roundsUnit(localDraft.roundsPerPlayer)"
           />
 
           <RuleSliderField
             v-model="localDraft.chooseSeconds"
-            :label="strings.room.chooseTimeField"
+            :label="strings.ui.room.chooseTimeField"
             :min="store.config.game.chooseSeconds.min"
             :max="store.config.game.chooseSeconds.max"
             :step="store.config.game.chooseSeconds.step"
             :display="
               localDraft.allowChooseTimeLimit
-                ? strings.common.secondsUnit(localDraft.chooseSeconds)
-                : strings.room.chooseTimeUnlimited
+                ? strings.ui.common.secondsUnit(localDraft.chooseSeconds)
+                : strings.ui.room.chooseTimeUnlimited
             "
             :disabled="!localDraft.allowChooseTimeLimit"
           />
 
           <RuleSliderField
             v-model="localDraft.optionCount"
-            :label="strings.room.optionCountField"
+            :label="strings.ui.room.optionCountField"
             :min="store.config.game.optionCount.min"
             :max="store.config.game.optionCount.max"
             :step="store.config.game.optionCount.step"
-            :display="strings.room.optionCountUnit(localDraft.optionCount)"
+            :display="strings.ui.room.optionCountUnit(localDraft.optionCount)"
           />
 
           <RuleSelectField
             v-model="localDraft.joinPolicy"
-            :label="strings.room.joinPolicyField"
+            :label="strings.ui.room.joinPolicyField"
             :options="joinPolicyOptions"
           />
 
           <div class="flex flex-col justify-center gap-[1.2cqh]">
             <RuleToggleField
               v-model="localDraft.allowChooseTimeLimit"
-              :label="strings.room.toggleChooseTimeLimit"
+              :label="strings.ui.room.toggleChooseTimeLimit"
             />
             <RuleToggleField
               v-model="localDraft.allowPlayerInvite"
-              :label="strings.room.togglePlayerInvite"
+              :label="strings.ui.room.togglePlayerInvite"
             />
             <RuleToggleField
               v-model="localDraft.allowWordReroll"
-              :label="strings.room.toggleAllowWordReroll"
+              :label="strings.ui.room.toggleAllowWordReroll"
             />
             <RuleToggleField
               v-model="localDraft.allowCustomWord"
-              :label="strings.room.toggleAllowCustomWord"
+              :label="strings.ui.room.toggleAllowCustomWord"
             />
           </div>
         </div>
@@ -167,24 +167,24 @@ watch(
       <!-- 高级设置：时长回退与计分基数等低频项，默认收起 -->
       <details class="rounded-[0.7em] border-[0.16cqh] border-line bg-paper p-[1em]">
         <summary class="cursor-pointer font-bold text-blue">
-          {{ strings.room.advancedSettings }}
+          {{ strings.ui.room.advancedSettings }}
         </summary>
         <div class="mt-[1.5cqh] grid grid-cols-3 gap-[1.5cqh_1.4em]">
           <RuleSelectField
             v-model="localDraft.drawSeconds"
-            :label="strings.room.drawSecondsField"
+            :label="strings.ui.room.drawSecondsField"
             :options="drawSecondsOptions"
           />
           <div class="flex flex-col gap-[0.8cqh]">
             <RuleToggleField
               v-model="localDraft.showWordLength"
-              :label="strings.room.toggleShowWordLength"
+              :label="strings.ui.room.toggleShowWordLength"
             />
             <RuleToggleField
               v-model="localDraft.progressiveHints"
-              :label="strings.room.toggleProgressiveHints"
+              :label="strings.ui.room.toggleProgressiveHints"
             />
-            <RuleToggleField v-model="localDraft.allowPause" :label="strings.room.togglePause" />
+            <RuleToggleField v-model="localDraft.allowPause" :label="strings.ui.room.togglePause" />
           </div>
         </div>
       </details>
@@ -192,12 +192,12 @@ watch(
 
     <template #footer>
       <!-- 底部操作：取消或保存规则 -->
-      <p class="mr-auto text-muted text-fs-12">{{ strings.room.rulesChangeNote }}</p>
+      <p class="mr-auto text-muted text-fs-12">{{ strings.ui.room.rulesChangeNote }}</p>
       <AppButton variant="secondary" type="button" audio-feedback="close" @click="handleClose">
-        {{ strings.common.cancel }}
+        {{ strings.ui.common.cancel }}
       </AppButton>
       <AppButton variant="primary" type="button" @click="emit('save', localDraft)">
-        {{ strings.room.saveRules }}
+        {{ strings.ui.room.saveRules }}
       </AppButton>
     </template>
   </BaseDialog>

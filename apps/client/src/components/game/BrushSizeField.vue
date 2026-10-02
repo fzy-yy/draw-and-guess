@@ -60,8 +60,8 @@ function onWheel(event: WheelEvent): void {
   <div
     class="relative grid min-h-[4.4cqh] shrink-0 cursor-default place-items-center px-[0.4em]"
     :class="[disabled ? 'opacity-40' : '', hovering && !disabled ? 'cursor-none' : '']"
-    :aria-label="strings.game.brushSize"
-    :title="strings.game.brushWheelHint"
+    :aria-label="strings.a11y.game.brushSize"
+    :title="strings.a11y.game.brushWheelHint"
     @pointerenter="onEnter"
     @pointermove="onMove"
     @pointerleave="onLeave"
@@ -69,10 +69,10 @@ function onWheel(event: WheelEvent): void {
   >
     <output
       class="inline-flex items-baseline gap-[0.15em] font-mono text-fs-14 font-bold tabular-nums text-navy"
-      :aria-label="`${strings.game.brushSize} ${width}${strings.game.brushUnit}`"
+      :aria-label="`${strings.a11y.game.brushSize} ${width}${strings.a11y.game.brushUnit}`"
     >
       <span class="inline-block min-w-[2ch] text-center">{{ width }}</span>
-      <small class="text-fs-10 text-muted">{{ strings.game.brushUnit }}</small>
+      <small class="text-fs-10 text-muted">{{ strings.ui.game.brushUnit }}</small>
     </output>
     <!-- 悬停画笔圆点：直径＝粗细值、跟随指针，纯预览不拦事件 -->
     <span

@@ -26,14 +26,14 @@ function selectAvatar(avatarId: AvatarId): void {
     v-model:open="open"
     width-class="w-[64cqw]"
     labelledby="avatar-picker-title"
-    :close-aria="strings.profile.avatarPickerCloseAria"
+    :close-aria="strings.a11y.profile.avatarPickerCloseAria"
     @close="emit('close')"
   >
     <template #header>
       <p class="eyebrow">
-        {{ strings.profile.avatarPickerLabel }}
+        {{ strings.ui.profile.avatarPickerLabel }}
       </p>
-      <h2 id="avatar-picker-title">{{ strings.profile.avatarPickerTitle }}</h2>
+      <h2 id="avatar-picker-title">{{ strings.ui.profile.avatarPickerTitle }}</h2>
     </template>
     <div
       class="grid min-h-0 grid-cols-8 gap-[1.4cqh_1cqw] overflow-y-auto px-[2cqw] py-[2.5cqh] overscroll-contain"
@@ -50,12 +50,12 @@ function selectAvatar(avatarId: AvatarId): void {
             : 'border-control'
         "
         :aria-pressed="modelValue === avatarId"
-        :aria-label="strings.profile.avatarOptionAria(avatarId)"
+        :aria-label="strings.a11y.profile.avatarOptionAria(avatarId)"
         @click="selectAvatar(avatarId)"
       >
         <AvatarImage
           :avatar-id="avatarId"
-          :label="strings.profile.avatarOptionAria(avatarId)"
+          :label="strings.a11y.profile.avatarOptionAria(avatarId)"
           class="h-full w-full border-0 shadow-none"
         />
       </button>

@@ -34,7 +34,7 @@ const props = withDefaults(
     /** 右键事件的视口坐标（clientX / clientY），组件负责换算成舞台内坐标。 */
     x: number
     y: number
-    /** 菜单的无障碍名称；缺省取 strings.common.contextMenuAria。 */
+    /** 菜单的无障碍名称；缺省取 strings.a11y.common.contextMenuAria。 */
     ariaLabel?: string
   }>(),
   { ariaLabel: undefined },
@@ -53,7 +53,7 @@ const anchor = ref<ContextMenuAnchor>()
 const previousFocus = ref<HTMLElement>()
 
 const isVisible = computed(() => open.value && props.items.length > 0)
-const label = computed(() => props.ariaLabel ?? strings.common.contextMenuAria)
+const label = computed(() => props.ariaLabel ?? strings.a11y.common.contextMenuAria)
 /** 实际生效的偏移：测量完成前回退到落点，避免先闪到舞台左上角。 */
 const point = computed<ContextMenuAnchor | undefined>(() => {
   const resolved = offset.value

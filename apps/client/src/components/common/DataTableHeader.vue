@@ -59,7 +59,7 @@ const emit = defineEmits<{ sort: [key: string]; 'toggle-all': [] }>()
           v-if="column.sortable !== false"
           type="button"
           class="inline-flex items-center gap-[0.25em] rounded-none px-[0.25em] py-[max(0.1cqh,0.3em)] hover:bg-line"
-          :aria-label="strings.common.sortByAria(column.label)"
+          :aria-label="strings.a11y.common.sortByAria(column.label)"
           @click="emit('sort', column.key)"
         >
           {{ column.label }}

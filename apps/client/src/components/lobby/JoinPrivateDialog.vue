@@ -32,24 +32,24 @@ async function submitJoin(): Promise<void> {
     v-model:open="open"
     width-class="w-[42cqw]"
     labelledby="join-private-title"
-    :close-aria="strings.lobby.privateJoinCloseAria"
+    :close-aria="strings.a11y.lobby.privateJoinCloseAria"
   >
     <template #header>
-      <p class="eyebrow-light">{{ strings.lobby.privateJoinLabel }}</p>
-      <h2 id="join-private-title">{{ strings.lobby.privateJoinTitle }}</h2>
+      <p class="eyebrow-light">{{ strings.ui.lobby.privateJoinLabel }}</p>
+      <h2 id="join-private-title">{{ strings.ui.lobby.privateJoinTitle }}</h2>
     </template>
 
     <div class="grid justify-items-center gap-[1.5cqh] px-[4cqw] py-[4cqh] text-center">
       <KeyRound class="h-[7cqh] w-[7cqh] text-blue" />
-      <p class="text-muted">{{ strings.lobby.privateJoinBody }}</p>
+      <p class="text-muted">{{ strings.ui.lobby.privateJoinBody }}</p>
       <div class="w-[22cqw]">
         <AppInput
           v-model="privateCode"
           align="center"
           input-class="font-bold uppercase tracking-[0.3em] font-mono text-fs-20"
           :maxlength="store.config.room.privateCodeLength + 2"
-          :placeholder="strings.lobby.privateCodePlaceholder"
-          :aria-label="strings.lobby.privateCodeAria"
+          :placeholder="strings.ui.lobby.privateCodePlaceholder"
+          :aria-label="strings.a11y.lobby.privateCodeAria"
           @enter="submitJoin"
         />
       </div>
@@ -57,10 +57,10 @@ async function submitJoin(): Promise<void> {
 
     <template #footer>
       <AppButton variant="secondary" type="button" audio-feedback="close" @click="open = false">
-        {{ strings.common.cancel }}
+        {{ strings.ui.common.cancel }}
       </AppButton>
       <AppButton type="button" :disabled="!privateCodeValid" @click="submitJoin">
-        {{ strings.lobby.joinPrivateConfirm }}
+        {{ strings.ui.lobby.joinPrivateConfirm }}
       </AppButton>
     </template>
   </BaseDialog>

@@ -55,7 +55,7 @@ describe('useGameHud 角色与计时派生', () => {
     await nextTick()
     expect(hud.secondsLeft.value).toBe(13)
     expect(hud.canGuess.value).toBe(false)
-    expect(hud.phaseLabel.value).toBe(strings.status.phasePaused)
+    expect(hud.phaseLabel.value).toBe(strings.ui.status.phasePaused)
 
     roomStore.room.phase = 'game_result'
     roomStore.room.game!.finalRanking = [
@@ -125,15 +125,17 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
     }) as VueWrapper
 
     // 顶栏只保留回合/题目/系统操作与聊天 / 工具开关（玩家面板为常驻左栏，不在顶栏）
-    expect(wrapper.find(`[aria-label="${strings.game.toggleChat}"]`).exists()).toBe(true)
-    expect(wrapper.find(`[aria-label="${strings.game.toggleTools}"]`).exists()).toBe(true)
+    expect(wrapper.find(`[aria-label="${strings.a11y.game.toggleChat}"]`).exists()).toBe(true)
+    expect(wrapper.find(`[aria-label="${strings.a11y.game.toggleTools}"]`).exists()).toBe(true)
 
     // 画家默认按本地偏好显示遮罩
     expect(wrapper.text()).toContain(game.answerMask)
     expect(wrapper.text()).not.toContain(game.answer)
 
     // 点击题目胶囊切换为明文
-    await wrapper.get(`[aria-label="${strings.game.toggleAnswerVisibilityAria}"]`).trigger('click')
+    await wrapper
+      .get(`[aria-label="${strings.a11y.game.toggleAnswerVisibilityAria}"]`)
+      .trigger('click')
     expect(wrapper.text()).toContain(game.answer)
 
     // 猜词者本人：题目不可点击，恒为遮罩
@@ -141,9 +143,9 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
     await nextTick()
     expect(wrapper.text()).toContain(game.answerMask)
     expect(wrapper.text()).not.toContain(game.answer)
-    expect(wrapper.find(`[aria-label="${strings.game.toggleAnswerVisibilityAria}"]`).exists()).toBe(
-      false,
-    )
+    expect(
+      wrapper.find(`[aria-label="${strings.a11y.game.toggleAnswerVisibilityAria}"]`).exists(),
+    ).toBe(false)
     wrapper.unmount()
   })
 
@@ -159,13 +161,13 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
     }) as VueWrapper
 
     expect(wrapper.findAll('[aria-live]').length).toBe(1)
-    expect(wrapper.get('[aria-live]').text()).toBe(strings.status.phasePaused)
+    expect(wrapper.get('[aria-live]').text()).toBe(strings.ui.status.phasePaused)
 
-    expect(wrapper.text()).toContain(strings.game.resumeGame)
-    expect(wrapper.text()).toContain(strings.game.endEarly)
+    expect(wrapper.text()).toContain(strings.ui.game.resumeGame)
+    expect(wrapper.text()).toContain(strings.ui.game.endEarly)
     session.playerId = GUEST_ID
     await nextTick()
-    expect(wrapper.text()).not.toContain(strings.game.resumeGame)
+    expect(wrapper.text()).not.toContain(strings.ui.game.resumeGame)
 
     roomStore.room.phase = 'choosing_word'
     roomStore.room.game!.wordOptions = [
@@ -174,7 +176,7 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
     ]
     session.playerId = HOST_ID
     await nextTick()
-    expect(wrapper.get('[aria-live]').text()).toBe(strings.status.phaseChoosing)
+    expect(wrapper.get('[aria-live]').text()).toBe(strings.ui.status.phaseChoosing)
     expect(wrapper.text()).toContain('苹果')
     // 选词卡新形态：纯色无修饰（无 navy 边框/厚底边），只显示词面——
     // 难度星级与可绘制性已随词库瘦身移除
@@ -200,16 +202,16 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
       rankings: [],
     }) as VueWrapper
 
-    expect(overlay.text()).toContain(strings.game.hostReturnWaiting)
-    expect(overlay.text()).not.toContain(strings.game.rematchReady)
+    expect(overlay.text()).toContain(strings.ui.game.hostReturnWaiting)
+    expect(overlay.text()).not.toContain(strings.ui.game.rematchReady)
 
     session.playerId = GUEST_ID
     await nextTick()
-    expect(overlay.text()).toContain(strings.game.rematch)
-    expect(overlay.text()).not.toContain(strings.game.hostReturnWaiting)
+    expect(overlay.text()).toContain(strings.ui.game.rematch)
+    expect(overlay.text()).not.toContain(strings.ui.game.hostReturnWaiting)
     await overlay
       .findAll('button')
-      .find((button) => button.text().includes(strings.game.rematch))!
+      .find((button) => button.text().includes(strings.ui.game.rematch))!
       .trigger('click')
     expect(overlay.emitted('return-waiting')).toHaveLength(1)
 
@@ -217,7 +219,7 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
     await nextTick()
     // 后台成员身份由玩家面板展示（原 ScoreStrip 已被 PlayerPanel 取代，见 ADR-0043）。
     const panel = mountWithPinia(PlayerPanel, {}) as VueWrapper
-    expect(panel.text()).toContain(strings.status.roleRematchReady)
+    expect(panel.text()).toContain(strings.ui.status.roleRematchReady)
     panel.unmount()
     overlay.unmount()
   })

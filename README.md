@@ -100,7 +100,7 @@ apps/server/       Express、Socket.IO、权威领域状态与 SQLite 本地持�
   └─ scripts/package-dist.ts    # 构建 Windows 分发包（esbuild 单文件 + 资源 + 内置 Node + zip）
 packages/shared/   DTO、Zod schema、协议常量、事件名和领域纯函数（完全自包含）
 packages/config/   浏览器安全的公开应用配置 workspace 包
-packages/strings/  客户端与服务端展示文案 workspace 包
+packages/strings/  展示文案包（`strings.ui` 可见 / `strings.a11y` 无障碍 / `serverStrings` 服务端）
 vocabulary/        唯一权威词库目录（SQLite 数据库，Provider 加载）
 docs/adr/          架构决策记录（背景 / 决策 / 后果），源码注释引用此处
 ```

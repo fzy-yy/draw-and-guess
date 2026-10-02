@@ -66,7 +66,9 @@ const allSelected = computed(
 
 // 悬浮提示文案：纯图标触发按钮靠它承载完整语义（如「分类 · 2」），未选中时仅展示标签。
 const triggerTitle = computed(() =>
-  selectedCount.value ? strings.common.countBadge(props.label, selectedCount.value) : props.label,
+  selectedCount.value
+    ? strings.ui.common.countBadge(props.label, selectedCount.value)
+    : props.label,
 )
 
 /** 切换单个选项：保持父组件集合语义不变，仅增删一项。 */

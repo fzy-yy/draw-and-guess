@@ -42,20 +42,20 @@ export function useAppBootstrap(transport: GameTransport = useGameTransport()) {
     // 空串不可达；只需过滤本人——自己的连/断由页面状态体现，不做成员播报。
     if (change.playerId === sessionStore.playerId) return
     if (change.connection === 'left') {
-      notify(strings.store.memberLeftGame(change.nickname), 'warning')
+      notify(strings.ui.store.memberLeftGame(change.nickname), 'warning')
       return
     }
     notify(
       change.connection === 'reconnecting'
-        ? strings.store.memberDisconnected(change.nickname)
-        : strings.store.memberReconnected(change.nickname),
+        ? strings.ui.store.memberDisconnected(change.nickname)
+        : strings.ui.store.memberReconnected(change.nickname),
       change.connection === 'reconnecting' ? 'warning' : 'success',
     )
   }
 
   function handleConnect(): void {
     sessionStore.connected = true
-    sessionStore.connectionLabel = strings.connection.connected
+    sessionStore.connectionLabel = strings.ui.connection.connected
     if (sessionStore.playerId || profileStore.profile.recoveryToken) {
       sessionStore.sessionState = 'restoring'
       void register(true)
@@ -85,7 +85,7 @@ export function useAppBootstrap(transport: GameTransport = useGameTransport()) {
     [EVENTS.inviteReceived]: {
       on: (invite) => {
         lobbyStore.invites.push(invite)
-        notify(strings.app.inviteReceived(invite.from.nickname, invite.roomName), 'warning')
+        notify(strings.ui.app.inviteReceived(invite.from.nickname, invite.roomName), 'warning')
       },
       recovery: 'generic-resync',
     },
@@ -168,24 +168,24 @@ export function useAppBootstrap(transport: GameTransport = useGameTransport()) {
           sessionStore.sessionState = 'idle'
           resyncStore.invalidateSession()
           sessionStore.page = 'profile'
-          sessionStore.connectionLabel = strings.connection.disconnected
-          notify(strings.store.sessionTakenOver, 'warning')
+          sessionStore.connectionLabel = strings.ui.connection.disconnected
+          notify(strings.ui.store.sessionTakenOver, 'warning')
           return
         }
         if (sessionStore.playerId || profileStore.profile.recoveryToken)
           sessionStore.sessionState = 'disconnected'
         sessionStore.connectionLabel =
           reason === 'io server disconnect'
-            ? strings.connection.unavailable
-            : strings.connection.reconnecting
+            ? strings.ui.connection.unavailable
+            : strings.ui.connection.reconnecting
       },
       onReconnectAttempt: () => {
-        sessionStore.connectionLabel = strings.connection.reconnecting
+        sessionStore.connectionLabel = strings.ui.connection.reconnecting
         if (sessionStore.playerId || profileStore.profile.recoveryToken)
           sessionStore.sessionState = 'disconnected'
       },
       onIoError: () => {
-        sessionStore.connectionLabel = strings.connection.unstable
+        sessionStore.connectionLabel = strings.ui.connection.unstable
         if (
           !transport.socket.connected &&
           (sessionStore.playerId || profileStore.profile.recoveryToken)

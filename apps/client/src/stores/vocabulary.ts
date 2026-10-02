@@ -70,7 +70,7 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
     return commitVocabulary(
       () => request(EVENTS.roomUpdateVocabulary, { ids, expectedVersion: room.stateVersion }),
       room.vocabularyPackageId,
-      strings.store.vocabularyUpdated,
+      strings.ui.store.vocabularyUpdated,
     )
   }
 
@@ -84,7 +84,7 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
           expectedVersion: room.stateVersion,
         }),
       packageId,
-      strings.room.vocabPackageSwitched,
+      strings.ui.room.vocabPackageSwitched,
     )
   }
 

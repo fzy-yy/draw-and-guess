@@ -73,20 +73,20 @@ async function submitCustomWord(text: string): Promise<void> {
       v-if="store.room.phase === 'starting'"
       class="absolute inset-0 z-30 grid place-items-center bg-navy/80 px-[5cqw] py-[4cqh] text-white"
     >
-      <span>{{ strings.game.countdownTitle }}</span
+      <span>{{ strings.ui.game.countdownTitle }}</span
       ><b
         class="grid place-items-center h-[20cqh] w-[20cqh] my-[2cqh] bg-yellow text-navy rounded-full text-fs-96"
         >{{ secondsLeft }}</b
       >
-      <p>{{ strings.game.countdownHint }}</p>
+      <p>{{ strings.ui.game.countdownHint }}</p>
     </div>
     <!-- 阶段遮罩：画家选词（只有画家可见候选词按钮与换一组操作） -->
     <OverlayCard v-else-if="store.room.phase === 'choosing_word' && store.isDrawer">
       <!-- 图标与文字留足内边距，避免画笔笔触溢出圆形底座被裁剪 -->
       <Brush class="h-[7.5cqh] w-[7.5cqh] bg-blue p-[1.9cqh] text-white rounded-full" />
-      <p>{{ strings.game.yourTurn }}</p>
+      <p>{{ strings.ui.game.yourTurn }}</p>
       <div class="relative flex w-full items-center justify-center min-h-[4.5cqh]">
-        <h2>{{ strings.game.chooseWordTitle }}</h2>
+        <h2>{{ strings.ui.game.chooseWordTitle }}</h2>
         <!-- 右侧动作组：换一组与自定义并排（关闭对应规则时整颗按钮不渲染） -->
         <div class="absolute right-[1em] flex items-center gap-[0.6em]">
           <AppButton
@@ -94,21 +94,21 @@ async function submitCustomWord(text: string): Promise<void> {
             variant="secondary"
             class="min-h-[4cqh] px-[0.9em] text-fs-14"
             :disabled="!game.canReroll"
-            :title="game.canReroll ? strings.game.rerollWords : strings.game.rerollUsed"
+            :title="game.canReroll ? strings.a11y.game.rerollWords : strings.a11y.game.rerollUsed"
             @click="emit('reroll-words')"
           >
             <RefreshCw class="h-[2cqh] w-[2cqh]" />
-            {{ strings.game.rerollWords }}
+            {{ strings.ui.game.rerollWords }}
           </AppButton>
           <AppButton
             v-if="allowCustomWord"
             variant="secondary"
             class="min-h-[4cqh] px-[0.9em] text-fs-14"
-            :title="strings.game.customWordHint(CUSTOM_WORD_MAX_LENGTH)"
+            :title="strings.a11y.game.customWordHint(CUSTOM_WORD_MAX_LENGTH)"
             @click="customWordOpen = true"
           >
             <PenLine class="h-[2cqh] w-[2cqh]" />
-            {{ strings.game.customWord }}
+            {{ strings.ui.game.customWord }}
           </AppButton>
         </div>
       </div>
@@ -126,8 +126,8 @@ async function submitCustomWord(text: string): Promise<void> {
       <!-- 选词阶段关闭限时时没有倒计时：提示「不限时」而不是「N 秒后自动选择」 -->
       <span>{{
         store.room.settings.allowChooseTimeLimit
-          ? strings.game.autoChoose(secondsLeft)
-          : strings.game.chooseNoLimitHint
+          ? strings.ui.game.autoChoose(secondsLeft)
+          : strings.ui.game.chooseNoLimitHint
       }}</span>
       <CustomWordDialog
         v-model:open="customWordOpen"
@@ -138,20 +138,20 @@ async function submitCustomWord(text: string): Promise<void> {
     <!-- 阶段遮罩：游戏暂停（房主可继续或提前结束） -->
     <OverlayCard v-else-if="store.room.phase === 'paused'">
       <CirclePause class="h-[7.5cqh] w-[7.5cqh] bg-blue p-[1.9cqh] text-white rounded-full" />
-      <p>{{ strings.game.pausedTitle }}</p>
-      <h2>{{ strings.game.pausedSubtitle }}</h2>
-      <span>{{ strings.game.pausedHint }}</span>
+      <p>{{ strings.ui.game.pausedTitle }}</p>
+      <h2>{{ strings.ui.game.pausedSubtitle }}</h2>
+      <span>{{ strings.ui.game.pausedHint }}</span>
       <div v-if="store.isHost" class="flex gap-[0.8em] mt-[1.5cqh]">
         <AppButton variant="primary" @click="emit('resume')">
-          <CirclePlay />{{ strings.game.resumeGame }}</AppButton
+          <CirclePlay />{{ strings.ui.game.resumeGame }}</AppButton
         ><AppButton variant="danger" :audio-feedback="null" @click="emit('open-end-confirm')">
-          {{ strings.game.endEarly }}
+          {{ strings.ui.game.endEarly }}
         </AppButton>
       </div>
     </OverlayCard>
     <!-- 阶段遮罩：回合结算（答案、得分明细） -->
     <OverlayCard v-else-if="store.room.phase === 'round_result' && game.roundResult">
-      <p>{{ strings.game.roundAnswerLabel }}</p>
+      <p>{{ strings.ui.game.roundAnswerLabel }}</p>
       <h2>{{ game.roundResult.answer }}</h2>
       <div class="my-[1.5cqh] flex w-full flex-col gap-[0.6cqh]">
         <article
@@ -160,12 +160,14 @@ async function submitCustomWord(text: string): Promise<void> {
           class="grid grid-cols-[1.5fr_1fr_auto] items-center gap-[0.5em] bg-line px-[0.8em] py-[0.8cqh] text-left text-fs-12"
         >
           <b>{{ store.room.members.find((member) => member.id === detail.playerId)?.nickname }}</b
-          ><span>{{ strings.game.scoreOrderLabel(detail.order) }}</span
-          ><strong class="text-blue text-fs-18">{{ strings.game.scoreTotal(detail.total) }}</strong>
+          ><span>{{ strings.ui.game.scoreOrderLabel(detail.order) }}</span
+          ><strong class="text-blue text-fs-18">{{
+            strings.ui.game.scoreTotal(detail.total)
+          }}</strong>
         </article>
-        <p v-if="!game.roundResult.details.length">{{ strings.game.noGuesses }}</p>
+        <p v-if="!game.roundResult.details.length">{{ strings.ui.game.noGuesses }}</p>
       </div>
-      <span>{{ strings.game.drawerScoreLine(game.roundResult.drawerScore, secondsLeft) }}</span>
+      <span>{{ strings.ui.game.drawerScoreLine(game.roundResult.drawerScore, secondsLeft) }}</span>
     </OverlayCard>
     <!-- 阶段遮罩：最终结算（排行榜、统计） -->
     <OverlayCard v-else-if="store.room.phase === 'game_result'" wide>
@@ -176,8 +178,8 @@ async function submitCustomWord(text: string): Promise<void> {
       >
         <Trophy class="h-[55%] w-[55%] fill-warning-fg text-warning-fg" />
       </span>
-      <p>{{ strings.game.gameResultLabel }}</p>
-      <h2>{{ strings.game.finalRanking }}</h2>
+      <p>{{ strings.ui.game.gameResultLabel }}</p>
+      <h2>{{ strings.ui.game.finalRanking }}</h2>
       <div class="my-[1cqh] flex w-full flex-col gap-[0.6cqh]">
         <article
           v-for="member in rankings"
@@ -185,16 +187,16 @@ async function submitCustomWord(text: string): Promise<void> {
           class="grid grid-cols-[3em_auto_1fr_auto] items-center gap-[0.8em] px-[1em] py-[0.6cqh] text-left"
           :class="member.rank === 1 ? 'text-navy bg-yellow/20' : 'bg-line text-navy'"
         >
-          <b>{{ strings.game.rankPrefix(member.rank) }}</b
+          <b>{{ strings.ui.game.rankPrefix(member.rank) }}</b
           ><AvatarImage
             class="h-[4.5cqh] w-[4.5cqh]"
             :avatar-id="member.avatarId"
-            :label="strings.common.playerAvatarAria(member.nickname)"
+            :label="strings.a11y.common.playerAvatarAria(member.nickname)"
           />
           <span class="flex flex-col font-bold"
             >{{ member.nickname
             }}<small class="text-muted text-fs-10 font-bold">{{
-              strings.game.playerStats(
+              strings.ui.game.playerStats(
                 member.stats.correctCount,
                 member.stats.correctCount
                   ? Math.round(member.stats.totalGuessMs / member.stats.correctCount / 1000)
@@ -202,7 +204,7 @@ async function submitCustomWord(text: string): Promise<void> {
                 member.stats.drawingCorrectCount,
               )
             }}</small></span
-          ><strong>{{ strings.common.scoreUnit(member.score) }}</strong>
+          ><strong>{{ strings.ui.common.scoreUnit(member.score) }}</strong>
         </article>
       </div>
       <div class="flex gap-[0.8em] mt-[1.5cqh]">
@@ -216,17 +218,17 @@ async function submitCustomWord(text: string): Promise<void> {
           {{
             store.me?.rematchReady
               ? store.isHost
-                ? strings.game.hostReturnQueued
-                : strings.game.rematchReady
+                ? strings.ui.game.hostReturnQueued
+                : strings.ui.game.rematchReady
               : store.isHost
-                ? strings.game.hostReturnWaiting
-                : strings.game.rematch
+                ? strings.ui.game.hostReturnWaiting
+                : strings.ui.game.rematch
           }}</AppButton
         ><AppButton variant="secondary" :audio-feedback="null" @click="emit('leave-room')">
-          {{ strings.game.leaveRoom }}
+          {{ strings.ui.game.leaveRoom }}
         </AppButton>
       </div>
-      <span>{{ strings.game.gameResultAutoReturn(secondsLeft) }}</span>
+      <span>{{ strings.ui.game.gameResultAutoReturn(secondsLeft) }}</span>
     </OverlayCard>
   </div>
 </template>

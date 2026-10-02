@@ -87,8 +87,8 @@ function isSelected(row: T): boolean {
 function displayValue(row: T, column: DataTableColumn<T>): string {
   const value = row[column.key]
   if (Array.isArray(value))
-    return value.length ? value.join(strings.common.listSeparator) : strings.common.emptyDash
-  if (value === undefined || value === null || value === '') return strings.common.emptyDash
+    return value.length ? value.join(strings.ui.common.listSeparator) : strings.ui.common.emptyDash
+  if (value === undefined || value === null || value === '') return strings.ui.common.emptyDash
   return String(value)
 }
 

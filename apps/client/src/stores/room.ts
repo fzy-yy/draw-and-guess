@@ -58,7 +58,7 @@ export const useRoomStore = defineStore('room', () => {
     const result = await request(EVENTS.roomLeave)
     if (!result.ok) return
     clearLocalRoomState()
-    notify(strings.store.roomLeft)
+    notify(strings.ui.store.roomLeft)
   }
 
   async function setReady(ready: boolean): Promise<void> {

@@ -1,0 +1,57 @@
+/**
+ * 无障碍文案（按用途分层）：供 aria-* 与悬浮 title 使用。
+ *
+ * 分类口径见 .scratch/strings-layering-and-maintenance/spec.md。
+ */
+
+export const game = {
+  pauseAriaHost: '暂停游戏',
+  pauseAriaGuest: '请求房主暂停',
+  resumeAria: '继续游戏',
+  settingsAria: '打开对局设置',
+  enterFullscreenAria: '进入全屏',
+  exitFullscreenAria: '退出全屏',
+  quickPhrasePickerAria: '选择快捷短语',
+  quickPhrasePanelAria: '快捷短语列表',
+  sendGuessAria: '发送猜词',
+  chatActionsAria: '快捷互动',
+  reactionPickerAria: '选择表情反应',
+  reactionPanelAria: '表情反应列表',
+  sendReactionAria: (reaction: string) => `发送表情 ${reaction}`,
+  sendQuickPhraseAria: (phrase: string) => `发送快捷短语：${phrase}`,
+  penTool: '画笔',
+  penAria: (key: string) => `画笔，快捷键 ${key}`,
+  eraserTool: '橡皮擦',
+  eraserAria: (key: string) => `橡皮擦，快捷键 ${key}`,
+  fillTool: '填充',
+  fillAria: (key: string) => `区域填充，快捷键 ${key}`,
+  presetColorAria: (color: string) => `选择预设颜色 ${color}`,
+  customColorTitle: '选择任意画笔或填充颜色',
+  customColorAria: '选择任意绘图颜色',
+  undoAria: '撤销 Ctrl+Z',
+  undo: '撤销',
+  redoAria: '重做 Ctrl+Shift+Z',
+  redo: '重做',
+  clearAria: '清空画板',
+  clear: '清空',
+  rerollWords: '换一组',
+  rerollUsed: '每回合仅能更换一次候选词',
+  customWordTitle: '画点别的',
+  customWordHint: (max: number) => `输入你想画的词（最多 ${max} 个字），确认后立即开始作画`,
+  customWordCancel: '取消',
+  toggleAnswerVisibilityAria: '切换答案显示状态',
+  toggleAnswerVisibilityHint: '点击切换答案明文与遮罩',
+  topBarAria: '对局顶栏',
+  toggleChat: '聊天面板',
+  toggleTools: '绘图工具',
+  playersPanelTitle: '玩家',
+  closePanelAria: '关闭面板',
+  toolbarAria: '绘图工具栏',
+  brushSize: '画笔大小',
+  brushUnit: 'px',
+  brushWheelHint: '滚动调整画笔大小',
+} as const
+export const canvas = {
+  drawingAria: '作画画布，支持画笔、橡皮擦、封闭区域填充和滚轮调整画笔或橡皮擦粗细',
+  watchingAria: '实时观看画布',
+} as const

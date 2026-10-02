@@ -19,34 +19,34 @@ const store = useGameStore()
   <section class="min-h-0 px-[5cqw] py-[3cqh]">
     <SettingsSectionHeader
       :icon="Music2"
-      :title="strings.settings.audioTitle"
-      :intro="strings.settings.audioIntro"
+      :title="strings.ui.settings.audioTitle"
+      :intro="strings.ui.settings.audioIntro"
     />
     <div class="flex flex-col gap-[1.2cqh]">
       <SettingSliderRow
         v-model="store.settings.masterVolume"
-        :title="strings.settings.masterVolume"
-        :hint="strings.settings.masterVolumeHint"
+        :title="strings.ui.settings.masterVolume"
+        :hint="strings.ui.settings.masterVolumeHint"
         :min="store.config.audio.volumeRange.min"
         :max="store.config.audio.volumeRange.max"
         :step="store.config.audio.volumeRange.step"
-        :display="strings.common.percentUnit(Math.round(store.settings.masterVolume * 100))"
+        :display="strings.ui.common.percentUnit(Math.round(store.settings.masterVolume * 100))"
         @save="store.saveSettings"
       />
       <SettingSliderRow
         v-model="store.settings.soundVolume"
-        :title="strings.settings.soundVolume"
-        :hint="strings.settings.soundVolumeHint"
+        :title="strings.ui.settings.soundVolume"
+        :hint="strings.ui.settings.soundVolumeHint"
         :min="store.config.audio.volumeRange.min"
         :max="store.config.audio.volumeRange.max"
         :step="store.config.audio.volumeRange.step"
-        :display="strings.common.percentUnit(Math.round(store.settings.soundVolume * 100))"
+        :display="strings.ui.common.percentUnit(Math.round(store.settings.soundVolume * 100))"
         @save="store.saveSettings"
       />
       <SettingSwitchRow
         v-model="store.settings.muted"
-        :title="strings.settings.muted"
-        :hint="strings.settings.mutedHint"
+        :title="strings.ui.settings.muted"
+        :hint="strings.ui.settings.mutedHint"
         class="border-l-[0.4cqh] border-blue"
         @save="store.saveSettings"
       />

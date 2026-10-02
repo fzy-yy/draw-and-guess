@@ -34,7 +34,7 @@ export interface ContextMenuItem {
 
 /** 弹出菜单时的可选参数。 */
 export interface ContextMenuOptions {
-  /** 菜单无障碍名称；缺省由 ContextMenu.vue 使用 strings.common.contextMenuAria。 */
+  /** 菜单无障碍名称；缺省由 ContextMenu.vue 使用 strings.a11y.common.contextMenuAria。 */
   ariaLabel?: string
 }
 

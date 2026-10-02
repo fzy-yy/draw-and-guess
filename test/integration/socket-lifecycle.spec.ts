@@ -215,12 +215,12 @@ describe('Socket 显式连接生命周期', () => {
     expect(session.sessionState).toBe('disconnected')
 
     transport.emitManager('reconnect_attempt')
-    expect(session.connectionLabel).toBe(strings.connection.reconnecting)
+    expect(session.connectionLabel).toBe(strings.ui.connection.reconnecting)
     expect(transport.managerListenerCount('reconnect_attempt')).toBe(1)
 
     transport.setConnected(false)
     transport.emitManager('error')
-    expect(session.connectionLabel).toBe(strings.connection.unstable)
+    expect(session.connectionLabel).toBe(strings.ui.connection.unstable)
 
     transport.emitSocket('disconnect', 'io server disconnect')
     expect(session.sessionState).toBe('idle')
@@ -355,7 +355,7 @@ describe('房间关闭按稳定关闭码分支', () => {
     transport.emitSocket(
       EVENTS.roomClosed,
       createServerPush(EVENTS.roomClosed, {
-        reason: strings.store.memberLeftGame('某人'),
+        reason: strings.ui.store.memberLeftGame('某人'),
         code: 'kicked',
       }),
     )

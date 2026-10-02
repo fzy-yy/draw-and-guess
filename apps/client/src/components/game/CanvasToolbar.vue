@@ -35,28 +35,28 @@ const TOOLS: ReadonlyArray<{ key: ToolKind; icon: Component; label: string; aria
   {
     key: 'pen',
     icon: Brush,
-    label: strings.game.penTool,
-    aria: strings.game.penAria(store.settings.penShortcut),
+    label: strings.a11y.game.penTool,
+    aria: strings.a11y.game.penAria(store.settings.penShortcut),
   },
   {
     key: 'eraser',
     icon: Eraser,
-    label: strings.game.eraserTool,
-    aria: strings.game.eraserAria(store.settings.eraserShortcut),
+    label: strings.a11y.game.eraserTool,
+    aria: strings.a11y.game.eraserAria(store.settings.eraserShortcut),
   },
   {
     key: 'fill',
     icon: PaintBucket,
-    label: strings.game.fillTool,
-    aria: strings.game.fillAria(store.settings.fillShortcut),
+    label: strings.a11y.game.fillTool,
+    aria: strings.a11y.game.fillAria(store.settings.fillShortcut),
   },
 ]
 
 type HistoryKey = 'undo' | 'redo' | 'clear'
 const HISTORY: ReadonlyArray<{ key: HistoryKey; icon: Component; label: string; aria: string }> = [
-  { key: 'undo', icon: RotateCcw, label: strings.game.undo, aria: strings.game.undoAria },
-  { key: 'redo', icon: RotateCw, label: strings.game.redo, aria: strings.game.redoAria },
-  { key: 'clear', icon: Trash2, label: strings.game.clear, aria: strings.game.clearAria },
+  { key: 'undo', icon: RotateCcw, label: strings.a11y.game.undo, aria: strings.a11y.game.undoAria },
+  { key: 'redo', icon: RotateCw, label: strings.a11y.game.redo, aria: strings.a11y.game.redoAria },
+  { key: 'clear', icon: Trash2, label: strings.a11y.game.clear, aria: strings.a11y.game.clearAria },
 ]
 
 const presetColors = store.config.drawing.colors
@@ -85,7 +85,7 @@ function runHistory(key: HistoryKey): void {
       <div
         v-if="visible"
         role="toolbar"
-        :aria-label="strings.game.toolbarAria"
+        :aria-label="strings.a11y.game.toolbarAria"
         class="flex items-center gap-[0.55em] rounded-[0.5em] border-[0.25cqh] border-navy bg-paper/95 px-[0.7em] py-[0.45cqh]"
       >
         <!-- 工具组：画笔 / 橡皮擦 / 填充 -->
@@ -110,7 +110,7 @@ function runHistory(key: HistoryKey): void {
           :key="paint"
           :paint="paint"
           :selected="color.toUpperCase() === paint"
-          :label="strings.game.presetColorAria(paint)"
+          :label="strings.a11y.game.presetColorAria(paint)"
           :disabled="!props.canDraw"
           @select="selectColor"
         />
@@ -118,8 +118,8 @@ function runHistory(key: HistoryKey): void {
           custom
           :paint="color"
           :selected="isCustomColor"
-          :label="strings.game.customColorTitle"
-          :aria-label="strings.game.customColorAria"
+          :label="strings.a11y.game.customColorTitle"
+          :aria-label="strings.a11y.game.customColorAria"
           :disabled="!props.canDraw"
           @select="selectColor"
         >

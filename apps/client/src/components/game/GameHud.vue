@@ -99,7 +99,7 @@ function toggleDrawerAnswerReveal(): void {
 /** 题目展示：画家按显隐状态在明文与遮罩间切换，猜词者恒为遮罩。 */
 const displayedAnswer = computed(() => {
   if (store.isDrawer && drawerRevealed.value && props.game?.answer) return props.game.answer
-  return props.game?.answerMask || strings.game.awaitingWord
+  return props.game?.answerMask || strings.ui.game.awaitingWord
 })
 
 /** 单按钮处理暂停与恢复切换：暂停时房主点击恢复，运行中点击暂停或请求暂停。 */
@@ -109,7 +109,9 @@ function handlePauseToggle(): void {
       void store.resume()
     }
   } else {
-    void store.pause(store.isHost ? strings.game.pauseReasonHost : strings.game.pauseReasonGuest)
+    void store.pause(
+      store.isHost ? strings.ui.game.pauseReasonHost : strings.ui.game.pauseReasonGuest,
+    )
   }
 }
 </script>
@@ -118,23 +120,23 @@ function handlePauseToggle(): void {
   <!-- 顶栏：ROUND 在最左，面板开关紧随其右；中间题目、右侧倒计时与系统操作 -->
   <header
     v-if="store.room"
-    :aria-label="strings.game.topBarAria"
+    :aria-label="strings.a11y.game.topBarAria"
     class="grid h-[11cqh] shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[1cqw] border-b-[0.45cqh] border-yellow bg-navy px-[1.2cqw] text-white"
   >
     <!-- 左：回合胶囊 + 聊天 / 工具面板开关（玩家面板为常驻左栏，无需开关） -->
     <div class="flex items-center gap-[0.5cqw]">
       <HudPill class="shrink-0">
-        <span class="text-sky text-fs-12">{{ strings.game.roundLabel }}</span>
+        <span class="text-sky text-fs-12">{{ strings.ui.game.roundLabel }}</span>
         <b class="text-white text-fs-24 leading-none tabular-nums">
           <span class="inline-block min-w-[2ch] text-center">{{ roundDisplay }}</span>
           <small class="text-fs-10 text-sky"
-            >{{ strings.game.roundSeparator }}{{ game?.totalRounds }}</small
+            >{{ strings.ui.game.roundSeparator }}{{ game?.totalRounds }}</small
           >
         </b>
       </HudPill>
       <SquareIconButton
         :active="chatOpen"
-        :label="strings.game.toggleChat"
+        :label="strings.a11y.game.toggleChat"
         @click="chatOpen = !chatOpen"
       >
         <MessageSquare />
@@ -142,7 +144,7 @@ function handlePauseToggle(): void {
       <SquareIconButton
         v-if="showTools"
         :active="toolsOpen"
-        :label="strings.game.toggleTools"
+        :label="strings.a11y.game.toggleTools"
         @click="toolsOpen = !toolsOpen"
       >
         <Palette />
@@ -158,8 +160,8 @@ function handlePauseToggle(): void {
         }"
         :role="store.isDrawer ? 'button' : undefined"
         :tabindex="store.isDrawer ? 0 : undefined"
-        :aria-label="store.isDrawer ? strings.game.toggleAnswerVisibilityAria : undefined"
-        :title="store.isDrawer ? strings.game.toggleAnswerVisibilityHint : undefined"
+        :aria-label="store.isDrawer ? strings.a11y.game.toggleAnswerVisibilityAria : undefined"
+        :title="store.isDrawer ? strings.a11y.game.toggleAnswerVisibilityHint : undefined"
         @click="toggleDrawerAnswerReveal"
         @keydown.enter.prevent="toggleDrawerAnswerReveal"
         @keydown.space.prevent="toggleDrawerAnswerReveal"
@@ -179,14 +181,14 @@ function handlePauseToggle(): void {
         <Clock3 class="h-[2.5cqh] w-[2.5cqh] shrink-0" />
         <template v-if="hasDeadline">
           <b class="min-w-0 text-center text-fs-24 tabular-nums">{{ secondsLeft }}</b>
-          <span class="shrink-0 text-fs-10 text-sky">{{ strings.game.secondsSuffix }}</span>
+          <span class="shrink-0 text-fs-10 text-sky">{{ strings.ui.game.secondsSuffix }}</span>
           <i
             class="absolute bottom-0 left-0 h-[0.45cqh] w-full origin-left"
             :class="isUrgent ? 'bg-yellow' : 'bg-green'"
             :style="{ transform: `scaleX(${progress})` }"
           ></i>
         </template>
-        <b v-else class="min-w-0 text-center text-fs-14">{{ strings.game.chooseNoLimit }}</b>
+        <b v-else class="min-w-0 text-center text-fs-14">{{ strings.ui.game.chooseNoLimit }}</b>
       </HudPill>
       <NetworkStatusButton
         :connected="store.connected"
@@ -205,21 +207,25 @@ function handlePauseToggle(): void {
         :disabled="store.room.phase === 'paused' && !store.isHost"
         :label="
           store.room.phase === 'paused'
-            ? strings.game.resumeAria
+            ? strings.a11y.game.resumeAria
             : store.isHost
-              ? strings.game.pauseAriaHost
-              : strings.game.pauseAriaGuest
+              ? strings.a11y.game.pauseAriaHost
+              : strings.a11y.game.pauseAriaGuest
         "
         @click="handlePauseToggle"
       >
         <CirclePlay v-if="store.room.phase === 'paused'" />
         <CirclePause v-else />
       </IconButton>
-      <IconButton :label="strings.game.settingsAria" @click="emit('settings')">
+      <IconButton :label="strings.a11y.game.settingsAria" @click="emit('settings')">
         <Settings />
       </IconButton>
       <IconButton
-        :label="isFullscreen ? strings.game.exitFullscreenAria : strings.game.enterFullscreenAria"
+        :label="
+          isFullscreen
+            ? strings.a11y.game.exitFullscreenAria
+            : strings.a11y.game.enterFullscreenAria
+        "
         @click="emit('toggle-fullscreen')"
       >
         <Minimize v-if="isFullscreen" /><Maximize v-else />

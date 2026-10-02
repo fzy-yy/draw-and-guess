@@ -35,10 +35,10 @@ const filteredPlayers = computed(() =>
 )
 
 const statusText = {
-  idle: strings.status.playerIdle,
-  in_room: strings.status.playerInRoom,
-  playing: strings.status.playerPlaying,
-  reconnecting: strings.status.playerReconnecting,
+  idle: strings.ui.status.playerIdle,
+  in_room: strings.ui.status.playerInRoom,
+  playing: strings.ui.status.playerPlaying,
+  reconnecting: strings.ui.status.playerReconnecting,
 } as const
 
 function openSettings(): void {
@@ -53,7 +53,7 @@ function openSettings(): void {
       <template #leading>
         <AvatarImage
           :avatar-id="store.profile.avatarId"
-          :label="strings.common.myAvatarAria"
+          :label="strings.a11y.common.myAvatarAria"
           class="h-[6cqh] w-[6cqh] border-sky"
         />
         <strong class="truncate">{{ store.profile.nickname }}</strong>
@@ -64,13 +64,13 @@ function openSettings(): void {
           <div class="flex flex-col leading-[1.05]">
             <b class="text-fs-18">{{ store.config.app.name }}</b>
             <span class="text-sky text-fs-10 tracking-[0.18em]">{{
-              strings.lobby.lobbyEnglishTitle
+              strings.ui.lobby.lobbyEnglishTitle
             }}</span>
           </div>
         </div>
       </template>
       <template #trailing>
-        <nav class="flex items-center gap-[0.7em]" :aria-label="strings.lobby.navAria">
+        <nav class="flex items-center gap-[0.7em]" :aria-label="strings.a11y.lobby.navAria">
           <NetworkStatusButton
             :connected="store.connected"
             :latency="store.latency"
@@ -82,7 +82,7 @@ function openSettings(): void {
             class="flex items-center gap-[0.4em] rounded-[0.55em] bg-white/5 px-[0.8em] py-[0.8cqh] text-sky hover:bg-white/10 transition-colors"
             @click="openSettings"
           >
-            <Settings /> {{ strings.lobby.settingsEntry }}
+            <Settings /> {{ strings.ui.lobby.settingsEntry }}
           </button>
         </nav>
       </template>
@@ -93,9 +93,12 @@ function openSettings(): void {
       class="flex min-h-0 min-w-0 flex-col border-r-[0.2cqh] border-line px-[2cqw] py-[3cqh]"
     >
       <div class="flex items-end justify-between">
-        <SectionHeader :eyebrow="strings.lobby.roomsLabel" :title="strings.lobby.roomsTitle" />
+        <SectionHeader
+          :eyebrow="strings.ui.lobby.roomsLabel"
+          :title="strings.ui.lobby.roomsTitle"
+        />
         <span class="text-muted text-fs-14">{{
-          strings.lobby.roomCount(store.presence.rooms.length)
+          strings.ui.lobby.roomCount(store.presence.rooms.length)
         }}</span>
       </div>
 
@@ -113,8 +116,8 @@ function openSettings(): void {
         >
           <CirclePlus class="first:h-[4.5cqh] first:w-[4.5cqh] first:text-yellow" />
           <span class="flex flex-col">
-            <b class="text-fs-18">{{ strings.lobby.createRoomTitle }}</b>
-            <small class="mt-[0.35cqh] text-sky">{{ strings.lobby.createRoomHint }}</small>
+            <b class="text-fs-18">{{ strings.ui.lobby.createRoomTitle }}</b>
+            <small class="mt-[0.35cqh] text-sky">{{ strings.ui.lobby.createRoomHint }}</small>
           </span>
           <ChevronRight class="last:ml-auto" />
         </button>
@@ -126,8 +129,8 @@ function openSettings(): void {
         >
           <KeyRound class="first:h-[4.5cqh] first:w-[4.5cqh] first:text-yellow" />
           <span class="flex flex-col">
-            <b class="text-fs-18">{{ strings.lobby.joinPrivateTitle }}</b>
-            <small class="mt-[0.35cqh] text-sky">{{ strings.lobby.joinPrivateHint }}</small>
+            <b class="text-fs-18">{{ strings.ui.lobby.joinPrivateTitle }}</b>
+            <small class="mt-[0.35cqh] text-sky">{{ strings.ui.lobby.joinPrivateHint }}</small>
           </span>
           <ChevronRight class="last:ml-auto" />
         </button>
@@ -135,7 +138,7 @@ function openSettings(): void {
 
       <div
         class="flex min-h-0 flex-1 flex-col gap-[0.85cqh] overflow-y-auto overscroll-contain"
-        :aria-label="strings.lobby.roomListAria"
+        :aria-label="strings.a11y.lobby.roomListAria"
       >
         <article
           v-for="publicRoom in store.presence.rooms"
@@ -148,7 +151,7 @@ function openSettings(): void {
           <div class="flex min-w-0 flex-col">
             <b class="truncate">{{ publicRoom.name }}</b>
             <span class="text-muted text-fs-12">{{
-              strings.lobby.roomMeta(
+              strings.ui.lobby.roomMeta(
                 publicRoom.hostName,
                 publicRoom.roundsPerPlayer,
                 publicRoom.drawSeconds,
@@ -156,7 +159,7 @@ function openSettings(): void {
             }}</span>
           </div>
           <span class="text-muted text-fs-12">{{
-            strings.status[
+            strings.ui.status[
               publicRoom.phase === 'waiting'
                 ? 'roomWaiting'
                 : publicRoom.joinPolicy === 'spectate'
@@ -179,10 +182,10 @@ function openSettings(): void {
           >
             {{
               publicRoom.phase !== 'waiting' && publicRoom.joinPolicy === 'spectate'
-                ? strings.lobby.spectateButton
+                ? strings.ui.lobby.spectateButton
                 : publicRoom.phase !== 'waiting' && publicRoom.joinPolicy === 'next_game'
-                  ? strings.lobby.waitNextGameButton
-                  : strings.lobby.joinButton
+                  ? strings.ui.lobby.waitNextGameButton
+                  : strings.ui.lobby.joinButton
             }}
           </AppButton>
         </article>
@@ -192,15 +195,18 @@ function openSettings(): void {
           class="grid h-full place-content-center gap-[0.8cqh] justify-items-center border-[0.2cqh] border-dashed border-line text-muted"
         >
           <Gamepad2 class="h-[6cqh] w-[6cqh] text-muted" />
-          <b>{{ strings.lobby.emptyRoomsTitle }}</b>
-          <span>{{ strings.lobby.emptyRoomsHint }}</span>
+          <b>{{ strings.ui.lobby.emptyRoomsTitle }}</b>
+          <span>{{ strings.ui.lobby.emptyRoomsHint }}</span>
         </div>
       </div>
     </section>
 
     <aside class="flex min-w-0 flex-col bg-paper px-[1.6cqw] pb-[2cqh] pt-[3cqh]">
       <div class="flex items-end justify-between">
-        <SectionHeader :eyebrow="strings.lobby.playersLabel" :title="strings.lobby.playersTitle" />
+        <SectionHeader
+          :eyebrow="strings.ui.lobby.playersLabel"
+          :title="strings.ui.lobby.playersTitle"
+        />
         <span
           class="grid h-[3cqh] w-[3cqh] place-items-center rounded-full bg-success-fg text-white text-fs-12"
         >
@@ -211,8 +217,8 @@ function openSettings(): void {
       <div class="mt-[1.6cqh] mb-[1.2cqh]">
         <SearchInput
           v-model="playerFilter"
-          :placeholder="strings.lobby.playerFilterPlaceholder"
-          :aria-label="strings.lobby.playerFilterAria"
+          :placeholder="strings.ui.lobby.playerFilterPlaceholder"
+          :aria-label="strings.a11y.lobby.playerFilterAria"
         />
       </div>
 
@@ -224,7 +230,7 @@ function openSettings(): void {
         >
           <AvatarImage
             :avatar-id="player.avatarId"
-            :label="strings.common.playerAvatarAria(player.nickname)"
+            :label="strings.a11y.common.playerAvatarAria(player.nickname)"
             class="h-[4.8cqh] w-[4.8cqh]"
           />
           <div class="flex min-w-0 flex-col">
@@ -239,7 +245,7 @@ function openSettings(): void {
         </div>
 
         <p v-if="!filteredPlayers.length" class="text-muted text-fs-12 leading-[1.6]">
-          {{ strings.lobby.discoveryEmpty }}
+          {{ strings.ui.lobby.discoveryEmpty }}
         </p>
       </div>
 
@@ -249,8 +255,8 @@ function openSettings(): void {
       >
         <Wifi />
         <span class="flex flex-col leading-[1.45]">
-          <b>{{ strings.lobby.lanTipTitle }}</b>
-          {{ strings.lobby.lanTipBody }}
+          <b>{{ strings.ui.lobby.lanTipTitle }}</b>
+          {{ strings.ui.lobby.lanTipBody }}
         </span>
       </footer>
     </aside>

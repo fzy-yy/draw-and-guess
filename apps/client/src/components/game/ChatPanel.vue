@@ -122,8 +122,10 @@ defineExpose({ focusInput })
   >
     <header class="flex items-center justify-between border-b-[0.18cqh] border-line pb-[1cqh]">
       <div>
-        <span class="text-blue text-fs-10 tracking-[0.15em]">{{ strings.game.liveChatLabel }}</span>
-        <h2 class="text-fs-18">{{ strings.game.chatTitle }}</h2>
+        <span class="text-blue text-fs-10 tracking-[0.15em]">{{
+          strings.ui.game.liveChatLabel
+        }}</span>
+        <h2 class="text-fs-18">{{ strings.ui.game.chatTitle }}</h2>
       </div>
       <!-- 当前角色标签：观战中 / 已猜中 / 作画中 / 猜词中（与得分条共用同一映射） -->
       <span class="bg-sky px-[0.6em] py-[0.35cqh] text-blue rounded-[99em] text-fs-10 font-bold">{{
@@ -156,12 +158,12 @@ defineExpose({ focusInput })
       >
         <!-- 玩家消息显示发送者昵称，昵称后接冒号分隔内容（分隔符来自 strings） -->
         <b v-if="message.playerId"
-          >{{ memberForMessage(message)?.nickname }}{{ strings.game.messageNameSeparator }}</b
+          >{{ memberForMessage(message)?.nickname }}{{ strings.ui.game.messageNameSeparator }}</b
         >
         <span>{{ message.text }}</span>
       </div>
       <div v-if="!messages.length" class="m-auto flex flex-col items-center text-muted text-fs-12">
-        <Send class="h-[4cqh] w-[4cqh]" /><span>{{ strings.game.noMessages }}</span>
+        <Send class="h-[4cqh] w-[4cqh]" /><span>{{ strings.ui.game.noMessages }}</span>
       </div>
     </div>
     <!-- 所有角色共享同一操作布局：上排快捷互动，下排输入；无猜词权限时仅禁用输入。 -->
@@ -169,12 +171,12 @@ defineExpose({ focusInput })
       <div
         class="mt-[0.55cqh] flex items-center gap-[0.45em]"
         role="group"
-        :aria-label="strings.game.chatActionsAria"
+        :aria-label="strings.a11y.game.chatActionsAria"
       >
         <!-- 表情反应面板：表情列表来自 @draw-guess/config -->
         <ActionPopover
-          :trigger-label="strings.game.reactionPickerAria"
-          :panel-aria-label="strings.game.reactionPanelAria"
+          :trigger-label="strings.a11y.game.reactionPickerAria"
+          :panel-aria-label="strings.a11y.game.reactionPanelAria"
           :disabled="!canSendPreset"
         >
           <template #trigger><SmilePlus class="h-[2.4cqh] w-[2.4cqh]" /></template>
@@ -185,7 +187,7 @@ defineExpose({ focusInput })
                 :key="reaction"
                 type="button"
                 class="grid h-[max(4.2cqh,16px)] w-[max(4.2cqh,16px)] place-items-center rounded-full border-[0.18cqh] border-control bg-line text-fs-18 hover:bg-sky"
-                :aria-label="strings.game.sendReactionAria(reaction)"
+                :aria-label="strings.a11y.game.sendReactionAria(reaction)"
                 @click="sendPresetAndClose(reaction, close)"
               >
                 {{ reaction }}
@@ -195,8 +197,8 @@ defineExpose({ focusInput })
         </ActionPopover>
         <!-- 快捷短语面板：原四个独立按钮合并为一个入口，短语列表可在 config 中增减 -->
         <ActionPopover
-          :trigger-label="strings.game.quickPhrasePickerAria"
-          :panel-aria-label="strings.game.quickPhrasePanelAria"
+          :trigger-label="strings.a11y.game.quickPhrasePickerAria"
+          :panel-aria-label="strings.a11y.game.quickPhrasePanelAria"
           :disabled="!canSendPreset"
           panel-class="w-[16cqw]"
         >
@@ -208,7 +210,7 @@ defineExpose({ focusInput })
                 :key="phrase"
                 type="button"
                 class="min-h-[3.4cqh] truncate rounded-[0.5em] bg-line px-[0.6em] py-[0.35cqh] text-left text-fs-12 font-bold text-navy hover:bg-sky"
-                :aria-label="strings.game.sendQuickPhraseAria(phrase)"
+                :aria-label="strings.a11y.game.sendQuickPhraseAria(phrase)"
                 :title="phrase"
                 @click="sendPresetAndClose(phrase, close)"
               >
@@ -219,7 +221,7 @@ defineExpose({ focusInput })
         </ActionPopover>
       </div>
       <form class="mt-[0.65cqh] flex gap-[0.5em]" @submit.prevent="sendGuess">
-        <label for="guess-input" class="sr-only">{{ strings.game.guessLabel }}</label>
+        <label for="guess-input" class="sr-only">{{ strings.ui.game.guessLabel }}</label>
         <AppInput
           id="guess-input"
           ref="guessInput"
@@ -228,13 +230,13 @@ defineExpose({ focusInput })
           class="min-w-0 flex-1"
           :maxlength="store.config.player.chatMaxLength"
           :disabled="!canGuess"
-          :placeholder="strings.game.guessPlaceholder"
+          :placeholder="strings.ui.game.guessPlaceholder"
         />
         <button
           type="submit"
           class="grid h-[5.2cqh] w-[5.2cqh] shrink-0 place-items-center rounded-[0.65em] bg-blue text-white disabled:cursor-not-allowed disabled:bg-line"
           :disabled="!canGuess || !guess.trim()"
-          :aria-label="strings.game.sendGuessAria"
+          :aria-label="strings.a11y.game.sendGuessAria"
         >
           <Send class="h-[2.5cqh] w-[2.5cqh]" />
         </button>

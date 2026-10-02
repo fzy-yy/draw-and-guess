@@ -122,7 +122,7 @@ async function leaveGame(): Promise<void> {
 /** 切换到全屏失败时给出统一提示（useFullscreen 内部已处理浏览器兼容，这里只兜底失败反馈）。 */
 function handleFullscreenToggle(): void {
   void toggleFullscreen().catch(() => {
-    store.notify(strings.game.fullscreenFailed, 'warning')
+    store.notify(strings.ui.game.fullscreenFailed, 'warning')
   })
 }
 </script>
@@ -177,7 +177,7 @@ function handleFullscreenToggle(): void {
             <span
               v-if="store.room.phase === 'choosing_word' && !store.isDrawer"
               class="text-fs-12"
-              >{{ strings.game.choosingHint }}</span
+              >{{ strings.ui.game.choosingHint }}</span
             >
           </div>
 
@@ -185,7 +185,7 @@ function handleFullscreenToggle(): void {
           <FloatingPanel
             v-model:open="chatOpen"
             v-model:position="chatPosition"
-            :title="strings.game.chatPanelTitle"
+            :title="strings.ui.game.chatPanelTitle"
             width-class="w-[24cqw]"
             height-class="h-full"
           >
@@ -221,7 +221,7 @@ function handleFullscreenToggle(): void {
     <!-- 对局内直接复用完整设置页；右上角放「退出游戏」，资料编辑能力按场景禁用。 -->
     <div v-if="showGameSettings" class="absolute inset-0 z-40">
       <SettingsView
-        :back-label="strings.settings.backToGame"
+        :back-label="strings.ui.settings.backToGame"
         :profile-editing-disabled="true"
         @back="showGameSettings = false"
       >
@@ -234,7 +234,7 @@ function handleFullscreenToggle(): void {
             :audio-feedback="null"
             @click="showLeaveGameConfirm = true"
           >
-            <LogOut />{{ strings.game.leaveGame }}
+            <LogOut />{{ strings.ui.game.leaveGame }}
           </AppButton>
         </template>
       </SettingsView>
@@ -243,10 +243,10 @@ function handleFullscreenToggle(): void {
     <!-- 确认弹窗：从对局设置页退出本局，层级高于设置页。 -->
     <ConfirmDialog
       v-model:open="showLeaveGameConfirm"
-      :title="strings.game.leaveGameTitle"
-      :body="strings.game.leaveGameBody"
-      :confirm-label="strings.game.confirmLeaveGame"
-      :cancel-label="strings.common.cancel"
+      :title="strings.ui.game.leaveGameTitle"
+      :body="strings.ui.game.leaveGameBody"
+      :confirm-label="strings.ui.game.confirmLeaveGame"
+      :cancel-label="strings.ui.common.cancel"
       :icon="LogOut"
       overlay-class="z-50"
       @confirm="leaveGame"
@@ -255,20 +255,20 @@ function handleFullscreenToggle(): void {
     <!-- 确认弹窗：清空画板 -->
     <ConfirmDialog
       v-model:open="showClearConfirm"
-      :title="strings.game.clearCanvasTitle"
-      :body="strings.game.clearCanvasBody"
-      :confirm-label="strings.game.confirmClear"
-      :cancel-label="strings.common.cancel"
+      :title="strings.ui.game.clearCanvasTitle"
+      :body="strings.ui.game.clearCanvasBody"
+      :confirm-label="strings.ui.game.confirmClear"
+      :cancel-label="strings.ui.common.cancel"
       :icon="Trash2"
       @confirm="clearDrawing"
     />
     <!-- 确认弹窗：提前结束本局 -->
     <ConfirmDialog
       v-model:open="showEndConfirm"
-      :title="strings.game.endGameTitle"
-      :body="strings.game.endGameBody"
-      :confirm-label="strings.game.confirmEnd"
-      :cancel-label="strings.common.cancel"
+      :title="strings.ui.game.endGameTitle"
+      :body="strings.ui.game.endGameBody"
+      :confirm-label="strings.ui.game.confirmEnd"
+      :cancel-label="strings.ui.common.cancel"
       :icon="X"
       @confirm="endGameEarly"
     />

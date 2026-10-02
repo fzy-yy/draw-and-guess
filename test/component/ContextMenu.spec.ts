@@ -58,7 +58,7 @@ describe('ContextMenu 受控渲染', () => {
 
     await view.rerender({ open: true })
 
-    expect(screen.getByRole('menu', { name: strings.common.contextMenuAria })).toBeTruthy()
+    expect(screen.getByRole('menu', { name: strings.a11y.common.contextMenuAria })).toBeTruthy()
     expect(screen.getAllByRole('menuitem').map((item) => item.textContent?.trim())).toEqual([
       '复制文本',
       '快速回应',

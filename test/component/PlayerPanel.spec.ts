@@ -31,9 +31,9 @@ describe('PlayerPanel 成员展示', () => {
     const wrapper = mountPanel()
     expect(wrapper.text()).toContain('房主')
     expect(wrapper.text()).toContain('猜词者')
-    expect(wrapper.text()).toContain(strings.common.scoreUnit(20))
-    expect(wrapper.text()).toContain(strings.status.roleDrawing)
-    expect(wrapper.text()).toContain(strings.status.roleGuessing)
+    expect(wrapper.text()).toContain(strings.ui.common.scoreUnit(20))
+    expect(wrapper.text()).toContain(strings.ui.status.roleDrawing)
+    expect(wrapper.text()).toContain(strings.ui.status.roleGuessing)
     wrapper.unmount()
   })
 
@@ -42,7 +42,7 @@ describe('PlayerPanel 成员展示', () => {
     roomStore.room = createRoomFixture('drawing')
 
     const wrapper = mountPanel()
-    expect(wrapper.text()).not.toContain(strings.room.meTag)
+    expect(wrapper.text()).not.toContain(strings.ui.room.meTag)
     wrapper.unmount()
   })
 
@@ -52,7 +52,7 @@ describe('PlayerPanel 成员展示', () => {
     roomStore.room.members.find((member) => member.id === GUEST_ID)!.guessed = true
 
     const wrapper = mountPanel()
-    expect(wrapper.text()).toContain(strings.status.roleGuessed)
+    expect(wrapper.text()).toContain(strings.ui.status.roleGuessed)
     wrapper.unmount()
   })
 
@@ -78,7 +78,7 @@ describe('PlayerPanel 成员展示', () => {
     expect(drawer.isDrawer).toBe(true)
 
     const wrapper = mountPanel()
-    expect(wrapper.text()).toContain(strings.status.roleDrawing)
+    expect(wrapper.text()).toContain(strings.ui.status.roleDrawing)
     wrapper.unmount()
   })
 })

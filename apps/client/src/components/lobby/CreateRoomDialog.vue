@@ -51,11 +51,11 @@ async function submitCreate(): Promise<void> {
     v-model:open="open"
     width-class="w-[58cqw]"
     labelledby="create-title"
-    :close-aria="strings.lobby.createDialogCloseAria"
+    :close-aria="strings.a11y.lobby.createDialogCloseAria"
   >
     <template #header>
-      <p class="eyebrow-light">{{ strings.lobby.newRoomLabel }}</p>
-      <h2 id="create-title">{{ strings.lobby.createDialogTitle }}</h2>
+      <p class="eyebrow-light">{{ strings.ui.lobby.newRoomLabel }}</p>
+      <h2 id="create-title">{{ strings.ui.lobby.createDialogTitle }}</h2>
     </template>
 
     <!-- 表单区在弹窗内自行滚动：低高度舞台下不会把底部操作按钮挤出可视区 -->
@@ -64,18 +64,18 @@ async function submitCreate(): Promise<void> {
     >
       <!-- 可见性单选组 -->
       <fieldset class="col-span-full m-0 grid grid-cols-2 gap-[0.8em] border-0 p-0">
-        <legend class="mb-[0.7cqh] font-bold">{{ strings.lobby.visibilityField }}</legend>
+        <legend class="mb-[0.7cqh] font-bold">{{ strings.ui.lobby.visibilityField }}</legend>
         <label
           v-for="option in [
             {
               value: 'public' as const,
-              title: strings.lobby.visibilityPublic,
-              hint: strings.lobby.visibilityPublicHint,
+              title: strings.ui.lobby.visibilityPublic,
+              hint: strings.ui.lobby.visibilityPublicHint,
             },
             {
               value: 'private' as const,
-              title: strings.lobby.visibilityPrivate,
-              hint: strings.lobby.visibilityPrivateHint,
+              title: strings.ui.lobby.visibilityPrivate,
+              hint: strings.ui.lobby.visibilityPrivateHint,
             },
           ]"
           :key="option.value"
@@ -95,7 +95,7 @@ async function submitCreate(): Promise<void> {
       </fieldset>
 
       <label class="flex flex-col gap-[0.55cqh] font-bold text-fs-14">
-        {{ strings.lobby.roomNameField }}
+        {{ strings.ui.lobby.roomNameField }}
         <AppInput
           v-model="createForm.name"
           :maxlength="store.config.player.roomNameMaxLength"
@@ -105,23 +105,25 @@ async function submitCreate(): Promise<void> {
 
       <RuleSelectField
         v-model="roomSettings.maxPlayers"
-        :label="strings.lobby.maxPlayersField"
+        :label="strings.ui.lobby.maxPlayersField"
         :options="playerOptions"
       />
 
       <p class="col-span-full m-0 text-muted text-fs-12 leading-[1.6]">
         {{
-          createForm.visibility === 'public' ? strings.lobby.publicNote : strings.lobby.privateNote
+          createForm.visibility === 'public'
+            ? strings.ui.lobby.publicNote
+            : strings.ui.lobby.privateNote
         }}
       </p>
     </div>
 
     <template #footer>
       <AppButton variant="secondary" type="button" audio-feedback="close" @click="open = false">
-        {{ strings.common.cancel }}
+        {{ strings.ui.common.cancel }}
       </AppButton>
       <AppButton type="button" :disabled="!createForm.name.trim()" @click="submitCreate">
-        {{ strings.lobby.createAndEnter }}
+        {{ strings.ui.lobby.createAndEnter }}
       </AppButton>
     </template>
   </BaseDialog>

@@ -34,8 +34,8 @@ const store = useGameStore()
   <section class="min-h-0 px-[5cqw] py-[3cqh]">
     <SettingsSectionHeader
       :icon="Keyboard"
-      :title="strings.settings.shortcutsTitle"
-      :intro="strings.settings.shortcutsIntro"
+      :title="strings.ui.settings.shortcutsTitle"
+      :intro="strings.ui.settings.shortcutsIntro"
     />
     <!-- 快捷键卡片：画板工具 + 面板显隐，三列网格按行排布，随舞台等比缩放 -->
     <div class="grid grid-cols-3 gap-[1em]">
@@ -54,7 +54,7 @@ const store = useGameStore()
           type="text"
           readonly
           class="h-[3.2em] w-[3.2em] rounded-[0.55em] bg-blue text-center text-white uppercase font-mono font-bold leading-none cursor-pointer focus:outline-[0.3cqh] focus:outline-focus focus:outline-offset-[0.2cqh]"
-          :aria-label="strings.settings.setShortcutAria(row.name)"
+          :aria-label="strings.a11y.settings.setShortcutAria(row.name)"
           @keydown.prevent="emit('capture', row.setting, $event)"
         />
       </label>
@@ -62,6 +62,6 @@ const store = useGameStore()
     <p v-if="error" class="mt-[1.2cqh] text-red font-bold" role="alert">
       {{ error }}
     </p>
-    <p class="mt-[1.2cqh] text-muted text-fs-12">{{ strings.settings.shortcutNote }}</p>
+    <p class="mt-[1.2cqh] text-muted text-fs-12">{{ strings.ui.settings.shortcutNote }}</p>
   </section>
 </template>
