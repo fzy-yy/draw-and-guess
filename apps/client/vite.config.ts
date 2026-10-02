@@ -31,6 +31,9 @@ export default defineConfig({
     // 默认 'dist'（相对 client 包根）；通过 CLIENT_OUT_DIR 覆盖为绝对临时路径。
     outDir: process.env.CLIENT_OUT_DIR ?? 'dist',
     emptyOutDir: true,
+    // 体积预算已随「局域网优先」移除（docs/adr/0049-lan-first-drop-size-and-coverage-gates.md）：
+    // 关闭 Vite 默认的 500 kB 分包告警，避免每次构建都提示本仓库已明确不再关心的体积问题。
+    chunkSizeWarningLimit: Number.POSITIVE_INFINITY,
   },
   resolve: {
     alias: {

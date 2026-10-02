@@ -21,7 +21,7 @@ export function useGuessConfetti(store: GuessConfettiStore): void {
     () => store.me?.guessed,
     (guessed, prev) => {
       if (guessed !== true || prev !== false) return
-      // 礼花模块按需下载，失败静默降级（见 utils/confetti.ts）
+      // 礼花发射器首次触发时创建并缓存（见 utils/confetti.ts）
       if (store.settings.animationsEnabled) void fireGuessCorrectConfetti()
     },
   )
