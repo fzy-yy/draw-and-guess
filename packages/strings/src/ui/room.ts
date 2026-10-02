@@ -1,7 +1,7 @@
 /**
  * 可见文案（按用途分层）：界面直接可见。
  *
- * 分类口径见 .scratch/strings-layering-and-maintenance/spec.md。
+ * 分类口径见 CONTEXT.md。
  */
 
 export const room = {
@@ -79,6 +79,8 @@ export const room = {
   vocabNoMatch: '没有符合条件的词条。',
   vocabAliasEmpty: '—',
   // —— 词库包选择与切换 ——
+  vocabSwitchToPackages: '切换词库选择',
+  vocabSwitchToWords: '返回词条列表',
   vocabPackageColumnName: '词库名称',
   vocabPackageColumnWordCount: '词数',
   vocabPackageColumnDescription: '词库描述',

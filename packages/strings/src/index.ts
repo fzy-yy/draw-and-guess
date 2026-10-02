@@ -6,7 +6,7 @@
  * - `strings.a11y`    —— 无障碍文案（aria-* 绑定与悬浮 title）；
  * - `serverStrings`   —— 服务端产生、经事件/ack 到达界面的文案（错误、通知等）。
  *
- * 分类口径见 .scratch/strings-layering-and-maintenance/spec.md；
+ * 分类口径见 CONTEXT.md；
  * 两者由源码扫描测试守护，禁止把可见文案塞进无障碍绑定。
  * 客户端与服务端都通过 `@draw-guess/strings` 导入。
  */

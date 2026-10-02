@@ -1,7 +1,7 @@
 /**
  * 无障碍文案（按用途分层）：供 aria-* 与悬浮 title 使用。
  *
- * 分类口径见 .scratch/strings-layering-and-maintenance/spec.md。
+ * 分类口径见 CONTEXT.md。
  */
 import { clampLatency } from '../internal/latency.ts'
 

@@ -63,6 +63,24 @@ describe('SQLite 迁移与事务边界', () => {
     expect(() => runMigrations(database)).toThrow(/旧版本数据库/)
   })
 
+  it('旧库版本号与新基线同号时按迁移名识别并报错', () => {
+    const db = database.connection
+    db.exec(`
+      CREATE TABLE schema_version (
+        version INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        applied_at INTEGER NOT NULL
+      );
+    `)
+    // 旧版 v1 名为 create-players，与新基线同为 1：只比版本号会误判为已应用。
+    db.prepare('INSERT INTO schema_version(version, name, applied_at) VALUES (?, ?, ?)').run(
+      1,
+      'create-players',
+      1,
+    )
+    expect(() => runMigrations(database)).toThrow(/旧版本数据库/)
+  })
+
   it('战报从表写入失败时回滚整局，重复归档保持单行并更新结果', () => {
     runMigrations(database)
     const db = database.connection

@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 /**
- * 文案分层护栏（见 .scratch/strings-layering-and-maintenance/spec.md）。
+ * 文案分层护栏（见 CONTEXT.md）。
  *
  * 契约：无障碍绑定（aria-* 家族、图标按钮的 label、原生元素的 title）引用的文案
  * 必须来自 `strings.a11y.*`，不得指向 `strings.ui.*`；`strings.ui.*` 只用于可见处。

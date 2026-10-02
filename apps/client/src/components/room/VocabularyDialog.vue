@@ -202,7 +202,7 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
         :eyebrow="strings.ui.room.vocabLabel"
         :title="
           viewMode === 'packages'
-            ? strings.a11y.room.vocabSwitchToPackages
+            ? strings.ui.room.vocabSwitchToPackages
             : isReadOnly
               ? strings.ui.room.vocabTitleReadonly
               : strings.ui.room.vocabTitle
@@ -310,7 +310,7 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
           audio-feedback="select"
           @click="switchViewMode('words')"
         >
-          {{ strings.a11y.room.vocabSwitchToWords }}
+          {{ strings.ui.room.vocabSwitchToWords }}
         </AppButton>
       </template>
       <!-- 词条管理模式：只读玩家仅提示不可编辑 -->

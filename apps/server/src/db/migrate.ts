@@ -3,8 +3,8 @@
  *
  * 原则：只持久化「低频关键态」，高频瞬态（画布笔画、聊天消息、计时器）不入库。
  * 项目处于开发阶段、无已发布用户，因此表结构只保留一条**最终 schema 基线**；
- * 历史上「建旧表/旧列再删除」的兼容迁移链已压缩掉（见 .scratch/strings-layering-and-maintenance/spec.md）。
- * 启动时若检测到旧版本数据库（schema_version 含未知版本），直接报错提示删除本地库，不做静默升级。
+ * 历史上「建旧表/旧列再删除」的兼容迁移链已压缩掉。
+ * 启动时若检测到旧版本数据库（schema_version 记录与基线不一致），直接报错提示删除本地库，不做静默升级。
  *
  * 设计取舍：
  * - 只保留玩家身份与完成局战报；
@@ -97,18 +97,21 @@ export function runMigrations(context: DatabaseContext): void {
       applied_at INTEGER NOT NULL
     );
   `)
-  const applied = (
-    database.prepare('SELECT version FROM schema_version').all() as Array<{ version: number }>
-  ).map((row) => row.version)
-  const known = new Set(MIGRATIONS.map((migration) => migration.version))
-  const unknown = applied.filter((version) => !known.has(version))
-  if (unknown.length > 0) {
+  const appliedRows = database.prepare('SELECT version, name FROM schema_version').all() as Array<{
+    version: number
+    name: string
+  }>
+  // 版本号与名称都要与基线一致：旧版 v1 的 name 是 'create-players'，与新基线同号却不同名，
+  // 只比版本号会把它误判为「已应用」而静默跳过迁移（评审发现）。
+  const known = new Map(MIGRATIONS.map((migration) => [migration.version, migration.name]))
+  const legacy = appliedRows.filter((row) => known.get(row.version) !== row.name)
+  if (legacy.length > 0) {
     throw new Error(
-      `检测到旧版本数据库（schema 版本 ${unknown.join('、')}）。本项目尚在开发阶段、已重置表结构，` +
+      `检测到旧版本数据库（schema 版本 ${legacy.map((row) => row.version).join('、')}）。本项目尚在开发阶段、已重置表结构，` +
         `请删除本地数据库文件（源码运行：apps/server/data/game.db；分发产物：data/game.db）后重启服务。`,
     )
   }
-  const appliedSet = new Set(applied)
+  const appliedSet = new Set(appliedRows.map((row) => row.version))
   for (const migration of MIGRATIONS) {
     if (appliedSet.has(migration.version)) continue
     // 每条迁移独立事务：失败回滚，避免半成品表结构。

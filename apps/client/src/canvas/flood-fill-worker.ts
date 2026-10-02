@@ -1,5 +1,8 @@
 import { applyFloodFillMeasured, type Rgba } from './flood-fill'
 
+/** Worker 路径的预期执行模式标记：由基准脚本导入用于校验（见 scripts/benchmark-flood-fill.mts）。 */
+export const FLOOD_FILL_EXECUTION_MODE = 'worker' as const
+
 export interface FloodFillWorkerRequest {
   type: 'fill'
   jobId: number

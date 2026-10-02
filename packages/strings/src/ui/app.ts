@@ -1,7 +1,7 @@
 /**
  * 可见文案（按用途分层）：界面直接可见。
  *
- * 分类口径见 .scratch/strings-layering-and-maintenance/spec.md。
+ * 分类口径见 CONTEXT.md。
  */
 
 export const app = {
