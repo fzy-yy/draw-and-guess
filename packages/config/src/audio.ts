@@ -25,9 +25,6 @@ export const soundCatalog = {
   game_result: { volumeMultiplier: 1.2, cooldownMs: 300, required: true },
 } as const
 
-export type SoundCatalog = typeof soundCatalog
-export type SoundCatalogKey = keyof SoundCatalog
-
 export const audio = {
   sounds: soundCatalog,
   /** 音量滑块（主音量/音效）共用的合法区间与步进。 */
@@ -42,5 +39,3 @@ export const audio = {
     preemptStrategy: 'round-robin',
   } as const,
 } as const
-
-export type SfxPoolPreemptStrategy = typeof audio.sfxPool.preemptStrategy

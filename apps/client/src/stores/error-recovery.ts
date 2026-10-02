@@ -21,7 +21,7 @@ type SpecialErrorCode = (typeof SPECIAL_ERROR_CODES)[number]
  * 补弹一次 Toast」；重试与否与这里无关——重试由调用方 request options 显式声明，
  * 且业务失败本来就不走传输重试。
  */
-export type ErrorRecoveryAction = 'require-upgrade' | 'warn-drawing-limit'
+type ErrorRecoveryAction = 'require-upgrade' | 'warn-drawing-limit'
 
 function isSpecialErrorCode(code: ErrorCode | undefined): code is SpecialErrorCode {
   return code !== undefined && (SPECIAL_ERROR_CODES as readonly ErrorCode[]).includes(code)

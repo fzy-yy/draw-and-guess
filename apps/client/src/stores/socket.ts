@@ -67,11 +67,10 @@ export interface GameTransportSocket extends PushBindingTarget, RequestAckTransp
  * 门禁域知识不再以 roomScoped 数组形态散在装配层——每个事件在注册表里显式声明策略，
  * 新增事件漏声明直接编译失败；旧「删数组条目 → 静默退化为裸 resync」的路径被类型封死。
  */
-export type PushRecovery =
-  'room-snapshot' | 'presence-refresh' | 'room-list-refresh' | 'generic-resync'
+type PushRecovery = 'room-snapshot' | 'presence-refresh' | 'room-list-refresh' | 'generic-resync'
 
 /** 推送注册表单条：解码后的载荷透传回调 + 非法载荷恢复策略。 */
-export interface PushBinding<E extends ServerPushEventName> {
+interface PushBinding<E extends ServerPushEventName> {
   /** 收到的即 `SERVER_PUSH_SCHEMAS[event]` 解出的 data 整体；字段解构归消费方。 */
   on(data: ServerPushData<E>): void
   recovery: PushRecovery

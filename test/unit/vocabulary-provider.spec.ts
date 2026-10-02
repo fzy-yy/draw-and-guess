@@ -1,14 +1,11 @@
 /**
- * SQLite 词库 Provider 专项单测（词库瘦身适配后）。
+ * SQLite 词库 Provider 专项单测。
  *
  * 覆盖点：
  * 1. 正常加载：只读出词面/分类/别称，meta 透传与版本哈希；
- * 2. **兼容路径**：旧词库文件仍带 difficulty/drawability/hint/enabled 列与 level_config /
- *    difficulty_enum / drawability_enum / enabled_enum 元数据键时照常加载，多余列既不读也不校验
- *    （词库表已删列，见 ADR-0048）；
- * 3. 严格校验（异常数据必须以中文 Error 阻止加载，绝不带病运行）：
+ * 2. 严格校验（异常数据必须以中文 Error 阻止加载，绝不带病运行）：
  *    category_enum 缺失、分类越界、词面为空/超长、别称超数/超长、主键与词面重复、词数不足；
- * 4. 内容哈希对词面/别称/分类变化的敏感性。
+ * 3. 内容哈希对词面/别称/分类变化的敏感性。
  *
  * 测试词库只写系统临时目录，每例结束即删除；表结构刻意不带 CHECK 约束，
  * 以便验证「Provider 是异常数据的最后防线」而非依赖数据库约束。
@@ -20,103 +17,25 @@ import { tmpdir } from 'node:os'
 import { createDatabase } from '../../apps/server/src/db/index.ts'
 import { SqliteProvider } from '../../apps/server/src/vocabulary/sqlite-provider.ts'
 
-/** 测试词条输入：与旧词库 words 表列一致（遗留列仍在，用于覆盖兼容路径）。 */
+/** 测试词条输入：与当前精简后的 words 表列一致。 */
 interface WordInput {
   id: number
   text: string
   category: string
-  difficulty: number
-  drawability: number
-  enabled: number
   aliases: string[]
-  hint: string
 }
 
-/** 默认合法词条：7 条（minWords=6 通过）；legacy 列 enabled 仍写出，用于证明它不再参与过滤。 */
+/** 默认合法词条：7 条（minWords=6 通过）。 */
 function defaultWords(): WordInput[] {
   return [
-    {
-      id: 1,
-      text: '猫',
-      category: '动物',
-      difficulty: 1,
-      drawability: 1,
-      enabled: 1,
-      aliases: ['小猫'],
-      hint: '喵喵叫的宠物',
-    },
-    {
-      id: 2,
-      text: '狗',
-      category: '动物',
-      difficulty: 2,
-      drawability: 1,
-      enabled: 1,
-      aliases: [],
-      hint: '人类的好朋友',
-    },
-    {
-      id: 3,
-      text: '树',
-      category: '植物',
-      difficulty: 3,
-      drawability: 2,
-      enabled: 1,
-      aliases: [],
-      hint: '秋天会落叶',
-    },
-    {
-      id: 4,
-      text: '山',
-      category: '自然',
-      difficulty: 4,
-      drawability: 3,
-      enabled: 1,
-      aliases: [],
-      hint: '',
-    },
-    {
-      id: 5,
-      text: '河流',
-      category: '自然',
-      difficulty: 5,
-      drawability: 2,
-      enabled: 1,
-      aliases: [],
-      hint: '水往这里流',
-    },
-    {
-      id: 6,
-      text: '电脑',
-      category: '电器',
-      difficulty: 2,
-      drawability: 4,
-      enabled: 1,
-      aliases: [],
-      hint: '可以打字',
-    },
-    {
-      id: 7,
-      text: '遗留启用位为零的词',
-      category: '动物',
-      difficulty: 1,
-      drawability: 1,
-      enabled: 0,
-      aliases: [],
-      hint: '启用位列已退出领域模型，写入 0 也照常加载',
-    },
+    { id: 1, text: '猫', category: '动物', aliases: ['小猫'] },
+    { id: 2, text: '狗', category: '动物', aliases: [] },
+    { id: 3, text: '树', category: '植物', aliases: [] },
+    { id: 4, text: '山', category: '自然', aliases: [] },
+    { id: 5, text: '河流', category: '自然', aliases: [] },
+    { id: 6, text: '电脑', category: '电器', aliases: [] },
+    { id: 7, text: '手机', category: '电器', aliases: [] },
   ]
-}
-
-/** 旧词库遗留的 level_config：Provider 已不再读取，夹具写出只为覆盖兼容路径。 */
-function legacyLevelConfig(): Record<string, { time_limit: number; score_weight: number }> {
-  return {
-    '1': { time_limit: 45, score_weight: 5 },
-    '2': { time_limit: 60, score_weight: 6 },
-    '3': { time_limit: 75, score_weight: 6 },
-    '4': { time_limit: 75, score_weight: 7 },
-    '5': { time_limit: 90, score_weight: 9 },
-  }
 }
 
 interface FixtureOptions {
@@ -131,7 +50,7 @@ interface FixtureOptions {
 let testDirectory = ''
 let counter = 0
 
-/** 在临时目录生成一份「旧版词库」库文件（带全部遗留列与元数据键）并返回其绝对路径。 */
+/** 在临时目录生成一份测试词库库文件（当前精简口径）并返回其绝对路径。 */
 function createVocabDb(options: FixtureOptions = {}): string {
   const file = join(testDirectory, `vocab-${(counter += 1)}.db`)
   // 经服务端 db 上下文取连接：pnpm 严格 node_modules 下测试目录不能直接 import better-sqlite3
@@ -143,12 +62,7 @@ function createVocabDb(options: FixtureOptions = {}): string {
         id INTEGER PRIMARY KEY,
         text TEXT NOT NULL,
         category TEXT NOT NULL,
-        difficulty INTEGER NOT NULL,
-        drawability INTEGER NOT NULL,
-        enabled INTEGER NOT NULL,
-        aliases TEXT NOT NULL,
-        hint TEXT NOT NULL,
-        updated_at TEXT NOT NULL DEFAULT ''
+        aliases TEXT NOT NULL
       );
     `)
     const meta: Record<string, string> = {
@@ -157,11 +71,6 @@ function createVocabDb(options: FixtureOptions = {}): string {
       version: '1.0.0',
       updated_at: '2026-09-23',
       category_enum: JSON.stringify(['动物', '植物', '自然', '电器']),
-      // 以下三个键是旧词库遗留：Provider 不再读取，写出只为覆盖兼容路径
-      difficulty_enum: JSON.stringify([1, 2, 3, 4, 5]),
-      drawability_enum: JSON.stringify([1, 2, 3, 4, 5]),
-      enabled_enum: JSON.stringify([0, 1]),
-      level_config: JSON.stringify(legacyLevelConfig()),
       ...(options.meta ?? {}),
     }
     if (options.removeMeta) for (const key of options.removeMeta) delete meta[key]
@@ -175,20 +84,10 @@ function createVocabDb(options: FixtureOptions = {}): string {
         ? options.words(defaultWords())
         : (options.words ?? defaultWords())
     const insertWord = context.connection.prepare(
-      `INSERT INTO words(id, text, category, difficulty, drawability, enabled, aliases, hint)
-       VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
+      'INSERT INTO words(id, text, category, aliases) VALUES(?, ?, ?, ?)',
     )
     for (const word of words) {
-      insertWord.run(
-        word.id,
-        word.text,
-        word.category,
-        word.difficulty,
-        word.drawability,
-        word.enabled,
-        JSON.stringify(word.aliases),
-        word.hint,
-      )
+      insertWord.run(word.id, word.text, word.category, JSON.stringify(word.aliases))
     }
   } finally {
     context.close()
@@ -211,9 +110,8 @@ afterEach(() => {
 })
 
 describe('SqliteProvider 正常加载', () => {
-  it('只读出词面/分类/别称，遗留的 enabled 列不再参与过滤', async () => {
+  it('只读出词面/分类/别称', async () => {
     const loaded = await load(createVocabDb())
-    // 7 条全部加载：词库已删除「是否启用」概念，旧库里的 enabled=0 不再被解释为下架
     expect(loaded.words).toHaveLength(7)
     expect(loaded.words.map((word) => word.id)).toEqual([
       'sqlite:1',
@@ -224,7 +122,7 @@ describe('SqliteProvider 正常加载', () => {
       'sqlite:6',
       'sqlite:7',
     ])
-    // 词条只剩词面/分类/别称/ID：难度、可绘制性与提示已随词库瘦身移除
+    // 词条只剩词面/分类/别称/ID
     expect(loaded.words[0]).toEqual({
       id: 'sqlite:1',
       text: '猫',
@@ -233,17 +131,6 @@ describe('SqliteProvider 正常加载', () => {
     })
     // 版本号为 12 位 hex 内容哈希
     expect(loaded.version).toMatch(/^[0-9a-f]{12}$/)
-  })
-
-  it('旧词库仍带难度/可绘制性/提示列与 level_config 元数据时照常加载', async () => {
-    // createVocabDb 默认就写出全部遗留列与元数据键：加载成功即证明「多余列不报错」
-    const loaded = await load(createVocabDb())
-    expect(loaded.words).toHaveLength(7)
-    expect(loaded.meta).not.toHaveProperty('difficultyEnum')
-    expect(loaded.meta).not.toHaveProperty('drawabilityEnum')
-    expect(loaded.meta).not.toHaveProperty('levelConfig')
-    expect(loaded.words[0]).not.toHaveProperty('difficulty')
-    expect(loaded.words[0]).not.toHaveProperty('hint')
   })
 
   it('meta 透传名称/版本/分类白名单与词数', async () => {

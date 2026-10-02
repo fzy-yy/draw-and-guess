@@ -207,8 +207,7 @@ export class SessionService {
     this.context.repositories.players.deleteStaleDisconnected(
       this.context.clock.now() - APP_CONFIG.network.reconnectGraceMs,
     )
-    // 房间从不跨进程恢复；全部玩家视为断线，开始新的身份宽限计时
-    //（旧版 room_id 兼容列已随迁移 v7 删除，此处不再涉及）。
+    // 房间从不跨进程恢复；全部玩家视为断线，开始新的身份宽限计时。
     this.context.repositories.players.markAllDisconnected(this.context.clock.now())
   }
 

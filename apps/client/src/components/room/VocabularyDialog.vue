@@ -251,7 +251,7 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
               <ListFilter v-else class="h-[2.2cqh] w-[2.2cqh]" />
             </RoundIconButton>
           </div>
-          <!-- 字段筛选：分类 / 难度 / 可绘制性（多选，仅词条模式可用）；纯图标 + 悬浮说明 -->
+          <!-- 字段筛选：分类（多选，仅词条模式可用）；纯图标 + 悬浮说明 -->
           <div v-if="viewMode === 'words'" class="flex w-1/2 min-w-0 items-center gap-[0.45em]">
             <MultiSelectPopover
               v-for="filter in filterDefs"

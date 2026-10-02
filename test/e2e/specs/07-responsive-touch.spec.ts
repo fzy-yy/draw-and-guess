@@ -320,7 +320,7 @@ for (const baseline of BASELINES) {
       await assertStageFitsViewport(gamePage, baseline)
       const hud = gamePage.locator('main > header').first()
       await assertNoOverflow(hud, '对局 HUD')
-      // 浮层布局：工具条是 role=toolbar，玩家/聊天面板是各自浮层内的 aside（不再固定在 main 网格列里）
+      // 浮层布局：工具条是 role=toolbar，聊天面板是浮层内的 aside，玩家面板是常驻左栏
       await assertNoOverflow(gamePage.getByRole('toolbar', { name: '绘图工具栏' }), '对局工具栏')
       await assertNoOverflow(gamePage.getByLabel('玩家', { exact: true }), '对局玩家面板')
       await assertNoOverflow(gamePage.locator('aside:has(form:has(#guess-input))'), '对局聊天面板')

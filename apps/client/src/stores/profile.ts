@@ -9,7 +9,7 @@ import { EVENTS, RecoveryTokenSchema, isAvatarId, type Profile } from '@draw-gue
 import { strings } from '@draw-guess/strings'
 import { useGameTransport } from '@/application/game-transport'
 
-export interface StoredProfile extends Profile {
+interface StoredProfile extends Profile {
   /** 只有服务端签发且不会公开的恢复令牌可用于接管既有 UUID 身份。 */
   recoveryToken?: string
 }
@@ -22,7 +22,7 @@ function randomItem<T>(items: readonly T[]): T {
 }
 
 /** 从 localStorage 加载本地资料；损坏时回退到随机资料。 */
-export function loadProfile(): StoredProfile {
+function loadProfile(): StoredProfile {
   try {
     const stored = localStorage.getItem(APP_CONFIG.app.storageKey)
     if (stored) {
@@ -30,7 +30,7 @@ export function loadProfile(): StoredProfile {
       const raw: unknown = JSON.parse(stored)
       const parsed: Record<string, unknown> =
         typeof raw === 'object' && raw !== null ? { ...raw } : {}
-      // 头像只接受内置编号；旧版 avatarColor 或损坏资料会安全迁移为随机 SVG 头像。
+      // 头像只接受内置编号；缺失或损坏的值回退为随机 SVG 头像。
       const avatarId = isAvatarId(parsed.avatarId)
         ? parsed.avatarId
         : randomItem(APP_CONFIG.player.avatarIds)

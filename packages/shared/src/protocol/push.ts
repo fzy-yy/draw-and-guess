@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { EVENTS } from '../events.ts'
-import { AvatarIdSchema, RoomPhaseSchema, WordIdSchema } from './base.ts'
+import { AvatarIdSchema, JoinPolicySchema, RoomPhaseSchema, WordIdSchema } from './base.ts'
 import { PROTOCOL_VERSION, ROOM_CLOSE_CODES } from './constants.ts'
 import { FillCommandSchema, StrokeSchema } from './drawing.ts'
 import { RoomSettingsSchema } from './room.ts'
@@ -27,7 +27,7 @@ export const PublicRoomSchema = z
     phase: RoomPhaseSchema,
     roundsPerPlayer: z.number().int().positive(),
     drawSeconds: z.number().int().positive(),
-    joinPolicy: z.enum(['forbid', 'spectate', 'next_game']),
+    joinPolicy: JoinPolicySchema,
   })
   .strict()
 export const MemberStatsSchema = z

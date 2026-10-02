@@ -16,7 +16,7 @@ type StrokeStyle = Pick<Stroke, 'tool' | 'color' | 'width'>
  * 会话只描述「笔尖发生了什么」，不持有画布上下文与簿记——预览像素、世代取代、
  * 失败回滚重放全部由端口实现方裁决（ADR-0018）。
  */
-export interface StrokePreviewSurface {
+interface StrokePreviewSurface {
   /** 起笔：登记预览并绘制首个圆点。 */
   beginPreview(id: string, style: StrokeStyle, point: DrawPoint): void
   /** 移动：绘制新增段并同步预览簿记。 */

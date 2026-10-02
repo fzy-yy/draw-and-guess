@@ -14,7 +14,7 @@ import { serverStrings } from '@draw-guess/strings'
 import { GameError } from '../../errors.ts'
 
 /** 自定义词在候选池里的分类标记：不参与词库分类白名单，只为统一候选对象形状。 */
-export const CUSTOM_WORD_CATEGORY = '自定义'
+const CUSTOM_WORD_CATEGORY = '自定义'
 
 /**
  * 禁止出现的字符：控制字符、格式字符（含零宽连接符）与 emoji。

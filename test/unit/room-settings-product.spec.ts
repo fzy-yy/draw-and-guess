@@ -78,7 +78,7 @@ describe('房间规则产品闭环', () => {
     const answer = game.candidates[0]
     if (!answer) throw new Error('测试词库未生成候选词')
     harness.service.chooseWord(game.drawerId, game.roundId, answer.id)
-    // 测试词库词条自带难度派生时限，但回合时长只认房间档位（见 ADR-0046）
+    // 回合时长只认房间档位（见 ADR-0046）
     expect(game.roundDurationMs).toBe(150 * 1_000)
   })
 

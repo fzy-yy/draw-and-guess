@@ -17,9 +17,9 @@ import { reactive } from 'vue'
 import { nanoid } from 'nanoid'
 import { APP_CONFIG } from '@draw-guess/config'
 
-export type ToastType = 'success' | 'warning' | 'error'
+type ToastType = 'success' | 'warning' | 'error'
 
-export interface ToastItem {
+interface ToastItem {
   /** 稳定 toast 唯一 ID（nanoid，用作 v-for key / 元素 ref 定位） */
   id: string
   /** 去重 key：`${type}:${text}`，同 key 只保留一条 */

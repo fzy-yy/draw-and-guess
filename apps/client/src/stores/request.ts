@@ -16,7 +16,7 @@ import { reactive, readonly } from 'vue'
 import { decodeClientResponse } from './response-protocol.ts'
 
 /** 请求选项：传输重试与失败 Toast 归属为两个独立开关（语义拆分见 ADR-0022）。 */
-export interface RequestOptions {
+interface RequestOptions {
   /**
    * 传输故障（超时/断线）时以同一 requestId 自动重试；默认启用。
    * 高频绘图命令与画布控制（撤销/重做/清空）显式关闭——它们的收敛靠权威快照与
@@ -76,7 +76,7 @@ export interface Requester {
   ): Promise<RequestResult<ClientResponse<E>>>
 }
 
-export interface ManagedRequester extends Requester {
+interface ManagedRequester extends Requester {
   state: Readonly<RequestState>
   cancelAll(): void
   destroy(): void

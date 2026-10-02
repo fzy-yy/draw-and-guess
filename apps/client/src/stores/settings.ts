@@ -9,7 +9,7 @@ import { EVENTS } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { useGameTransport } from '@/application/game-transport'
 
-export type LocalSettings = {
+type LocalSettings = {
   -readonly [
     Key in keyof typeof PUBLIC_CONFIG.localSettings
   ]: (typeof PUBLIC_CONFIG.localSettings)[Key] extends string

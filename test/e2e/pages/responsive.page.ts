@@ -96,7 +96,7 @@ export async function assertNotOccluded(locator: Locator, label: string): Promis
 
 /**
  * 容器不得裁切内容：仅在容器该轴不可滚动时检查。
- * 可滚动（overflow auto/scroll）是紧凑布局允许的「局部滚动」策略，不算裁切。
+ * 可滚动（overflow auto/scroll）不算裁切。
  */
 export async function assertNoOverflow(
   locator: Locator,

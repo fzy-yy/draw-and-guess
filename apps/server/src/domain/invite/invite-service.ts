@@ -11,7 +11,7 @@ type InviteStatus = 'accepted' | 'declined' | 'expired'
  * 仅暴露本用例需要的数据与副作用端口；运行时出口复用共享接口（见 domain/shared-ports.ts），
  * 由应用层连接跨用例动作。
  */
-export interface InviteContext extends RuntimePorts {
+interface InviteContext extends RuntimePorts {
   invites: Map<string, InviteSecret>
   getMembership(playerId: string): { room: RoomSecret }
   getPlayer(playerId: string): PlayerSecret

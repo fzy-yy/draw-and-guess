@@ -5,13 +5,13 @@
  */
 import { createBoundedDiagnostics } from '@/utils/bounded-diagnostics'
 
-export type FillDiagnosticReason =
+type FillDiagnosticReason =
   /** Worker 运行失败、由主线程对同一 ImageData 降级成功：画布结果正确，但线程已被终止重建。 */
   | 'worker_degraded'
   /** 这次填充无法在本地完成（Worker 与主线程降级都失败，或结果无法写回）：需要请求权威全量快照。 */
   | 'fill_unavailable'
 
-export interface FillDiagnostic {
+interface FillDiagnostic {
   reason: FillDiagnosticReason
   receivedAt: number
 }

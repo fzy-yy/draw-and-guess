@@ -212,7 +212,7 @@ export class RoundMachine {
     if (member.guessedAt) return // 防重复计分
     member.guessedAt = this.service.clock.now()
     game.correctOrder.push(member.playerId)
-    // 按可玩成员数（排除观战）计算速度奖励和顺序奖励，累加到成员总分（scoring 模块统一口径）
+    // 按猜中顺序计算本回合得分（固定 100 分制，scoring 模块统一口径），累加到成员总分
     const detail = buildGuessDetail({
       playerId: member.playerId,
       orderIndex: game.correctOrder.length,
@@ -252,9 +252,7 @@ export class RoundMachine {
     this.clearHintTimers(game)
     this.service.scheduler.clear(game.timer)
     if (wasPaused) delete game.pauseState
-    // 直接取用猜中当时入账的明细，不事后重算：重算会因暂停/恢复重置 phaseStartedAt
-    // （使 elapsedMs 变负）或因成员中途离开改变可玩人数（使顺序奖归零），
-    // 导致结算展示的分数与实际入账不一致。
+    // 直接取用猜中当时入账的明细，不事后重算，保证结算展示的分数与实际入账一致。
     const details = [...game.correctDetails]
     // 画家得分：每个猜中者 20 分、单回合上限 100（scoring 模块统一）
     const drawerScore = buildDrawerScore({ game, drawerAbandoned })
@@ -525,7 +523,7 @@ export class RoundMachine {
     return result
   }
 
-  /** 候选词多样性抽样：保证候选词集合在难度（1~5星阶梯）和类别（无重复分类）上均匀随机分布。 */
+  /** 候选词多样性抽样：保证候选词集合在类别（无重复分类）上均匀随机分布。 */
   private sampleDiverseCandidates(pool: VocabularyWord[], count: number): VocabularyWord[] {
     const selected = selectDiverseCandidates({ pool: this.shuffle([...pool]), count })
     return pool.length <= count ? selected : this.shuffle(selected)

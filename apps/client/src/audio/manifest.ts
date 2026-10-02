@@ -44,10 +44,10 @@ type WidenLiteral<T> = T extends boolean
 export type SoundMeta = { readonly [K in keyof CatalogEntry]: WidenLiteral<CatalogEntry[K]> }
 
 /** 键的可用性状态。 */
-export type SoundAvailability = 'available' | 'missing'
+type SoundAvailability = 'available' | 'missing'
 
 /** 清单中单个键的条目。 */
-export interface SoundManifestEntry {
+interface SoundManifestEntry {
   key: string
   required: boolean
   availability: SoundAvailability
@@ -60,7 +60,7 @@ export interface SoundManifestEntry {
 }
 
 /** 清单校验发现的问题。 */
-export interface SoundManifestIssue {
+interface SoundManifestIssue {
   kind: 'required-missing' | 'optional-missing' | 'duplicate-extension'
   key: string
   /** 可直接定位到缺失/冲突文件的描述。 */

@@ -29,8 +29,8 @@ import ProfileView from '@/views/ProfileView.vue'
 import LobbyView from '@/views/LobbyView.vue'
 import RoomView from '@/views/RoomView.vue'
 import GameView from '@/views/GameView.vue'
-// 设置页随入口静态加载：懒加载首开会产生「视图真空帧」露出舞台近白底板（白闪），
-// 且原「重试」按钮在真失败时不渲染；取舍与理由见 docs/adr/0014-settings-view-static-import.md
+// 设置页随入口静态导入（前端已无任何懒加载）：避免懒加载首开产生「视图真空帧」露出舞台近白底板的白闪；
+// 取舍见 docs/adr/0049-lan-first-drop-size-and-coverage-gates.md
 import SettingsView from '@/views/SettingsView.vue'
 
 // 获取全局游戏 store（连接、身份、房间、对局状态）

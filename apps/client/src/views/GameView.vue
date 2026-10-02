@@ -1,7 +1,7 @@
 <!--
-  对局统一骨架（浮层布局）：画家与猜词者共享顶栏、铺满画布与浮层面板，仅按服务端角色快照切换权限。
-  结构为「固定顶栏 + 铺满画布（黑色描边 / 圆角 / 极微边距）+ 可拖动浮层面板 + 底部横向工具条」，
-  取代旧的 3×3 网格；画布、浮层与工具条的定位/交互分别拆入 components/game/ 下的子组件。
+  对局统一骨架：画家与猜词者共享顶栏、画布与浮层，仅按服务端角色快照切换权限。
+  结构为「固定顶栏 + 铺满画布（黑色描边 / 直角 / 极微边距）+ 常驻左栏玩家面板 + 可拖动浮层聊天面板 + 底部横向工具条」，
+  取代旧的 3×3 网格；画布、面板与工具条的定位/交互分别拆入 components/game/ 下的子组件。
   本文件只保留画布装配、弹窗编排与浏览器级状态（全屏/弹窗开关/颜色线宽工具）。
 -->
 <script setup lang="ts">
@@ -30,7 +30,7 @@ import { useGuessConfetti } from '@/composables/useGuessConfetti'
 // 填充 ack 类型与提交锁语义归 useFillSession 单点定义（GameCanvas 同源导入）。
 import type { FillAck } from '@/composables/useFillSession'
 import type { RequestResult } from '@/stores/request'
-// 对局内设置页复用同一个静态导入的视图组件（首开白闪取舍见 docs/adr/0014-settings-view-static-import.md）
+// 对局内设置页复用同一个静态导入的视图组件（静态导入取舍见 docs/adr/0049-lan-first-drop-size-and-coverage-gates.md）
 import SettingsView from '@/views/SettingsView.vue'
 
 const store = useGameStore()

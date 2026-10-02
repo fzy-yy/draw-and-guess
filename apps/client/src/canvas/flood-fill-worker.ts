@@ -1,7 +1,5 @@
 import { applyFloodFillMeasured, type Rgba } from './flood-fill'
 
-export const FLOOD_FILL_EXECUTION_MODE = 'worker' as const
-
 export interface FloodFillWorkerRequest {
   type: 'fill'
   jobId: number
@@ -26,9 +24,9 @@ export interface FloodFillWorkerResponse {
 }
 
 /** 本次填充实际使用的执行路径：worker 为线程计算，main_thread 为环境不支持或降级后计算。 */
-export type FloodFillExecutionMode = 'worker' | 'main_thread'
+type FloodFillExecutionMode = 'worker' | 'main_thread'
 
-export interface FloodFillJobResult {
+interface FloodFillJobResult {
   image: ImageData
   filledPixels: number
   /** 观测/测试接缝：栈峰值字节仅供基准脚本与 spec 断言消费；生产渲染路径（replay-machine 的端口契约）不读取。 */
@@ -39,7 +37,7 @@ export interface FloodFillJobResult {
   degraded: boolean
 }
 
-export type FloodFillFailureReason =
+type FloodFillFailureReason =
   /** 任务被取消或被新任务取代：结果作废，不是故障。 */
   | 'cancelled'
   /** Worker 与主线程降级都无法完成：调用方需请求权威全量快照。 */

@@ -2,7 +2,7 @@ import { APP_CONFIG } from './config/index.ts'
 import { isPunctuationOrSpace } from '@draw-guess/shared'
 
 /** 回合逐步提示调度的纯计算层：不创建定时器、不修改房间状态，便于独立测试。 */
-export interface HintScheduleInput {
+interface HintScheduleInput {
   totalMs: number
   currentRemainingMs: number
   progressiveHints: boolean
@@ -10,7 +10,7 @@ export interface HintScheduleInput {
   revealedCount: number
 }
 
-export interface HintSchedule {
+interface HintSchedule {
   progressiveDelays: number[]
 }
 

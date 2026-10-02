@@ -13,7 +13,7 @@ import type { RoomPhase } from '@draw-guess/shared'
  * paused 是可恢复的对局暂停态，因此计入进行中；starting 是开局倒计时，尚未正式
  * 开赛但已进入对局上下文（大厅状态、提前结束守卫都依赖它）。
  */
-export const IN_MATCH_PHASES = [
+const IN_MATCH_PHASES = [
   'starting',
   'choosing_word',
   'drawing',
@@ -25,7 +25,7 @@ export const IN_MATCH_PHASES = [
  * 可暂停阶段：starting 不可暂停——若允许会先清除倒计时再转换失败，
  * 留下无人推进的僵死阶段（见 round-machine 的暂停实现注释）。
  */
-export const PAUSABLE_PHASES = [
+const PAUSABLE_PHASES = [
   'choosing_word',
   'drawing',
   'round_result',
@@ -35,7 +35,7 @@ export const PAUSABLE_PHASES = [
  * 允许进入回合结算的阶段：作画中，或「作画中进入的暂停」。
  * 暂停前阶段是否为 drawing 由调用方另行守卫（暂停也可能发生在选词/结算期）。
  */
-export const ROUND_SETTLE_PHASES = ['drawing', 'paused'] as const satisfies readonly RoomPhase[]
+const ROUND_SETTLE_PHASES = ['drawing', 'paused'] as const satisfies readonly RoomPhase[]
 
 /** 阶段是否属于进行中的对局（含暂停态）。 */
 export function isInMatchPhase(phase: RoomPhase): boolean {

@@ -200,7 +200,7 @@ const visibleRows = computed(() =>
               :key="column.key"
               class="min-w-0 px-[0.6em] py-[0.4cqh] align-middle"
             >
-              <!-- 富内容插槽：调用方可为任意列提供自定义渲染（如难度星级、分类徽章） -->
+              <!-- 富内容插槽：调用方可为任意列提供自定义渲染（如分类徽章、别称列表） -->
               <slot :name="`cell-${column.key}`" :row="item.row" :value="item.row[column.key]">
                 <span class="block truncate" :title="displayValue(item.row, column)">{{
                   displayValue(item.row, column)

@@ -196,7 +196,7 @@ draw-and-guess/
 │       │   ├── ProfileView.vue    # 资料确认页（随机昵称/内置 SVG 头像选择，无上传）
 │       │   ├── LobbyView.vue      # 在线大厅（公开列表/公私建房/私密短码加入/可发现玩家）
 │       │   ├── RoomView.vue       # 房间等待（席位/准备/私密码/词库/规则/邀请/退出）
-│       │   ├── GameView.vue       # 对局骨架：固定顶栏 + 铺满画布 + 浮层玩家/聊天面板 + 底部横向工具条 + 各阶段遮罩/结算（useFullscreen 全屏，布局见 docs/adr/0043-game-view-floating-layout.md）
+│       │   ├── GameView.vue       # 对局骨架：固定顶栏 + 铺满画布 + 常驻左栏玩家面板 + 浮层聊天面板 + 底部横向工具条 + 各阶段遮罩/结算（useFullscreen 全屏，布局见 docs/adr/0043-game-view-floating-layout.md）
 │       │   └── SettingsView.vue   # 设置页（声音/显示/快捷键/资料诊断）
 │       └── utils/
 │           ├── avatar.ts          # Vite SVG 静态资源白名单编号到 URL 映射
@@ -247,7 +247,7 @@ pnpm start      # 单一 Express + Socket.IO 生产服务（tsx src/index.ts）
 - 其它玩家连接**同一局域网**后在浏览器输入上述地址即可。
 - 常见问题：IP/端口与终端输出不一致、设备不在同一网段、防火墙未放行 Node.js 专用网络、版本不兼容（刷新/清缓存）。
 - 部署参数可覆盖：`PORT=5180 pnpm start`、`HOST=0.0.0.0`、`LOG_LEVEL=error`、`LOG_ENABLED=false`（关闭则完全不创建日志记录器、不写日志文件）、`LOG_MAX_FILES=3`（日志文件保留上限）、`HEALTH_METRICS_ENABLED=true`（仅允许本机查看详细健康指标）、`DRAW_GUESS_OPEN_BROWSER=false`（仅分发产物模式：关闭启动后自动打开浏览器）。服务启动时会自动加载项目根目录 `.env`（复制 `.env.example` 即可）；进程已有环境变量优先级高于 `.env`。环境变量**不会**覆盖游戏规则。
-- **配置写法严格校验**：`PORT` 只接受纯十进制正整数、`HOST` 只接受 IP 字面量或 RFC1123 主机名、布尔项只接受开/关两族等价写法（`1/true/yes/on` ↔ `0/false/no/off`），写法或取值不对**启动即中止**；带 UTF-8 BOM 的 `.env` 整份拒绝加载。不静默降级、不静默取默认值（见 `docs/adr/0035-startup-config-fail-fast.md`）。
+- **配置写法严格校验**：`PORT` 只接受纯十进制正整数、`HOST` 只接受 IP 字面量或 RFC1123 主机名、布尔项只接受 `true`/`false`（大小写不敏感），写法或取值不对**启动即中止**；带 UTF-8 BOM 的 `.env` 整份拒绝加载。不静默降级、不静默取默认值（见 `docs/adr/0035-startup-config-fail-fast.md`）。
 
 ### Windows 分发包
 
@@ -331,7 +331,7 @@ pnpm format:check  # 仅检查格式
 - **配色与对比度**：品牌基色固定为 `navy`/`muted`/`line`/`paper`/`blue`/`sky`/`yellow`/`green`/`red`/`purple`；为满足 WCAG AA，可使用 `success-fg`/`success-on-dark`/`warning-fg`/`danger-on-dark`/`control`/`focus` 等集中定义于 `style/tokens.css` 的无障碍语义令牌。`packages/config/src/room.ts` 的 `seatColors` 仍只取品牌基色；`#fff`/`#000`（及黑色变量 `--color-black`）与透明度衍生（如 `bg-blue/10`）不计入调色板。普通文字至少 4.5:1，大字号与非文字控件边界至少 3:1。**禁止**在组件/模板中硬编码任意 HEX（`bg-[#...]`/`text-[#...]`）或 Tailwind 默认色阶（`slate-*` 等）。`packages/config/src/drawing.ts` 的 `colors` 是**画板工具色**，属功能性工具配置，不纳入品牌调色板限制。
 - **动画一致性**：按钮/卡片交互动效统一为 160ms（复用 `.ui-feedback` / `.hover-tint` 共享类，或依赖 `@layer base` 中 `.game-stage button` 的全局过渡）；同类控件应复用同一动画，避免各自定制造成手感不一。浮层出入场（`FloatingPanel`/`CanvasToolbar` 的淡入淡出 + 缩放，进入 180ms / 退出 140ms）为独立动效，不属按钮/卡片交互动效，保留其手感。
 - **布局规范（外 Grid 骨架，内 Flex 排版）**：
-  - **Grid 宏观骨架与二维矩阵**：主页面二维行列骨架（`ProfileView`/`LobbyView`/`RoomView`/`SettingsView`）、二维固定席位/头像/卡片矩阵（`SeatGrid` 2×3、`AvatarPickerDialog` 8×5、`ShortcutsTab` 3 列、`RulesDialog` 3 列表单、`ChatPanel` 3 列表情）、三列对称顶栏（`StageHeader` `grid grid-cols-[1fr_auto_1fr]`）。**对局页 `GameView` 不属此类二维骨架**：它是「固定顶栏 + 铺满画布 + 绝对定位浮层面板 + 底部横向工具条」，画布铺满后由浮层覆盖；顶栏高度与大厅/房间/设置页一致（均为舞台高度的 `11%`，见 `docs/adr/0043-game-view-floating-layout.md` 与 `docs/adr/0044-panel-shortcuts-and-unified-topbar.md`）；
+  - **Grid 宏观骨架与二维矩阵**：主页面二维行列骨架（`ProfileView`/`LobbyView`/`RoomView`/`SettingsView`）、二维固定席位/头像/卡片矩阵（`SeatGrid` 2×3、`AvatarPickerDialog` 8×5、`ShortcutsTab` 3 列、`RulesDialog` 3 列表单、`ChatPanel` 3 列表情）、三列对称顶栏（`StageHeader` `grid grid-cols-[1fr_auto_1fr]`）。**对局页 `GameView` 不属此类二维骨架**：它是「固定顶栏 + 铺满画布 + 常驻左栏玩家面板 + 绝对定位浮层聊天面板 + 底部横向工具条」；顶栏高度与大厅/房间/设置页一致（均为舞台高度的 `11%`，见 `docs/adr/0043-game-view-floating-layout.md` 与 `docs/adr/0044-panel-shortcuts-and-unified-topbar.md`）；
   - **Flex 微观流式排版**：一维线性排列（水平按钮内容 `inline-flex items-center gap-[...]`、导航 Tab、工具栏工具条、输入框组合；垂直消息流 `flex flex-col`、规则行列表、Toast 堆叠）；
   - **单元素绝对居中**：严格使用 `grid place-items-center`（如圆形头像底座 `AvatarImage`、独立图标按钮 `IconButton`/`RoundIconButton`、徽章 `HostCrownBadge`、模态遮罩居中），杜绝单元素使用 `flex items-center justify-center` 导致子项伸缩变形；
   - **保留专用布局**：弹窗/画布状态遮罩（`BaseDialog`/`ConfirmDialog`/`OverlayCard`/`PhaseOverlay`）、对局浮层面板与底部工具条（`FloatingPanel`/`CanvasToolbar`）与 Toast 悬浮层（`AppToaster`）保留 `absolute`/`fixed` 定位；吸顶表头保留 `sticky`；数据表格（`DataTable.vue`）保留原生 `table`/`table-fixed`；
@@ -511,7 +511,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
    - 服务端必须保持**权威裁决**：答案、计分、阶段、计时、绘画资格只能由服务端判定；客户端永远不能上传「裁决结果」。
    - 服务端**不把业务日志输出到控制台**（避免 Windows 控制台 GBK 解码 UTF-8 中文乱码），每次启动写一个新日志文件（`apps/server/log/app-<秒级时间戳>.log`），保留条数由 `LOG_MAX_FILES` 控制（默认 10）。持久化边界固定如下，**禁止擅自扩大**：
      - ✅ 允许落盘：玩家身份/恢复令牌/偏好（`players`）、完成局战报（`game_archive`/`game_results`/`rounds`）；
-     - ❌ 禁止落盘：运行期房间配置与成员席位；旧版 `rooms`/`room_members` 仅由兼容迁移删除，不参与恢复；
+     - ❌ 禁止落盘：运行期房间配置与成员席位；
      - ❌ 禁止落盘：画布笔画、聊天消息、内部计时器、幂等请求缓存、限频时间窗等高频瞬态；
      - 数据库经 `db/migrate.ts` 版本化迁移建表，仓储接口在 `repositories/`，领域层只依赖接口；服务重启时 `recoverOnStartup` 标记玩家断线（身份可宽限恢复），房间因纯内存模型自然清空。
    - 公开房必须进入大厅列表；私密房必须从大厅隐藏，短码只能由服务端安全随机生成并限频校验；禁止客户端自选弱码、自定义密码、邀请链接或二维码。
@@ -520,7 +520,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
    - 客户端请求必须带 `requestId`（幂等）与统一 `ack`；非法阶段/角色/序号/频率由 `binder.ts` 与领域服务拒绝。
    - 头像只允许 `packages/shared/src/protocol/constants.ts` 白名单中的内置 SVG 编号；**禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像**。
 3. **词库与内容**
-   - `vocabulary/` 目录下的 SQLite 词库包是仓库的权威词库来源（当前仅 `base_words.db`，可并存多个 `.db`，服务启动时全部加载并从中选默认包；分发产物模式另有产物 `data/vocabulary/custom/` 自定义目录与内置目录合并加载，同名包 ID 追加序号唯一化，见 `docs/adr/0034-node-single-file-distribution.md` 决策四）：`metadata` 表只存 name/description/version/updated_at/category_enum（`version`/`updated_at` 是词库包自身的版本与更新日期，仍由词库包列表展示）；`words` 表词条只含 id/text/**category**（单词条仅一个分类）/aliases（JSON）。**难度、可绘制性、提示、难度级配置与「是否启用」位已退出领域模型并从库表删列**：`difficulty`/`drawability`/`hint`/`enabled`/`updated_at`/`level_config`/`difficulty_enum`/`drawability_enum`/`enabled_enum`/`drawability_desc` 都只属于旧词库文件，Provider **既不读取也不校验**（见 `docs/adr/0046-vocabulary-slimming-and-unified-round-time.md`、`docs/adr/0048-vocabulary-schema-slimming.md`）；所有词条一律进入候选池，不存在「下架词条」开关。**玩家自定义词库的空白样板**是 `vocabulary/templates/example.db`（与基础词库同字段、0 词条、带同份 category_enum；说明见 `vocabulary/templates/README.md`）——它放在子目录而不是 `vocabulary/` 根，因为扫描只认根目录下的 `*.db`，0 词库若被扫描会触发词数门槛让服务启动失败。校验为 fail-fast：分类 ⊆ category_enum、词面长度 ≤ `maxWordLength`、别称数量与长度、主键与词面不重复、词条数 ≥ `minWords`；目录内没有任何 `.db` 时按 `apps/server/src/config/private.ts` 的 `dbPath` 兜底探测（默认文件名 `base_words.db`）。修改后需重启服务，异常数据以中文错误阻止启动。
+   - `vocabulary/` 目录下的 SQLite 词库包是仓库的权威词库来源（当前仅 `base_words.db`，可并存多个 `.db`，服务启动时全部加载并从中选默认包；分发产物模式另有产物 `data/vocabulary/custom/` 自定义目录与内置目录合并加载，同名包 ID 追加序号唯一化，见 `docs/adr/0034-node-single-file-distribution.md` 决策四）：`metadata` 表只存 name/description/version/updated_at/category_enum（`version`/`updated_at` 是词库包自身的版本与更新日期，仍由词库包列表展示）；`words` 表词条只含 id/text/**category**（单词条仅一个分类）/aliases（JSON）。**难度、可绘制性、提示、难度级配置与「是否启用」位已退出领域模型并从库表删列**（见 `docs/adr/0046-vocabulary-slimming-and-unified-round-time.md`、`docs/adr/0048-vocabulary-schema-slimming.md`）；所有词条一律进入候选池，不存在「下架词条」开关。**玩家自定义词库的空白样板**是 `vocabulary/templates/example.db`（与基础词库同字段、0 词条、带同份 category_enum；说明见 `vocabulary/templates/README.md`）——它放在子目录而不是 `vocabulary/` 根，因为扫描只认根目录下的 `*.db`，0 词库若被扫描会触发词数门槛让服务启动失败。校验为 fail-fast：分类 ⊆ category_enum、词面长度 ≤ `maxWordLength`、别称数量与长度、主键与词面不重复、词条数 ≥ `minWords`；目录内没有任何 `.db` 时按 `apps/server/src/config/private.ts` 的 `dbPath` 兜底探测（默认文件名 `base_words.db`）。修改后需重启服务，异常数据以中文错误阻止启动。
    - **猜词提示只靠逐字遮罩**：结构化提示已从对局链路移除（见 `docs/adr/0042-remove-structured-hints.md`），猜词者只根据题目遮罩按节奏逐格揭示字符推理（保留末尾非标点字符，调度归 `apps/server/src/hint-scheduler.ts`）；选词卡对画家只显示候选词面（`wordOptions` 只带 `id/text`）与自定义入口。
    - **画家自定义题目**：房主开关 `allowCustomWord`（默认关闭）；开启时画家可在选词阶段输入去空白后 1~12 个 grapheme 的词直接开画，服务端把它合成为一条无元数据词条并拒绝与本局已用词或当前候选重复（见 `docs/adr/0045-custom-word-and-untimed-choosing.md`）。选词阶段是否计时由 `allowChooseTimeLimit` 决定（默认关闭 = 不限时，`phaseEndsAt` 保持 `0` 哨兵）。
    - 猜词判定固定用 `normalizeAnswer`（NFKC + 去空白 + 折叠空白 + 忽略拉丁大小写），不要在别处另写一套比较。

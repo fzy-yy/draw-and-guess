@@ -2,7 +2,7 @@
   规则表单竖排滑块字段（可复用）：上一行标签 + 滑块 + 当前值。
   收敛房间规则弹窗中 6 处重复的「纵向 label + range + 数值」结构；
   数值/滑块区间与步进全部由调用方传入，组件不感知业务字段。
-  可选 disabled：禁用时整行半透明并阻止交互（如结构化提示关闭后的时机字段）。
+  可选 disabled：禁用时整行半透明并阻止交互（如选词阶段不限时时的限时字段）。
 -->
 <script setup lang="ts">
 import { playInteractionSound } from '@/audio'
@@ -19,7 +19,7 @@ withDefaults(
     /** 当前值展示文案（由调用方格式化，如「60%」「90 秒」） */
     display: string
     disabled?: boolean
-    /** 下方辅助说明（可选，如「提示已关闭时不可用」） */
+    /** 下方辅助说明（可选，如「当前阶段不可用」） */
     hint?: string
   }>(),
   { disabled: false, hint: undefined },

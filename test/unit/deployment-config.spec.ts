@@ -90,21 +90,18 @@ describe('部署配置解析', () => {
     }
   })
 
-  it('布尔变量：开/关两族等价写法均可，族外值中止并点名变量', () => {
-    for (const on of ['1', 'true', 'YES', 'On', ' true ']) {
+  it('布尔变量：只接受 true/false（大小写不敏感），其余值中止并点名变量', () => {
+    for (const on of ['true', 'TRUE', 'True', ' true ']) {
       expect(getDeploymentConfig({ LOG_ENABLED: on }).logEnabled, on).toBe(true)
     }
-    for (const off of ['0', 'false', 'no', 'OFF', ' off ']) {
+    for (const off of ['false', 'FALSE', 'False', ' false ']) {
       expect(getDeploymentConfig({ LOG_ENABLED: off }).logEnabled, off).toBe(false)
     }
-    for (const off of ['0', 'false']) {
-      expect(getDeploymentConfig({ DRAW_GUESS_OPEN_BROWSER: off }).openBrowserEnabled, off).toBe(
-        false,
-      )
+    expect(getDeploymentConfig({ DRAW_GUESS_OPEN_BROWSER: 'false' }).openBrowserEnabled).toBe(false)
+    // 旧的 1/0、yes/no、on/off 值与拼写错误一律中止（开发阶段不做值级兼容）。
+    for (const invalid of ['1', '0', 'yes', 'no', 'on', 'off', 'ture']) {
+      expect(() => getDeploymentConfig({ LOG_ENABLED: invalid }), invalid).toThrow(/LOG_ENABLED/u)
     }
-    // 拼写错误不得静默按「关」处理：否则日志会无声消失，运维要到出事时才发现。
-    expect(() => getDeploymentConfig({ LOG_ENABLED: 'ture' })).toThrow(/LOG_ENABLED/u)
-    expect(() => getDeploymentConfig({ LOG_ENABLED: 'ture' })).toThrow('ture')
     expect(() => getDeploymentConfig({ HEALTH_METRICS_ENABLED: 'maybe' })).toThrow(
       /HEALTH_METRICS_ENABLED/u,
     )

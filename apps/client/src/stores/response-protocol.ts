@@ -16,9 +16,9 @@ import {
 } from '@draw-guess/shared'
 import { createBoundedDiagnostics, describeZodIssues } from '@/utils/bounded-diagnostics'
 
-export type InvalidResponseReason = 'invalid_payload' | 'request_id_mismatch'
+type InvalidResponseReason = 'invalid_payload' | 'request_id_mismatch'
 
-export interface ResponseDiagnostic {
+interface ResponseDiagnostic {
   event: ClientRequestEvent
   reason: string
   receivedAt: number
@@ -26,7 +26,7 @@ export interface ResponseDiagnostic {
 
 const diagnostics = createBoundedDiagnostics<ResponseDiagnostic>()
 
-export type DecodeClientResponseResult<E extends ClientRequestEvent> =
+type DecodeClientResponseResult<E extends ClientRequestEvent> =
   | { status: 'valid'; ack: ClientResponseAck<E> }
   | { status: 'invalid'; reason: InvalidResponseReason }
 

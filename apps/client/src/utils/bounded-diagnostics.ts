@@ -7,7 +7,7 @@
  * - 记录上限、副本语义与清空行为只有一处；
  * - 脱敏白名单只有一处，绝不写入被拒绝的原始值（见 docs/adr/0026-client-diagnostics-core.md）。
  */
-export interface BoundedDiagnostics<T> {
+interface BoundedDiagnostics<T> {
   /** 追加一条记录；超过上限时丢弃最旧的一条。 */
   record(entry: T): void
   /** 返回副本数组，避免调用方改写内部记录。 */

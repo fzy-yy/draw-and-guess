@@ -20,7 +20,7 @@ import { useVocabularyStore } from './vocabulary.ts'
 import { acceptRoomSnapshot } from './snapshot-gate.ts'
 
 /** 全量重同步的触发原因：非法推送 / 状态缺口 / 绘图回滚。 */
-export type ResyncReason = 'invalid_push' | 'state_gap' | 'drawing_rollback'
+type ResyncReason = 'invalid_push' | 'state_gap' | 'drawing_rollback'
 
 export const useResyncStore = defineStore('resync', () => {
   const { request } = useGameTransport()

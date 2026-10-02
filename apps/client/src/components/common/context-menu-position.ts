@@ -22,7 +22,7 @@ export interface ContextMenuAnchor {
 }
 
 /** 矩形尺寸：菜单面板尺寸或舞台可用区域。 */
-export interface ContextMenuSize {
+interface ContextMenuSize {
   width: number
   height: number
 }

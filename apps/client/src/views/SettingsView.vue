@@ -23,7 +23,7 @@ import {
   type ShortcutSettingKey,
 } from '@/utils/keyboard'
 import { StageHeader, SideNav, type SideNavItem } from '@/components/common'
-// 诊断页同样静态导入（原二级懒加载会留下分类切换的异步边界，随设置页一并进主入口，见 ADR-0014）
+// 诊断页同样静态导入（前端已无懒加载，随设置页一并进主入口，见 ADR-0049）
 import { AccessibilityTab, AudioTab, DiagnosticsTab, ShortcutsTab } from '@/components/settings'
 
 const store = useGameStore()

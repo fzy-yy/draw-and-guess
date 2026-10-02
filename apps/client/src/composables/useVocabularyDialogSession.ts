@@ -10,14 +10,14 @@ import { ref, watch, type Ref } from 'vue'
 import type { VocabularySnapshot } from '@draw-guess/shared'
 
 /** 会话需要的词库 Store 窄面（生产传 `useGameStore()`，测试可传 stub）。 */
-export interface VocabularyDialogStore {
+interface VocabularyDialogStore {
   readonly vocabulary: VocabularySnapshot | undefined
   loadVocabulary(): Promise<void>
   saveVocabulary(ids: string[]): Promise<boolean>
   cancelVocabularyRequests(): void
 }
 
-export interface VocabularyDialogSessionOptions {
+interface VocabularyDialogSessionOptions {
   /** 弹窗显隐（v-model:open）。 */
   open: Ref<boolean>
   /** 父层展示的加载态（v-model:loading）。 */

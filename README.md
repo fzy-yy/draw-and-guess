@@ -75,9 +75,9 @@ pnpm package:dist     # 构建 Windows 分发包（一个可运行目录 + zip�
 - **部署覆盖**：复制 [`.env.example`](.env.example) 为根目录 `.env`，可配置 `HOST`、`PORT`、`LOG_LEVEL`、`LOG_ENABLED`、`LOG_MAX_FILES`、`HEALTH_METRICS_ENABLED`、`DRAW_GUESS_OPEN_BROWSER`（浏览器开关仅分发产物模式生效）；服务启动时会自动加载 `.env`（进程已有环境变量优先级更高）。环境变量不会覆盖游戏规则。
   - `LOG_ENABLED=false` 时完全不创建日志记录器、不写日志文件（零内存开销）；
   - `LOG_MAX_FILES` 控制日志文件保留条数（默认 10，每次启动新建一个 `apps/server/log/app-<秒级时间戳>.log`，超出删除最老）；
-  - 配置写法严格校验：`PORT` 只接受纯十进制正整数、`HOST` 只接受 IP 字面量或 RFC1123 主机名、布尔项只接受开/关两族等价写法，写法或取值不对**启动即报错**；带 UTF-8 BOM 的 `.env`（记事本与 PowerShell 5.1 的默认写法）会被整份拒绝加载，均不会静默取默认值（见 [`docs/adr/0035`](docs/adr/0035-startup-config-fail-fast.md)）。
+  - 配置写法严格校验：`PORT` 只接受纯十进制正整数、`HOST` 只接受 IP 字面量或 RFC1123 主机名、布尔项只接受 `true`/`false`（大小写不敏感），写法或取值不对**启动即报错**；带 UTF-8 BOM 的 `.env`（记事本与 PowerShell 5.1 的默认写法）会被整份拒绝加载，均不会静默取默认值（见 [`docs/adr/0035`](docs/adr/0035-startup-config-fail-fast.md)）。
   - `/api/health` 默认只返回版本与协议安全摘要；仅当 `HEALTH_METRICS_ENABLED=true` 且请求来自本机回环地址时返回详细聚合指标。
-- **词库来源**：[`vocabulary/`](vocabulary/) 目录下可包含多个 SQLite 词库包（metadata/words 表），由 Provider 注册并在房间内选择。词条只保留**词面/别称/唯一分类**——难度、可绘制性、提示、难度级配置与启用位已随词库瘦身退出领域模型**并从库表删列**（见 [`docs/adr/0046`](docs/adr/0046-vocabulary-slimming-and-unified-round-time.md)、[`docs/adr/0048`](docs/adr/0048-vocabulary-schema-slimming.md)）：旧词库文件仍带这些遗留列时照常可用，Provider 既不读取也不校验。分类必须落在 `category_enum` 白名单内。修改后重启服务生效，异常数据会以中文错误阻止启动。**空白词库样板**在 `vocabulary/templates/example.db`（字段与基础词库一致、0 词条，不参与启动扫描）：玩家复制到 `data/vocabulary/custom/` 填词即可，说明见 `vocabulary/templates/README.md`。
+- **词库来源**：[`vocabulary/`](vocabulary/) 目录下可包含多个 SQLite 词库包（metadata/words 表），由 Provider 注册并在房间内选择。词条只保留**词面/别称/唯一分类**——难度、可绘制性、提示、难度级配置与启用位已随词库瘦身退出领域模型**并从库表删列**（见 [`docs/adr/0046`](docs/adr/0046-vocabulary-slimming-and-unified-round-time.md)、[`docs/adr/0048`](docs/adr/0048-vocabulary-schema-slimming.md)）。分类必须落在 `category_enum` 白名单内。修改后重启服务生效，异常数据会以中文错误阻止启动。**空白词库样板**在 `vocabulary/templates/example.db`（字段与基础词库一致、0 词条，不参与启动扫描）：玩家复制到 `data/vocabulary/custom/` 填词即可，说明见 `vocabulary/templates/README.md`。
 - 服务启动时会按规范化词面去重并生成稳定 ID（`sqlite:主键`）；词条过少或过长会阻止启动并显示中文错误。
 
 ## 工程结构
@@ -86,7 +86,7 @@ pnpm package:dist     # 构建 Windows 分发包（一个可运行目录 + zip�
 apps/client/       Vue 3 游戏舞台、内置 SVG 头像、Pinia 状态与 Canvas 实时画板
   └─ src/components/  # 按领域分子目录，各自提供 index.ts barrel：
                       #   common/   共享原语（AppButton / BaseDialog / ConfirmDialog / 输入与开关等）
-                      #   game/     对局（固定顶栏 / 铺满画布 / 浮层玩家与聊天面板 / 底部工具条 / 阶段遮罩）
+                      #   game/     对局（固定顶栏 / 铺满画布 / 常驻左栏玩家面板 / 浮层聊天面板 / 底部工具条 / 阶段遮罩）
                       #   lobby/    大厅弹窗（建房 / 私密房加入）
                       #   room/     房间（席位 / 规则 / 邀请 / 词库）
                       #   settings/ 设置页分类（声音 / 显示 / 快捷键 / 诊断）

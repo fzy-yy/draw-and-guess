@@ -12,9 +12,9 @@ import { useProfileStore } from './profile.ts'
 import { useSettingsStore } from './settings.ts'
 import { getErrorRecoveryAction } from './error-recovery.ts'
 
-export type ConnectionLabel = (typeof strings.ui.connection)[keyof typeof strings.ui.connection]
-export type ShellPage = 'profile' | 'lobby' | 'settings'
-export type SessionState = 'idle' | 'ready' | 'disconnected' | 'restoring'
+type ConnectionLabel = (typeof strings.ui.connection)[keyof typeof strings.ui.connection]
+type ShellPage = 'profile' | 'lobby' | 'settings'
+type SessionState = 'idle' | 'ready' | 'disconnected' | 'restoring'
 
 export const useSessionStore = defineStore('session', () => {
   const transport = useGameTransport()

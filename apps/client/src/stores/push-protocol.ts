@@ -9,7 +9,7 @@ import { createBoundedDiagnostics, describeZodIssues } from '@/utils/bounded-dia
 
 export type InvalidPushReason = 'invalid_payload' | 'protocol_mismatch'
 
-export interface ProtocolDiagnostic {
+interface ProtocolDiagnostic {
   event: ServerPushEventName
   reason: string
   receivedAt: number
@@ -17,7 +17,7 @@ export interface ProtocolDiagnostic {
 
 const diagnostics = createBoundedDiagnostics<ProtocolDiagnostic>()
 
-export type DecodeServerPushResult<E extends ServerPushEventName> =
+type DecodeServerPushResult<E extends ServerPushEventName> =
   { ok: true; data: ServerPushData<E> } | { ok: false; reason: InvalidPushReason }
 
 export function decodeServerPush<E extends ServerPushEventName>(

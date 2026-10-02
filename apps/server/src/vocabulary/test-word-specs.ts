@@ -13,7 +13,7 @@ import { MIN_SELECTED_VOCABULARY_WORDS } from '@draw-guess/shared'
 export const TEST_WORD_CATEGORIES = ['物品', '动物', '动作'] as const
 
 /** 一条测试词面规格：编号/词面/分类（难度/可绘制性/提示已随词库瘦身移除）。 */
-export interface TestWordSpec {
+interface TestWordSpec {
   index: number
   text: string
   category: string

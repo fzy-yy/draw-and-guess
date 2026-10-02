@@ -33,13 +33,13 @@ export interface ContextMenuItem {
 }
 
 /** 弹出菜单时的可选参数。 */
-export interface ContextMenuOptions {
+interface ContextMenuOptions {
   /** 菜单无障碍名称；缺省由 ContextMenu.vue 使用 strings.a11y.common.contextMenuAria。 */
   ariaLabel?: string
 }
 
 /** 当前菜单状态（模块级单例，直接绑定给 ContextMenu 的 props 与 v-model:open）。 */
-export interface ContextMenuState {
+interface ContextMenuState {
   open: boolean
   /** 弹出位置：直接取右键事件的视口坐标，由组件换算成舞台内坐标后再夹取。 */
   x: number
@@ -67,7 +67,7 @@ const state = shallowReactive<ContextMenuState>({
  * @param items 本次场景的菜单项；空列表视为无菜单可弹，直接关闭
  * @param options 可选参数（目前只有无障碍名称）
  */
-export function openContextMenu(
+function openContextMenu(
   event: MouseEvent,
   items: readonly ContextMenuItem[],
   options: ContextMenuOptions = {},
@@ -86,12 +86,12 @@ export function openContextMenu(
 }
 
 /** 关闭菜单；保留 items 供离场动画继续渲染。幂等。 */
-export function closeContextMenu(): void {
+function closeContextMenu(): void {
   state.open = false
 }
 
 /** 执行菜单项动作；禁用项与无 action 项静默忽略。 */
-export function activateContextMenuItem(item: ContextMenuItem): void {
+function activateContextMenuItem(item: ContextMenuItem): void {
   if (item.disabled) return
   item.action?.()
 }

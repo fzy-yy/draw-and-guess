@@ -19,7 +19,6 @@ const forbidden = [
   'maxAliasesPerWord',
   'maxAliasLength',
   'resetWhenExhausted',
-  'useWordTimeLimit',
 ]
 
 function collectFiles(directory) {

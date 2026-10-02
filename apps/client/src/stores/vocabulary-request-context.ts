@@ -1,12 +1,12 @@
 /** 词库异步操作上下文：阻止旧会话/旧房间/旧词库包响应回写当前 UI。 */
-export interface VocabularyRequestContext {
+interface VocabularyRequestContext {
   operationId: number
   sessionGeneration: number
   roomId: string
   packageId?: string
 }
 
-export interface VocabularyContextState {
+interface VocabularyContextState {
   sessionGeneration: number
   roomId?: string
 }

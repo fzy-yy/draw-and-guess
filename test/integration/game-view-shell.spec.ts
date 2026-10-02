@@ -10,7 +10,7 @@ import { createPiniaWithFakeTransport, type FakeGameTransport } from '../client/
 
 /**
  * 新对局骨架（浮层布局）的集成级保障：真实 Pinia + 假 Socket 传输 + 真实 GameView 组件树，
- * 覆盖「顶栏 + 铺满画布 + 两个浮层面板 + 底部工具条」以及顶栏开关对面板/工具条显隐的驱动。
+ * 覆盖「顶栏 + 铺满画布 + 常驻玩家面板 + 浮层聊天面板 + 底部工具条」以及顶栏开关对面板/工具条显隐的驱动。
  *
  * 这是规格「Testing Decisions」要求补的最高缝之下的集成用例：断言外部可观察结果（DOM 结构
  * 与显隐），不触碰组件私有状态。happy-dom 不实现 Canvas 2D 与布局，这里提供最小上下文替身

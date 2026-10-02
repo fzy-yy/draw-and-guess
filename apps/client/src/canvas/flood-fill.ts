@@ -2,7 +2,7 @@ import { clampPixelAxis } from './geometry'
 
 export type Rgba = readonly [number, number, number, number]
 
-export interface FloodFillMetrics {
+interface FloodFillMetrics {
   filledPixels: number
   peakWorkingBytes: number
 }

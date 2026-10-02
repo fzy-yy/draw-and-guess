@@ -44,3 +44,5 @@ export const RoomPhaseSchema = z.enum([
   'game_result',
   'closed',
 ])
+/** 中途加入策略：房间规则与大厅列表共用同一枚举，避免常量在协议内重复内联。 */
+export const JoinPolicySchema = z.enum(['forbid', 'spectate', 'next_game'])

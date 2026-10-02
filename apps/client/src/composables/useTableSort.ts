@@ -4,7 +4,7 @@ import { ref } from 'vue'
  * 排序单元格值：两个消费点（词条列 sortValue/取值、词库包字段直读）的类型交集，
  * 均只可能产出 string 或 number（协议 schema 保证词库包字段非空且无其它类型）。
  */
-export type SortCellValue = string | number
+type SortCellValue = string | number
 
 /**
  * 统一升序比较：两值皆 number 时直接相减，否则按 `zh-Hans-CN` 字典序比较字符串形态。

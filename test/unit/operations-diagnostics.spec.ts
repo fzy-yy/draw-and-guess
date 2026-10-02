@@ -252,12 +252,15 @@ describe('/api/health 最小公开边界', () => {
     )
   })
 
-  it('浏览器自动打开开关默认开启，显式关闭值（含历史 0）均不打开', () => {
+  it('浏览器自动打开开关默认开启，仅 true/false 可解析', () => {
     expect(getDeploymentConfig({}).openBrowserEnabled).toBe(true)
-    expect(getDeploymentConfig({ DRAW_GUESS_OPEN_BROWSER: '0' }).openBrowserEnabled).toBe(false)
     expect(getDeploymentConfig({ DRAW_GUESS_OPEN_BROWSER: 'false' }).openBrowserEnabled).toBe(false)
     expect(getDeploymentConfig({ DRAW_GUESS_OPEN_BROWSER: 'true' }).openBrowserEnabled).toBe(true)
     expect(getDeploymentConfig({ DRAW_GUESS_OPEN_BROWSER: ' ' }).openBrowserEnabled).toBe(true)
+    // 历史 0/1 关族写法已收窄移除：显式写入即中止。
+    expect(() => getDeploymentConfig({ DRAW_GUESS_OPEN_BROWSER: '0' })).toThrow(
+      /DRAW_GUESS_OPEN_BROWSER/,
+    )
   })
 
   it('默认响应没有详细指标，即使请求来自本机', async () => {

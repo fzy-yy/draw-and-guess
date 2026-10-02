@@ -1,6 +1,6 @@
 # 0032 · 画家模式完整提示、猜词者逐渐披露（wordCategory → wordHint）
 
-**状态**：已采纳
+**状态**：已废弃（被 [ADR-0042](0042-remove-structured-hints.md) 取代）
 
 ## 背景
 

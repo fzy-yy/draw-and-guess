@@ -19,7 +19,7 @@ const LOG_LEVELS = ['info', 'error'] as const
  * 日志级别：只有 info/error 两档——RuntimeLogger 没有 debug/warn 通道（零调用者已删除），
  * 档位必须与可观察行为一致。
  */
-export type LogLevel = (typeof LOG_LEVELS)[number]
+type LogLevel = (typeof LOG_LEVELS)[number]
 
 export type DeploymentConfig = {
   host: string
@@ -31,23 +31,23 @@ export type DeploymentConfig = {
   logMaxFiles: number
   /** 仅允许本机 /api/health 返回详细进程指标；默认关闭。 */
   healthMetricsEnabled: boolean
-  /** 分发产物启动后是否自动打开浏览器；默认开启，关族写法（0/false/no/off）不打开（仅产物模式生效）。 */
+  /** 分发产物启动后是否自动打开浏览器；默认开启，设为 false 关闭（仅产物模式生效）。 */
   openBrowserEnabled: boolean
 }
 
 /**
- * 布尔型部署变量的统一解析口径：开族（1/true/yes/on）与关族（0/false/no/off）两组等价写法，
- * 大小写与首尾空白不敏感；未设置（空/纯空白）取默认值。`DRAW_GUESS_OPEN_BROWSER=0` 的历史用法
- * 由关族写法保持兼容。
- * 两族之外的显式值 fail-fast：旧口径把一切非开族值静默按「关」处理，`LOG_ENABLED=ture` 这类
- * 拼写错误会无声关闭全部日志——运维常常要等到出事查日志时，才发现自己一直没有日志。
+ * 布尔型部署变量的统一解析口径：**只接受 true / false**（大小写与首尾空白不敏感），
+ * 未设置（空/纯空白）取默认值；其余写法一律 fail-fast。
+ * 项目处于开发阶段，不做 1/0/yes/no/on/off 的值级兼容——配置契约保持唯一明确。
+ * 旧口径把一切非开族值静默按「关」处理，`LOG_ENABLED=ture` 这类拼写错误会无声关闭全部日志，
+ * 因此这里宁可中止启动，也不静默降级。
  */
 function parseBooleanEnv(name: string, raw: string | undefined, fallback: boolean): boolean {
   const value = raw?.trim().toLowerCase() ?? ''
   if (value === '') return fallback
-  if (['1', 'true', 'yes', 'on'].includes(value)) return true
-  if (['0', 'false', 'no', 'off'].includes(value)) return false
-  throw new Error(`${name} 仅接受 true/false（等价写法 1/0、yes/no、on/off），当前值：${raw ?? ''}`)
+  if (value === 'true') return true
+  if (value === 'false') return false
+  throw new Error(`${name} 仅接受 true/false，当前值：${raw ?? ''}`)
 }
 
 /**

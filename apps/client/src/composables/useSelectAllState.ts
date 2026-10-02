@@ -5,7 +5,7 @@
  */
 import { computed, type ComputedRef, type Ref } from 'vue'
 
-export type SelectAllState = 'all' | 'some' | 'none'
+type SelectAllState = 'all' | 'some' | 'none'
 
 export function useSelectAllState(
   /** 当前展示范围内的行（已应用搜索/筛选/排序）。 */

@@ -44,7 +44,7 @@ export function pickLatestBundledNode(index: unknown): string {
 }
 
 /** 规范化镜像根地址为「末尾恰有一个斜杠」——本模块内所有 URL 拼接的唯一口径。 */
-export function normalizeNodeMirror(mirror: string): string {
+function normalizeNodeMirror(mirror: string): string {
   return mirror.endsWith('/') ? mirror : `${mirror}/`
 }
 

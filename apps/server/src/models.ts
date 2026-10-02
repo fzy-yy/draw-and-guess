@@ -96,7 +96,7 @@ export interface GameSecret {
   drawerId: string // 当前画家
   candidates: VocabularyWord[] // 当前回合候选词（富模型，仅画家可见）
   rerollUsed?: boolean // 当前回合是否已使用“换一组”
-  answer?: VocabularyWord // 当前回合答案（选定后置位；含别称/分类与加载期派生的时限、权重）
+  answer?: VocabularyWord // 当前回合答案（选定后置位；含别称/分类）
   offeredWordIds: Set<string> // 本局已展示过的候选词 ID 集合（整局游戏中候选词绝不重复）
   /** 自由笔画与区域填充共用一条内存历史，支持统一撤销、重做与重连恢复。 */
   strokes: DrawingCommand[]
@@ -110,8 +110,7 @@ export interface GameSecret {
   correctOrder: string[] // 猜中者 ID 按时间排序
   /**
    * 猜中当时的得分明细（与入账同一条记录）。
-   * 结算展示必须直接取用本数组：若事后重算，暂停/恢复会重置 phaseStartedAt（使 elapsedMs 变负）、
-   * 成员中途离开会改变可玩人数（使顺序奖归零），导致「展示的分数」与「实际入账的分数」不一致。
+   * 结算展示直接取用本数组，不事后重算，保证「展示的分数」与「实际入账的分数」一致。
    */
   correctDetails: ScoreDetail[]
   revealedIndices: Set<number> // 逐步提示已揭示的字符下标

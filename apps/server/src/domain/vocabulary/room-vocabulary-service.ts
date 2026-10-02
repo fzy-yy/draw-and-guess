@@ -9,7 +9,7 @@ import type { RoomEventPorts } from '../shared-ports.ts'
  * 房间词库用例端口：房间推送出口复用共享接口（见 domain/shared-ports.ts），
  * 其余为本用例特有成员。
  */
-export interface RoomVocabularyContext extends RoomEventPorts {
+interface RoomVocabularyContext extends RoomEventPorts {
   registry: VocabularyRegistry
   getMembership(playerId: string): { room: RoomSecret }
   getHostRoom(playerId: string): RoomSecret

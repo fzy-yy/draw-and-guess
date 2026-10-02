@@ -22,7 +22,7 @@ export type InterServerEvents = Record<string, () => void>
  * 刻意不引用 GameService 类本身：models/领域层经 AppSocket 触到本文件时，
  * 不会反向依赖应用服务，避免「领域模型 → GameService → 领域模型」的类型环。
  */
-export interface SocketServiceAccess {
+interface SocketServiceAccess {
   readonly clock: Clock
   readonly metrics: OperationalMetrics
   logUnexpectedError(error: unknown, context?: RuntimeLogContext): void

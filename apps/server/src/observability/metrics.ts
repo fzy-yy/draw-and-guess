@@ -19,7 +19,7 @@ function increment(value: number): number {
   return value >= MAX_COUNTER ? MAX_COUNTER : value + 1
 }
 
-export interface OperationalMetricsSnapshot {
+interface OperationalMetricsSnapshot {
   onlineConnections: number
   roomCount: number
   protocol: {

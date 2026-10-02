@@ -121,7 +121,7 @@ export function rankedMembers(room: MemberList): MemberState[] {
 
 /**
  * 本回合猜词者全集：可玩且非画家。
- * 计分与满员奖励用它——含已掉线者，只认「是否猜中」，因此猜中后掉线不取消奖励；
+ * 回合计分用它——含已掉线者，只认「是否猜中」，因此猜中后掉线不取消得分；
  * 回合结束判定用 onlineGuessers（掉线者不阻塞收回合），两者不要互换。
  */
 export function activeGuessers(room: MemberList, drawerId: string): MemberState[] {
@@ -129,7 +129,7 @@ export function activeGuessers(room: MemberList, drawerId: string): MemberState[
 }
 
 /** 本回合在线猜词者：在线可玩且非画家，用于判「有效猜词者全部猜中即结束回合」。
- * 与 activeGuessers 的差别是刻意保留的：计分/满员奖励认「是否猜中」（掉线不取消），
+ * 与 activeGuessers 的差别是刻意保留的：回合计分认「是否猜中」（掉线不取消得分），
  * 回合结束判定认「在线」（掉线者不会让回合卡死）——不要在两处互换使用。 */
 export function onlineGuessers(
   room: MemberList,

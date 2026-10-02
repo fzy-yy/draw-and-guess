@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { RequestSchema } from './base.ts'
+import { JoinPolicySchema, RequestSchema } from './base.ts'
 import {
   DRAW_SECONDS_OPTIONS,
   PLAYER_PROTOCOL_LIMITS,
@@ -56,7 +56,7 @@ export const RoomSettingsSchema = z
     allowWordReroll: z.boolean(),
     /** 是否允许画家在选词阶段自定义题目（默认关闭，见 ADR-0045）。 */
     allowCustomWord: z.boolean(),
-    joinPolicy: z.enum(['forbid', 'spectate', 'next_game']),
+    joinPolicy: JoinPolicySchema,
   })
   .strict()
 export const PrivateRoomCodeSchema = z

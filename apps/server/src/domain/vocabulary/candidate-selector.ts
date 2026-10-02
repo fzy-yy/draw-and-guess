@@ -1,7 +1,7 @@
 import type { VocabularyWord } from '@draw-guess/shared'
 
 /** 输入顺序由调用方提供；选择过程不读取随机源，也不修改词池。 */
-export interface CandidateSelectorContext {
+interface CandidateSelectorContext {
   pool: readonly VocabularyWord[]
   count: number
 }

@@ -9,7 +9,7 @@ import { GameError } from './errors.ts'
 import type { PlayerSecret } from './models.ts'
 import type { Clock } from './runtime.ts'
 
-export interface SlidingWindowDecision {
+interface SlidingWindowDecision {
   allowed: boolean
   /** 已丢弃过期项的队列；放行时含本次时间戳，拒绝时不含。调用点决定回写策略（binder/短码拒绝也回写以滚窗口；事件限频保留原队列）。 */
   times: number[]

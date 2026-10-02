@@ -8,7 +8,7 @@
     内容超高由表单区滚动条容纳（旧「展开把弹窗撑大」缺陷的修复点）；
   - 规则分「基础设置 / 高级设置」两个可收纳 <details>，基础默认展开；
   - 旧「玩法预设」与「计分方式」下拉已移除：预设取消（唯一默认组见 config roomSettingsDefaults），
-    计分固定为标准（基础+速度+顺序）。
+    计分固定为固定 100 分制（见 ADR-0047）。
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'

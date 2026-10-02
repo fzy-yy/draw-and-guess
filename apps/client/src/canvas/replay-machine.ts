@@ -54,7 +54,7 @@ export interface FillComputePort {
   cancel(): void
 }
 
-export interface ReplayMachinePorts {
+interface ReplayMachinePorts {
   /**
    * 逻辑层内容变化后请求投影到展示层（唯一出口副作用）；
    * 传入已提交的逻辑画布元素，端口实现无需反向引用机器。

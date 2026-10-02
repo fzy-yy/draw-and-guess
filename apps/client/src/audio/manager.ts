@@ -4,7 +4,7 @@ import type { AudioFactory, AudioPort, SoundClock } from './contracts.ts'
 import { calculateEffectiveVolume, type AudioSettingsState } from './volume.ts'
 
 /** SoundManager 的运行依赖；全部由外部注入，管理器本身不触碰全局 Audio/Date。 */
-export interface SoundManagerOptions {
+interface SoundManagerOptions {
   /** 创建单个播放器（浏览器适配器用 new Audio，测试用假工厂）。 */
   audioFactory: AudioFactory
   /** 时钟（生产用 Date.now，测试用假时钟）。 */

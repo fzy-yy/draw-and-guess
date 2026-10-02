@@ -83,7 +83,7 @@ describe('monorepo 包边界', () => {
     expect(databaseSource).not.toMatch(/setDbFile|getDb|closeDb|dbFileOverride/u)
   })
 
-  it('运行期房间保持纯内存，旧房间表只由兼容迁移处理', () => {
+  it('运行期房间保持纯内存，迁移不再包含历史房间表', () => {
     const serverRoot = fileURLToPath(new URL('../../apps/server/src', import.meta.url))
     const runtimeSources = sourceFiles(serverRoot)
       .filter((file) => !file.endsWith(join('db', 'migrate.ts')))
@@ -93,8 +93,8 @@ describe('monorepo 包边界', () => {
       /RoomRepository|SqliteRoomRepository|persistRoom|saveAggregate|room_members/u,
     )
     const migrations = source('../../apps/server/src/db/migrate.ts')
-    expect(migrations).toContain("name: 'remove-transient-room-storage'")
-    expect(migrations).toContain('DROP TABLE IF EXISTS room_members')
-    expect(migrations).toContain('DROP TABLE IF EXISTS rooms')
+    expect(migrations).toContain("name: 'baseline-schema'")
+    expect(migrations).not.toContain('room_members')
+    expect(migrations).not.toContain('CREATE TABLE IF NOT EXISTS rooms')
   })
 })

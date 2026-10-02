@@ -57,5 +57,3 @@ export const strings = {
 } as const
 
 export { serverErrorMessages, serverStrings }
-export type Strings = typeof strings
-export type ServerStrings = typeof serverStrings

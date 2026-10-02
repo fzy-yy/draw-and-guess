@@ -4,9 +4,7 @@
  * 供 E2E launcher 在「唯一临时目录」内生成最小但**可开完整局**的词库 SQLite 库文件：
  * - 包 ID 取数据库文件名，名称/描述/版本等元数据可按测试场景注入；
  * - 词条数 ≥ MIN_SELECTED_VOCABULARY_WORDS（协议常量裁决线），否则 startGame 会因词条不足而拒绝；
- * - 表结构刻意保留旧词库的遗留列（difficulty/drawability/hint/enabled/updated_at）与遗留元数据键
- *   （difficulty_enum/drawability_enum/enabled_enum/level_config），用于覆盖「旧词库文件带多余列时
- *   Provider 照常加载」的兼容路径（真实库文件已按 ADR-0048 删列）。
+ * - 表结构为当前精简口径：words 只含词面/分类/别称，metadata 只含 name/description/version/updated_at/category_enum。
  *
  * 只写入调用方给定的临时路径，绝不触碰仓库真实 vocabulary/*.db。
  * 放在 apps/server/src 内是让 better-sqlite3 能按 pnpm 严格 node_modules 解析到（而非 test/ 目录）。
@@ -17,13 +15,7 @@ import Database from 'better-sqlite3'
 import { MIN_SELECTED_VOCABULARY_WORDS } from '@draw-guess/shared'
 import { buildWordSpecs } from './test-word-specs.ts'
 
-/**
- * 遗留 level_config 的 time_limit 取值（秒）：单回合时长已改由房间规则决定，该列不再被读取，
- * 仅作为「旧词库带多余列」的夹具数据保留。容量用例的回合窗口现由房间规则指定。
- */
-const E2E_WORD_TIME_LIMIT_SECONDS = 600
-
-export interface MinimalVocabularyFixtureOptions {
+interface MinimalVocabularyFixtureOptions {
   wordCount?: number
   name?: string
   description?: string
@@ -55,27 +47,9 @@ export function createMinimalVocabularyDb(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         text TEXT NOT NULL UNIQUE,
         category TEXT NOT NULL,
-        difficulty INTEGER NOT NULL,
-        drawability INTEGER NOT NULL DEFAULT 3,
-        enabled INTEGER NOT NULL DEFAULT 1,
-        aliases TEXT NOT NULL DEFAULT '[]',
-        hint TEXT NOT NULL DEFAULT '',
-        updated_at TEXT NOT NULL DEFAULT ''
+        aliases TEXT NOT NULL DEFAULT '[]'
       );
     `)
-
-    // 词库瘦身后难度/可绘制性/启用位/level_config 已退出领域模型并从库表删列（ADR-0046/0048）；
-    // 夹具仍写出这些遗留列与元数据键，用于覆盖「旧词库文件带多余列时 Provider 照常加载」的兼容路径。
-    const difficultyEnum = [1, 2, 3, 4, 5]
-    const levelConfig: Record<string, { time_limit: number; score_weight: number }> = {}
-    for (const level of difficultyEnum) {
-      levelConfig[String(level)] = {
-        time_limit: E2E_WORD_TIME_LIMIT_SECONDS,
-        // 计分已改为固定 100 分制，词条权重不再参与计算；夹具保留该列只为覆盖
-        // 「旧词库仍带多余列」的兼容路径（列本身由词库重建另行删除）。
-        score_weight: 5,
-      }
-    }
 
     const metaRows: Array<[string, string]> = [
       ['name', name],
@@ -83,10 +57,6 @@ export function createMinimalVocabularyDb(
       ['version', version],
       ['updated_at', updatedAt],
       ['category_enum', JSON.stringify(['物品', '动物', '动作'])],
-      ['difficulty_enum', JSON.stringify(difficultyEnum)],
-      ['drawability_enum', JSON.stringify([1, 2, 3, 4, 5])],
-      ['enabled_enum', JSON.stringify([0, 1])],
-      ['level_config', JSON.stringify(levelConfig)],
     ]
     const insertMeta = db.prepare(
       'INSERT INTO metadata(meta_data_key, meta_data_value) VALUES(?, ?)',
@@ -94,21 +64,10 @@ export function createMinimalVocabularyDb(
     for (const [key, value] of metaRows) insertMeta.run(key, value)
 
     const insertWord = db.prepare(
-      `INSERT INTO words(id, text, category, difficulty, drawability, enabled, aliases, hint, updated_at)
-       VALUES(?, ?, ?, ?, ?, 1, ?, ?, '')`,
+      'INSERT INTO words(id, text, category, aliases) VALUES(?, ?, ?, ?)',
     )
-    // 词面/分类来自共享数据源（与内存 fixture 单源）；难度/可绘制性/提示只是旧词库的遗留列，
-    // Provider 已不再读取，这里照写是为了让 e2e 覆盖「旧词库带多余列」的兼容路径。
     for (const spec of buildWordSpecs(wordCount)) {
-      insertWord.run(
-        spec.index,
-        spec.text,
-        spec.category,
-        difficultyEnum[(spec.index - 1) % difficultyEnum.length] ?? 1,
-        ((spec.index - 1) % 5) + 1,
-        '[]',
-        '',
-      )
+      insertWord.run(spec.index, spec.text, spec.category, '[]')
     }
   } finally {
     db.close()

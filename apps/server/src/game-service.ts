@@ -438,7 +438,7 @@ export class GameService {
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_READY)
     if (member.spectating)
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_SPECTATOR_READY)
-    // 房主由服务端视为隐式准备；旧客户端误发准备请求时幂等返回，不污染状态版本。
+    // 房主由服务端视为隐式准备；同值重复请求幂等返回，不污染状态版本。
     if (room.hostId === playerId || member.ready === ready)
       return this.snapshotter.snapshot(room, playerId)
     member.ready = ready

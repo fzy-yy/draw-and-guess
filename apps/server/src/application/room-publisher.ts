@@ -8,7 +8,7 @@ import type { RuntimeLogContext } from '../errors.ts'
 import type { PlayerSecret, RoomSecret } from '../models.ts'
 import type { AppServer } from '../socket-types.ts'
 
-export interface RoomPublisherContext {
+interface RoomPublisherContext {
   io: AppServer
   rooms: Map<string, RoomSecret>
   players: Map<string, PlayerSecret>

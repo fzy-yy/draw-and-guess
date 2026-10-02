@@ -22,6 +22,7 @@ import type { VocabularyStore } from './vocabulary/index.ts'
 import { invalidateMemberCanvasSync } from './domain/drawing/canvas-sync.ts'
 import {
   connectionStatus,
+  isActivePlayer,
   nicknameOf,
   nominalPhaseDurationMs,
   occupiesSeat,
@@ -63,7 +64,7 @@ export class SnapshotBuilder {
     // 游标语义归本构建器所有（重连恢复 / 客户端自检修复通道），调用方不再直接改写领域状态。
     if (options.forceFull) invalidateMemberCanvasSync(viewerMember)
     // 候场/观战身份永远不能获得画家答案权限；即使异常状态下 ID 碰巧与 drawerId 相同也要裁剪。
-    const viewerIsDrawer = !viewerMember.spectating && game?.drawerId === viewerId
+    const viewerIsDrawer = isActivePlayer(viewerMember) && game?.drawerId === viewerId
     // game && 直接参与条件让 TS 收窄（Boolean(game) 不产生收窄，曾迫使下游写 game!）
     const canOmitStrokes =
       !!game &&
@@ -106,7 +107,7 @@ export class SnapshotBuilder {
                 ? createAnswerMask(game.answer.text, game.revealedIndices)
                 : serverStrings.notices.answerHidden
             : '',
-          // 画家才可看到真实答案与候选词（候选词携带难度供选词星级展示，以及换一组权限标识）。
+          // 画家才可看到真实答案与候选词（候选词含换一组权限标识）。
           ...(viewerIsDrawer && game.answer ? { answer: game.answer.text } : {}),
           ...(viewerIsDrawer && room.phase === 'choosing_word'
             ? {
@@ -175,7 +176,7 @@ export class SnapshotBuilder {
           ready: room.hostId === member.playerId || member.ready,
           score: member.score,
           isHost: room.hostId === member.playerId,
-          isDrawer: !member.spectating && game?.drawerId === member.playerId,
+          isDrawer: isActivePlayer(member) && game?.drawerId === member.playerId,
           guessed: Boolean(member.guessedAt),
           spectating: Boolean(member.spectating),
           waitingForNextGame: Boolean(member.waitingForNextGame),

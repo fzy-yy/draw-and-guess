@@ -9,7 +9,7 @@
  * 再分配新值，保证任何时刻浮层都盖不住暂停/结算遮罩。层级存于响应式 Map，重排会同步更新
  * 其它面板的层级（各面板订阅自己那一格）。
  *
- * 当前对局只有两个浮层面板（玩家 / 聊天），压缩后的下限区远小于上限，重排不会触顶。
+ * 当前对局只有聊天一个浮层面板（玩家面板为常驻左栏、不参与层级竞争），压缩后的下限区远小于上限，重排不会触顶。
  */
 import { computed, reactive, type ComputedRef } from 'vue'
 
@@ -23,7 +23,7 @@ const layers = reactive(new Map<symbol, number>())
 /** 下一条待分配的层级，单调递增；接近上限时经重排回落。 */
 let nextZIndex = BASE_Z_INDEX
 
-export interface PanelLayer {
+interface PanelLayer {
   /** 面板实例的稳定标识（模块内部用于定位该面板的层级）。 */
   id: symbol
   /** 该面板当前层级；面板根节点直接绑定此值。 */

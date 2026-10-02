@@ -19,7 +19,7 @@ import type { RoomEventPorts, RuntimePorts } from '../shared-ports.ts'
  * 绘图用例端口：时钟与房间推送出口复用共享接口（见 domain/shared-ports.ts），
  * 其余为本用例特有成员。
  */
-export interface DrawingContext extends RuntimePorts, RoomEventPorts {
+interface DrawingContext extends RuntimePorts, RoomEventPorts {
   getSession(
     playerId: string,
     roundId: string,

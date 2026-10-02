@@ -18,14 +18,14 @@
  */
 import type { RoomSnapshot } from '@draw-guess/shared'
 
-export type PushDecision = 'accept' | 'ignore' | 'resync'
+type PushDecision = 'accept' | 'ignore' | 'resync'
 
 /**
  * 房间快照门禁的决策子集：快照的新旧裁决只有「采纳 / 丢弃」两种结果。
  * 曾声明为完整 PushDecision，导致消费侧 useRoomSync 存在一个永不可达的 resync 分支
  * （类型收窄后编译即强制删除该死分支，取舍见 docs/adr/0041-snapshot-gate-decision-narrowing.md）。
  */
-export type RoomSnapshotDecision = Extract<PushDecision, 'accept' | 'ignore'>
+type RoomSnapshotDecision = Extract<PushDecision, 'accept' | 'ignore'>
 
 /**
  * 房间快照统一门禁：拒绝旧房间、旧状态、旧对局、旧回合与画布修订倒退。

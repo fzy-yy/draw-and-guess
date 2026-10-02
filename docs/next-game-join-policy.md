@@ -17,4 +17,4 @@
   分数和局内统计保持初始值，并以 `ready=false` 成为下一局普通成员。纯 `spectate` 观战者不会被
   自动转为参赛成员。
 
-由于 `RoomMember` 推送新增候场和再来一局状态字段，该变更当时把协议版本提升到 `10`（历史设计记录；现行协议为 `14`，见 `packages/shared/src/protocol/constants.ts`）。
+由于 `RoomMember` 推送新增候场和再来一局状态字段，该变更当时把协议版本提升到 `10`（历史设计记录；现行协议为 `16`，见 `packages/shared/src/protocol/constants.ts`）。
