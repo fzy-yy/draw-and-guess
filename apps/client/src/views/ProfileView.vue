@@ -33,7 +33,7 @@ function randomize(): void {
       class="relative flex flex-col items-start justify-center overflow-hidden bg-navy px-[7cqw] py-[8cqh] text-white before:absolute before:right-[-12cqh] before:top-[-10cqh] before:h-[34cqh] before:w-[34cqh] before:rounded-full before:border-[0.5cqh] before:border-white/10 before:content-[''] after:absolute after:bottom-[-7cqh] after:left-[-9cqh] after:h-[22cqh] after:w-[22cqh] after:rounded-full after:border-[0.5cqh] after:border-white/10 after:content-['']"
       :aria-label="strings.a11y.profile.brandAria"
     >
-      <!-- 品牌标记：整枚内联 SVG（白描边黄方块 + 深蓝画笔斜条 + 蓝色圆形问号徽标）。
+      <!-- 品牌标记：整枚内联 SVG（白描边黄方块 + 斜置画笔 + 蓝色圆形问号徽标）。
            问号必须画成矢量路径、不能再用文本字形：文本字号带像素下限（text-fs-* 的 max(...) 下限），
            而这里所有尺寸都是 cqh 等比缩放，小窗下两者不同步会让问号溢出/错位；
            几何全进 SVG 用户坐标后，整枚标记严格随舞台缩放。
@@ -52,16 +52,18 @@ function randomize(): void {
           class="fill-yellow stroke-white"
           stroke-width="4.2"
         />
-        <rect
-          x="25.2"
-          y="13.7"
-          width="15"
-          height="66.5"
-          rx="7.5"
-          class="fill-yellow stroke-navy"
-          stroke-width="2.7"
-          transform="rotate(38 32.7 46.9)"
-        />
+        <!-- 画笔：笔杆 + 笔尖两段，整体斜置 38°（尖锋朝右上）。
+             笔身用单条封闭路径（尖锋 → 直笔杆 → 圆尾）以免杆与尖出现接缝，笔尖再以实心深蓝覆盖其上：
+             实心尖端是「一眼看出是笔」的关键，空心条纹只会再次变回抽象色块。 -->
+        <g transform="rotate(38 32.7 46.9)">
+          <path
+            d="M32.7 13.2 L40.2 27.4 L40.2 77.4 A2.8 2.8 0 0 1 37.4 80.2 L28 80.2 A2.8 2.8 0 0 1 25.2 77.4 L25.2 27.4 Z"
+            class="fill-yellow stroke-navy"
+            stroke-width="2.7"
+            stroke-linejoin="round"
+          ></path>
+          <path d="M25.2 27.4 L32.7 13.2 L40.2 27.4 Z" class="fill-navy"></path>
+        </g>
         <circle cx="73.5" cy="26.5" r="17.3" class="fill-blue" />
         <!-- 问号几何取自 lucide `circle-help`（24 盒内设计好的字形），按徽标半径 17.3/10 等比放大 -->
         <g
