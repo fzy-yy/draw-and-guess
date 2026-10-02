@@ -33,18 +33,48 @@ function randomize(): void {
       class="relative flex flex-col items-start justify-center overflow-hidden bg-navy px-[7cqw] py-[8cqh] text-white before:absolute before:right-[-12cqh] before:top-[-10cqh] before:h-[34cqh] before:w-[34cqh] before:rounded-full before:border-[0.5cqh] before:border-white/10 before:content-[''] after:absolute after:bottom-[-7cqh] after:left-[-9cqh] after:h-[22cqh] after:w-[22cqh] after:rounded-full after:border-[0.5cqh] after:border-white/10 after:content-['']"
       :aria-label="strings.a11y.profile.brandAria"
     >
-      <div
-        class="relative h-[13cqh] w-[13cqh] rounded-[2.4cqh] border-[0.55cqh] border-white bg-yellow shadow-block -rotate-3"
+      <!-- 品牌标记：整枚内联 SVG（白描边黄方块 + 深蓝画笔斜条 + 蓝色圆形问号徽标）。
+           问号必须画成矢量路径、不能再用文本字形：文本字号带像素下限（text-fs-* 的 max(...) 下限），
+           而这里所有尺寸都是 cqh 等比缩放，小窗下两者不同步会让问号溢出/错位；
+           几何全进 SVG 用户坐标后，整枚标记严格随舞台缩放。
+           rounded-[2.4cqh] 供 shadow-block 贴合圆角（SVG 的盒阴影跟随元素盒而非绘图路径）。 -->
+      <svg
+        class="h-[13cqh] w-[13cqh] rounded-[2.4cqh] shadow-block -rotate-3"
+        viewBox="0 0 100 100"
         aria-hidden="true"
       >
-        <span
-          class="absolute left-[3.1cqh] top-[1.6cqh] h-[9cqh] w-[2.3cqh] rounded-full border-[0.35cqh] border-navy bg-yellow rotate-38"
-        ></span
-        ><span
-          class="absolute right-[1.2cqh] top-[1.2cqh] grid h-[4.5cqh] w-[4.5cqh] place-items-center rounded-full bg-blue text-white text-fs-28 font-bold"
-          >?</span
+        <rect
+          x="2.1"
+          y="2.1"
+          width="95.8"
+          height="95.8"
+          rx="16.5"
+          class="fill-yellow stroke-white"
+          stroke-width="4.2"
+        />
+        <rect
+          x="25.2"
+          y="13.7"
+          width="15"
+          height="66.5"
+          rx="7.5"
+          class="fill-yellow stroke-navy"
+          stroke-width="2.7"
+          transform="rotate(38 32.7 46.9)"
+        />
+        <circle cx="73.5" cy="26.5" r="17.3" class="fill-blue" />
+        <!-- 问号几何取自 lucide `circle-help`（24 盒内设计好的字形），按徽标半径 17.3/10 等比放大 -->
+        <g
+          class="fill-none stroke-white"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          transform="translate(73.5 26.5) scale(1.73) translate(-12 -12)"
         >
-      </div>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <path d="M12 17h.01" />
+        </g>
+      </svg>
       <p class="mt-[3cqh] eyebrow-light">
         {{ strings.ui.profile.brandEyebrow }}
       </p>
