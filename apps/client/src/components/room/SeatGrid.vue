@@ -16,9 +16,17 @@ import HostCrownBadge from '@/components/common/HostCrownBadge.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useGameStore } from '@/stores/game'
+import { occupiesSeatMember } from '@/utils/room-facts'
 
 const store = useGameStore()
 const contextMenu = useContextMenu()
+
+/**
+ * 席位计数（N/M）按**占席**口径统计：未离局即占席（观战者也占席）。
+ * 与服务端容量校验、大厅人数同口径（见 ADR-0023）；离局者为成绩卡保留的占位不算占席，
+ * 因此计数可能小于下方卡片数——这正是「还有多少可用容量」的语义。
+ */
+const seatedCount = computed(() => (store.room?.members ?? []).filter(occupiesSeatMember).length)
 
 // 席位展示：解耦界面槽位与底层物理 seatIndex。
 // 优先稳定呈现全部已有成员（防止历史跳号或缩容后丢失），并在不足最大人数时用空位补齐。
@@ -94,7 +102,7 @@ function openSeatMenu(event: MouseEvent, member: RoomMember): void {
         ><Users />
         {{
           strings.ui.room.seatCount(
-            store.room?.members.length ?? 0,
+            seatedCount,
             store.room?.settings.maxPlayers ?? store.config.player.defaultMaxPlayers,
           )
         }}</span

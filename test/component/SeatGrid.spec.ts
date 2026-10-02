@@ -70,6 +70,23 @@ describe('SeatGrid 席位右键菜单', () => {
     guestWrapper.unmount()
   })
 
+  it('席位计数按占席口径：离局占位不计容量，但成绩卡仍展示', () => {
+    const roomStore = useRoomStore()
+    roomStore.room = createRoomFixture('waiting')
+    roomStore.room.members[1]!.leftGame = true
+    useSessionStore().playerId = HOST_ID
+    const wrapper = mount(SeatGrid, { global: { plugins: [pinia] } })
+
+    // 两张卡片里 1 人已离局：计数 1/6，与大厅人数、服务端容量校验同口径
+    expect(wrapper.text()).toContain(
+      strings.ui.room.seatCount(1, roomStore.room.settings.maxPlayers),
+    )
+    // 离局者仍保留卡片（成绩属于本局历史），计数与卡片数刻意不一致
+    const seats = wrapper.findAll('article')
+    expect(seats.filter((seat) => seat.text().includes('猜词者')).length).toBe(1)
+    wrapper.unmount()
+  })
+
   it('激活「移除玩家」菜单项弹出确认框（不直接执行破坏性操作）', async () => {
     const wrapper = mountSeats(HOST_ID)
     rightClick(seatOf(wrapper, '猜词者'))

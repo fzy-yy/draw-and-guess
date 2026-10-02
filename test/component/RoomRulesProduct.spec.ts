@@ -173,4 +173,33 @@ describe('房间规则与高级设置', () => {
     expect(wrapper.text()).not.toContain(strings.ui.room.chooseTimeUnlimited)
     wrapper.unmount()
   })
+
+  it('邀请按钮的满员判定按占席口径：离局占位不会造成「假满员」', async () => {
+    const roomStore = useRoomStore()
+    const session = useSessionStore()
+    roomStore.room = createRoomFixture('waiting')
+    roomStore.room.settings = { ...roomStore.room.settings, maxPlayers: 2 }
+    session.playerId = HOST_ID
+    const wrapper = mount(RuleSummary, {
+      props: { vocabularyLoading: false },
+      global: { plugins: [pinia] },
+    })
+    const inviteButton = (): { attributes: (name: string) => string | undefined } =>
+      wrapper
+        .findAll('button')
+        .find((button) => button.text().includes(strings.ui.room.invitePlayers))!
+
+    // 2 个成员里 1 人已离局：占席 1/2 未满，仍可邀请（离局占位只为成绩卡保留）
+    roomStore.room.members[1]!.leftGame = true
+    await flushPromises()
+    expect(inviteButton().attributes('disabled')).toBeUndefined()
+    expect(inviteButton().attributes('title')).toBe(strings.ui.room.inviteDisabledTip)
+
+    // 全员在席才判满员：禁用并给出满员提示
+    roomStore.room.members[1]!.leftGame = false
+    await flushPromises()
+    expect(inviteButton().attributes('disabled')).toBeDefined()
+    expect(inviteButton().attributes('title')).toBe(strings.ui.room.inviteDisabledFull)
+    wrapper.unmount()
+  })
 })

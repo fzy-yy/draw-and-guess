@@ -12,6 +12,7 @@ import type { RoomSettings } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
 import AppButton from '@/components/common/AppButton.vue'
 import RuleRow from '@/components/room/RuleRow.vue'
+import { occupiesSeatMember } from '@/utils/room-facts'
 
 const props = defineProps<{
   /** 词库拉取中：房主按钮应禁用，避免重复请求 */
@@ -39,6 +40,21 @@ const hintsSummary = computed(() => {
 function enabled(value: boolean): string {
   return value ? strings.ui.room.ruleEnabled : strings.ui.room.ruleDisabled
 }
+
+/**
+ * 满员判定按**占席**口径（未离局即占席，观战者也占席），与服务端 room-membership-service 的
+ * 容量校验、SeatGrid 的席位计数同口径（见 ADR-0023）；离局者为成绩卡保留的占位不算占席，
+ * 否则会出现「明明还有空位却禁用邀请」的假满员。
+ */
+const isRoomFull = computed(() => {
+  const room = store.room
+  return room ? room.members.filter(occupiesSeatMember).length >= room.settings.maxPlayers : false
+})
+
+/** 非房主且房间未开放普通玩家邀请：与满员是两种不同的禁用原因，提示文案也不同。 */
+const inviteForbidden = computed(
+  () => !store.isHost && !(store.room?.settings.allowPlayerInvite ?? false),
+)
 
 const summaryRows = computed(() => {
   const settings = store.room?.settings
@@ -176,14 +192,11 @@ const summaryRows = computed(() => {
       <AppButton
         variant="secondary"
         class="w-full min-h-[4.6cqh] px-[0.5em] text-fs-12"
-        :disabled="
-          (store.room?.members.length ?? 0) >= (store.room?.settings.maxPlayers ?? 0) ||
-          (!store.isHost && !(store.room?.settings.allowPlayerInvite ?? false))
-        "
+        :disabled="isRoomFull || inviteForbidden"
         :title="
-          (store.room?.members.length ?? 0) >= (store.room?.settings.maxPlayers ?? 0)
+          isRoomFull
             ? strings.ui.room.inviteDisabledFull
-            : !store.isHost && !(store.room?.settings.allowPlayerInvite ?? false)
+            : inviteForbidden
               ? strings.ui.room.inviteDisabledHostOnly
               : strings.ui.room.inviteDisabledTip
         "
