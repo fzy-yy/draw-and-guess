@@ -1,6 +1,6 @@
 import { nextTick } from 'vue'
 import { setActivePinia, type Pinia } from 'pinia'
-import { render, screen, waitFor, within } from '@testing-library/vue'
+import { render, screen, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { strings } from '@draw-guess/strings'
@@ -126,14 +126,11 @@ describe('ChatPanel 输入与快捷互动', () => {
     expect(submitGuess).toHaveBeenCalledTimes(2)
   })
 
-  it('无猜词权限时禁用输入；绘图阶段可发送服务端白名单快捷短语', async () => {
-    const user = userEvent.setup()
+  it('无猜词权限时禁用输入，恢复权限后重新启用', async () => {
     const room = useRoomStore()
     const session = useSessionStore()
     room.room = createRoomFixture()
     session.playerId = HOST_ID
-    const game = useGameStore()
-    const sendPreset = vi.spyOn(game, 'sendPreset').mockResolvedValue(true)
 
     const view = renderWithPinia(ChatPanel, { canGuess: false })
     expect((screen.getByLabelText(strings.ui.game.guessLabel) as HTMLInputElement).disabled).toBe(
@@ -144,26 +141,14 @@ describe('ChatPanel 输入与快捷互动', () => {
         .disabled,
     ).toBe(true)
 
-    const phrase = game.config.presets.safeChat[0]!
-    await user.click(screen.getByRole('button', { name: strings.a11y.game.quickPhrasePickerAria }))
-    const panel = await screen.findByRole('dialog', {
-      name: strings.a11y.game.quickPhrasePanelAria,
-    })
-    await user.click(
-      within(panel).getByRole('button', { name: strings.a11y.game.sendQuickPhraseAria(phrase) }),
-    )
-
-    await waitFor(() => expect(sendPreset).toHaveBeenCalledWith(phrase))
-    await waitFor(() =>
-      expect(
-        screen.queryByRole('dialog', { name: strings.a11y.game.quickPhrasePanelAria }),
-      ).toBeNull(),
-    )
-
     await view.rerender({ canGuess: true })
     expect((screen.getByLabelText(strings.ui.game.guessLabel) as HTMLInputElement).disabled).toBe(
       false,
     )
+    expect(
+      (screen.getByRole('button', { name: strings.a11y.game.sendGuessAria }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true)
   })
 
   it('系统消息渲染为居中圆角卡片，玩家消息使用独立胶囊标签徽章', async () => {

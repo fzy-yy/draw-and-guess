@@ -1,24 +1,20 @@
 <!--
   右侧常驻聊天区（20cqw 独立黑框常驻版）：
   单行容纳 15~16 汉字，短句猜词不折行，猜词者边看画边打字，手感极其丝滑。
-  消息列表 + 快捷互动工具 + 猜词输入。猜词输入、消息滚动跟随与自动聚焦逻辑全部收敛到内部；
-  是否可猜词由父组件经 canGuess 传入，提交猜词/预设短语直接调用 store。
+  消息列表 + 底部固定猜词输入。猜词输入、消息滚动跟随与自动聚焦逻辑全部收敛到内部；
+  是否可猜词由父组件经 canGuess 传入，提交猜词直接调用 store。
   输入框对无权限角色直接禁用（禁用样式已表达状态，不再渲染冗余的文字提示行）。
-  快捷互动收敛为两个悬浮面板：表情反应 + 快捷短语（短语列表来自 @draw-guess/config，
-  在 config 中可增减），均基于 ActionPopover 复用外壳。
   高度与宽度撑满父容器（GameView 右栏 aside），流内常驻，上部滚动消息流，底部固定输入。
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { Lightbulb, Send, SmilePlus } from 'lucide-vue-next'
+import { Send } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { normalizeAnswer, type ChatMessage, type RoomMember } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
 import { useToasts } from '@/composables/useToasts'
 import { useGameStore } from '@/stores/game'
 import { roleTextFor } from '@/utils/role-text'
-import { isOnlineActiveMember } from '@/utils/room-facts'
-import ActionPopover from '@/components/common/ActionPopover.vue'
 import AppInput from '@/components/common/AppInput.vue'
 
 // canGuess 由父组件（useGameHud）计算，这里只用于输入框权限与提交保护。
@@ -36,11 +32,6 @@ const messageList = ref<HTMLElement>()
 const shouldFollowMessages = ref(true)
 // 消息数据直接读取房间快照中的聊天记录，无需独立 ticker。
 const messages = computed(() => store.room?.game?.messages ?? [])
-// 画家、猜词者和已猜中者在作画阶段都能使用受控互动；观战者始终只读。
-const canSendPreset = computed(
-  () => store.room?.phase === 'drawing' && !!store.me && isOnlineActiveMember(store.me),
-)
-
 function memberForMessage(message: ChatMessage): RoomMember | undefined {
   return message.playerId
     ? store.room?.members.find((member) => member.id === message.playerId)
@@ -115,14 +106,6 @@ async function sendGuess(): Promise<void> {
   if (delivered) {
     playInteractionSound('activate')
     guess.value = ''
-  }
-}
-
-/** 发送服务端白名单内的互动内容，并在送达后收起其悬浮面板。 */
-async function sendPresetAndClose(preset: string, close: () => void): Promise<void> {
-  if (await store.sendPreset(preset)) {
-    playInteractionSound('activate')
-    close()
   }
 }
 
@@ -229,85 +212,32 @@ defineExpose({ focusInput })
         <Send class="h-[4cqh] w-[4cqh]" /><span>{{ strings.ui.game.noMessages }}</span>
       </div>
     </div>
-    <!-- 所有角色共享同一操作布局：上排快捷互动，下排输入；无猜词权限时仅禁用输入。 -->
-    <div class="border-t-[0.18cqh] border-line pt-[0.8cqh]">
-      <div
-        class="mt-[0.55cqh] flex items-center gap-[0.45em]"
-        role="group"
-        :aria-label="strings.a11y.game.chatActionsAria"
+    <!-- 底部固定猜词输入：顶部分割线隔开消息列表，无猜词权限时仅禁用输入 -->
+    <form
+      class="flex gap-[0.5em] border-t-[0.18cqh] border-line pt-[0.8cqh]"
+      @submit.prevent="sendGuess"
+    >
+      <label for="guess-input" class="sr-only">{{ strings.ui.game.guessLabel }}</label>
+      <AppInput
+        id="guess-input"
+        ref="guessInput"
+        v-model="guess"
+        size="body"
+        class="min-w-0 flex-1"
+        :maxlength="store.config.player.chatMaxLength"
+        :disabled="!canGuess"
+        :placeholder="
+          store.isDrawer ? strings.ui.game.drawerChatPlaceholder : strings.ui.game.guessPlaceholder
+        "
+      />
+      <button
+        type="submit"
+        class="grid h-[5.2cqh] w-[5.2cqh] shrink-0 place-items-center rounded-[0.65em] bg-blue text-white disabled:cursor-not-allowed disabled:bg-line"
+        :disabled="!canGuess || !guess.trim()"
+        :aria-label="strings.a11y.game.sendGuessAria"
       >
-        <!-- 表情反应面板：表情列表来自 @draw-guess/config -->
-        <ActionPopover
-          :trigger-label="strings.a11y.game.reactionPickerAria"
-          :panel-aria-label="strings.a11y.game.reactionPanelAria"
-          :disabled="!canSendPreset"
-        >
-          <template #trigger><SmilePlus class="h-[2.4cqh] w-[2.4cqh]" /></template>
-          <template #default="{ close }">
-            <div class="grid grid-cols-3 gap-[0.45em]">
-              <button
-                v-for="reaction in store.config.presets.chatReactions"
-                :key="reaction"
-                type="button"
-                class="grid h-[max(4.2cqh,16px)] w-[max(4.2cqh,16px)] place-items-center rounded-full border-[0.18cqh] border-control bg-line text-fs-18 hover:bg-sky"
-                :aria-label="strings.a11y.game.sendReactionAria(reaction)"
-                @click="sendPresetAndClose(reaction, close)"
-              >
-                {{ reaction }}
-              </button>
-            </div>
-          </template>
-        </ActionPopover>
-        <!-- 快捷短语面板：原四个独立按钮合并为一个入口，短语列表可在 config 中增减 -->
-        <ActionPopover
-          :trigger-label="strings.a11y.game.quickPhrasePickerAria"
-          :panel-aria-label="strings.a11y.game.quickPhrasePanelAria"
-          :disabled="!canSendPreset"
-          panel-class="w-[16cqw]"
-        >
-          <template #trigger><Lightbulb class="h-[2.4cqh] w-[2.4cqh]" /></template>
-          <template #default="{ close }">
-            <div class="flex flex-col gap-[0.4cqh]">
-              <button
-                v-for="phrase in store.config.presets.safeChat"
-                :key="phrase"
-                type="button"
-                class="min-h-[3.4cqh] truncate rounded-[0.5em] bg-line px-[0.6em] py-[0.35cqh] text-left text-fs-12 font-bold text-navy hover:bg-sky"
-                :aria-label="strings.a11y.game.sendQuickPhraseAria(phrase)"
-                :title="phrase"
-                @click="sendPresetAndClose(phrase, close)"
-              >
-                {{ phrase }}
-              </button>
-            </div>
-          </template>
-        </ActionPopover>
-      </div>
-      <form class="mt-[0.65cqh] flex gap-[0.5em]" @submit.prevent="sendGuess">
-        <label for="guess-input" class="sr-only">{{ strings.ui.game.guessLabel }}</label>
-        <AppInput
-          id="guess-input"
-          ref="guessInput"
-          v-model="guess"
-          size="body"
-          class="min-w-0 flex-1"
-          :maxlength="store.config.player.chatMaxLength"
-          :disabled="!canGuess"
-          :placeholder="
-            store.isDrawer
-              ? strings.ui.game.drawerChatPlaceholder
-              : strings.ui.game.guessPlaceholder
-          "
-        />
-        <button
-          type="submit"
-          class="grid h-[5.2cqh] w-[5.2cqh] shrink-0 place-items-center rounded-[0.65em] bg-blue text-white disabled:cursor-not-allowed disabled:bg-line"
-          :disabled="!canGuess || !guess.trim()"
-          :aria-label="strings.a11y.game.sendGuessAria"
-        >
-          <Send class="h-[2.5cqh] w-[2.5cqh]" />
-        </button>
-      </form>
-    </div>
+        <Send class="h-[2.5cqh] w-[2.5cqh]" />
+      </button>
+    </form>
   </aside>
 </template>

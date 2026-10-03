@@ -94,8 +94,9 @@ export class GamePage {
   }
 
   async sendPreset(phrase: string) {
-    await this.page.locator('button[aria-label="选择快捷短语"]').click()
-    await this.page.locator(`button[title="${phrase}"]`).click()
+    const canvas = this.page.locator('canvas').first()
+    await canvas.click({ button: 'right' })
+    await this.page.locator(`button:has-text("${phrase}")`).click()
   }
 
   async pauseGame() {
