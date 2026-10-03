@@ -158,12 +158,12 @@ const summaryRows = computed(() => {
         </p>
         <h2 class="col-start-1">{{ strings.ui.room.rulesTitle }}</h2>
         <button
-          v-if="store.isHost"
           type="button"
-          class="col-start-2 row-[1/3] flex items-center gap-[0.4em] text-blue bg-transparent font-bold"
+          class="col-start-2 row-[1/3] flex items-center gap-[0.4em] text-blue bg-transparent font-bold cursor-pointer"
           @click="emit('edit-rules')"
         >
-          <Settings2 /> {{ strings.ui.room.rulesEdit }}
+          <Settings2 class="h-[1.1em] w-[1.1em]" />
+          {{ store.isHost ? strings.ui.room.rulesEdit : strings.ui.room.rulesView }}
         </button>
       </div>
       <dl class="my-[1.4cqh] border-t-[0.16cqh] border-t-line">

@@ -58,15 +58,16 @@ describe('CanvasToolbar 交互', () => {
     wrapper.unmount()
   })
 
-  it('选择预设色经 v-model:color 上抛', async () => {
+  it('选择预设色经 v-model:color 上抛，若当前为橡皮则自动切回画笔', async () => {
     const store = useGameStore()
     const nextColor = store.config.drawing.colors.find((paint) => paint !== '#1F2937')!
-    const wrapper = mountToolbar()
+    const wrapper = mountToolbar({ tool: 'eraser' })
 
     await wrapper
       .get(`[aria-label="${strings.a11y.game.presetColorAria(nextColor)}"]`)
       .trigger('click')
     expect(wrapper.emitted('update:color')?.[0]).toEqual([nextColor])
+    expect(wrapper.emitted('update:tool')?.[0]).toEqual(['pen'])
     wrapper.unmount()
   })
 

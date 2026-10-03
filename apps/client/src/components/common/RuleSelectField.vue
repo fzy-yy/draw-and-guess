@@ -10,18 +10,25 @@ import SelectDropdown, { type SelectDropdownOption } from './SelectDropdown.vue'
 
 export type RuleSelectOption<V extends string | number = string | number> = SelectDropdownOption<V>
 
-defineProps<{
-  label: string
-  options: readonly SelectDropdownOption<V>[]
-}>()
+withDefaults(
+  defineProps<{
+    label: string
+    options: readonly SelectDropdownOption<V>[]
+    disabled?: boolean
+  }>(),
+  { disabled: false },
+)
 const model = defineModel<V>({ required: true })
 /** 标签元素 id：useId 保证多实例共存时关联不串台。 */
 const labelId = `${useId()}-label`
 </script>
 
 <template>
-  <div class="min-w-0 flex flex-col gap-[0.5cqh] text-fs-14 font-bold">
+  <div
+    class="min-w-0 flex flex-col gap-[0.5cqh] text-fs-14 font-bold"
+    :class="{ 'opacity-60': disabled }"
+  >
     <span :id="labelId">{{ label }}</span>
-    <SelectDropdown v-model="model" :options="options" :labelledby="labelId" />
+    <SelectDropdown v-model="model" :options="options" :disabled="disabled" :labelledby="labelId" />
   </div>
 </template>

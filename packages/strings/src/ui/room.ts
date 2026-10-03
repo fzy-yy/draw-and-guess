@@ -26,6 +26,7 @@ export const room = {
   emptySeatHint: '可从在线列表邀请',
   rulesTitle: '本局规则',
   rulesEdit: '编辑',
+  rulesView: '查看',
   ruleCapacityDt: '房间容量',
   ruleEnabled: '开启',
   ruleDisabled: '关闭',

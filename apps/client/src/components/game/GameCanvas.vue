@@ -9,9 +9,10 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   Brush,
-  Copy,
   Download,
   Eraser,
+  Eye,
+  EyeOff,
   Flame,
   HelpCircle,
   MessageSquareQuote,
@@ -49,6 +50,7 @@ import type { RequestFailure, RequestResult } from '@/stores/request'
 const width = defineModel<number>('width', { required: true })
 const tool = defineModel<ToolKind>('tool', { default: 'pen' })
 const color = defineModel<string>('color', { default: '#1a1a1a' })
+const showToolbar = defineModel<boolean>('showToolbar', { default: true })
 
 const props = defineProps<{
   roundId: string
@@ -224,16 +226,6 @@ function sendReactionPing(type: CanvasPingType): void {
 const allowReactions = computed(() => store.room?.settings.allowCanvasReactions ?? true)
 
 /**
- * 将逻辑画布导出为 PNG Blob 纯净图片。
- */
-async function getLogicalCanvasBlob(): Promise<globalThis.Blob | null> {
-  const logical = machine.logicalCanvas
-  return new Promise<globalThis.Blob | null>((resolve) => {
-    logical.toBlob((blob) => resolve(blob), 'image/png')
-  })
-}
-
-/**
  * 将当前逻辑画布内容保存为 PNG 文件下载。
  */
 function downloadCanvasImage(): void {
@@ -246,35 +238,6 @@ function downloadCanvasImage(): void {
   link.click()
   document.body.removeChild(link)
   toasts.notify(strings.ui.game.canvasSavedAsImage, 'success')
-}
-
-/**
- * 导出画作：优先写入剪贴板，若权限不足或非安全上下文自动降级为触发文件下载。
- */
-async function exportCanvasImage(): Promise<void> {
-  try {
-    const blob = await getLogicalCanvasBlob()
-    if (!blob) {
-      downloadCanvasImage()
-      return
-    }
-    if (
-      typeof navigator !== 'undefined' &&
-      navigator.clipboard &&
-      typeof globalThis.ClipboardItem !== 'undefined'
-    ) {
-      await navigator.clipboard.write([new globalThis.ClipboardItem({ 'image/png': blob })])
-      toasts.notify(strings.ui.game.canvasCopiedToClipboard, 'success')
-      return
-    }
-    // 无剪贴板环境，静默降级为直接下载
-    downloadCanvasImage()
-    toasts.notify(strings.ui.game.canvasCopyFallbackDownload, 'warning')
-  } catch {
-    // 剪贴板异常（如非 HTTPS 权限阻止），降级为下载
-    downloadCanvasImage()
-    toasts.notify(strings.ui.game.canvasCopyFallbackDownload, 'warning')
-  }
 }
 
 /** 画家专属右键菜单项 */
@@ -344,16 +307,19 @@ const drawerMenuItems = computed<ContextMenuItem[]>(() => {
         void store.drawAction(EVENTS.drawRedo)
       },
     },
-    // 导出分享组
+    // 工具栏显隐
     {
-      id: 'export-copy',
-      label: strings.ui.game.canvasMenuCopy,
-      icon: Copy,
+      id: 'toggle-toolbar',
+      label: showToolbar.value
+        ? strings.ui.game.canvasMenuHideToolbar
+        : strings.ui.game.canvasMenuShowToolbar,
+      icon: showToolbar.value ? EyeOff : Eye,
       separatorBefore: true,
       action: () => {
-        void exportCanvasImage()
+        showToolbar.value = !showToolbar.value
       },
     },
+    // 保存画作
     {
       id: 'export-save',
       label: strings.ui.game.canvasMenuSave,
@@ -381,14 +347,6 @@ const drawerMenuItems = computed<ContextMenuItem[]>(() => {
 const guesserMenuItems = computed<ContextMenuItem[]>(() => {
   const items: ContextMenuItem[] = [
     {
-      id: 'export-copy',
-      label: strings.ui.game.canvasMenuCopy,
-      icon: Copy,
-      action: () => {
-        void exportCanvasImage()
-      },
-    },
-    {
       id: 'export-save',
       label: strings.ui.game.canvasMenuSave,
       icon: Download,
@@ -397,7 +355,6 @@ const guesserMenuItems = computed<ContextMenuItem[]>(() => {
       },
     },
   ]
-
   // 微表情互动组（点赞 👍、满头问号 ❓、神仙画画 🔥）
   items.push(
     {

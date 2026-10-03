@@ -1,7 +1,7 @@
 <!-- 房间等待界面：固定六个游戏席位、权威准备门槛、房主规则与本局词库管理。 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Check, ClipboardCopy, KeyRound, LogOut, Play, ShieldCheck } from 'lucide-vue-next'
+import { ClipboardCopy, KeyRound, LogOut, Play, ShieldCheck } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
@@ -161,24 +161,6 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
 
       <!-- 房主只显示开始按钮；其他玩家保留准备按钮，观战者不能参与准备。 -->
       <div class="mt-auto pt-[1.3cqh] border-t-[0.2cqh] border-t-line text-center">
-        <p v-if="store.me?.spectating" class="min-h-[1.6em] text-muted text-fs-12">
-          {{ strings.ui.room.spectatorReadyHint }}
-        </p>
-        <p v-else-if="!allSet" class="min-h-[1.6em] text-muted text-fs-12">
-          {{
-            activePlayers.length < store.config.player.minPlayers
-              ? strings.ui.room.needMorePlayers
-              : store.isHost
-                ? strings.ui.room.waitForGuestsReady
-                : strings.ui.room.waitForReady
-          }}
-        </p>
-        <p
-          v-else
-          class="min-h-[1.6em] flex items-center justify-center gap-[0.3em] text-success-fg text-fs-12"
-        >
-          <Check /> {{ strings.ui.room.allReady }}
-        </p>
         <!-- 准备按钮：复用 AppButton secondary（白底描边），已准备时经外部类切换为绿色高亮。 -->
         <AppButton
           v-if="!store.isHost && !store.me?.spectating"
@@ -222,7 +204,12 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
     <VocabularyDialog v-model:open="showVocabulary" v-model:loading="vocabularyLoading" />
 
     <!-- 弹窗二：房间规则编辑（房主）——滑块与开关修改规则（动画由 BaseDialog 内部负责） -->
-    <RulesDialog v-model:open="showSettings" :draft="settingsDraft" @save="saveSettings" />
+    <RulesDialog
+      v-model:open="showSettings"
+      :draft="settingsDraft"
+      :read-only="!store.isHost"
+      @save="saveSettings"
+    />
 
     <!-- 弹窗三：邀请在线玩家（房主或允许邀请的成员） -->
     <InviteDialog v-model:open="showInvite" />

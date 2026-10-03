@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Crown, UserPlus, Users, X } from 'lucide-vue-next'
+import { Crown, User, UserPlus, Users, X } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import type { RoomMember } from '@draw-guess/shared'
 import AvatarImage from '@/components/common/AvatarImage.vue'
@@ -140,12 +140,15 @@ function openSeatMenu(event: MouseEvent, member: RoomMember): void {
             />
           </div>
           <div class="flex items-center gap-[0.4em] max-w-[90%] mt-[0.7cqh]">
-            <b class="overflow-hidden text-ellipsis whitespace-nowrap">{{ member.nickname }}</b
-            ><span
+            <b class="overflow-hidden text-ellipsis whitespace-nowrap">{{ member.nickname }}</b>
+            <span
               v-if="member.id === store.playerId"
-              class="py-[0.1cqh] px-[0.45em] text-white bg-blue rounded-[99em] text-fs-10"
-              >{{ strings.ui.room.meTag }}</span
+              class="flex items-center justify-center p-[0.3em] text-white bg-blue rounded-[99em] text-fs-10 shrink-0"
+              :aria-label="strings.a11y.room.selfBadgeAria"
+              :title="strings.a11y.room.selfBadgeAria"
             >
+              <User class="h-[1.1em] w-[1.1em] stroke-[2.5]" />
+            </span>
           </div>
           <!-- 准备状态标签：观战 / 已准备 / 重连中 / 未准备 -->
           <span

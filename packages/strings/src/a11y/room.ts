@@ -5,6 +5,7 @@
  */
 
 export const room = {
+  selfBadgeAria: '我',
   copyPrivateCodeAria: '复制私密房间码',
   hostCrownAria: '房主',
   kickAria: '移除该玩家',

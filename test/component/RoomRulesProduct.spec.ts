@@ -202,4 +202,45 @@ describe('房间规则与高级设置', () => {
     expect(inviteButton().attributes('title')).toBe(strings.ui.room.inviteDisabledFull)
     wrapper.unmount()
   })
+
+  it('RulesDialog 在 readOnly 模式下禁用所有输入控件且仅显示关闭按钮', async () => {
+    const draft = defaultRoomSettings(6)
+    const wrapper = mount(RulesDialog, {
+      props: { open: true, draft, readOnly: true },
+      global: { plugins: [pinia] },
+    })
+
+    // 下拉按钮全部带 disabled 属性
+    const dropdowns = wrapper.findAll('button[aria-haspopup="listbox"]')
+    for (const dropdown of dropdowns) {
+      expect(dropdown.attributes('disabled')).toBeDefined()
+    }
+
+    // 复选框 input 全部带 disabled 属性
+    const checkboxes = wrapper.findAll('input[type="checkbox"]')
+    for (const checkbox of checkboxes) {
+      expect(checkbox.attributes('disabled')).toBeDefined()
+    }
+
+    // 底部没有「保存规则」按钮，仅有「关闭」按钮
+    expect(wrapper.text()).not.toContain(strings.ui.room.saveRules)
+    expect(wrapper.text()).toContain(strings.ui.common.close)
+    wrapper.unmount()
+  })
+
+  it('RuleSummary 在非房主视角下展示「查看」规则按钮', async () => {
+    const roomStore = useRoomStore()
+    const session = useSessionStore()
+    roomStore.room = createRoomFixture('waiting')
+    // 设为非房主
+    session.playerId = 'guest-player-id'
+    const wrapper = mount(RuleSummary, {
+      props: { vocabularyLoading: false },
+      global: { plugins: [pinia] },
+    })
+
+    expect(wrapper.text()).toContain(strings.ui.room.rulesView)
+    expect(wrapper.text()).not.toContain(strings.ui.room.rulesEdit)
+    wrapper.unmount()
+  })
 })

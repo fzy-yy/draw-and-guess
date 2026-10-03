@@ -28,7 +28,13 @@ import { occupiesSeatMember, playerCountOptions } from '@/utils/room-facts'
 type ChooseTimeValue = 'unlimited' | number
 
 const open = defineModel<boolean>('open', { default: false })
-const props = defineProps<{ draft?: RoomSettings }>()
+const props = withDefaults(
+  defineProps<{
+    draft?: RoomSettings
+    readOnly?: boolean
+  }>(),
+  { draft: undefined, readOnly: false },
+)
 const emit = defineEmits<{ save: [draft: RoomSettings] }>()
 const store = useGameStore()
 
@@ -151,36 +157,42 @@ const chooseTime = computed<ChooseTimeValue>({
         v-model="localDraft.maxPlayers"
         :label="strings.ui.room.maxPlayersField"
         :options="maxPlayerOptions"
+        :disabled="readOnly"
       />
 
       <RuleSelectField
         v-model="localDraft.roundsPerPlayer"
         :label="strings.ui.common.roundsField"
         :options="roundsOptions"
+        :disabled="readOnly"
       />
 
       <RuleSelectField
         v-model="localDraft.drawSeconds"
         :label="strings.ui.room.drawSecondsField"
         :options="drawSecondsOptions"
+        :disabled="readOnly"
       />
 
       <RuleSelectField
         v-model="chooseTime"
         :label="strings.ui.room.chooseTimeField"
         :options="chooseTimeOptions"
+        :disabled="readOnly"
       />
 
       <RuleSelectField
         v-model="localDraft.optionCount"
         :label="strings.ui.room.optionCountField"
         :options="optionCountOptions"
+        :disabled="readOnly"
       />
 
       <RuleSelectField
         v-model="localDraft.joinPolicy"
         :label="strings.ui.room.joinPolicyField"
         :options="joinPolicyOptions"
+        :disabled="readOnly"
       />
 
       <!-- 复选框字段保持自身高度，在固定行高里垂直居中（self-center），不随行高拉伸 -->
@@ -188,53 +200,75 @@ const chooseTime = computed<ChooseTimeValue>({
         v-model="localDraft.allowPlayerInvite"
         class="self-center"
         :label="strings.ui.room.togglePlayerInvite"
+        :disabled="readOnly"
       />
       <RuleToggleField
         v-model="localDraft.allowWordReroll"
         class="self-center"
         :label="strings.ui.room.toggleAllowWordReroll"
+        :disabled="readOnly"
       />
       <RuleToggleField
         v-model="localDraft.allowCustomWord"
         class="self-center"
         :label="strings.ui.room.toggleAllowCustomWord"
+        :disabled="readOnly"
       />
       <RuleToggleField
         v-model="localDraft.showWordLength"
         class="self-center"
         :label="strings.ui.room.toggleShowWordLength"
+        :disabled="readOnly"
       />
       <RuleToggleField
         v-model="localDraft.progressiveHints"
         class="self-center"
         :label="strings.ui.room.toggleProgressiveHints"
+        :disabled="readOnly"
       />
       <RuleToggleField
         v-model="localDraft.allowPause"
         class="self-center"
         :label="strings.ui.room.togglePause"
+        :disabled="readOnly"
       />
       <RuleToggleField
         v-model="localDraft.allowNearMissHint"
         class="self-center"
         :label="strings.ui.room.nearMissHintLabel"
+        :disabled="readOnly"
       />
       <RuleToggleField
         v-model="localDraft.allowCanvasReactions"
         class="self-center"
         :label="strings.ui.room.canvasReactionsLabel"
+        :disabled="readOnly"
       />
     </div>
 
     <template #footer>
-      <!-- 底部操作：取消或保存规则 -->
-      <p class="mr-auto text-muted text-fs-12">{{ strings.ui.room.rulesChangeNote }}</p>
-      <AppButton variant="secondary" type="button" audio-feedback="close" @click="handleClose">
-        {{ strings.ui.common.cancel }}
+      <!-- 底部操作：只读时仅有关闭按钮；可编辑时取消或保存规则 -->
+      <p v-if="!readOnly" class="mr-auto text-muted text-fs-12">
+        {{ strings.ui.room.rulesChangeNote }}
+      </p>
+      <AppButton
+        v-if="readOnly"
+        class="ml-auto"
+        variant="primary"
+        type="button"
+        audio-feedback="close"
+        @click="handleClose"
+      >
+        {{ strings.ui.common.close }}
       </AppButton>
-      <AppButton variant="primary" type="button" @click="emit('save', localDraft)">
-        {{ strings.ui.room.saveRules }}
-      </AppButton>
+      <template v-else>
+        <AppButton variant="secondary" type="button" audio-feedback="close" @click="handleClose">
+          {{ strings.ui.common.cancel }}
+        </AppButton>
+        <AppButton variant="primary" type="button" @click="emit('save', localDraft)">
+          {{ strings.ui.room.saveRules }}
+        </AppButton>
+      </template>
     </template>
   </BaseDialog>
 </template>

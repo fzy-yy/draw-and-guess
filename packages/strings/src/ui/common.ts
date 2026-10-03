@@ -11,6 +11,7 @@ export const meta = {
 } as const
 export const common = {
   cancel: '取消',
+  close: '关闭',
   accept: '接受',
   decline: '拒绝',
   listSeparator: '、',

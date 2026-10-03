@@ -15,9 +15,9 @@ import {
   GripVertical,
   PaintBucket,
   Pipette,
-  RotateCcw,
-  RotateCw,
+  Redo2,
   Trash2,
+  Undo2,
 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { EVENTS, type ToolKind } from '@draw-guess/shared'
@@ -147,8 +147,8 @@ const TOOLS: ReadonlyArray<{ key: ToolKind; icon: Component; label: string; aria
 
 type HistoryKey = 'undo' | 'redo' | 'clear'
 const HISTORY: ReadonlyArray<{ key: HistoryKey; icon: Component; label: string; aria: string }> = [
-  { key: 'undo', icon: RotateCcw, label: strings.a11y.game.undo, aria: strings.a11y.game.undoAria },
-  { key: 'redo', icon: RotateCw, label: strings.a11y.game.redo, aria: strings.a11y.game.redoAria },
+  { key: 'undo', icon: Undo2, label: strings.a11y.game.undo, aria: strings.a11y.game.undoAria },
+  { key: 'redo', icon: Redo2, label: strings.a11y.game.redo, aria: strings.a11y.game.redoAria },
   { key: 'clear', icon: Trash2, label: strings.a11y.game.clear, aria: strings.a11y.game.clearAria },
 ]
 
@@ -161,6 +161,9 @@ const isCustomColor = computed(
 /** 选择颜色（预设或取色器）后播放统一交互音效。 */
 function selectColor(nextColor: string): void {
   color.value = nextColor
+  if (tool.value === 'eraser') {
+    tool.value = 'pen'
+  }
   playInteractionSound('select')
 }
 

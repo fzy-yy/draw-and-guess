@@ -135,4 +135,25 @@ describe('GameView 黄金平衡三栏对局骨架', () => {
 
     wrapper.unmount()
   })
+
+  it('移动工具条后执行撤销操作，工具条位置保持不变（不被重置）', async () => {
+    const wrapper = mountGameView()
+    const roomStore = useRoomStore()
+
+    // 模拟工具条拖拽后位置被更新
+    const toolbar = wrapper.findComponent({ name: 'CanvasToolbar' })
+    await toolbar.vm.$emit('update:position', { x: 20, y: 30 })
+    await flushPromises()
+
+    // 执行撤销：更新 game 快照（如 undoneStrokeIds）
+    if (roomStore.room?.game) {
+      roomStore.room.game.undoneStrokeIds = ['stroke-1']
+    }
+    await flushPromises()
+
+    // 断言 position 依然保持为 { x: 20, y: 30 }，没有被重置为 null
+    expect(toolbar.props('position')).toEqual({ x: 20, y: 30 })
+
+    wrapper.unmount()
+  })
 })

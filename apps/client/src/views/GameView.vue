@@ -57,20 +57,27 @@ const showGameSettings = ref(false) // 对局内设置弹窗
 
 // 底部工具条本地位置（仅画家拖拽微调避让，刷新即重置；位置为相对画布容器的百分比）
 const toolbarPosition = ref<PanelPosition | null>(null)
+// 画家是否主动展示工具条（支持右键菜单显隐）
+const isToolbarVisible = ref(true)
 
-// 换人作画或新回合开始时，重置工具条位置到底部居中默认位置
+// 换人作画或新回合开始时，重置工具条位置到底部居中默认位置并重置为显示状态；
+// 监听源采用具体 getter 数组，避免对整个 game 对象的其它属性变动（如撤销时的 undoneStrokeIds）产生非预期触发
 watch(
-  () => [game.value?.roundId, game.value?.drawerId],
-  () => {
-    toolbarPosition.value = null
+  [() => game.value?.roundId, () => game.value?.drawerId],
+  ([newRound, newDrawer], oldValues) => {
+    const oldRound = oldValues?.[0]
+    const oldDrawer = oldValues?.[1]
+    if (newRound !== oldRound || newDrawer !== oldDrawer) {
+      toolbarPosition.value = null
+      isToolbarVisible.value = true
+    }
   },
 )
 
 /** 仅画家在作画阶段可绘制：驱动画布与底部工具条的启用，非画家/非该阶段整组置灰。 */
 const canDraw = computed(() => store.isDrawer && store.room?.phase === 'drawing')
-/** 底部绘图工具条可见性：仅画家自动显示，猜词者不显示，且工具条不可被隐藏。 */
-const showToolbar = computed(() => store.isDrawer)
-
+/** 底部绘图工具条可见性：仅画家在未主动隐藏时显示，猜词者完全隐藏。 */
+const showToolbar = computed(() => store.isDrawer && isToolbarVisible.value)
 // ---- 猜词框快捷键：Enter 键自动聚焦猜词输入框 ----
 // 对局内设置弹窗打开时让位，避免与设置页的输入控件冲突。
 const chatPanelRef = ref<{ focusInput: () => void }>()
@@ -165,6 +172,7 @@ function handleFullscreenToggle(): void {
             v-model:width="width"
             v-model:tool="tool"
             v-model:color="color"
+            v-model:show-toolbar="isToolbarVisible"
             :round-id="game.roundId"
             :strokes="game.strokes"
             :undone-stroke-ids="game.undoneStrokeIds"
