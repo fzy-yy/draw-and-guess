@@ -194,6 +194,33 @@ describe('ChatPanel 输入与快捷互动', () => {
     expect(screen.getByText('这是一条猜词')).toBeTruthy()
     expect(screen.getByText('房主')).toBeTruthy()
   })
+
+  it('画家输入答案被客户端拦截并弹出 Toast，输入普通消息正常发送', async () => {
+    const user = userEvent.setup()
+    const room = useRoomStore()
+    const session = useSessionStore()
+    room.room = createRoomFixture()
+    session.playerId = HOST_ID
+    room.room.game!.drawerId = HOST_ID
+    room.room.game!.answer = '猫咪'
+    const game = useGameStore()
+    const submitGuess = vi.spyOn(game, 'submitGuess').mockResolvedValue(true)
+
+    renderWithPinia(ChatPanel, { canGuess: true })
+    const input = screen.getByLabelText(strings.ui.game.guessLabel)
+    const send = screen.getByRole('button', { name: strings.a11y.game.sendGuessAria })
+
+    // 1. 画家输入答案「猫咪」并发送：被客户端直接拦截，不调用 submitGuess，弹出 Toast
+    await user.type(input, '猫咪')
+    await user.click(send)
+    expect(submitGuess).not.toHaveBeenCalled()
+
+    // 2. 清空并输入非答案消息「提示：一种宠物」：正常调用 submitGuess 发送
+    await user.clear(input)
+    await user.type(input, '提示：一种宠物')
+    await user.click(send)
+    await waitFor(() => expect(submitGuess).toHaveBeenCalledWith('提示：一种宠物'))
+  })
 })
 
 describe('PhaseOverlay 阶段分支', () => {

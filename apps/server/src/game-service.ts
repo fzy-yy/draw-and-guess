@@ -619,28 +619,39 @@ export class GameService {
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_GUESS)
     if (isPhaseExpired(game, this.clock.now()))
       throw new GameError('PHASE_EXPIRED', serverStrings.errors.PHASE_EXPIRED)
-    if (game.drawerId === playerId)
-      throw new GameError('DRAWER_CANNOT_GUESS', serverStrings.errors.DRAWER_CANNOT_GUESS)
     if (member.spectating)
       throw new GameError('SPECTATOR_CANNOT_GUESS', serverStrings.errors.SPECTATOR_CANNOT_GUESS)
-    if (member.guessedAt)
-      throw new GameError('ALREADY_GUESSED', serverStrings.errors.ALREADY_GUESSED)
+
     const text = rawText.trim()
-    enforceEventRate(this.requirePlayer(playerId), 'guess', this.clock) // 猜词限频
+    enforceEventRate(this.requirePlayer(playerId), 'guess', this.clock) // 猜词与发言限频
     if (!text || Array.from(text).length > APP_CONFIG.player.chatMaxLength)
       throw new GameError('INVALID_MESSAGE', serverStrings.errors.INVALID_MESSAGE_EMPTY)
+
     const normalized = normalizeAnswer(text)
     const answer = normalizeAnswer(game.answer.text)
     // 命中正确答案：词面与全部别称均可判对（规范化后比较）
     const acceptedAnswers = [answer, ...game.answer.aliases.map((alias) => normalizeAnswer(alias))]
-    if (acceptedAnswers.includes(normalized)) {
+    const isAnswer = acceptedAnswers.includes(normalized)
+
+    // 画家发送消息分支：如果内容为答案则拦截拒绝，非答案作为普通聊天消息广播全员
+    if (game.drawerId === playerId) {
+      if (isAnswer) {
+        throw new GameError('DRAWER_CANNOT_GUESS', serverStrings.errors.DRAWER_CANNOT_GUESS)
+      }
+      this.round.addMessage(room, { type: 'guess', text, playerId })
+      this.emitRoom(room.id)
+      return { correct: false }
+    }
+
+    if (member.guessedAt)
+      throw new GameError('ALREADY_GUESSED', serverStrings.errors.ALREADY_GUESSED)
+    if (isAnswer) {
       // markCorrect 内部已负责广播（全员猜中时 finishRound，否则刷新快照），无需再重复广播
       this.round.markCorrect(room, member)
       return { correct: true }
     }
     // 未命中正确答案：作为普通猜词进入聊天流并广播全员
     this.round.addMessage(room, { type: 'guess', text, playerId })
-
     // 差一字私密提示：若房间开启 allowNearMissHint，且猜词与答案（主词面或任一别称）仅差一字（答案字数 >= 2 且编辑距离严格等于 1）
     // 则仅将一条私密提示消息写入当前玩家的独占快照视口（通过 recipientId 隔离），其他玩家与公屏绝对不泄漏
     const targets = [game.answer.text, ...game.answer.aliases]

@@ -12,8 +12,9 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { Lightbulb, Send, SmilePlus } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
-import type { ChatMessage, RoomMember } from '@draw-guess/shared'
+import { normalizeAnswer, type ChatMessage, type RoomMember } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
+import { useToasts } from '@/composables/useToasts'
 import { useGameStore } from '@/stores/game'
 import { roleTextFor } from '@/utils/role-text'
 import { isOnlineActiveMember } from '@/utils/room-facts'
@@ -26,6 +27,7 @@ const props = defineProps<{
 }>()
 
 const store = useGameStore()
+const toasts = useToasts()
 
 // 猜词输入本地状态（输入框内容随 submit 清空）。
 const guess = ref('')
@@ -98,6 +100,17 @@ function messageClass(message: ChatMessage): string {
 async function sendGuess(): Promise<void> {
   const text = guess.value.trim()
   if (!text || !props.canGuess) return
+
+  // 画家如果发送内容为答案，则在客户端直接拦截并弹出 Toast 提示无法发送答案
+  if (store.isDrawer && store.room?.game?.answer) {
+    const normalizedInput = normalizeAnswer(text)
+    const normalizedAnswer = normalizeAnswer(store.room.game.answer)
+    if (normalizedInput === normalizedAnswer) {
+      toasts.notify(strings.ui.game.drawerCannotSendAnswer, 'warning')
+      return
+    }
+  }
+
   const delivered = await store.submitGuess(text)
   if (delivered) {
     playInteractionSound('activate')
@@ -280,7 +293,11 @@ defineExpose({ focusInput })
           class="min-w-0 flex-1"
           :maxlength="store.config.player.chatMaxLength"
           :disabled="!canGuess"
-          :placeholder="strings.ui.game.guessPlaceholder"
+          :placeholder="
+            store.isDrawer
+              ? strings.ui.game.drawerChatPlaceholder
+              : strings.ui.game.guessPlaceholder
+          "
         />
         <button
           type="submit"

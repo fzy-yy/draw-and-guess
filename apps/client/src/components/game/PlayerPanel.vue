@@ -20,7 +20,7 @@ const store = useGameStore()
 
 // 头像右下角标（画家 / 已猜中）共用同一底座；提取常量避免长串在模板里逐字重复。
 const memberBadgeClass =
-  'absolute right-[-0.25cqh] bottom-[-0.15cqh] h-[2.1cqh] w-[2.1cqh] rounded-full bg-blue p-[0.3cqh] text-white'
+  'absolute right-[-0.25cqh] bottom-[-0.15cqh] grid h-[2.1cqh] w-[2.1cqh] place-items-center rounded-full bg-blue text-white shadow-xs'
 
 /**
  * 画家即时飘字动效：
@@ -93,10 +93,10 @@ watch(
           :avatar-id="member.avatarId"
           :label="strings.a11y.common.playerAvatarAria(member.nickname)"
         />
-        <Brush v-if="member.isDrawer" :class="memberBadgeClass" /><Eye
-          v-else-if="member.guessed"
-          :class="memberBadgeClass"
-        />
+        <span v-if="member.isDrawer || member.guessed" :class="memberBadgeClass" aria-hidden="true">
+          <Brush v-if="member.isDrawer" class="h-[62%] w-[62%]" />
+          <Eye v-else-if="member.guessed" class="h-[62%] w-[62%]" />
+        </span>
 
         <!-- 当其他玩家猜中时在画家头像处向上飘起金色 +20 浮动动效 -->
         <template v-if="member.isDrawer">

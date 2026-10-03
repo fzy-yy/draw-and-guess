@@ -51,11 +51,13 @@ function confirm(): void {
     :overlay-class="overlayClass"
     @close="cancel"
   >
-    <component
-      :is="icon"
+    <div
       v-if="icon"
-      class="h-[7cqh] w-[7cqh] rounded-full bg-red/10 p-[1.4cqh] text-red"
-    />
+      class="grid h-[7cqh] w-[7cqh] place-items-center rounded-full bg-red/10 text-red"
+      aria-hidden="true"
+    >
+      <component :is="icon" class="h-[55%] w-[55%]" />
+    </div>
     <h2 :id="titleId">{{ title }}</h2>
     <p class="max-w-[30em] leading-[1.6] text-muted">{{ body }}</p>
     <template #footer>

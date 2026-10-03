@@ -61,7 +61,7 @@ export const serverStrings = {
     INVALID_WORD_ID_CHOOSE: '候选词已失效，请等待服务端自动选择',
     NOT_ENOUGH_PLAYERS: '至少需要 2 名玩家才能开始',
     NOT_ALL_READY: '其他在线玩家全部准备后才能开始',
-    DRAWER_CANNOT_GUESS: '画家不能发送猜词消息',
+    DRAWER_CANNOT_GUESS: '无法发送答案',
     SPECTATOR_CANNOT_GUESS: '观战成员不能参与猜词',
     SPECTATOR_CANNOT_CHAT: '观战成员不能发送互动短语',
     ALREADY_GUESSED: '你已经猜中了，只能发送预设短语',

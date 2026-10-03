@@ -17,11 +17,12 @@ defineProps<{
 
 <template>
   <div class="mb-[2.5cqh] flex items-center gap-[1.2em]">
-    <component
-      :is="icon"
-      class="h-[6cqh] w-[6cqh] rounded-[0.8em] bg-blue p-[1.2cqh] text-white"
+    <div
+      class="grid h-[6cqh] w-[6cqh] place-items-center rounded-[0.8em] bg-blue text-white"
       aria-hidden="true"
-    />
+    >
+      <component :is="icon" class="h-[60%] w-[60%]" />
+    </div>
     <div>
       <h2>{{ title }}</h2>
       <p class="mt-[0.5cqh] text-muted text-fs-12">{{ intro }}</p>

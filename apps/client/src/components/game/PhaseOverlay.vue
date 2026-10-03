@@ -141,7 +141,9 @@ async function submitCustomWord(text: string): Promise<void> {
     </OverlayCard>
     <!-- 阶段遮罩：游戏暂停（房主可继续或提前结束） -->
     <OverlayCard v-else-if="store.room.phase === 'paused'">
-      <CirclePause class="h-[7.5cqh] w-[7.5cqh] bg-blue p-[1.9cqh] text-white rounded-full" />
+      <div class="grid place-items-center h-[7.5cqh] w-[7.5cqh] bg-blue rounded-full">
+        <CirclePause class="h-[3.8cqh] w-[3.8cqh] text-white" />
+      </div>
       <p>{{ strings.ui.game.pausedTitle }}</p>
       <h2>{{ strings.ui.game.pausedSubtitle }}</h2>
       <span>{{ strings.ui.game.pausedHint }}</span>

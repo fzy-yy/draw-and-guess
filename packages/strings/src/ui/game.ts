@@ -20,6 +20,8 @@ export const game = {
   messageNameSeparator: '：',
   guessLabel: '输入你的答案',
   guessPlaceholder: '按 Enter 发送猜词',
+  drawerChatPlaceholder: '按 Enter 发送消息',
+  drawerCannotSendAnswer: '无法发送答案',
   countdownTitle: '游戏即将开始',
   countdownHint: '画家顺序和首个回合由服务器统一确定',
   yourTurn: '轮到你作画了',

@@ -184,4 +184,37 @@ describe('快照隐私与绘图边界', () => {
     expect(game.fillCount).toBe(0)
     expect(game.strokePointTotal).toBe(0)
   })
+
+  it('画家作画阶段发送普通消息成功广播全员，发送答案或别称被拦截并提示无法发送答案', () => {
+    const { harness, host, game } = enterDrawing()
+    const drawerId = host.playerId
+    expect(game.drawerId).toBe(drawerId)
+    const answer = game.answer
+    if (!answer) throw new Error('作画阶段应存在答案')
+
+    // 1. 画家发送非答案聊天消息：成功进入消息流并广播
+    const chatResult = harness.service.submitGuess(drawerId, game.roundId, '画得好不好看？')
+    expect(chatResult).toEqual({ correct: false })
+    const lastMsg = game.messages.at(-1)
+    expect(lastMsg?.type).toBe('guess')
+    expect(lastMsg?.playerId).toBe(drawerId)
+    expect(lastMsg?.text).toBe('画得好不好看？')
+
+    // 2. 画家发送完全匹配的答案词面：拦截并抛出 DRAWER_CANNOT_GUESS 且文案为无法发送答案
+    expect(() => harness.service.submitGuess(drawerId, game.roundId, answer.text)).toThrowError(
+      '无法发送答案',
+    )
+    try {
+      harness.service.submitGuess(drawerId, game.roundId, answer.text)
+    } catch (error) {
+      expect((error as GameError).code).toBe('DRAWER_CANNOT_GUESS')
+    }
+
+    // 3. 若答案包含别称，发送别称同样被拦截
+    if (answer.aliases.length > 0) {
+      expect(() =>
+        harness.service.submitGuess(drawerId, game.roundId, answer.aliases[0]!),
+      ).toThrowError('无法发送答案')
+    }
+  })
 })

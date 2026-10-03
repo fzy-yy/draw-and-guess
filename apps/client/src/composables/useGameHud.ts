@@ -49,12 +49,12 @@ export function useGameHud(store: GameStore) {
       ),
     )
   })
-  // 当前玩家是否可猜词：作画阶段、非画家、非观战、未猜中且在线
+  // 当前玩家是否可猜词或发言：作画阶段、未猜中（或为当前画家）、非观战且在线
   const canGuess = computed(
     () =>
       store.room?.phase === 'drawing' &&
-      !store.isDrawer &&
-      !store.me?.guessed &&
+      (store.isDrawer || !store.me?.guessed) &&
+      !store.me?.spectating &&
       !!store.me &&
       isOnlineActiveMember(store.me),
   )
