@@ -21,20 +21,6 @@ const store = useGameStore()
     />
     <div class="grid grid-cols-2 gap-[1.2cqh_1em]">
       <SettingSwitchRow
-        v-model="store.settings.animationsEnabled"
-        class="border-l-[0.35cqh] border-line"
-        :title="strings.ui.settings.animations"
-        :hint="strings.ui.settings.animationsHint"
-        @save="store.saveSettings"
-      />
-      <SettingSwitchRow
-        v-model="store.settings.showShortcuts"
-        class="border-l-[0.35cqh] border-line"
-        :title="strings.ui.settings.showShortcuts"
-        :hint="strings.ui.settings.showShortcutsHint"
-        @save="store.saveSettings"
-      />
-      <SettingSwitchRow
         v-model="store.settings.autoFocusGuess"
         class="border-l-[0.35cqh] border-line"
         :title="strings.ui.settings.autoFocus"

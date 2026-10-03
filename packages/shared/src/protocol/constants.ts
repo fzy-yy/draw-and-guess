@@ -67,7 +67,7 @@ export const PLAYER_PROTOCOL_LIMITS = {
   minPlayers: 2,
   maxPlayers: 6,
   nicknameMinLength: 1,
-  nicknameMaxLength: 16,
+  nicknameMaxLength: 10,
   roomNameMaxLength: 24,
   chatMaxLength: 60,
 } as const

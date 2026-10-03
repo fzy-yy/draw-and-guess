@@ -74,6 +74,18 @@ describe('SessionService 与 Facade 契约', () => {
     expect(harness.service.players.size).toBe(1)
   })
 
+  it('玩家昵称超过 10 字符被服务端拒绝 (INVALID_NICKNAME)', () => {
+    const harness = createGameHarness()
+    const socket = harness.createSocket('long-nickname')
+    expect(() =>
+      harness.service.session.register(socket as never, {
+        protocolVersion: APP_CONFIG.app.protocolVersion,
+        profile: { nickname: '一二三四五六七八九十一', avatarId: '01' },
+        preferences: { discoverable: true, acceptsInvites: true },
+      }),
+    ).toThrow(serverErrorMessages[ERROR_CODES.INVALID_NICKNAME])
+  })
+
   it('旧连接迟到断线不影响接管身份；注销同时清空索引与请求缓存', () => {
     const harness = createGameHarness()
     const first = harness.register('接管玩家', 'old')

@@ -159,7 +159,7 @@ export const serverErrorMessages = {
   INVALID_DRAW_STYLE: serverStrings.errors.INVALID_DRAW_STYLE,
   INVALID_FILL: serverStrings.errors.INVALID_FILL,
   INVALID_MESSAGE: serverStrings.errors.INVALID_MESSAGE_EMPTY,
-  INVALID_NICKNAME: serverStrings.errors.INVALID_NICKNAME(1, 20),
+  INVALID_NICKNAME: serverStrings.errors.INVALID_NICKNAME(1, 10),
   INVALID_PAYLOAD: serverStrings.errors.INVALID_PAYLOAD,
   INVALID_PHASE: serverStrings.errors.INVALID_PHASE_READY,
   INVALID_SETTINGS: serverStrings.errors.INVALID_SETTINGS,

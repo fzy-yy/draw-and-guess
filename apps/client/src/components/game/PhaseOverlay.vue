@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { CirclePause, CirclePlay, Paintbrush, PenLine, RefreshCw, Trophy } from 'lucide-vue-next'
+import { Brush, CirclePause, CirclePlay, PenLine, RefreshCw, Trophy } from 'lucide-vue-next'
 import { CUSTOM_WORD_MAX_LENGTH, type GameView } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
@@ -84,9 +84,9 @@ async function submitCustomWord(text: string): Promise<void> {
     </div>
     <!-- 阶段遮罩：画家选词（只有画家可见候选词按钮与换一组操作） -->
     <OverlayCard v-else-if="store.room.phase === 'choosing_word' && store.isDrawer">
-      <!-- 居中圆形底座包裹 Paintbrush，避免笔触裁切 -->
+      <!-- 居中圆形底座包裹 Brush，等比居中无裁切 -->
       <div class="grid place-items-center h-[7.5cqh] w-[7.5cqh] bg-blue rounded-full">
-        <Paintbrush class="h-[4cqh] w-[4cqh] text-white" />
+        <Brush class="h-[3.8cqh] w-[3.8cqh] text-white" />
       </div>
       <p>{{ strings.ui.game.yourTurn }}</p>
       <div class="relative flex w-full items-center justify-center min-h-[4.5cqh]">

@@ -165,6 +165,35 @@ describe('ChatPanel 输入与快捷互动', () => {
       false,
     )
   })
+
+  it('系统消息渲染为居中圆角卡片，玩家消息使用独立胶囊标签徽章', async () => {
+    const room = useRoomStore()
+    const session = useSessionStore()
+    room.room = createRoomFixture()
+    session.playerId = GUEST_ID
+
+    room.room.game!.messages = [
+      {
+        id: 'msg-sys',
+        type: 'system',
+        text: '作画开始，猜词玩家请在右侧输入答案',
+        createdAt: Date.now(),
+      },
+      {
+        id: 'msg-user',
+        type: 'guess',
+        playerId: HOST_ID,
+        text: '这是一条猜词',
+        createdAt: Date.now(),
+      },
+    ]
+
+    renderWithPinia(ChatPanel, { canGuess: true })
+
+    expect(screen.getByText('作画开始，猜词玩家请在右侧输入答案')).toBeTruthy()
+    expect(screen.getByText('这是一条猜词')).toBeTruthy()
+    expect(screen.getByText('房主')).toBeTruthy()
+  })
 })
 
 describe('PhaseOverlay 阶段分支', () => {

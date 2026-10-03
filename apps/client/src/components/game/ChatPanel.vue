@@ -58,10 +58,23 @@ function messageStyle(message: ChatMessage): Record<string, string> | undefined 
   if (!member) return undefined
   return {
     borderLeftColor: member.seatColor,
-    backgroundColor: `color-mix(in srgb, ${member.seatColor} 16%, white)`,
+    backgroundColor: `color-mix(in srgb, ${member.seatColor} 12%, white)`,
   }
 }
 
+/**
+ * 玩家昵称胶囊徽章样式：以玩家所属席位颜色作为文字与边框，辅以半透明浅色底，
+ * 与右侧发言正文形成鲜明区隔。
+ */
+function nicknameBadgeStyle(message: ChatMessage): Record<string, string> | undefined {
+  const member = memberForMessage(message)
+  if (!member) return undefined
+  return {
+    color: member.seatColor,
+    borderColor: `color-mix(in srgb, ${member.seatColor} 45%, transparent)`,
+    backgroundColor: `color-mix(in srgb, ${member.seatColor} 18%, white)`,
+  }
+}
 /** 聊天消息类型对应的分层着色样式类。 */
 function messageClass(message: ChatMessage): string {
   switch (message.type) {
@@ -168,24 +181,37 @@ defineExpose({ focusInput })
         吃掉剩余空间、把整列推到底部，与「最新消息在下方」的阅读锚点一致；
         内容超过一屏后 mt-auto 归零，不影响滚动跟随逻辑。
       -->
-      <div
-        v-for="message in messages"
-        :key="message.id"
-        :class="[
-          'flex flex-wrap items-center gap-[0.35em] border-l-[0.3cqh] px-[0.65em] py-[0.6cqh] text-fs-12 leading-[1.35] first:mt-auto ui-feedback rounded-r-[0.35em]',
-          messageClass(message),
-          message.playerId && message.type !== 'near_miss' && 'font-bold',
-        ]"
-        :style="messageStyle(message)"
-      >
-        <!-- 差一字私密提示专属图标 -->
-        <span v-if="message.type === 'near_miss'" class="select-none" aria-hidden="true">💡</span>
-        <!-- 玩家消息显示发送者昵称，昵称后接冒号分隔内容（分隔符来自 strings） -->
-        <b v-if="message.playerId && message.type !== 'near_miss'"
-          >{{ memberForMessage(message)?.nickname }}{{ strings.ui.game.messageNameSeparator }}</b
+      <template v-for="message in messages" :key="message.id">
+        <!-- 系统通知消息：水平垂直居中对齐的圆角矩形卡片 -->
+        <div
+          v-if="message.type === 'system'"
+          class="self-center mx-auto my-[0.35cqh] flex flex-col items-center justify-center text-center rounded-[0.55em] border-[0.16cqh] border-line/80 bg-paper/85 px-[0.9em] py-[0.45cqh] text-fs-10 text-muted leading-[1.35] max-w-[92%] first:mt-auto ui-feedback"
         >
-        <span>{{ message.text }}</span>
-      </div>
+          <span>{{ message.text }}</span>
+        </div>
+        <!-- 其它消息（普通猜词、猜中通报、差一字提示） -->
+        <div
+          v-else
+          :class="[
+            'flex flex-wrap items-center gap-[0.45em] border-l-[0.3cqh] px-[0.65em] py-[0.5cqh] text-fs-12 leading-[1.35] first:mt-auto ui-feedback rounded-r-[0.35em]',
+            messageClass(message),
+            message.playerId && message.type !== 'near_miss' && 'font-bold',
+          ]"
+          :style="messageStyle(message)"
+        >
+          <!-- 差一字私密提示专属图标 -->
+          <span v-if="message.type === 'near_miss'" class="select-none" aria-hidden="true">💡</span>
+          <!-- 玩家发言：独立胶囊标签徽章展示昵称，与正文明显区隔 -->
+          <span
+            v-if="message.playerId && message.type !== 'near_miss'"
+            class="inline-flex items-center px-[0.45em] py-[0.1cqh] rounded-full text-fs-10 font-bold border"
+            :style="nicknameBadgeStyle(message)"
+          >
+            {{ memberForMessage(message)?.nickname }}
+          </span>
+          <span class="break-words">{{ message.text }}</span>
+        </div>
+      </template>
       <div v-if="!messages.length" class="m-auto flex flex-col items-center text-muted text-fs-12">
         <Send class="h-[4cqh] w-[4cqh]" /><span>{{ strings.ui.game.noMessages }}</span>
       </div>

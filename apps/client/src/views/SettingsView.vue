@@ -7,7 +7,6 @@ import {
   Eraser,
   Eye,
   Keyboard,
-  MessageSquare,
   PaintBucket,
   SlidersHorizontal,
   Volume2,
@@ -76,12 +75,6 @@ const shortcutRows: Array<{
     name: strings.ui.settings.fill,
     detail: strings.ui.settings.fillDetail,
     icon: PaintBucket,
-  },
-  {
-    setting: 'chatPanelShortcut',
-    name: strings.ui.settings.panelChat,
-    detail: strings.ui.settings.panelChatDetail,
-    icon: MessageSquare,
   },
 ]
 

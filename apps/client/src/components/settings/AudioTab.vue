@@ -33,16 +33,6 @@ const store = useGameStore()
         :display="strings.ui.common.percentUnit(Math.round(store.settings.masterVolume * 100))"
         @save="store.saveSettings"
       />
-      <SettingSliderRow
-        v-model="store.settings.soundVolume"
-        :title="strings.ui.settings.soundVolume"
-        :hint="strings.ui.settings.soundVolumeHint"
-        :min="store.config.audio.volumeRange.min"
-        :max="store.config.audio.volumeRange.max"
-        :step="store.config.audio.volumeRange.step"
-        :display="strings.ui.common.percentUnit(Math.round(store.settings.soundVolume * 100))"
-        @save="store.saveSettings"
-      />
       <SettingSwitchRow
         v-model="store.settings.muted"
         :title="strings.ui.settings.muted"
