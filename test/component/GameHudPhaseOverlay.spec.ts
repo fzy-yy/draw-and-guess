@@ -194,16 +194,16 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
       rankings: [],
     }) as VueWrapper
 
-    expect(overlay.text()).toContain(strings.ui.game.hostReturnWaiting)
-    expect(overlay.text()).not.toContain(strings.ui.game.rematchReady)
+    expect(overlay.text()).toContain(strings.ui.game.hostReturnWaitingWithSeconds(12))
+    expect(overlay.text()).not.toContain(strings.ui.game.rematchReadyWithSeconds(12))
 
     session.playerId = GUEST_ID
     await nextTick()
-    expect(overlay.text()).toContain(strings.ui.game.rematch)
-    expect(overlay.text()).not.toContain(strings.ui.game.hostReturnWaiting)
+    expect(overlay.text()).toContain(strings.ui.game.rematchWithSeconds(12))
+    expect(overlay.text()).not.toContain(strings.ui.game.hostReturnWaitingWithSeconds(12))
     await overlay
       .findAll('button')
-      .find((button) => button.text().includes(strings.ui.game.rematch))!
+      .find((button) => button.text().includes(strings.ui.game.rematchWithSeconds(12)))!
       .trigger('click')
     expect(overlay.emitted('return-waiting')).toHaveLength(1)
 
@@ -213,6 +213,59 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
     const panel = mountWithPinia(PlayerPanel, {}) as VueWrapper
     expect(panel.text()).toContain(strings.ui.status.roleRematchReady)
     panel.unmount()
+    overlay.unmount()
+  })
+
+  it('回合结算中答案呈现黄色粗体，画家得分置顶第一条，下一轮按钮点击后本地关闭弹窗', async () => {
+    const roomStore = useRoomStore()
+    const session = useSessionStore()
+    roomStore.room = createRoomFixture('round_result')
+    session.playerId = GUEST_ID
+    const game = roomStore.room.game!
+    game.roundResult = {
+      answer: '自行车',
+      drawerScore: 20,
+      details: [{ playerId: GUEST_ID, order: 1, total: 100 }],
+    }
+
+    // 重播期间不弹窗
+    const replayingOverlay = mountWithPinia(PhaseOverlay, {
+      secondsLeft: 7,
+      game,
+      rankings: [],
+      isReplaying: true,
+    }) as VueWrapper
+    expect(replayingOverlay.find('h2').exists()).toBe(false)
+    replayingOverlay.unmount()
+
+    // 重播结束后正常弹窗
+    const overlay = mountWithPinia(PhaseOverlay, {
+      secondsLeft: 5,
+      game,
+      rankings: [],
+      isReplaying: false,
+    }) as VueWrapper
+
+    const answerHeading = overlay.get('h2')
+    expect(answerHeading.text()).toBe('自行车')
+    expect(answerHeading.classes()).toContain('text-yellow')
+    expect(answerHeading.classes()).toContain('font-bold')
+
+    // 画家置顶第一条
+    const articles = overlay.findAll('article')
+    expect(articles).toHaveLength(2)
+    expect(articles[0]!.text()).toContain('房主 (画家)')
+    expect(articles[0]!.text()).toContain('+20')
+    expect(articles[1]!.text()).toContain('猜词者')
+    expect(articles[1]!.text()).toContain('+100')
+
+    // 下一轮按钮
+    const nextBtn = overlay.findAll('button').find((b) => b.text().includes('进入下一轮'))
+    expect(nextBtn?.text()).toContain(strings.ui.game.enterNextRound(5))
+
+    // 点击按钮本地隐藏弹窗以便看画
+    await nextBtn!.trigger('click')
+    expect(overlay.find('h2').exists()).toBe(false)
     overlay.unmount()
   })
 })

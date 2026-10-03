@@ -377,9 +377,11 @@ describe('角色裁剪快照穷举矩阵', () => {
       const view = builder.snapshot(room, HOST_ID).game
       expect(view?.phaseBeforePause).toBe('round_result')
       expect(view?.pausedRemainingMs).toBe(3_000)
-      expect((view?.phaseEndsAt ?? 0) - (view?.phaseStartedAt ?? 0)).toBe(
-        APP_CONFIG.game.roundResultSeconds * 1_000,
-      )
+      const expectedNominalMs =
+        (room.settings.allowRoundReplay
+          ? APP_CONFIG.game.roundReplaySeconds + APP_CONFIG.game.roundResultSeconds
+          : APP_CONFIG.game.roundResultSeconds) * 1_000
+      expect((view?.phaseEndsAt ?? 0) - (view?.phaseStartedAt ?? 0)).toBe(expectedNominalMs)
     })
 
     it('私密房码只进当前房主的快照，普通成员与观战拿不到', () => {

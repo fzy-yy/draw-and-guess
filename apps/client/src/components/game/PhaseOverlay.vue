@@ -7,7 +7,7 @@
   注：外层的 display:contents 只是为了让多个定位遮罩不参与父级 grid 布局，同时保留 TS 窄化。
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Brush, CirclePause, CirclePlay, PenLine, RefreshCw, Trophy } from 'lucide-vue-next'
 import { CUSTOM_WORD_MAX_LENGTH, type GameView } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
@@ -23,14 +23,19 @@ import OverlayCard from '@/components/game/OverlayCard.vue'
 
 // 阶段遮罩需要的 HUD 派生值（剩余秒数、对局数据、最终排行）由父组件 GameView
 // 统一计算后经 props 下发，整局只保留一个 ticker（不再此处单独起定时器）。
-const props = defineProps<{
-  /** 当前阶段剩余秒数（开局倒计时/自动选词提示用）。 */
-  secondsLeft: number
-  /** 对局视图（候选词/回合结算/答案等）。 */
-  game: GameView | undefined
-  /** 最终结算的排名列表（带同名次位次）。 */
-  rankings: RankedMember[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** 当前阶段剩余秒数（开局倒计时/自动选词提示用）。 */
+    secondsLeft: number
+    /** 对局视图（候选词/回合结算/答案等）。 */
+    game: GameView | undefined
+    /** 最终结算的排名列表（带同名次位次）。 */
+    rankings: RankedMember[]
+    /** 是否正在执行 3 秒作画重播 */
+    isReplaying?: boolean
+  }>(),
+  { isReplaying: false },
+)
 const emit = defineEmits<{
   'choose-word': [wordId: string]
   'reroll-words': []
@@ -47,6 +52,20 @@ const playerAccolades = computed(() => {
 })
 const phaseAnnouncement = computed(() => phaseTextFor(store.room?.phase))
 
+/** 当前回合画家成员 */
+const drawerMember = computed(() => {
+  const drawerId = props.game?.drawerId
+  return drawerId ? store.room?.members.find((member) => member.id === drawerId) : undefined
+})
+
+/** 回合结算弹窗显隐控制：新回合或新阶段时默认展示；玩家点击“进入下一轮”后本地隐藏以便查看画作 */
+const showRoundResultModal = ref(true)
+watch(
+  () => [store.room?.phase, props.game?.roundId],
+  () => {
+    showRoundResultModal.value = true
+  },
+)
 function chooseWord(wordId: string): void {
   playInteractionSound('select')
   emit('choose-word', wordId)
@@ -156,24 +175,63 @@ async function submitCustomWord(text: string): Promise<void> {
       </div>
     </OverlayCard>
     <!-- 阶段遮罩：回合结算（答案、得分明细） -->
-    <OverlayCard v-else-if="store.room.phase === 'round_result' && game.roundResult">
+    <!-- 阶段遮罩：回合结算（答案、得分明细）——重播期间隐藏，重播结束后或未开启重播时展示；玩家点击关闭后本地隐藏，便于欣赏画作 -->
+    <OverlayCard
+      v-else-if="
+        store.room.phase === 'round_result' &&
+        game.roundResult &&
+        !props.isReplaying &&
+        showRoundResultModal
+      "
+    >
       <p>{{ strings.ui.game.roundAnswerLabel }}</p>
-      <h2>{{ game.roundResult.answer }}</h2>
+      <h2 class="text-yellow text-fs-24 font-bold tracking-[0.16em]">
+        {{ game.roundResult.answer }}
+      </h2>
       <div class="my-[1.5cqh] flex w-full flex-col gap-[0.6cqh]">
+        <!-- 画家本回合得分条状项目（置于第一行） -->
+        <article
+          v-if="drawerMember"
+          class="grid grid-cols-[1.5fr_1fr_auto] items-center gap-[0.5em] bg-line px-[0.8em] py-[0.8cqh] text-left text-fs-12"
+        >
+          <span class="flex items-center gap-[0.3em] font-bold truncate">
+            <Brush class="h-[1.8cqh] w-[1.8cqh] text-blue shrink-0" />
+            <span class="truncate">{{ strings.ui.game.drawerNameTag(drawerMember.nickname) }}</span>
+          </span>
+          <span>{{ strings.ui.game.drawerScoreLabel }}</span>
+          <strong class="text-blue text-fs-18">
+            {{ strings.ui.game.scoreTotal(game.roundResult.drawerScore) }}
+          </strong>
+        </article>
+
+        <!-- 猜词玩家明细列表 -->
         <article
           v-for="detail in game.roundResult.details"
           :key="detail.playerId"
           class="grid grid-cols-[1.5fr_1fr_auto] items-center gap-[0.5em] bg-line px-[0.8em] py-[0.8cqh] text-left text-fs-12"
         >
-          <b>{{ store.room.members.find((member) => member.id === detail.playerId)?.nickname }}</b
-          ><span>{{ strings.ui.game.scoreOrderLabel(detail.order) }}</span
-          ><strong class="text-blue text-fs-18">{{
-            strings.ui.game.scoreTotal(detail.total)
-          }}</strong>
+          <b class="truncate">{{
+            store.room.members.find((member) => member.id === detail.playerId)?.nickname
+          }}</b>
+          <span>{{ strings.ui.game.scoreOrderLabel(detail.order) }}</span>
+          <strong class="text-blue text-fs-18">
+            {{ strings.ui.game.scoreTotal(detail.total) }}
+          </strong>
         </article>
-        <p v-if="!game.roundResult.details.length">{{ strings.ui.game.noGuesses }}</p>
+        <p
+          v-if="!game.roundResult.details.length"
+          class="text-muted text-fs-12 text-center py-[0.5cqh]"
+        >
+          {{ strings.ui.game.noGuesses }}
+        </p>
       </div>
-      <span>{{ strings.ui.game.drawerScoreLine(game.roundResult.drawerScore, secondsLeft) }}</span>
+
+      <!-- 居中按钮：进入下一轮( 5 )，点击关闭弹窗以便查看画作 -->
+      <div class="flex justify-center mt-[0.5cqh]">
+        <AppButton variant="primary" class="min-w-[12em]" @click="showRoundResultModal = false">
+          {{ strings.ui.game.enterNextRound(Math.min(5, secondsLeft)) }}
+        </AppButton>
+      </div>
     </OverlayCard>
     <!-- 阶段遮罩：最终结算（排行榜、统计） -->
     <OverlayCard v-else-if="store.room.phase === 'game_result'" wide>
@@ -203,10 +261,11 @@ async function submitCustomWord(text: string): Promise<void> {
             <span class="flex items-center gap-[0.4em] flex-wrap">
               <span>{{ member.nickname }}</span>
               <!-- 荣誉称号胶囊徽章列表 -->
+              <!-- 荣誉称号胶囊徽章列表（无边框纯色浅底设计） -->
               <span
                 v-for="accolade in playerAccolades[member.id] ?? []"
                 :key="accolade.key"
-                class="inline-flex items-center gap-[0.2em] rounded-full border-[0.16cqh] px-[0.55em] py-[0.1cqh] text-fs-10 font-bold shadow-xs select-none"
+                class="inline-flex items-center gap-[0.2em] rounded-full px-[0.55em] py-[0.1cqh] text-fs-10 font-bold select-none"
                 :class="accolade.colorClass"
                 :title="accolade.description"
                 :aria-label="strings.a11y.game.accoladeBadgeAria(member.nickname, accolade.title)"
@@ -239,17 +298,16 @@ async function submitCustomWord(text: string): Promise<void> {
           {{
             store.me?.rematchReady
               ? store.isHost
-                ? strings.ui.game.hostReturnQueued
-                : strings.ui.game.rematchReady
+                ? strings.ui.game.hostReturnQueuedWithSeconds(secondsLeft)
+                : strings.ui.game.rematchReadyWithSeconds(secondsLeft)
               : store.isHost
-                ? strings.ui.game.hostReturnWaiting
-                : strings.ui.game.rematch
+                ? strings.ui.game.hostReturnWaitingWithSeconds(secondsLeft)
+                : strings.ui.game.rematchWithSeconds(secondsLeft)
           }}</AppButton
         ><AppButton variant="secondary" :audio-feedback="null" @click="emit('leave-room')">
           {{ strings.ui.game.leaveRoom }}
         </AppButton>
       </div>
-      <span>{{ strings.ui.game.gameResultAutoReturn(secondsLeft) }}</span>
     </OverlayCard>
   </div>
 </template>

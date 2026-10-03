@@ -163,12 +163,16 @@ export function countOnlinePlayers(room: MemberList, isOnline: OnlineLookup): nu
 export function nominalPhaseDurationMs(
   phase: RoomPhase | undefined,
   game: Pick<GameSecret, 'roundDurationMs'>,
-  settings: Pick<RoomSettings, 'chooseSeconds' | 'allowChooseTimeLimit'>,
+  settings: Pick<RoomSettings, 'chooseSeconds' | 'allowChooseTimeLimit'> &
+    Partial<Pick<RoomSettings, 'allowRoundReplay'>>,
 ): number | undefined {
   if (phase === 'drawing') return game.roundDurationMs
   if (phase === 'choosing_word')
     return settings.allowChooseTimeLimit ? settings.chooseSeconds * 1_000 : undefined
-  if (phase === 'round_result') return APP_CONFIG.game.roundResultSeconds * 1_000
+  if (phase === 'round_result') {
+    const replayMs = settings.allowRoundReplay ? APP_CONFIG.game.roundReplaySeconds * 1_000 : 0
+    return replayMs + APP_CONFIG.game.roundResultSeconds * 1_000
+  }
   return undefined
 }
 

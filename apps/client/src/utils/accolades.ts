@@ -32,28 +32,28 @@ export const ACCOLADE_CONFIG: Record<AccoladeKey, AccoladeInfo> = {
     title: strings.ui.game.accolades.masterDrawer,
     description: strings.ui.game.accolades.masterDrawerDesc,
     icon: '🖌️',
-    colorClass: 'border-yellow bg-yellow/15 text-warning-fg',
+    colorClass: 'bg-yellow/15 text-warning-fg',
   },
   soulPainter: {
     key: 'soulPainter',
     title: strings.ui.game.accolades.soulPainter,
     description: strings.ui.game.accolades.soulPainterDesc,
     icon: '🎨',
-    colorClass: 'border-purple bg-purple/15 text-purple',
+    colorClass: 'bg-purple/15 text-purple',
   },
   mindReader: {
     key: 'mindReader',
     title: strings.ui.game.accolades.mindReader,
     description: strings.ui.game.accolades.mindReaderDesc,
     icon: '⚡',
-    colorClass: 'border-blue bg-sky text-blue',
+    colorClass: 'bg-sky text-blue',
   },
   activeGuesser: {
     key: 'activeGuesser',
     title: strings.ui.game.accolades.activeGuesser,
     description: strings.ui.game.accolades.activeGuesserDesc,
     icon: '🔥',
-    colorClass: 'border-red bg-red/15 text-red',
+    colorClass: 'bg-red/15 text-red',
   },
 }
 

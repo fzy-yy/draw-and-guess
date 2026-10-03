@@ -32,6 +32,7 @@ import {
   type ToolKind,
   type CanvasPingType,
 } from '@draw-guess/shared'
+import { APP_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import { recordFillDiagnostic } from '@/canvas/fill-diagnostics'
 import { FloodFillWorkerClient } from '@/canvas/flood-fill-worker'
@@ -512,6 +513,15 @@ function handlePointerMove(event: PointerEvent): void {
   cursor.cursorTrack(event)
   strokeSession.pointerMove(event)
 }
+
+/** 供宿主视图编排：在回合结算前执行 3 秒画布笔迹快速重放 */
+function speedrunReplay(durationMs = APP_CONFIG.game.roundReplaySeconds * 1_000): Promise<void> {
+  return machine.speedrun(durationMs)
+}
+
+defineExpose({
+  speedrunReplay,
+})
 
 onBeforeUnmount(() => {
   fillSession.reset()

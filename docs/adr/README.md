@@ -79,6 +79,7 @@
 | [0054](0054-draggable-toolbar-and-fixed-drawer-visibility.md)      | 绘图工具条改为画家常驻不可隐藏与手柄拖拽移动         | 已采纳                 |
 | [0055](0055-player-panel-visual-balance-and-identity-highlight.md) | 玩家栏独立黑框视觉平衡、高对比度座位色与本人高亮重构 | 已采纳                 |
 | [0056](0056-three-column-layout-and-canvas-menu.md)                | 黄金三栏对局布局、画板双角色右键菜单与趣味机制升级   | 已采纳                 |
+| [0057](0057-round-drawing-replay-and-result-improvements.md)       | 回合画作快速重播与结算流程优化                       | 已采纳                 |
 
 ### 词汇与提示
 

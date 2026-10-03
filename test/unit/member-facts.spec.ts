@@ -139,8 +139,7 @@ describe('member-facts 选择器与计数契约', () => {
 
 describe('nominalPhaseDurationMs 契约', () => {
   const game = { roundDurationMs: 45_000 }
-  const settings = { chooseSeconds: 12, allowChooseTimeLimit: true }
-
+  const settings = { chooseSeconds: 12, allowChooseTimeLimit: true, allowRoundReplay: false }
   it('drawing 返回本回合实际作画时长', () => {
     expect(nominalPhaseDurationMs('drawing', game, settings)).toBe(45_000)
   })
@@ -158,10 +157,13 @@ describe('nominalPhaseDurationMs 契约', () => {
     ).toBeUndefined()
   })
 
-  it('round_result 返回全局结算展示时长（暂停快照按它换算进度，防进度条钉死）', () => {
-    expect(nominalPhaseDurationMs('round_result', game, settings)).toBe(
-      APP_CONFIG.game.roundResultSeconds * 1_000,
-    )
+  it('round_result 返回全局结算展示时长（包含开启重播时的 3 秒与关闭时的 5 秒）', () => {
+    expect(
+      nominalPhaseDurationMs('round_result', game, { ...settings, allowRoundReplay: false }),
+    ).toBe(APP_CONFIG.game.roundResultSeconds * 1_000)
+    expect(
+      nominalPhaseDurationMs('round_result', game, { ...settings, allowRoundReplay: true }),
+    ).toBe((APP_CONFIG.game.roundReplaySeconds + APP_CONFIG.game.roundResultSeconds) * 1_000)
   })
 
   it('不可暂停阶段与阶段缺失返回 undefined', () => {

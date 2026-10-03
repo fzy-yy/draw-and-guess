@@ -136,6 +136,11 @@ const summaryRows = computed(() => {
     enabled(settings.allowCanvasReactions),
   )
   addDifference(
+    'allowRoundReplay',
+    strings.ui.room.roundReplayLabel,
+    enabled(settings.allowRoundReplay),
+  )
+  addDifference(
     'joinPolicy',
     strings.ui.room.joinPolicyField,
     settings.joinPolicy === 'forbid'

@@ -166,7 +166,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           v-if="!store.isHost && !store.me?.spectating"
           variant="secondary"
           type="button"
-          class="w-full my-[0.8cqh]"
+          class="w-full"
           :class="{ 'text-success-fg bg-green/10 border-green': store.me?.ready }"
           :audio-feedback="store.me?.ready ? 'activate' : null"
           @click="store.setReady(!store.me?.ready)"
@@ -177,7 +177,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           v-else-if="!store.isHost"
           variant="secondary"
           type="button"
-          class="w-full my-[0.8cqh]"
+          class="w-full"
           disabled
           :title="strings.a11y.room.spectatorReadyTitle"
         >
@@ -192,7 +192,8 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           :audio-feedback="null"
           @click="store.startGame"
         >
-          <Play /> {{ strings.ui.room.startGame }}
+          <Play class="h-[2.4cqh] w-[2.4cqh] shrink-0 fill-current" />
+          <span>{{ strings.ui.room.startGame }}</span>
         </AppButton>
       </div>
     </aside>

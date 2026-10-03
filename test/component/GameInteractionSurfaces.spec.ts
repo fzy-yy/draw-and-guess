@@ -280,7 +280,9 @@ describe('PhaseOverlay 阶段分支', () => {
 
     room.room.phase = 'game_result'
     await nextTick()
-    await user.click(screen.getByRole('button', { name: strings.ui.game.rematch }))
+    await user.click(
+      screen.getByRole('button', { name: strings.ui.game.rematchWithSeconds(5) }),
+    )
     await user.click(screen.getByRole('button', { name: strings.ui.game.leaveRoom }))
     expect(onReturnWaiting).toHaveBeenCalledOnce()
     expect(onLeaveRoom).toHaveBeenCalledOnce()
@@ -290,7 +292,7 @@ describe('PhaseOverlay 阶段分支', () => {
     expect(
       (
         screen.getByRole('button', {
-          name: strings.ui.game.hostReturnWaiting,
+          name: strings.ui.game.hostReturnWaitingWithSeconds(5),
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(false)

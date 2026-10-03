@@ -13,8 +13,8 @@ export const room = {
   allowPause: roomSettingsDefaults.allowPause,
   allowNearMissHint: roomSettingsDefaults.allowNearMissHint,
   allowCanvasReactions: roomSettingsDefaults.allowCanvasReactions,
+  allowRoundReplay: roomSettingsDefaults.allowRoundReplay,
   joinPolicy: roomSettingsDefaults.joinPolicy,
-  /** 私密房间码使用排除易混淆字符的服务端随机字符集。 */
   privateCodeAlphabet: PRIVATE_ROOM_CODE.alphabet,
   privateCodeLength: PRIVATE_ROOM_CODE.length,
 } as const

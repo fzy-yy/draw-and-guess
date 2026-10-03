@@ -16,16 +16,16 @@ import { useGameStore } from '@/stores/game'
 import { IconButton, NetworkStatusButton } from '@/components/common'
 import HudPill from '@/components/game/HudPill.vue'
 
-const props = defineProps<{
-  /** 是否处于全屏：用于切换全屏/退出全屏图标与无障碍标签。 */
-  isFullscreen: boolean
-  /** 对局视图（回合/答案/遮罩等），由 useGameHud 派生。 */
-  game: GameView | undefined
-  /** 当前阶段剩余秒数。 */
-  secondsLeft: number
-  /** 当前阶段剩余进度（0～1），供进度条 scaleX。 */
-  progress: number
-}>()
+const props = withDefaults(
+  defineProps<{
+    isFullscreen: boolean
+    game: GameView | undefined
+    secondsLeft: number
+    progress: number
+    isReplaying?: boolean
+  }>(),
+  { isReplaying: false },
+)
 const emit = defineEmits<{
   /** 打开对局内设置弹窗（父组件维护弹窗开关）。 */
   settings: []
@@ -83,8 +83,20 @@ function toggleDrawerAnswerReveal(): void {
 
 /** 题目展示：画家按显隐状态在明文与遮罩间切换，猜词者恒为遮罩。 */
 const displayedAnswer = computed(() => {
+  if (props.isReplaying) return strings.ui.game.replayingDrawing
   if (store.isDrawer && drawerRevealed.value && props.game?.answer) return props.game.answer
   return props.game?.answerMask || strings.ui.game.awaitingWord
+})
+
+/** 呈现给用户的剩余秒数（回合结算前若有重播，重播期间为 3 秒倒计时，结束后为 5 秒倒计时） */
+const displaySeconds = computed(() => {
+  if (props.isReplaying) {
+    return Math.max(1, props.secondsLeft - 5)
+  }
+  if (store.room?.phase === 'round_result') {
+    return Math.min(5, props.secondsLeft)
+  }
+  return props.secondsLeft
 })
 
 /** 单按钮处理暂停与恢复切换：暂停时房主点击恢复，运行中点击暂停或请求暂停。 */
@@ -154,7 +166,7 @@ function handlePauseToggle(): void {
       >
         <Clock3 class="h-[2.5cqh] w-[2.5cqh] shrink-0" />
         <b class="w-[3ch] shrink-0 text-center text-fs-24 tabular-nums leading-none">
-          {{ hasDeadline ? secondsLeft : strings.ui.game.chooseNoLimit }}
+          {{ hasDeadline ? displaySeconds : strings.ui.game.chooseNoLimit }}
         </b>
         <i
           v-if="hasDeadline"

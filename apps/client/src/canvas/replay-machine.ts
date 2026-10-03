@@ -86,6 +86,7 @@ export class DrawingReplayMachine {
   private disposed = false
   /** 视口是否已经定尺寸；未定尺寸前 sync/预览只登记，不产生绘制。 */
   private sized = false
+  private speedrunCancel: (() => void) | null = null
 
   constructor(
     ports: ReplayMachinePorts,
@@ -108,6 +109,7 @@ export class DrawingReplayMachine {
     const visible = this.visibleCommands()
     const undoChanged = snapshot.undoneIds.length !== this.committedUndoLen
     const roundChanged = snapshot.roundId !== this.committedRoundId
+    if (roundChanged) this.cancelSpeedrun()
     const visibleIds = new Set(visible.map((command) => command.id))
     const hasRemovedCommand = [...this.drawn.keys()].some(
       (id) => id !== this.preview?.id && !visibleIds.has(id),
@@ -161,6 +163,7 @@ export class DrawingReplayMachine {
 
   /** 强制整帧重放当前快照（ack 合并后消除分批抗锯齿像素差异等场景）。 */
   replay(): void {
+    this.cancelSpeedrun()
     this.generation += 1
     this.computeFill.cancel()
     void this.runReplay(this.generation)
@@ -213,9 +216,135 @@ export class DrawingReplayMachine {
 
   /** 释放：中止在途填充任务；调用后机器不再产生渲染态回调。 */
   dispose(): void {
+    this.cancelSpeedrun()
     this.disposed = true
     this.generation += 1
     this.computeFill.cancel()
+  }
+
+  private cancelSpeedrun(): void {
+    if (this.speedrunCancel) {
+      const cancel = this.speedrunCancel
+      this.speedrunCancel = null
+      cancel()
+    }
+  }
+
+  /**
+   * 3 秒精彩快速重播（Speedrun Replay）：
+   * 在指定毫秒内（默认 3000ms），清空画布并从第 0 笔至最新笔迹逐帧递进重绘，
+   * 并在 RAF 中实时向展示层呈现，让玩家回顾完整作画过程。
+   * 返回 Promise，重放完毕或被新操作中断时完成。
+   */
+  async speedrun(durationMs = 3000): Promise<void> {
+    this.cancelSpeedrun()
+    const logical = this.logicalContext()
+    if (!logical || !this.sized) return
+    const generation = ++this.generation
+    const roundId = this.currentRoundId()
+    const commands = this.visibleCommands()
+    if (!commands.length) return
+    this.computeFill.cancel()
+    const width = logical.canvas.width
+    const height = logical.canvas.height
+    if (!width || !height) return
+
+    logical.clearRect(0, 0, width, height)
+    this.drawn.clear()
+    this.ports.present(this.logicalCanvas)
+
+    const FILL_WEIGHT = 15
+    const commandWeights = commands.map((cmd) =>
+      cmd.kind === 'stroke' ? Math.max(1, cmd.points.length) : FILL_WEIGHT,
+    )
+    const totalWeight = commandWeights.reduce((a, b) => a + b, 0)
+    if (totalWeight <= 0) return
+
+    let currentCmdIdx = 0
+    let currentStrokePointIdx = 0
+    let accumulatedWeight = 0
+    const startTime = performance.now()
+
+    return new Promise<void>((resolve) => {
+      let rafId: number | null = null
+
+      const finish = () => {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId)
+          rafId = null
+        }
+        this.speedrunCancel = null
+        if (generation === this.generation && roundId === this.currentRoundId()) {
+          this.replay()
+        }
+        resolve()
+      }
+
+      this.speedrunCancel = () => {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId)
+          rafId = null
+        }
+        this.speedrunCancel = null
+        resolve()
+      }
+
+      const step = async () => {
+        if (this.disposed || generation !== this.generation || roundId !== this.currentRoundId()) {
+          finish()
+          return
+        }
+
+        const now = performance.now()
+        const elapsed = now - startTime
+        const progress = Math.min(1, elapsed / durationMs)
+        const targetWeight = totalWeight * progress
+
+        while (currentCmdIdx < commands.length && accumulatedWeight < targetWeight) {
+          const cmd = commands[currentCmdIdx]
+          if (!cmd) break
+          if (cmd.kind === 'stroke') {
+            const strokePoints = cmd.points.length
+            const remainingStrokeWeight = strokePoints - currentStrokePointIdx
+            const neededWeight = targetWeight - accumulatedWeight
+
+            if (neededWeight >= remainingStrokeWeight) {
+              renderStroke(logical, cmd, currentStrokePointIdx)
+              this.drawn.set(cmd.id, strokePoints)
+              accumulatedWeight += remainingStrokeWeight
+              currentCmdIdx++
+              currentStrokePointIdx = 0
+            } else {
+              const toPointIdx = currentStrokePointIdx + Math.max(1, Math.floor(neededWeight))
+              const clampedToIdx = Math.min(strokePoints, toPointIdx)
+              const partialStroke: Stroke = {
+                ...cmd,
+                points: cmd.points.slice(0, clampedToIdx),
+              }
+              renderStroke(logical, partialStroke, currentStrokePointIdx)
+              accumulatedWeight += clampedToIdx - currentStrokePointIdx
+              currentStrokePointIdx = clampedToIdx
+              break
+            }
+          } else if (cmd.kind === 'fill') {
+            await this.applyFill(logical, cmd, generation, roundId)
+            this.drawn.set(cmd.id, -1)
+            accumulatedWeight += FILL_WEIGHT
+            currentCmdIdx++
+          }
+        }
+
+        this.ports.present(this.logicalCanvas)
+
+        if (progress >= 1 || currentCmdIdx >= commands.length) {
+          finish()
+        } else {
+          rafId = requestAnimationFrame(step)
+        }
+      }
+
+      rafId = requestAnimationFrame(step)
+    })
   }
 
   // ---------- 内部 ----------

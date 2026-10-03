@@ -8,7 +8,7 @@
   工具条仅画家可见，猜词者隐藏，支持手柄微移避让。
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useFullscreen } from '@vueuse/core'
 import { Brush, LogOut, Trash2, X } from 'lucide-vue-next'
 import { APP_CONFIG } from '@draw-guess/config'
@@ -78,6 +78,33 @@ watch(
 const canDraw = computed(() => store.isDrawer && store.room?.phase === 'drawing')
 /** 底部绘图工具条可见性：仅画家在未主动隐藏时显示，猜词者完全隐藏。 */
 const showToolbar = computed(() => store.isDrawer && isToolbarVisible.value)
+
+/** 画布引用与回合结束 3 秒作画重播状态 */
+const gameCanvasRef = ref<{ speedrunReplay: (durationMs?: number) => Promise<void> }>()
+const isReplayingRound = ref(false)
+
+watch(
+  () => store.room?.phase,
+  async (newPhase, oldPhase) => {
+    // 当从 drawing 进入 round_result 时，若房间开启 allowRoundReplay 且有笔迹，触发 3 秒快速重播
+    if (newPhase === 'round_result' && oldPhase === 'drawing') {
+      const allowReplay = store.room?.settings.allowRoundReplay ?? true
+      const hasStrokes = (game.value?.strokes.length ?? 0) > 0
+      if (allowReplay && hasStrokes) {
+        isReplayingRound.value = true
+        await nextTick()
+        try {
+          await gameCanvasRef.value?.speedrunReplay()
+        } finally {
+          isReplayingRound.value = false
+        }
+        return
+      }
+    }
+    isReplayingRound.value = false
+  },
+)
+
 // ---- 猜词框快捷键：Enter 键自动聚焦猜词输入框 ----
 // 对局内设置弹窗打开时让位，避免与设置页的输入控件冲突。
 const chatPanelRef = ref<{ focusInput: () => void }>()
@@ -146,6 +173,7 @@ function handleFullscreenToggle(): void {
       :game="game"
       :seconds-left="secondsLeft"
       :progress="progress"
+      :is-replaying="isReplayingRound"
       @settings="showGameSettings = true"
       @toggle-fullscreen="handleFullscreenToggle"
     />
@@ -169,6 +197,7 @@ function handleFullscreenToggle(): void {
           @pointerdown="focusToolbar"
         >
           <GameCanvas
+            ref="gameCanvasRef"
             v-model:width="width"
             v-model:tool="tool"
             v-model:color="color"
@@ -186,9 +215,9 @@ function handleFullscreenToggle(): void {
             @fill-failure="recoverAuthoritativeDrawing"
           />
 
-          <!-- 画布状态遮罩：选词/结算/暂停等非作画阶段覆盖在画布上（猜词者在画家选词时也能看到状态） -->
+          <!-- 画布状态遮罩：选词/暂停等阶段覆盖在画布上；回合结算（round_result）期间不遮挡，以便玩家欣赏画作与快速重播 -->
           <div
-            v-if="store.room.phase !== 'drawing'"
+            v-if="store.room.phase !== 'drawing' && store.room.phase !== 'round_result'"
             class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-[0.6cqh] bg-paper text-muted"
           >
             <Brush class="h-[7cqh] w-[7cqh] text-blue" /><b class="text-fs-20">{{ phaseLabel }}</b>
@@ -224,6 +253,7 @@ function handleFullscreenToggle(): void {
       :seconds-left="secondsLeft"
       :game="game"
       :rankings="rankings"
+      :is-replaying="isReplayingRound"
       @choose-word="store.chooseWord"
       @reroll-words="store.rerollWords"
       @resume="store.resume"

@@ -26,6 +26,7 @@ export const roomSettingsDefaults = {
   allowCustomWord: false,
   allowNearMissHint: true,
   allowCanvasReactions: true,
+  allowRoundReplay: true,
   joinPolicy: 'next_game',
 } as const satisfies Omit<RoomSettings, 'maxPlayers'>
 
@@ -55,7 +56,8 @@ export const game = {
     step: 1,
   },
   startingCountdownSeconds: 3, // 开局倒计时
-  roundResultSeconds: 6, // 回合结算展示时长
+  roundReplaySeconds: 3, // 回合结束作画精彩重播时长（3 秒）
+  roundResultSeconds: 5, // 回合结算展示时长（5 秒）
   /** 作画阶段剩余秒数低于该值时进入“紧急”视觉/音效提示（GameHud 与 useAudioFeedback 共用，避免重复硬编码）。 */
   warningSeconds: 10,
   /** 逐步提示时间窗口比例：在作画时间的后半程开始逐步揭示字符（0.5 = 后 50% 时间开始） */

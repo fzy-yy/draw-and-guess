@@ -60,6 +60,8 @@ export const RoomSettingsSchema = z
     allowNearMissHint: z.boolean().default(true),
     /** 是否允许猜词者在画布上发送轻量微表情气泡互动（默认开启）。 */
     allowCanvasReactions: z.boolean().default(true),
+    /** 回合结束时是否在画布上快速重播画家作画全过程（默认开启）。 */
+    allowRoundReplay: z.boolean().default(true),
     joinPolicy: JoinPolicySchema,
   })
   .strict()

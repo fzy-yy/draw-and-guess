@@ -53,6 +53,7 @@
 | 玩家常驻左栏（player side column）               | 对局界面左侧独立黑框容器（16cqw），容纳 8~10 字昵称完整展示；本人以座位颜色浅色底高亮，画家仅以「作画中」文案与画笔角标表达（无背景色）                                     | ADR-0055、ADR-0056、`PlayerPanel.vue`                              |
 | 画板右键菜单（canvas context menu）              | 画布拦截右键呼出全局单例菜单，画家专属创作/撤销/导出/清空二次确认，猜词者专属复制/下载/微表情全员广播；作画中防冲突且点外关闭不留杂墨                                       | ADR-0056、`GameCanvas.vue`                                         |
 | 差一字私密提示（near-miss hint）                 | 猜词与答案长度 >= 2 且编辑距离严格等于 1 时，由服务端定向向当前玩家独占推送的私密线索，公屏绝不剧透                                                                         | ADR-0056、`handlers/chat.ts`                                       |
+| 作画快速重播（round speedrun replay）            | 回合结束进入结算展示前，客户端在画布上以 3 秒高速递进重现画家从第 0 笔至末笔的全部运笔细节；由房间设置 allowRoundReplay 控制，画布保留画作直至下一回合选词才清空            | ADR-0057、`DrawingReplayMachine`                                   |
 
 ## 待打磨（deliberately unresolved）
 

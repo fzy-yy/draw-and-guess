@@ -22,9 +22,10 @@ describe('房间规则产品闭环', () => {
     expect(settings.drawSeconds).toBe(APP_CONFIG.game.drawSeconds.default)
     expect(DRAW_SECONDS_OPTIONS).toContain(settings.drawSeconds)
     expect(settings.allowChooseTimeLimit).toBe(false)
-    // 差一字私密提示与画布微表情互动默认开启
+    // 差一字私密提示、画布微表情互动与作画精彩重播默认开启
     expect(settings.allowNearMissHint).toBe(true)
     expect(settings.allowCanvasReactions).toBe(true)
+    expect(settings.allowRoundReplay).toBe(true)
   })
 
   it('协议 Schema 逐字段拒绝越界、非整数、错误枚举与非布尔值（唯一裁决点）', () => {
@@ -120,20 +121,23 @@ describe('房间规则产品闭环', () => {
       settings: testRoomSettings({
         allowNearMissHint: true,
         allowCanvasReactions: true,
+        allowRoundReplay: true,
       }),
     })
 
-    // 修改规则关闭这两项
+    // 修改规则关闭这些项
     const updated = harness.service.updateSettings(
       host.playerId,
       {
         allowNearMissHint: false,
         allowCanvasReactions: false,
+        allowRoundReplay: false,
       },
       room.stateVersion,
     )
     expect(updated.settings.allowNearMissHint).toBe(false)
     expect(updated.settings.allowCanvasReactions).toBe(false)
+    expect(updated.settings.allowRoundReplay).toBe(false)
     expect(updated.stateVersion).toBeGreaterThan(room.stateVersion)
   })
 })

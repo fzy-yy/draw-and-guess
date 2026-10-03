@@ -43,16 +43,20 @@ describe('统一假运行时驱动完整回合生命周期', () => {
     const member = room.members.find((item) => item.playerId === guesser.playerId)!
     expect(member.score).toBe(detail.total)
     expect(game.roundResult?.details[0]).toEqual(detail)
-    expect(game.phaseEndsAt - game.phaseStartedAt).toBe(APP_CONFIG.game.roundResultSeconds * 1_000)
+    const resultDurationMs =
+      (room.settings.allowRoundReplay
+        ? APP_CONFIG.game.roundReplaySeconds + APP_CONFIG.game.roundResultSeconds
+        : APP_CONFIG.game.roundResultSeconds) * 1_000
+    expect(game.phaseEndsAt - game.phaseStartedAt).toBe(resultDurationMs)
 
     // 第二回合交给所有权威定时器自动推进，最终应只归档一次并进入 game_result。
-    harness.runtime.advance(APP_CONFIG.game.roundResultSeconds * 1_000)
+    harness.runtime.advance(resultDurationMs)
     expect(room.phase).toBe('choosing_word')
     harness.runtime.advance(room.settings.chooseSeconds * 1_000)
     expect(room.phase).toBe('drawing')
     harness.runtime.advance(game.roundDurationMs)
     expect(room.phase).toBe('round_result')
-    harness.runtime.advance(APP_CONFIG.game.roundResultSeconds * 1_000)
+    harness.runtime.advance(resultDurationMs)
     expect(room.phase).toBe('game_result')
     expect(game.currentRound).toBe(game.totalRounds)
     expect(harness.repositories.archive.games).toHaveLength(1)

@@ -29,6 +29,7 @@ const settings: RoomSettings = {
   allowCustomWord: false,
   allowNearMissHint: true,
   allowCanvasReactions: true,
+  allowRoundReplay: true,
   joinPolicy: 'forbid',
 }
 

@@ -71,6 +71,7 @@ export function createRoomFixture(
       allowCustomWord: false,
       allowNearMissHint: true,
       allowCanvasReactions: true,
+      allowRoundReplay: true,
       joinPolicy: 'spectate',
     },
     members: [member(HOST_ID, '房主', true, true), member(GUEST_ID, '猜词者', false, false)],

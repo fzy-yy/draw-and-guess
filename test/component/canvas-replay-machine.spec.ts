@@ -489,4 +489,22 @@ describe('定尺寸与历史容量', () => {
     expect(vi.mocked(scratch.clearRect).mock.calls.length).toBe(clears + 1)
     expect(scratch.clearRect).toHaveBeenLastCalledWith(0, 0, 300, 150)
   })
+
+  it('speedrun 快速重播能在规定时间内推进并在完成时呈现画作', async () => {
+    const { machine, present } = harness()
+    const stroke = strokeCommand({
+      id: 'stroke-speed',
+      sequence: 1,
+      points: [
+        { x: 0.1, y: 0.1 },
+        { x: 0.5, y: 0.5 },
+      ],
+    })
+    machine.sync(snapshotOf([stroke]))
+    await flush()
+
+    const presentsBefore = vi.mocked(present).mock.calls.length
+    await machine.speedrun(10)
+    expect(vi.mocked(present).mock.calls.length).toBeGreaterThan(presentsBefore)
+  })
 })

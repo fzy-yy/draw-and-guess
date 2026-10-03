@@ -244,6 +244,12 @@ const chooseTime = computed<ChooseTimeValue>({
         :label="strings.ui.room.canvasReactionsLabel"
         :disabled="readOnly"
       />
+      <RuleToggleField
+        v-model="localDraft.allowRoundReplay"
+        class="self-center"
+        :label="strings.ui.room.roundReplayLabel"
+        :disabled="readOnly"
+      />
     </div>
 
     <template #footer>

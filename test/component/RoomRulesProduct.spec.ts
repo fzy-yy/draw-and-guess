@@ -68,10 +68,10 @@ describe('房间规则与高级设置', () => {
     expect(wrapper.text()).toContain(strings.ui.room.toggleShowWordLength)
     expect(wrapper.text()).toContain(strings.ui.room.toggleProgressiveHints)
     expect(wrapper.text()).toContain(strings.ui.room.togglePause)
-    // 区间字段一律下拉：滑块 0；开关 8（原有 6 项 + 差一字提示 + 画布微表情互动）
+    // 区间字段一律下拉：滑块 0；开关 9（原有 6 项 + 差一字提示 + 画布微表情互动 + 作画精彩重播）
     //（结构化提示、提示出现时机、额外猜词时间与猜词基础分均已移除）
     expect(wrapper.findAll('input[type="range"]')).toHaveLength(0)
-    expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(8)
+    expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(9)
     // 下拉：最大玩家数 / 每人作画次数 / 单回合时长 / 选词时间 / 候选词数量 / 中途加入 = 6
     // 单回合时长默认显示 120 秒；选词阶段默认不限时
     expect(wrapper.findAll('button[aria-haspopup="listbox"]')).toHaveLength(6)
