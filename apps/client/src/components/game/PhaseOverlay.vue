@@ -14,6 +14,7 @@ import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
 import { phaseTextFor } from '@/utils/phase-text'
+import { deriveAccolades } from '@/utils/accolades'
 import type { RankedMember } from '@/composables/useGameHud'
 import AppButton from '@/components/common/AppButton.vue'
 import AvatarImage from '@/components/common/AvatarImage.vue'
@@ -22,7 +23,7 @@ import OverlayCard from '@/components/game/OverlayCard.vue'
 
 // 阶段遮罩需要的 HUD 派生值（剩余秒数、对局数据、最终排行）由父组件 GameView
 // 统一计算后经 props 下发，整局只保留一个 ticker（不再此处单独起定时器）。
-defineProps<{
+const props = defineProps<{
   /** 当前阶段剩余秒数（开局倒计时/自动选词提示用）。 */
   secondsLeft: number
   /** 对局视图（候选词/回合结算/答案等）。 */
@@ -40,7 +41,10 @@ const emit = defineEmits<{
 }>()
 
 const store = useGameStore()
-/** 阶段播报文案与 HUD 共用同一映射（utils/phase-text），保证展示与播报一致。 */
+/** 计算终局荣誉称号列表映射（按成员 ID 索引） */
+const playerAccolades = computed(() => {
+  return deriveAccolades(props.game, store.room?.members ?? [])
+})
 const phaseAnnouncement = computed(() => phaseTextFor(store.room?.phase))
 
 function chooseWord(wordId: string): void {
@@ -193,9 +197,23 @@ async function submitCustomWord(text: string): Promise<void> {
             :avatar-id="member.avatarId"
             :label="strings.a11y.common.playerAvatarAria(member.nickname)"
           />
-          <span class="flex flex-col font-bold"
-            >{{ member.nickname
-            }}<small class="text-muted text-fs-10 font-bold">{{
+          <span class="flex flex-col font-bold">
+            <span class="flex items-center gap-[0.4em] flex-wrap">
+              <span>{{ member.nickname }}</span>
+              <!-- 荣誉称号胶囊徽章列表 -->
+              <span
+                v-for="accolade in playerAccolades[member.id] ?? []"
+                :key="accolade.key"
+                class="inline-flex items-center gap-[0.2em] rounded-full border-[0.16cqh] px-[0.55em] py-[0.1cqh] text-fs-10 font-bold shadow-xs select-none"
+                :class="accolade.colorClass"
+                :title="accolade.description"
+                :aria-label="strings.a11y.game.accoladeBadgeAria(member.nickname, accolade.title)"
+              >
+                <span>{{ accolade.icon }}</span>
+                <span>{{ accolade.title }}</span>
+              </span>
+            </span>
+            <small class="text-muted text-fs-10 font-bold">{{
               strings.ui.game.playerStats(
                 member.stats.correctCount,
                 member.stats.correctCount
@@ -203,8 +221,9 @@ async function submitCustomWord(text: string): Promise<void> {
                   : 0,
                 member.stats.drawingCorrectCount,
               )
-            }}</small></span
-          ><strong>{{ strings.ui.common.scoreUnit(member.score) }}</strong>
+            }}</small>
+          </span>
+          <strong>{{ strings.ui.common.scoreUnit(member.score) }}</strong>
         </article>
       </div>
       <div class="flex gap-[0.8em] mt-[1.5cqh]">

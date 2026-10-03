@@ -1,8 +1,11 @@
 <!--
-  对局统一骨架：画家与猜词者共享顶栏、画布与浮层，仅按服务端角色快照切换权限。
-  结构为「固定顶栏 + 铺满画布（黑色描边 / 直角 / 极微边距）+ 常驻左栏玩家面板 + 可拖动浮层聊天面板 + 底部横向工具条」，
-  取代旧的 3×3 网格；画布、面板与工具条的定位/交互分别拆入 components/game/ 下的子组件。
-  本文件只保留画布装配、弹窗编排与浏览器级状态（全屏/弹窗开关/颜色线宽工具）。
+  对局统一骨架（黄金平衡三栏布局版）：
+  画家与猜词者共享顶栏、画布与常驻左右两栏，仅按服务端角色快照切换权限。
+  精确 100cqw 物理闭环三栏结构：
+  外留白 0.2cqw + 左栏 16cqw + 间距 0.8cqw + 中栏 62cqw + 间距 0.8cqw + 右栏 20cqw + 外留白 0.2cqw = 100cqw。
+  中间画板居中绝对主角，零遮挡、永不拉伸伸缩，比例约为 4:3 方正舒适；
+  彻底废除浮动面板组件（FloatingPanel），右侧聊天栏常驻流内；
+  工具条仅画家可见，猜词者隐藏，支持手柄微移避让。
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
@@ -16,7 +19,6 @@ import { AppButton, ConfirmDialog } from '@/components/common'
 import {
   CanvasToolbar,
   ChatPanel,
-  FloatingPanel,
   GameCanvas,
   GameHud,
   PhaseOverlay,
@@ -53,12 +55,7 @@ const showEndConfirm = ref(false) // 提前结束确认弹窗
 const showLeaveGameConfirm = ref(false) // 设置页退出对局确认弹窗
 const showGameSettings = ref(false) // 对局内设置弹窗
 
-// ---- 浮层面板与工具条的本地状态（仅本机 UI，刷新即重置；位置为相对画布容器的百分比）----
-// 玩家面板是常驻左栏（占位、不浮动、不可关闭），因此只有聊天面板需要开合与位置状态。
-const chatOpen = ref(true)
-// 聊天贴右缘：工作区宽度 = 舞台宽 - 两侧边距(1.4cqw) - 玩家左栏(10cqw) ≈ 88.6cqw，
-// 面板宽 24cqw ⇒ x 取 72% 时右缘约在舞台 98.5cqw 处，既不溢出舞台也贴住右缘。
-const chatPosition = ref<PanelPosition>({ x: 72, y: 0 })
+// 底部工具条本地位置（仅画家拖拽微调避让，刷新即重置；位置为相对画布容器的百分比）
 const toolbarPosition = ref<PanelPosition | null>(null)
 
 // 换人作画或新回合开始时，重置工具条位置到底部居中默认位置
@@ -74,12 +71,11 @@ const canDraw = computed(() => store.isDrawer && store.room?.phase === 'drawing'
 /** 底部绘图工具条可见性：仅画家自动显示，猜词者不显示，且工具条不可被隐藏。 */
 const showToolbar = computed(() => store.isDrawer)
 
-// ---- 面板显隐快捷键：C（设置页可改）开关聊天面板，回车固定只打开聊天或聚焦猜词框 ----
+// ---- 猜词框快捷键：Enter 键自动聚焦猜词输入框 ----
 // 对局内设置弹窗打开时让位，避免与设置页的输入控件冲突。
 const chatPanelRef = ref<{ focusInput: () => void }>()
 usePanelShortcuts({
   store,
-  chatOpen,
   focusChatInput: () => chatPanelRef.value?.focusInput(),
   enabled: () => !showGameSettings.value,
 })
@@ -137,9 +133,8 @@ function handleFullscreenToggle(): void {
 <template>
   <!-- 对局主骨架：仅在房间存在且对局未结束时渲染；画框以外区域统一使用 paper（近白）语义色 -->
   <main v-if="store.room && game" class="relative flex h-full flex-col bg-paper">
-    <!-- 固定顶栏：回合 / 面板开关 / 题目 / 倒计时 / 网络 / 暂停·设置·全屏 -->
+    <!-- 固定顶栏：回合 / 题目 / 倒计时 / 网络 / 暂停·设置·全屏（高度统一） -->
     <GameHud
-      v-model:chat-open="chatOpen"
       :is-fullscreen="isFullscreen"
       :game="game"
       :seconds-left="secondsLeft"
@@ -148,27 +143,35 @@ function handleFullscreenToggle(): void {
       @toggle-fullscreen="handleFullscreenToggle"
     />
 
-    <!-- 顶栏以下：玩家常驻左栏 + 画板并排；画板内承载聊天浮层与底部工具条 -->
-    <div class="min-h-0 flex-1 p-[0.7cqh_0.7cqw]">
-      <div class="flex h-full gap-[0.7cqw]">
-        <!-- 常驻玩家左栏：占位（挤窄画板）、不浮动、无标题栏、不可关闭，带独立黑框与画板视觉平衡 -->
-        <aside class="w-[10cqw] shrink-0 overflow-hidden border-[0.35cqh] border-black bg-paper">
+    <!--
+      对局主舞台：精确 100cqw 物理闭环三栏结构
+      外留白 0.2cqw + 左栏 16cqw + 间距 0.8cqw + 中栏 62cqw + 间距 0.8cqw + 右栏 20cqw + 外留白 0.2cqw = 100cqw
+    -->
+    <div class="min-h-0 flex-1 px-[0.2cqw] py-[0.7cqh]">
+      <div class="flex h-full items-stretch gap-[0.8cqw]">
+        <!-- 左栏：16cqw 舒展玩家榜，独立粗黑边框包裹 -->
+        <aside
+          class="w-[16cqw] shrink-0 overflow-hidden rounded-[0.6em] border-[0.35cqh] border-line bg-paper"
+        >
           <PlayerPanel />
         </aside>
+
+        <!-- 中栏：62cqw 黄金画板主角，宽高比约 4:3 方正舒适，全屏零遮挡 -->
         <div
-          class="relative min-w-0 flex-1 overflow-hidden border-[0.35cqh] border-black bg-white"
+          class="relative w-[62cqw] shrink-0 overflow-hidden rounded-[0.6em] border-[0.35cqh] border-line bg-white"
           @pointerdown="focusToolbar"
         >
           <GameCanvas
             v-model:width="width"
+            v-model:tool="tool"
+            v-model:color="color"
             :round-id="game.roundId"
             :strokes="game.strokes"
             :undone-stroke-ids="game.undoneStrokeIds"
             :last-sequence="game.lastSequence"
             :can-draw="canDraw"
-            :tool="tool"
-            :color="color"
             :revision="game.drawingRevision"
+            @clear="showClearConfirm = true"
             @stroke="submitStroke"
             @stroke-failure="recoverAuthoritativeDrawing"
             @fill="submitFill"
@@ -188,18 +191,7 @@ function handleFullscreenToggle(): void {
             >
           </div>
 
-          <!-- 浮层聊天面板（贴右缘，默认打开，可拖动 / 关闭） -->
-          <FloatingPanel
-            v-model:open="chatOpen"
-            v-model:position="chatPosition"
-            :title="strings.ui.game.chatPanelTitle"
-            width-class="w-[24cqw]"
-            height-class="h-full"
-          >
-            <ChatPanel ref="chatPanelRef" :can-guess="canGuess" />
-          </FloatingPanel>
-
-          <!-- 底部横向工具条：仅画家显示，不可被隐藏，支持拖动手柄在画布内移动位置 -->
+          <!-- 底部横向工具条：仅画家显示（visible="showToolbar"），猜词者完全隐藏，支持拖动手柄在画布内移动避让 -->
           <CanvasToolbar
             v-model:tool="tool"
             v-model:color="color"
@@ -210,9 +202,15 @@ function handleFullscreenToggle(): void {
             @clear="showClearConfirm = true"
           />
         </div>
+
+        <!-- 右栏：20cqw 常驻聊天区，独立粗黑边框包裹，单行容纳 15~16 汉字不折行 -->
+        <aside
+          class="w-[20cqw] shrink-0 overflow-hidden rounded-[0.6em] border-[0.35cqh] border-line bg-paper"
+        >
+          <ChatPanel ref="chatPanelRef" :can-guess="canGuess" />
+        </aside>
       </div>
     </div>
-
     <!-- 阶段遮罩：开局倒计时 / 画家选词 / 暂停 / 回合结算 / 最终结算 -->
     <PhaseOverlay
       :seconds-left="secondsLeft"

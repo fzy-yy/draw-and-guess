@@ -216,6 +216,7 @@ describe('请求响应注册表与 ack 边界', () => {
       EVENTS.drawUndo,
       EVENTS.drawRedo,
       EVENTS.drawClear,
+      EVENTS.gameCanvasPing,
       // 成功但可能没有房间：invite:respond / state:resync 允许 data 缺省。
       EVENTS.inviteRespond,
       EVENTS.stateResync,

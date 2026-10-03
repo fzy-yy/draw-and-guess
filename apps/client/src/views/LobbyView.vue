@@ -163,9 +163,30 @@ function openSettings(): void {
                     : 'roomInProgress'
             ]
           }}</span>
-          <span class="flex items-center gap-[0.35em] font-bold">
-            <Users /> {{ publicRoom.playerCount }}/{{ publicRoom.maxPlayers }}
-          </span>
+          <!-- 6 席位入座可视化微型点阵：直观呈现已占席位与空余席位 -->
+          <div
+            class="flex items-center gap-[0.45em]"
+            :aria-label="
+              strings.a11y.lobby.seatOccupancyAria(publicRoom.playerCount, publicRoom.maxPlayers)
+            "
+          >
+            <span class="flex items-center gap-[0.3em] font-bold text-navy">
+              <Users class="h-[1.8cqh] w-[1.8cqh]" />
+              {{ publicRoom.playerCount }}/{{ publicRoom.maxPlayers }}
+            </span>
+            <div class="flex items-center gap-[0.3cqw]" aria-hidden="true">
+              <span
+                v-for="seatIdx in Math.max(publicRoom.maxPlayers, 6)"
+                :key="seatIdx"
+                class="h-[1cqh] w-[1cqh] rounded-full transition-colors"
+                :class="
+                  seatIdx <= publicRoom.playerCount
+                    ? 'bg-success-fg'
+                    : 'border-[0.15cqh] border-dashed border-line bg-transparent'
+                "
+              />
+            </div>
+          </div>
           <AppButton
             type="button"
             :disabled="

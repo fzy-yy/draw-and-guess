@@ -56,6 +56,10 @@ export const RoomSettingsSchema = z
     allowWordReroll: z.boolean(),
     /** 是否允许画家在选词阶段自定义题目（默认关闭，见 ADR-0045）。 */
     allowCustomWord: z.boolean(),
+    /** 猜词差一字时是否向猜词者单人私密提示（默认开启）。 */
+    allowNearMissHint: z.boolean().default(true),
+    /** 是否允许猜词者在画布上发送轻量微表情气泡互动（默认开启）。 */
+    allowCanvasReactions: z.boolean().default(true),
     joinPolicy: JoinPolicySchema,
   })
   .strict()

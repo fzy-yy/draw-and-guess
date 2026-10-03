@@ -71,13 +71,14 @@
 | [0027](0027-vocabulary-dialog-session.md)                          | 词库弹窗会话生命周期独立成 composable                | 已采纳                 |
 | [0028](0028-client-room-facts.md)                                  | 客户端房间事实单一口径：阶段文案与可玩成员           | 已采纳                 |
 | [0029](0029-shallow-wrappers-kept.md)                              | 客户端浅层包装保持现状：删除测试判定不复用折叠       | 已采纳                 |
-| [0043](0043-game-view-floating-layout.md)                          | 对局界面改为浮层布局：顶栏 + 铺满画布 + 浮层面板     | 已采纳                 |
+| [0043](0043-game-view-floating-layout.md)                          | 对局界面改为浮层布局：顶栏 + 铺满画布 + 浮层面板     | 已废弃（被 0056 取代） |
 | [0044](0044-panel-shortcuts-and-unified-topbar.md)                 | 对局面板显隐快捷键与顶栏高度统一                     | 已采纳                 |
 | [0041](0041-snapshot-gate-decision-narrowing.md)                   | 快照门禁决策类型按裁决能力收窄                       | 已采纳                 |
 | [0051](0051-rules-dialog-flat-grid-and-dropdown-fields.md)         | 规则弹窗平铺两列栅格、区间字段一律下拉               | 已采纳                 |
 | [0052](0052-stage-header-button-unification.md)                    | 顶栏操作按钮统一为图文胶囊并收敛基座组件             | 已采纳                 |
 | [0054](0054-draggable-toolbar-and-fixed-drawer-visibility.md)      | 绘图工具条改为画家常驻不可隐藏与手柄拖拽移动         | 已采纳                 |
 | [0055](0055-player-panel-visual-balance-and-identity-highlight.md) | 玩家栏独立黑框视觉平衡、高对比度座位色与本人高亮重构 | 已采纳                 |
+| [0056](0056-three-column-layout-and-canvas-menu.md)                | 黄金三栏对局布局、画板双角色右键菜单与趣味机制升级   | 已采纳                 |
 
 ### 词汇与提示
 

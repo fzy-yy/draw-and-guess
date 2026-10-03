@@ -145,6 +145,7 @@ function handlers(): SocketHandlers {
       [EVENTS.systemError]: { on: vi.fn(), recovery: 'generic-resync' },
       [EVENTS.drawStrokeBatch]: { on: vi.fn(), recovery: 'room-snapshot' },
       [EVENTS.drawFillCommit]: { on: vi.fn(), recovery: 'room-snapshot' },
+      [EVENTS.gameCanvasPing]: { on: vi.fn(), recovery: 'room-snapshot' },
     },
   }
 }

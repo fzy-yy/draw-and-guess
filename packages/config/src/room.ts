@@ -11,6 +11,8 @@ export const room = {
   seatColors: ['#dc2626', '#facc15', '#16a34a', '#0284c7', '#2563eb', '#c026d3'],
   allowPlayerInvite: roomSettingsDefaults.allowPlayerInvite,
   allowPause: roomSettingsDefaults.allowPause,
+  allowNearMissHint: roomSettingsDefaults.allowNearMissHint,
+  allowCanvasReactions: roomSettingsDefaults.allowCanvasReactions,
   joinPolicy: roomSettingsDefaults.joinPolicy,
   /** 私密房间码使用排除易混淆字符的服务端随机字符集。 */
   privateCodeAlphabet: PRIVATE_ROOM_CODE.alphabet,

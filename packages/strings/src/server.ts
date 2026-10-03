@@ -131,6 +131,7 @@ export const serverStrings = {
     noDrawerAvailable: '没有可继续作画的在线玩家',
     playerDisconnectedLeave: (nickname: string) => `${nickname} 已断线并退出房间`,
     playerReconnectedTimeout: '玩家重连超时离开',
+    nearMissHint: '离答案只差一个字了',
   },
 
   /* ---- 词库加载错误（服务启动校验，展示给运维 / 终端）---- */

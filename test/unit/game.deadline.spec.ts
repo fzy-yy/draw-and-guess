@@ -27,6 +27,8 @@ const settings: RoomSettings = {
   allowPause: true,
   allowWordReroll: true,
   allowCustomWord: false,
+  allowNearMissHint: true,
+  allowCanvasReactions: true,
   joinPolicy: 'forbid',
 }
 

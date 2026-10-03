@@ -106,9 +106,9 @@ describe('useGameHud 角色与计时派生', () => {
 })
 
 describe('GameHud 与 PhaseOverlay 角色差异', () => {
-  it('画家可切换答案明文，猜词者始终只看到遮罩且顶栏提供面板开关', async () => {
-    const roomStore = useRoomStore()
+  it('画家可切换答案明文，猜词者始终只看到遮罩', async () => {
     const session = useSessionStore()
+    const roomStore = useRoomStore()
     // 结构化提示已移除：画家只有「明文 / 遮罩」两态，猜词者恒为服务端遮罩（见 ADR-0042）。
     roomStore.room = createRoomFixture('drawing')
     session.playerId = HOST_ID
@@ -119,12 +119,7 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
       game,
       secondsLeft: 30,
       progress: 0.5,
-      chatOpen: true,
     }) as VueWrapper
-
-    // 顶栏只保留回合/题目/系统操作与聊天开关（工具条改为画家常驻且不可隐藏，玩家面板为常驻左栏）
-    expect(wrapper.find(`[aria-label="${strings.a11y.game.toggleChat}"]`).exists()).toBe(true)
-
     // 画家默认按本地偏好显示遮罩
     expect(wrapper.text()).toContain(game.answerMask)
     expect(wrapper.text()).not.toContain(game.answer)

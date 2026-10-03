@@ -7,10 +7,13 @@
 import { RoomPersistenceCoordinator } from './application/room-persistence-coordinator.ts'
 import { RoomMembershipService } from './domain/room/room-membership-service.ts'
 import { SessionService } from './domain/session/session-service.ts'
+import { slidingWindowAllow } from './rate-limit.ts'
 import {
+  type CanvasPingType,
   EVENTS,
   MIN_SELECTED_VOCABULARY_WORDS,
   createServerPush,
+  isNearMissAnswer,
   normalizeAnswer,
   type FillCommand,
   type Invite,
@@ -635,8 +638,23 @@ export class GameService {
       this.round.markCorrect(room, member)
       return { correct: true }
     }
-    // 未命中正确答案：作为普通猜词进入聊天流并广播全员（不提供近似词提示）
+    // 未命中正确答案：作为普通猜词进入聊天流并广播全员
     this.round.addMessage(room, { type: 'guess', text, playerId })
+
+    // 差一字私密提示：若房间开启 allowNearMissHint，且猜词与答案（主词面或任一别称）仅差一字（答案字数 >= 2 且编辑距离严格等于 1）
+    // 则仅将一条私密提示消息写入当前玩家的独占快照视口（通过 recipientId 隔离），其他玩家与公屏绝对不泄漏
+    const targets = [game.answer.text, ...game.answer.aliases]
+    if (
+      room.settings.allowNearMissHint &&
+      targets.some((candidate) => isNearMissAnswer(text, candidate))
+    ) {
+      this.round.addMessage(room, {
+        type: 'near_miss',
+        text: serverStrings.notices.nearMissHint,
+        recipientId: playerId,
+      })
+    }
+
     this.emitRoom(room.id)
     return { correct: false }
   }
@@ -657,6 +675,38 @@ export class GameService {
       throw new GameError('INVALID_MESSAGE', serverStrings.errors.INVALID_MESSAGE_PRESET)
     this.round.addMessage(room, { type: 'preset', text: preset, playerId })
     this.emitRoom(room.id)
+  }
+
+  /**
+   * 处理玩家发送的画板微表情（👍 / ❓ / 🔥）：
+   * 1. 校验房间配置是否开启微表情交互（allowCanvasReactions === true）；
+   * 2. 执行单人 1.5 秒滑动窗口限频（防刷屏）；
+   * 3. 广播全员可见的轻量级推送（不入持久化、不入笔画历史）。
+   */
+  sendCanvasPing(playerId: string, x: number, y: number, type: CanvasPingType): void {
+    const { room, player } = this.membership.requireMembership(playerId)
+    if (!room.settings.allowCanvasReactions) {
+      throw new GameError('FORBIDDEN', serverStrings.errors.FORBIDDEN)
+    }
+
+    // 限制单人 1.5 秒滑动窗口（最多 1 次）
+    const now = this.clock.now()
+    const decision = slidingWindowAllow(player.canvasReactionTimes ?? [], now, 1_500, 1)
+    player.canvasReactionTimes = decision.times
+    if (!decision.allowed) {
+      throw new GameError('RATE_LIMITED', serverStrings.errors.RATE_LIMITED)
+    }
+
+    // 轻量广播给房间内所有在线连接
+    const broadcastPayload = {
+      x: Math.max(0, Math.min(1, x)),
+      y: Math.max(0, Math.min(1, y)),
+      type,
+      senderNickname: player.profile.nickname,
+    }
+    this.io
+      .to(room.id)
+      .emit(EVENTS.gameCanvasPing, createServerPush(EVENTS.gameCanvasPing, broadcastPayload))
   }
 
   addStroke(playerId: string, roundId: string, stroke: Stroke): StrokeAck {

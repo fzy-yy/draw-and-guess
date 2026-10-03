@@ -10,7 +10,10 @@ import {
   type RoomSnapshot,
   type Stroke,
   type StrokeAck,
+  type CanvasPingBroadcast,
+  type CanvasPingType,
 } from '@draw-guess/shared'
+import { ref } from 'vue'
 import { strings } from '@draw-guess/strings'
 import { useGameTransport } from '@/application/game-transport'
 import type { RequestResult } from './request.ts'
@@ -22,6 +25,41 @@ export const useGameplayStore = defineStore('gameplay', () => {
   const { request, notify } = useGameTransport()
   const roomStore = useRoomStore()
   const sessionStore = useSessionStore()
+
+  /** 最近收到的画布微表情广播（带递增唯一序号以确保连续同类表情响应式触发） */
+  const latestCanvasPing = ref<(CanvasPingBroadcast & { id: number }) | null>(null)
+  let pingSequence = 0
+
+  /** 本地 1.5 秒冷却时间戳（毫秒） */
+  let lastLocalPingAt = 0
+
+  /** 接收服务端广播的画布微表情推送并分发到响应式状态 */
+  function handleCanvasPing(ping: CanvasPingBroadcast): void {
+    latestCanvasPing.value = {
+      ...ping,
+      id: ++pingSequence,
+    }
+  }
+
+  /** 发送微表情请求到服务端（附带客户端 1.5 秒滑动窗口冷却保护） */
+  async function sendCanvasPing(x: number, y: number, type: CanvasPingType): Promise<boolean> {
+    const now = Date.now()
+    if (now - lastLocalPingAt < 1_500) {
+      return false
+    }
+    lastLocalPingAt = now
+
+    const result = await request(
+      EVENTS.gameCanvasPing,
+      {
+        x: Math.max(0, Math.min(1, x)),
+        y: Math.max(0, Math.min(1, y)),
+        type,
+      },
+      { retry: false, notify: 'silent' },
+    )
+    return result.ok
+  }
 
   /**
    * 新权威内容到达即不可逆地丢弃撤销历史（与服务端 drawing-service 的 discardUndone 同规则）：
@@ -216,5 +254,8 @@ export const useGameplayStore = defineStore('gameplay', () => {
     returnWaiting,
     handleStrokeBatch,
     handleFillCommit,
+    latestCanvasPing,
+    handleCanvasPing,
+    sendCanvasPing,
   }
 })

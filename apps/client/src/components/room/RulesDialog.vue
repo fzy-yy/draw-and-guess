@@ -214,6 +214,16 @@ const chooseTime = computed<ChooseTimeValue>({
         class="self-center"
         :label="strings.ui.room.togglePause"
       />
+      <RuleToggleField
+        v-model="localDraft.allowNearMissHint"
+        class="self-center"
+        :label="strings.ui.room.nearMissHintLabel"
+      />
+      <RuleToggleField
+        v-model="localDraft.allowCanvasReactions"
+        class="self-center"
+        :label="strings.ui.room.canvasReactionsLabel"
+      />
     </div>
 
     <template #footer>

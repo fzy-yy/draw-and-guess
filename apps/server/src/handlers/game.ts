@@ -29,4 +29,10 @@ export function registerGameHandlers(socket: AppSocket, service: GameService): v
   bindRequest(socket, EVENTS.gameReturnWaiting, (_input, playerId) =>
     service.returnWaiting(playerId),
   )
+  bindRequest(
+    socket,
+    EVENTS.gameCanvasPing,
+    (input, playerId) => service.sendCanvasPing(playerId, input.x, input.y, input.type),
+    { rateLimit: false },
+  )
 }

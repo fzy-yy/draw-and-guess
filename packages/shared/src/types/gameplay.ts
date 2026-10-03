@@ -12,3 +12,8 @@ export type ScoreDetail = z.infer<typeof ScoreDetailSchema>
 export type RoundResult = z.infer<typeof RoundResultSchema>
 export type FinalRankingEntry = z.infer<typeof FinalRankingEntrySchema>
 export type GameView = z.infer<typeof GameViewSchema>
+export type {
+  CanvasPingType,
+  CanvasPingPayload,
+  CanvasPingBroadcast,
+} from '../protocol/gameplay.ts'

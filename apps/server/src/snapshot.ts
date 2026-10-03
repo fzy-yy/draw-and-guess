@@ -123,7 +123,11 @@ export class SnapshotBuilder {
           undoneStrokeIds: game.undoneStrokeIds,
           lastSequence: game.lastSequence, // 下发已接受的最大绘图序号，供重连客户端续起
           drawingRevision: game.drawingRevision,
-          messages: game.messages.slice(-APP_CONFIG.ui.recentMessageCount),
+          // 裁剪聊天流：若消息包含 recipientId（独占私密提示），仅对该玩家可见；向客户端输出时剥除 recipientId
+          messages: game.messages
+            .filter((msg) => !msg.recipientId || msg.recipientId === viewerId)
+            .slice(-APP_CONFIG.ui.recentMessageCount)
+            .map(({ recipientId: _omit, ...publicMsg }) => publicMsg),
           ...(game.roundResult ? { roundResult: game.roundResult } : {}),
           ...(game.finalRanking ? { finalRanking: game.finalRanking } : {}),
           ...(room.phase === 'game_result' && game.gameResultMinEndsAt !== undefined

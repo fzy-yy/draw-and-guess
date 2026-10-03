@@ -4,6 +4,7 @@ import { APP_CONFIG } from '@draw-guess/config'
 import type { DrawPoint, FillCommand, Stroke, StrokeAck, ToolKind } from '@draw-guess/shared'
 import { createUuid } from '@/utils/create-uuid'
 import type { RequestFailure, RequestResult } from '@/stores/request'
+import { useContextMenu } from '@/composables/useContextMenu'
 
 /**
  * 落笔样式：由 shared `Stroke` 的落笔字段子集派生（笔画样式单源，
@@ -150,6 +151,12 @@ export function useStrokeSession(options: {
   }
 
   function pointerDown(event: PointerEvent): void {
+    // 若右键菜单当前处于展开状态，仅关闭菜单并立即阻断墨迹生成，保证画板 100% 干净
+    const contextMenu = useContextMenu()
+    if (contextMenu.state.open) {
+      contextMenu.close()
+      return
+    }
     if (!options.canDraw() || event.button !== 0) return
     const point = normalizedPoint(event)
     if (options.tool() === 'fill') {
@@ -252,6 +259,7 @@ export function useStrokeSession(options: {
     get activeStrokeId() {
       return activeStrokeId
     },
+    drawing,
     pointerDown,
     pointerMove,
     pointerUp,

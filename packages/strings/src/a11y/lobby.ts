@@ -12,4 +12,5 @@ export const lobby = {
   createDialogCloseAria: '关闭创建房间弹窗',
   privateJoinCloseAria: '关闭私密房加入弹窗',
   privateCodeAria: '私密房间码',
+  seatOccupancyAria: (occupied: number, total: number) => `席位占用情况：${occupied} / ${total}`,
 } as const

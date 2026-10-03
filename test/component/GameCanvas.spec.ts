@@ -1,6 +1,8 @@
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setActivePinia, type Pinia } from 'pinia'
+import { createPiniaWithFakeTransport } from '../client/fake-game-transport'
 import { APP_CONFIG } from '@draw-guess/config'
 import type { DrawingCommand, Stroke, ToolKind } from '@draw-guess/shared'
 import { makeFill, makeStroke } from '../client/canvas-stubs'
@@ -8,7 +10,8 @@ import type { RequestResult } from '@/stores/request'
 import { clearFillDiagnostics, getFillDiagnostics } from '@/canvas/fill-diagnostics'
 import type { FloodFillWorkerRequest, FloodFillWorkerResponse } from '@/canvas/flood-fill-worker'
 import GameCanvas from '@/components/game/GameCanvas.vue'
-
+import { useContextMenu } from '@/composables/useContextMenu'
+import { useGameplayStore } from '@/stores/gameplay'
 /**
  * GameCanvas 组合层的组件级保障：真实挂载组件（含视口/光标/笔迹三个 composable），
  * 统一替换 Canvas 2D 与布局 API，验证权威历史重放、增量投影与指针批次上送。
@@ -121,6 +124,7 @@ function mountCanvas(props: Partial<CanvasProps> = {}) {
       revision: 0,
       ...props,
     },
+    global: { plugins: [pinia] },
   })
 }
 
@@ -182,7 +186,11 @@ function latestWorkerRequest(): FloodFillWorkerRequest {
   return request
 }
 
+let pinia: Pinia
+
 beforeEach(() => {
+  pinia = createPiniaWithFakeTransport().pinia
+  setActivePinia(pinia)
   vi.useFakeTimers()
   contexts = new Map()
   imageDataFactory = undefined
@@ -639,5 +647,120 @@ describe('GameCanvas 填充解锁', () => {
 
     await triggerFill(wrapper)
     expect(wrapper.emitted('fill')).toHaveLength(1)
+  })
+})
+describe('GameCanvas 右键菜单与画作导出', () => {
+  it('右键拦截并根据 canDraw 分别弹出画家与猜词者菜单', async () => {
+    const menu = useContextMenu()
+
+    // 1. 画家视角
+    const drawerWrapper = mountCanvas({ canDraw: true })
+    await drawerWrapper.trigger('contextmenu', { clientX: 100, clientY: 150 })
+    expect(menu.state.open).toBe(true)
+    expect(menu.state.items.map((i) => i.id)).toContain('tool-pen')
+    expect(menu.state.items.map((i) => i.id)).toContain('tool-eraser')
+    expect(menu.state.items.map((i) => i.id)).toContain('tool-fill')
+    expect(menu.state.items.map((i) => i.id)).toContain('tool-eyedropper')
+    expect(menu.state.items.map((i) => i.id)).toContain('history-undo')
+    expect(menu.state.items.map((i) => i.id)).toContain('history-redo')
+    expect(menu.state.items.map((i) => i.id)).toContain('export-copy')
+    expect(menu.state.items.map((i) => i.id)).toContain('export-save')
+    expect(menu.state.items.map((i) => i.id)).toContain('history-clear')
+
+    menu.close()
+
+    // 2. 猜词者视角
+    const guesserWrapper = mountCanvas({ canDraw: false })
+    await guesserWrapper.trigger('contextmenu', { clientX: 200, clientY: 250 })
+    expect(menu.state.open).toBe(true)
+    const guesserIds = menu.state.items.map((i) => i.id)
+    expect(guesserIds).toContain('export-copy')
+    expect(guesserIds).toContain('export-save')
+    expect(guesserIds).toContain('reaction-thumbs_up')
+    expect(guesserIds).toContain('reaction-confused')
+    expect(guesserIds).toContain('reaction-fire')
+    expect(guesserIds).not.toContain('tool-pen')
+    expect(guesserIds).not.toContain('history-clear')
+    menu.close()
+  })
+
+  it('正在作画时右键彻底忽略，不弹出菜单', async () => {
+    const menu = useContextMenu()
+    const wrapper = mountCanvas({ canDraw: true })
+    const canvas = wrapper.find('canvas')
+
+    // 按下鼠标左键进入作画态
+    await canvas.trigger('pointerdown', { button: 0, clientX: 50, clientY: 50, pointerId: 1 })
+    // 右键画布容器
+    await wrapper.trigger('contextmenu', { clientX: 60, clientY: 60 })
+
+    expect(menu.state.open).toBe(false)
+  })
+
+  it('右键菜单处于展开状态时，点击画板仅关闭菜单并阻止墨迹生成', async () => {
+    const menu = useContextMenu()
+    const wrapper = mountCanvas({ canDraw: true })
+    const canvas = wrapper.find('canvas')
+
+    // 弹出右键菜单
+    await wrapper.trigger('contextmenu', { clientX: 100, clientY: 100 })
+    expect(menu.state.open).toBe(true)
+
+    // 点击画板
+    await canvas.trigger('pointerdown', { button: 0, clientX: 50, clientY: 50, pointerId: 1 })
+    expect(menu.state.open).toBe(false)
+    expect(wrapper.emitted('stroke')).toBeUndefined()
+  })
+
+  it('清空画板菜单项带有 danger 样式并触发 clear 事件', async () => {
+    const menu = useContextMenu()
+    const wrapper = mountCanvas({ canDraw: true })
+
+    await wrapper.trigger('contextmenu', { clientX: 100, clientY: 100 })
+    const clearItem = menu.state.items.find((i) => i.id === 'history-clear')
+    expect(clearItem).toBeDefined()
+    expect(clearItem?.danger).toBe(true)
+
+    // 激活清空项
+    clearItem?.action?.()
+    expect(wrapper.emitted('clear')).toBeDefined()
+    menu.close()
+  })
+
+  it('猜词者右键菜单包含微表情互动项，点击触发微表情发送', async () => {
+    const menu = useContextMenu()
+    const wrapper = mountCanvas({ canDraw: false })
+
+    await wrapper.trigger('contextmenu', { clientX: 150, clientY: 150 })
+    expect(menu.state.open).toBe(true)
+
+    const thumbsUpItem = menu.state.items.find((i) => i.id === 'reaction-thumbs_up')
+    expect(thumbsUpItem).toBeDefined()
+    expect(thumbsUpItem?.disabled).toBe(false)
+
+    // 点击点赞表情
+    thumbsUpItem?.action?.()
+    menu.close()
+  })
+
+  it('画板接收广播后渲染微表情浮动气泡，且最多并存 6 个气泡', async () => {
+    const wrapper = mountCanvas({ canDraw: false })
+    const gameplay = useGameplayStore()
+    // 连续触发 8 次微表情广播推送
+    for (let i = 1; i <= 8; i++) {
+      gameplay.handleCanvasPing({
+        x: 0.1 * i,
+        y: 0.1 * i,
+        type: 'fire',
+        senderNickname: `玩家${i}`,
+      })
+      await wrapper.vm.$nextTick()
+    }
+
+    // 渲染在画板上的浮动气泡数量严格受限为 6 个
+    const bubbles = wrapper.findAll('.animate-\\[score-float-up_1\\.2s_ease-out_forwards\\]')
+    expect(bubbles.length).toBe(6)
+    // 最新气泡包含玩家8
+    expect(wrapper.text()).toContain('玩家8')
   })
 })

@@ -126,6 +126,16 @@ const summaryRows = computed(() => {
     settings.allowCustomWord ? strings.ui.room.ruleCustomWordOn : strings.ui.room.ruleCustomWordOff,
   )
   addDifference(
+    'allowNearMissHint',
+    strings.ui.room.nearMissHintLabel,
+    enabled(settings.allowNearMissHint),
+  )
+  addDifference(
+    'allowCanvasReactions',
+    strings.ui.room.canvasReactionsLabel,
+    enabled(settings.allowCanvasReactions),
+  )
+  addDifference(
     'joinPolicy',
     strings.ui.room.joinPolicyField,
     settings.joinPolicy === 'forbid'

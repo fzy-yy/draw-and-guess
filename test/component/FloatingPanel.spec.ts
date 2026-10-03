@@ -1,18 +1,13 @@
-import { defineComponent, h, nextTick, ref } from 'vue'
-import { setActivePinia, type Pinia } from 'pinia'
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
+import { mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
 import { strings } from '@draw-guess/strings'
 import FloatingPanel from '@/components/game/FloatingPanel.vue'
-import GameHud from '@/components/game/GameHud.vue'
 import { focusToolbar, toolbarZIndex } from '@/components/game/floating-panel-z'
 import type { PanelPosition } from '@/components/game'
-import { useRoomStore } from '@/stores/room'
-import { createRoomFixture } from '../client/room-fixture'
-import { createPiniaWithFakeTransport } from '../client/fake-game-transport'
 /**
  * 浮层面板壳的对外行为：
- * 开合（v-model:open）、标题栏拖动的位置夹取、关闭按钮、与顶栏开关共用同一份开关状态。
+ * 开合（v-model:open）、标题栏拖动的位置夹取、关闭按钮。
  * 只断言渲染与 v-model 契约，不触碰内部拖动簿记。
  */
 
@@ -111,74 +106,6 @@ describe('FloatingPanel 标题栏拖动', () => {
       clientY: 260,
     })
     expect(wrapper.emitted('update:position')).toBeUndefined()
-    wrapper.unmount()
-  })
-})
-
-describe('FloatingPanel 与顶栏开关联动', () => {
-  let pinia: Pinia
-
-  beforeEach(() => {
-    pinia = createPiniaWithFakeTransport().pinia
-    setActivePinia(pinia)
-  })
-
-  /** 复刻 GameView 的绑定：顶栏开关与浮层面板共用同一个 open 引用，两处都能改它。 */
-  function mountSharedOpen(): VueWrapper {
-    const roomStore = useRoomStore()
-    roomStore.room = createRoomFixture('drawing')
-    const game = roomStore.room.game
-
-    const Harness = defineComponent({
-      components: { GameHud, FloatingPanel },
-      setup() {
-        const chatOpen = ref(true)
-        return () =>
-          h('div', [
-            h(GameHud, {
-              isFullscreen: false,
-              game,
-              secondsLeft: 30,
-              progress: 0.5,
-              chatOpen: chatOpen.value,
-              'onUpdate:chatOpen': (value: boolean) => (chatOpen.value = value),
-            }),
-            h(
-              FloatingPanel,
-              {
-                open: chatOpen.value,
-                'onUpdate:open': (value: boolean) => (chatOpen.value = value),
-                title: strings.ui.game.chatPanelTitle,
-              },
-              { default: () => h('p', '聊天消息') },
-            ),
-          ])
-      },
-    })
-
-    return mount(Harness, { global: { plugins: [pinia] } })
-  }
-
-  it('顶栏按钮可收起面板，面板内关闭按钮也能收起同一份状态', async () => {
-    const wrapper = mountSharedOpen()
-    const toggle = wrapper.get(`[aria-label="${strings.a11y.game.toggleChat}"]`)
-    const panelTitle = strings.ui.game.chatPanelTitle
-
-    // 顶栏开关 → 收起
-    await toggle.trigger('click')
-    await flushPromises()
-    expect(wrapper.findAll('section').some((node) => node.text().includes(panelTitle))).toBe(false)
-
-    // 顶栏开关 → 重新打开
-    await toggle.trigger('click')
-    await flushPromises()
-    expect(wrapper.findAll('section').some((node) => node.text().includes(panelTitle))).toBe(true)
-
-    // 面板内关闭按钮 → 同样收起（证明两处写的是同一份 open）
-    const panel = wrapper.findAll('section').find((node) => node.text().includes(panelTitle))!
-    await panel.get(`[aria-label="${strings.a11y.game.closePanelAria}"]`).trigger('click')
-    await flushPromises()
-    expect(wrapper.findAll('section').some((node) => node.text().includes(panelTitle))).toBe(false)
     wrapper.unmount()
   })
 })

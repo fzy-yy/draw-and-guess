@@ -22,6 +22,9 @@ describe('房间规则产品闭环', () => {
     expect(settings.drawSeconds).toBe(APP_CONFIG.game.drawSeconds.default)
     expect(DRAW_SECONDS_OPTIONS).toContain(settings.drawSeconds)
     expect(settings.allowChooseTimeLimit).toBe(false)
+    // 差一字私密提示与画布微表情互动默认开启
+    expect(settings.allowNearMissHint).toBe(true)
+    expect(settings.allowCanvasReactions).toBe(true)
   })
 
   it('协议 Schema 逐字段拒绝越界、非整数、错误枚举与非布尔值（唯一裁决点）', () => {
@@ -38,6 +41,8 @@ describe('房间规则产品闭环', () => {
       { allowPlayerInvite: 'yes' },
       { allowPause: 1 },
       { allowWordReroll: null },
+      { allowNearMissHint: 'yes' },
+      { allowCanvasReactions: 123 },
       { joinPolicy: 'open' },
     ]
     for (const patch of invalidPatches) {
@@ -104,5 +109,31 @@ describe('房间规则产品闭环', () => {
     expect(game.phaseEndsAt).toBe(0)
     harness.runtime.advance(60_000)
     expect(room.phase).toBe('choosing_word')
+  })
+
+  it('房主可成功开启/关闭差一字私密提示与画布微表情并广播生效', () => {
+    const harness = createGameHarness()
+    const host = harness.register('房主')
+    const room = harness.service.createRoom(host.playerId, {
+      name: '测试房间',
+      visibility: 'public',
+      settings: testRoomSettings({
+        allowNearMissHint: true,
+        allowCanvasReactions: true,
+      }),
+    })
+
+    // 修改规则关闭这两项
+    const updated = harness.service.updateSettings(
+      host.playerId,
+      {
+        allowNearMissHint: false,
+        allowCanvasReactions: false,
+      },
+      room.stateVersion,
+    )
+    expect(updated.settings.allowNearMissHint).toBe(false)
+    expect(updated.settings.allowCanvasReactions).toBe(false)
+    expect(updated.stateVersion).toBeGreaterThan(room.stateVersion)
   })
 })

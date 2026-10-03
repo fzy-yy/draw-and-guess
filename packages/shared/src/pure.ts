@@ -113,3 +113,64 @@ const LEGAL_PHASES: Record<RoomPhase, readonly RoomPhase[]> = {
 export function canTransition(from: RoomPhase, to: RoomPhase): boolean {
   return LEGAL_PHASES[from].includes(to)
 }
+
+/**
+ * 计算两个字符串基于 Unicode 码点（或字符）的 Levenshtein 编辑距离。
+ * 使用空间优化的单行/双行动态规划，时间复杂度 O(M*N)，空间复杂度 O(min(M, N))。
+ */
+export function levenshteinDistance(a: string, b: string): number {
+  const charsA = Array.from(a)
+  const charsB = Array.from(b)
+  const lenA = charsA.length
+  const lenB = charsB.length
+
+  if (lenA === 0) return lenB
+  if (lenB === 0) return lenA
+
+  // 保证 dp 数组长度为较短的串，节省内存分配
+  if (lenA < lenB) {
+    return levenshteinDistance(b, a)
+  }
+
+  let previousRow = Array.from({ length: lenB + 1 }, (_, index) => index)
+  let currentRow = new Array<number>(lenB + 1)
+
+  for (let i = 1; i <= lenA; i++) {
+    currentRow[0] = i
+    const charA = charsA[i - 1]
+
+    for (let j = 1; j <= lenB; j++) {
+      const charB = charsB[j - 1]
+      const cost = charA === charB ? 0 : 1
+      const deleteCost = (previousRow[j] ?? 0) + 1
+      const insertCost = (currentRow[j - 1] ?? 0) + 1
+      const replaceCost = (previousRow[j - 1] ?? 0) + cost
+      currentRow[j] = Math.min(deleteCost, insertCost, replaceCost)
+    }
+
+    const temp = previousRow
+    previousRow = currentRow
+    currentRow = temp
+  }
+
+  return previousRow[lenB] ?? 0
+}
+
+/**
+ * 判定猜词是否与正确答案「仅差一个字」（差一字私密提示）。
+ * 规则：
+ * 1. 规范化后的答案字数必须 >= 2，单字词恒返回 false（避免盲猜无成本套出线索）；
+ * 2. 规范化后的猜词与规范化后的答案之间的 Levenshtein 编辑距离严格等于 1。
+ */
+export function isNearMissAnswer(guess: string, answer: string): boolean {
+  const normalizedGuess = normalizeAnswer(guess)
+  const normalizedAnswer = normalizeAnswer(answer)
+  const answerLength = Array.from(normalizedAnswer).length
+
+  // 单字词答案不触发差一字提示
+  if (answerLength < 2) {
+    return false
+  }
+
+  return levenshteinDistance(normalizedGuess, normalizedAnswer) === 1
+}

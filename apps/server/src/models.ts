@@ -19,6 +19,11 @@ import type {
 import type { AppSocket } from './socket-types.ts'
 import type { TimerHandle } from './runtime.ts'
 
+/** 服务端内部持有的聊天消息记录：包含可选的私密接收人 recipientId。 */
+export interface ServerChatMessage extends ChatMessage {
+  /** 若指定，则该消息为该玩家专属私密提示（如差一字提醒），快照下发时仅其本人可见。 */
+  recipientId?: string
+}
 /**
  * 玩家在服务端内存中的秘密状态。
  * 所有带 Secret 的数据绝不原样发送给客户端；公开视图必须通过 GameService 的裁剪函数生成。
@@ -44,6 +49,8 @@ export interface PlayerSecret {
   /** 一秒滑动窗口内的猜词与绘图事件时间，用于局域网刷包保护。 */
   guessEventTimes: number[]
   drawEventTimes: number[]
+  /** 画布微表情 1.5 秒滑动窗口限频时间队列。 */
+  canvasReactionTimes?: number[]
   /** 私密房间码尝试时间窗口，独立于通用事件限频以阻止短码枚举。 */
   privateJoinAttemptTimes: number[]
 }
@@ -106,7 +113,7 @@ export interface GameSecret {
   strokePointTotal: number
   /** 当前回合已提交的填充命令数，用于 maxFillsPerRound 预算（限制重连全量重放成本）。 */
   fillCount: number
-  messages: ChatMessage[] // 回合聊天消息（入队裁剪）
+  messages: ServerChatMessage[] // 回合聊天消息（含独占私密通知标记，入队裁剪）
   correctOrder: string[] // 猜中者 ID 按时间排序
   /**
    * 猜中当时的得分明细（与入账同一条记录）。

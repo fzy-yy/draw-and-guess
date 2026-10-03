@@ -40,7 +40,6 @@ describe('GameHud 角色视图', () => {
       game: room.room.game,
       secondsLeft: 30,
       progress: 0.5,
-      chatOpen: true,
     })
 
     const answerToggle = screen.getByRole('button', {
@@ -73,7 +72,6 @@ describe('GameHud 角色视图', () => {
       game: room.room.game,
       secondsLeft: 12,
       progress: 0.2,
-      chatOpen: true,
     })
 
     expect(

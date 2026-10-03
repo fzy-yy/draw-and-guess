@@ -24,6 +24,8 @@ export const roomSettingsDefaults = {
   allowPause: true,
   allowWordReroll: true,
   allowCustomWord: false,
+  allowNearMissHint: true,
+  allowCanvasReactions: true,
   joinPolicy: 'next_game',
 } as const satisfies Omit<RoomSettings, 'maxPlayers'>
 

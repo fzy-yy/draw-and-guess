@@ -17,7 +17,7 @@ export function registerRoomHandlers(socket: AppSocket, service: GameService): v
     service.joinPrivateRoom(playerId, input.code),
   )
   bindRequest(socket, EVENTS.roomLeave, (_input, playerId) => service.leaveRoom(playerId))
-  // 房间规则：准备、改规则、词库管理
+  // 房间规则：准备、改规则（含差一字提示与画布微表情开关）、词库管理
   bindRequest(socket, EVENTS.roomSetReady, (input, playerId) =>
     service.setReady(playerId, input.ready),
   )

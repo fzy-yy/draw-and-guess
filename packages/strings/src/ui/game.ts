@@ -70,4 +70,34 @@ export const game = {
   // —— 对局浮层布局：顶栏、可拖动浮层面板与底部横向工具条（见 docs/adr/0043-game-view-floating-layout.md）——
   chatPanelTitle: '聊天',
   brushUnit: 'px',
+  // —— 画板右键菜单与画作导出 ——
+  canvasMenuAria: '画板操作菜单',
+  canvasMenuBrush: '画笔 (B)',
+  canvasMenuEraser: '橡皮擦 (E)',
+  canvasMenuFill: '油漆桶 (F)',
+  canvasMenuEyedropper: '吸管取色',
+  canvasMenuUndo: '撤销 (Ctrl+Z)',
+  canvasMenuRedo: '重做 (Ctrl+Y)',
+  canvasMenuCopy: '复制画作',
+  canvasMenuSave: '保存图片',
+  canvasMenuClear: '清空画板',
+  canvasMenuQuickPhrases: '快捷发言短语',
+  // 微表情互动菜单项文案
+  canvasMenuReactionThumbsUp: '点赞 👍',
+  canvasMenuReactionConfused: '满头问号 ❓',
+  canvasMenuReactionFire: '神仙画画 🔥',
+  canvasCopiedToClipboard: '画作已复制到剪贴板',
+  canvasSavedAsImage: '已保存画作图片',
+  canvasCopyFallbackDownload: '剪贴板不可用，已自动保存图片文件',
+  // 终局战报荣誉称号文案
+  accolades: {
+    masterDrawer: '神笔马良',
+    masterDrawerDesc: '画作秒懂，全场猜中速度最快',
+    soulPainter: '灵魂画手',
+    soulPainterDesc: '笔精墨妙，画风独树一帜',
+    mindReader: '读心大师',
+    mindReaderDesc: '心有灵犀，多次第一顺位秒猜中',
+    activeGuesser: '积极分子',
+    activeGuesserDesc: '猜词最积极，全场氛围担当',
+  },
 } as const

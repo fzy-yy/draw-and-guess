@@ -51,6 +51,9 @@ export const game = {
   brushSize: '画笔大小',
   brushUnit: 'px',
   brushWheelHint: '滚动调整画笔大小',
+  canvasMenuAria: '画板操作菜单',
+  accoladeBadgeAria: (nickname: string, accolade: string) =>
+    `${nickname} 获得荣誉称号：${accolade}`,
 } as const
 export const canvas = {
   drawingAria: '作画画布，支持画笔、橡皮擦、封闭区域填充和滚轮调整画笔或橡皮擦粗细',

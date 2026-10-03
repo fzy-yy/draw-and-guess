@@ -27,3 +27,27 @@ export const CustomWordSchema = RequestSchema.extend({
   text: z.string().min(1).max(64),
 })
 export const PauseGameSchema = RequestSchema.extend({ reason: z.string().max(40) })
+
+/** 画布微表情反应类型枚举（点赞、困惑/问号、火焰/神仙画画）。 */
+export const CANVAS_PING_TYPES = ['thumbs_up', 'confused', 'fire'] as const
+export const CanvasPingTypeSchema = z.enum(CANVAS_PING_TYPES)
+export type CanvasPingType = z.infer<typeof CanvasPingTypeSchema>
+
+/** 客户端请求发送画布微表情的载荷 Schema。 */
+export const CanvasPingPayloadSchema = RequestSchema.extend({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  type: CanvasPingTypeSchema,
+})
+export type CanvasPingPayload = z.infer<typeof CanvasPingPayloadSchema>
+
+/** 服务端广播全员可见的微表情数据 Schema。 */
+export const CanvasPingBroadcastSchema = z
+  .object({
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+    type: CanvasPingTypeSchema,
+    senderNickname: z.string(),
+  })
+  .strict()
+export type CanvasPingBroadcast = z.infer<typeof CanvasPingBroadcastSchema>

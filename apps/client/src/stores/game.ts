@@ -133,6 +133,8 @@ export const useGameStore = defineStore('game', () => {
     chooseCustomWord: gameplayStore.chooseCustomWord,
     submitGuess: gameplayStore.submitGuess,
     sendPreset: gameplayStore.sendPreset,
+    sendCanvasPing: gameplayStore.sendCanvasPing,
+    latestCanvasPing: storeToRefs(gameplayStore).latestCanvasPing,
     sendStroke: gameplayStore.sendStroke,
     sendFill: gameplayStore.sendFill,
     drawAction: gameplayStore.drawAction,

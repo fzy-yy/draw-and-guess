@@ -11,6 +11,7 @@ import {
   PauseGameSchema,
   RerollWordsSchema,
   CustomWordSchema,
+  CanvasPingPayloadSchema,
   SendPresetSchema,
   StartGameSchema,
 } from './protocol/gameplay.ts'
@@ -69,6 +70,7 @@ export const EVENTS = {
   gameReturnWaiting: 'game:returnWaiting',
   guessSubmit: 'guess:submit',
   chatPreset: 'chat:preset',
+  gameCanvasPing: 'game:canvas_ping',
   drawStrokeBatch: 'draw:strokeBatch',
   drawFillCommit: 'draw:fillCommit',
   drawUndo: 'draw:undo',
@@ -125,6 +127,7 @@ export const CLIENT_REQUEST_SCHEMAS = {
   [EVENTS.gameReturnWaiting]: RequestSchema,
   [EVENTS.guessSubmit]: GuessWordSchema,
   [EVENTS.chatPreset]: SendPresetSchema,
+  [EVENTS.gameCanvasPing]: CanvasPingPayloadSchema,
   [EVENTS.drawStrokeBatch]: DrawingRoundSchema.extend({ stroke: StrokeSchema }),
   [EVENTS.drawFillCommit]: DrawingRoundSchema.extend({ fill: FillCommandSchema }),
   [EVENTS.drawUndo]: DrawingRoundSchema,

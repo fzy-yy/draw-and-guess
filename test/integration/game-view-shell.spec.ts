@@ -9,13 +9,9 @@ import { createRoomFixture, HOST_ID } from '../client/room-fixture'
 import { createPiniaWithFakeTransport, type FakeGameTransport } from '../client/fake-game-transport'
 
 /**
- * 新对局骨架（浮层布局）的集成级保障：真实 Pinia + 假 Socket 传输 + 真实 GameView 组件树，
- * 覆盖「顶栏 + 铺满画布 + 常驻玩家面板 + 浮层聊天面板 + 底部工具条」以及顶栏开关对面板/工具条显隐的驱动。
- *
- * 这是规格「Testing Decisions」要求补的最高缝之下的集成用例：断言外部可观察结果（DOM 结构
- * 与显隐），不触碰组件私有状态。happy-dom 不实现 Canvas 2D 与布局，这里提供最小上下文替身
- * （与 GameCanvas 组件测试同构）；MSW 网络边界与音频/焦点陷阱替身由 integration setup 统一提供。
- */
+ * 黄金平衡三栏对局骨架的集成级保障：真实 Pinia + 假 Socket 传输 + 真实 GameView 组件树，
+ * 覆盖「统领顶栏 + 16cqw 左栏玩家榜 + 62cqw 中栏黄金画板 + 20cqw 右栏常驻聊天 + 底部工具条」。
+ * 彻底废除旧浮动面板与 C 快捷键开关断言，验证三栏常驻与 Enter 聚焦猜词输入框。
 
 /** 最小 Canvas 2D 上下文替身：记录绘制调用即可，重放决策由画布组件自身保障。 */
 function createContextStub(): CanvasRenderingContext2D {
@@ -82,29 +78,26 @@ function mountGameView(): VueWrapper {
   return mount(GameView, { global: { plugins: [pinia] } })
 }
 
-/** 按标题定位浮层面板：只匹配 FloatingPanel 渲染的 section。 */
-function findPanel(wrapper: VueWrapper, title: string): boolean {
-  return wrapper.findAll('section').some((node) => node.text().includes(title))
-}
-
-/** 定位常驻玩家左栏：它是普通 aside（不是浮层 section），按 aria-label 判定。 */
-function hasPlayersColumn(wrapper: VueWrapper): boolean {
-  return wrapper.find(`aside[aria-label="${strings.a11y.game.playersPanelTitle}"]`).exists()
-}
-
 /** 在 window 上派发按键：与 usePanelShortcuts 的监听目标一致，模拟全局快捷键。 */
 function pressKey(key: string): void {
   window.dispatchEvent(new KeyboardEvent('keydown', { key }))
 }
 
-describe('GameView 新对局骨架', () => {
-  it('渲染顶栏、铺满画布、玩家常驻左栏、聊天浮层与底部工具条', () => {
+describe('GameView 黄金平衡三栏对局骨架', () => {
+  it('渲染全局统领顶栏、左栏玩家榜、中栏画板、右栏常驻聊天与底部工具条', () => {
     const wrapper = mountGameView()
 
+    // 顶部统领顶栏
     expect(wrapper.find(`header[aria-label="${strings.a11y.game.topBarAria}"]`).exists()).toBe(true)
+    // 左栏玩家面板常驻
+    expect(
+      wrapper.find(`aside[aria-label="${strings.a11y.game.playersPanelTitle}"]`).exists(),
+    ).toBe(true)
+    // 中栏黄金画板
     expect(wrapper.find('canvas').exists()).toBe(true)
-    expect(hasPlayersColumn(wrapper)).toBe(true)
-    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(true)
+    // 右栏常驻聊天面板
+    expect(wrapper.find('form:has(#guess-input)').exists()).toBe(true)
+    // 画家底部工具条
     expect(
       wrapper.find(`[role="toolbar"][aria-label="${strings.a11y.game.toolbarAria}"]`).exists(),
     ).toBe(true)
@@ -112,53 +105,33 @@ describe('GameView 新对局骨架', () => {
     wrapper.unmount()
   })
 
-  it('顶栏开关可收起并重新打开聊天面板，工具条对画家常驻不可隐藏，玩家面板常驻左栏', async () => {
+  it('三栏物理闭环流内常驻，零浮窗遮挡画板，工具条对画家常驻不可隐藏', async () => {
     const wrapper = mountGameView()
 
-    // 玩家面板是常驻左栏：不参与开关，始终在 DOM 中
-    expect(hasPlayersColumn(wrapper)).toBe(true)
-    expect(wrapper.find(`[aria-label="${strings.a11y.game.toggleChat}"]`).exists()).toBe(true)
+    // 验证左栏玩家榜与右栏聊天均常驻在 DOM 中
+    expect(
+      wrapper.find(`aside[aria-label="${strings.a11y.game.playersPanelTitle}"]`).exists(),
+    ).toBe(true)
+    expect(wrapper.find('form:has(#guess-input)').exists()).toBe(true)
 
-    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(true)
-
-    // 顶栏「聊天面板」开关 → 收起聊天面板
-    await wrapper.get(`[aria-label="${strings.a11y.game.toggleChat}"]`).trigger('click')
-    await flushPromises()
-    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(false)
-    // 收起聊天不影响常驻玩家左栏
-    expect(hasPlayersColumn(wrapper)).toBe(true)
-
-    // 再次点击同一开关 → 重新打开聊天面板
-    await wrapper.get(`[aria-label="${strings.a11y.game.toggleChat}"]`).trigger('click')
-    await flushPromises()
-    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(true)
+    // 顶栏无聊天显隐开关
+    expect(wrapper.find(`[aria-label="${strings.a11y.game.toggleChat}"]`).exists()).toBe(false)
 
     // 底部工具条对画家常驻显示且不可被隐藏
     expect(wrapper.find('[role="toolbar"]').exists()).toBe(true)
     wrapper.unmount()
   })
 
-  it('面板快捷键：C 开关聊天面板，回车只打开不隐藏，输入控件聚焦时让位', async () => {
+  it('快捷键：回车键聚焦猜词输入框', async () => {
     const wrapper = mountGameView()
 
-    // 回车：聊天已打开时只聚焦、不隐藏
+    const input = wrapper.find<HTMLInputElement>('#guess-input').element
+    const focusSpy = vi.spyOn(input, 'focus')
+
+    // 按回车键聚焦猜词框
     pressKey('Enter')
     await flushPromises()
-    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(true)
-
-    // C：关掉聊天后再用回车打开（回车永不隐藏）
-    pressKey('c')
-    await flushPromises()
-    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(false)
-    pressKey('Enter')
-    await flushPromises()
-    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(true)
-
-    // 输入控件聚焦时快捷键让位：事件目标是可编辑元素，面板不受影响
-    const input = wrapper.find('input').element
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }))
-    await flushPromises()
-    expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(true)
+    expect(focusSpy).toHaveBeenCalled()
 
     wrapper.unmount()
   })

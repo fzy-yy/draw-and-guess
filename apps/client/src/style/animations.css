@@ -141,6 +141,26 @@
   }
 }
 
+/* ===== 关键帧：画家得分 +20 金色向上浮起并淡出动效（持续 1.2 秒） ===== */
+@keyframes score-float-up {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0.4cqh, 0) scale(0.8);
+  }
+  20% {
+    opacity: 1;
+    transform: translate3d(0, -0.6cqh, 0) scale(1.15);
+  }
+  80% {
+    opacity: 0.95;
+    transform: translate3d(0, -1.8cqh, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -2.6cqh, 0) scale(0.9);
+  }
+}
+
 /* ===== 减少动态效果：把非必要过渡压缩为瞬时（基于 utilities 层级自然覆盖，0 !important） ===== */
 @layer utilities {
   .motion-disabled .game-stage *,

@@ -1,6 +1,6 @@
 # 0043 · 对局界面改为浮层布局
 
-**状态**：已采纳
+**状态**：已废弃（被 [0056](0056-three-column-layout-and-canvas-menu.md) 取代）
 
 - 来源：2026-10-01 对局界面重设计（原型经多轮评审收敛，规格见 `.scratch/game-ui-redesign/spec.md`）。
 

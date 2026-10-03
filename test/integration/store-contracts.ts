@@ -62,6 +62,8 @@ expectTypeOf<BusinessKeys<ReturnType<typeof useGameStore>>>().toEqualTypeOf<
   | 'chooseCustomWord'
   | 'submitGuess'
   | 'sendPreset'
+  | 'sendCanvasPing'
+  | 'latestCanvasPing'
   | 'sendStroke'
   | 'sendFill'
   | 'drawAction'

@@ -22,9 +22,9 @@ export class GamePage {
     return this.page.getByLabel('玩家', { exact: true })
   }
 
-  /** 浮层聊天面板（按标题文本定位，避免与玩家面板混淆）。 */
+  /** 常驻聊天右栏。 */
   get chatPanel() {
-    return this.page.locator('section').filter({ hasText: '聊天' })
+    return this.page.locator('aside:has(form:has(#guess-input))')
   }
 
   async toggleChatPanel() {

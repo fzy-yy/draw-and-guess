@@ -1,10 +1,12 @@
 <!--
-  右侧聊天区（从 GameView.vue 拆出的子组件）：
+  右侧常驻聊天区（20cqw 独立黑框常驻版）：
+  单行容纳 15~16 汉字，短句猜词不折行，猜词者边看画边打字，手感极其丝滑。
   消息列表 + 快捷互动工具 + 猜词输入。猜词输入、消息滚动跟随与自动聚焦逻辑全部收敛到内部；
   是否可猜词由父组件经 canGuess 传入，提交猜词/预设短语直接调用 store。
   输入框对无权限角色直接禁用（禁用样式已表达状态，不再渲染冗余的文字提示行）。
   快捷互动收敛为两个悬浮面板：表情反应 + 快捷短语（短语列表来自 @draw-guess/config，
   在 config 中可增减），均基于 ActionPopover 复用外壳。
+  高度与宽度撑满父容器（GameView 右栏 aside），流内常驻，上部滚动消息流，底部固定输入。
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
@@ -43,13 +45,38 @@ function memberForMessage(message: ChatMessage): RoomMember | undefined {
     : undefined
 }
 
-/** 玩家消息气泡沿用固定席位色；文字始终保持黑色粗体以保证可读性。 */
+/**
+ * 玩家发言气泡沿用固定席位色；系统通知、猜对广播与差一字提示采用专属视觉分层样式，
+ * 覆盖底色与边框。
+ */
 function messageStyle(message: ChatMessage): Record<string, string> | undefined {
+  // 非玩家普通发言不附加席位强调色
+  if (message.type === 'system' || message.type === 'correct' || message.type === 'near_miss') {
+    return undefined
+  }
   const member = memberForMessage(message)
   if (!member) return undefined
   return {
     borderLeftColor: member.seatColor,
     backgroundColor: `color-mix(in srgb, ${member.seatColor} 16%, white)`,
+  }
+}
+
+/** 聊天消息类型对应的分层着色样式类。 */
+function messageClass(message: ChatMessage): string {
+  switch (message.type) {
+    case 'system':
+      // 常规系统消息（进出房间等）：中性浅灰微字，低侵入感
+      return 'border-line/60 bg-paper/60 text-muted border-l-line'
+    case 'correct':
+      // 猜对答案广播：淡绿微底色，清晰激励
+      return 'bg-green/10 text-success-fg border border-green/30 border-l-green'
+    case 'near_miss':
+      // 差一字私密提示：淡橙微底色，带有专属警示醒目标记
+      return 'bg-yellow/15 text-navy border border-yellow/40 border-l-yellow font-bold'
+    default:
+      // 常规猜词与预设互动消息
+      return 'border-line bg-white text-navy'
   }
 }
 
@@ -115,11 +142,8 @@ defineExpose({ focusInput })
 </script>
 
 <template>
-  <!-- 右侧聊天区：消息列表 + 猜词输入 / 安全预设短语 -->
-  <aside
-    v-if="store.room"
-    class="flex min-w-0 flex-col border-l-[0.2cqh] border-line bg-paper px-[0.9cqw] py-[1.5cqh]"
-  >
+  <!-- 右侧聊天区：上部滚动消息流 + 底部固定猜词输入与预设短语 -->
+  <aside v-if="store.room" class="flex h-full min-w-0 flex-col bg-paper px-[0.9cqw] py-[1.2cqh]">
     <header class="flex items-center justify-between border-b-[0.18cqh] border-line pb-[1cqh]">
       <div>
         <span class="text-blue text-fs-10 tracking-[0.15em]">{{
@@ -148,16 +172,16 @@ defineExpose({ focusInput })
         v-for="message in messages"
         :key="message.id"
         :class="[
-          'flex flex-wrap gap-[0.35em] border-l-[0.3cqh] px-[0.65em] py-[0.6cqh] text-fs-12 leading-[1.35] first:mt-auto ui-feedback',
-          message.type === 'system'
-            ? 'text-blue bg-sky border-l-blue'
-            : 'border-line bg-white text-navy',
-          message.playerId && 'font-bold',
+          'flex flex-wrap items-center gap-[0.35em] border-l-[0.3cqh] px-[0.65em] py-[0.6cqh] text-fs-12 leading-[1.35] first:mt-auto ui-feedback rounded-r-[0.35em]',
+          messageClass(message),
+          message.playerId && message.type !== 'near_miss' && 'font-bold',
         ]"
         :style="messageStyle(message)"
       >
+        <!-- 差一字私密提示专属图标 -->
+        <span v-if="message.type === 'near_miss'" class="select-none" aria-hidden="true">💡</span>
         <!-- 玩家消息显示发送者昵称，昵称后接冒号分隔内容（分隔符来自 strings） -->
-        <b v-if="message.playerId"
+        <b v-if="message.playerId && message.type !== 'near_miss'"
           >{{ memberForMessage(message)?.nickname }}{{ strings.ui.game.messageNameSeparator }}</b
         >
         <span>{{ message.text }}</span>

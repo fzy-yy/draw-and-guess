@@ -3,6 +3,7 @@ import { EVENTS } from '../events.ts'
 import { AvatarIdSchema, JoinPolicySchema, RoomPhaseSchema, WordIdSchema } from './base.ts'
 import { PROTOCOL_VERSION, ROOM_CLOSE_CODES } from './constants.ts'
 import { FillCommandSchema, StrokeSchema } from './drawing.ts'
+import { CanvasPingBroadcastSchema } from './gameplay.ts'
 import { RoomSettingsSchema } from './room.ts'
 
 export const ConnectionStateSchema = z.enum(['online', 'reconnecting', 'left'])
@@ -55,7 +56,7 @@ export const RoomMemberSchema = PublicPlayerSchema.extend({
 export const ChatMessageSchema = z
   .object({
     id: z.string().uuid(),
-    type: z.enum(['guess', 'system', 'correct', 'preset']),
+    type: z.enum(['guess', 'system', 'correct', 'preset', 'near_miss']),
     text: z.string(),
     playerId: z.string().uuid().optional(),
     createdAt: z.number(),
@@ -199,6 +200,7 @@ export const SERVER_PUSH_SCHEMAS = {
       })
       .strict(),
   ),
+  [EVENTS.gameCanvasPing]: pushEnvelope(CanvasPingBroadcastSchema),
 } as const
 
 export type ServerPushEventName = keyof typeof SERVER_PUSH_SCHEMAS

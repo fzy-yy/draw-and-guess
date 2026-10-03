@@ -11,6 +11,7 @@ import type { InvalidPushReason } from '@/stores/push-protocol'
 import { useGameTransport, type GameTransport } from '@/application/game-transport'
 import type { PushHandlerMap } from '@/stores/socket'
 import { useGameStore } from '@/stores/game'
+import { useGameplayStore } from '@/stores/gameplay'
 import { useLobbyStore } from '@/stores/lobby'
 import { useProfileStore } from '@/stores/profile'
 import { useSessionStore } from '@/stores/session'
@@ -28,6 +29,7 @@ export function useAppBootstrap(transport: GameTransport = useGameTransport()) {
   const lobbyStore = useLobbyStore()
   const resyncStore = useResyncStore()
   const roomSync = useRoomSync()
+  const gameplayStore = useGameplayStore()
   let detachListeners: (() => void) | undefined
   let pingTimer: number | undefined
 
@@ -118,6 +120,11 @@ export function useAppBootstrap(transport: GameTransport = useGameTransport()) {
     [EVENTS.drawFillCommit]: {
       on: (data) => roomSync.onFill(data, data.fill),
       recovery: 'room-snapshot',
+    },
+    [EVENTS.gameCanvasPing]: {
+      on: (data) => gameplayStore.handleCanvasPing(data),
+      // 微表情属于瞬态轻量互动广播，数据校验异常时不触发全量快照重拉取
+      recovery: 'generic-resync',
     },
   }
 

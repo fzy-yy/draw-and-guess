@@ -9,12 +9,11 @@ import { serverStrings } from '@draw-guess/strings'
 import {
   canTransition,
   isPunctuationOrSpace,
-  type ChatMessage,
   type RoomPhase,
   type RoundResult,
   type VocabularyWord,
 } from '@draw-guess/shared'
-import type { GameSecret, MemberState, RoomSecret } from './models.ts'
+import type { GameSecret, MemberState, RoomSecret, ServerChatMessage } from './models.ts'
 import { buildDrawerScore, buildGuessDetail, freezeFinalRanking } from './scoring.ts'
 import type { TimerHandle } from './runtime.ts'
 import type { RoundContext } from './domain/game/round-context.ts'
@@ -230,11 +229,14 @@ export class RoundMachine {
       ),
       playerId: member.playerId,
     })
-    // 所有有效猜词者（可玩成员，排除观战）都已猜中时立即结束本回合，否则刷新房间快照
+    // 检查所有在线猜词者是否均已答对：若全部猜中（guessedCount === totalGuessers），立即取消倒计时定时器并切入 round_result 阶段
     const eligible = onlineGuessers(room, game.drawerId, this.isOnline)
-    if (eligible.length > 0 && eligible.every((candidate) => candidate.guessedAt))
+    const allGuessed = eligible.length > 0 && eligible.every((candidate) => candidate.guessedAt)
+    if (allGuessed) {
       this.finishRound(room, false)
-    else this.service.emitRoom(room.id)
+    } else {
+      this.service.emitRoom(room.id)
+    }
   }
   public finishRound(room: RoomSecret, drawerAbandoned: boolean): void {
     const game = room.game
@@ -602,7 +604,7 @@ export class RoundMachine {
   }
 
   /** 追加一条对局消息并裁剪队列，防止内存无限增长。 */
-  public addMessage(room: RoomSecret, input: Omit<ChatMessage, 'id' | 'createdAt'>): void {
+  public addMessage(room: RoomSecret, input: Omit<ServerChatMessage, 'id' | 'createdAt'>): void {
     const game = this.service.requireGame(room)
     game.messages.push({
       ...input,

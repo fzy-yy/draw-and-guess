@@ -146,6 +146,7 @@ export const CLIENT_RESPONSE_SCHEMAS = {
   [EVENTS.gameReturnWaiting]: emptyAckSchema,
   [EVENTS.guessSubmit]: eventAckSchema(guessResultSchema),
   [EVENTS.chatPreset]: emptyAckSchema,
+  [EVENTS.gameCanvasPing]: emptyAckSchema,
   [EVENTS.drawStrokeBatch]: eventAckSchema(StrokeAckSchema),
   [EVENTS.drawFillCommit]: eventAckSchema(drawingRevisionSchema),
   [EVENTS.drawUndo]: emptyAckSchema,
