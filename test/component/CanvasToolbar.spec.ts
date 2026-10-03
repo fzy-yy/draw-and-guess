@@ -1,7 +1,7 @@
 import { setActivePinia, type Pinia } from 'pinia'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { EVENTS } from '@draw-guess/shared'
+import { EVENTS, type ToolKind } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import CanvasToolbar from '@/components/game/CanvasToolbar.vue'
 import { useGameStore } from '@/stores/game'
@@ -22,7 +22,7 @@ beforeEach(() => {
 
 function mountToolbar(
   props: Partial<{
-    tool: 'pen' | 'eraser' | 'fill'
+    tool: ToolKind
     color: string
     width: number
     canDraw: boolean
@@ -115,6 +115,67 @@ describe('CanvasToolbar 交互', () => {
   it('visible 为假时不渲染工具条', () => {
     const wrapper = mountToolbar({ visible: false })
     expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('拖动手柄可移动工具条位置并在工作区内夹取', async () => {
+    const wrapper = mountToolbar()
+    const toolbar = wrapper.element as HTMLElement
+    const workspace = document.createElement('div')
+    workspace.appendChild(toolbar)
+
+    const rect = (left: number, top: number, width: number, height: number): DOMRect =>
+      ({
+        x: left,
+        y: top,
+        left,
+        top,
+        right: left + width,
+        bottom: top + height,
+        width,
+        height,
+        toJSON: () => ({}),
+      }) as DOMRect
+
+    vi.spyOn(workspace, 'getBoundingClientRect').mockReturnValue(rect(0, 0, 1000, 500))
+    vi.spyOn(toolbar, 'getBoundingClientRect').mockReturnValue(rect(200, 400, 600, 50))
+
+    const handle = wrapper.get(`[aria-label="${strings.a11y.game.dragToolbarAria}"]`)
+      .element as HTMLElement
+
+    handle.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        clientX: 200,
+        clientY: 400,
+        pointerId: 1,
+      }),
+    )
+    handle.dispatchEvent(
+      new PointerEvent('pointermove', {
+        bubbles: true,
+        button: 0,
+        clientX: 300,
+        clientY: 300,
+        pointerId: 1,
+      }),
+    )
+
+    const emitted = wrapper.emitted('update:position') as Array<[{ x: number; y: number }]>
+    expect(emitted).toBeTruthy()
+    expect(emitted[0]?.[0]).toEqual({ x: 20, y: 80 })
+    expect(emitted[1]?.[0]).toEqual({ x: 30, y: 60 })
+
+    handle.dispatchEvent(
+      new PointerEvent('pointerup', {
+        bubbles: true,
+        button: 0,
+        clientX: 300,
+        clientY: 300,
+        pointerId: 1,
+      }),
+    )
     wrapper.unmount()
   })
 })

@@ -17,8 +17,6 @@ export const localSettings = {
   fillShortcut: 'f',
   /** 显示/隐藏聊天面板（回车键固定用于打开聊天，见 usePanelShortcuts）。 */
   chatPanelShortcut: 'c',
-  /** 显示/隐藏底部绘图工具条（仅画家生效）。 */
-  toolsPanelShortcut: 't',
   autoFocusGuess: true,
   discoverable: true,
   acceptsInvites: true,

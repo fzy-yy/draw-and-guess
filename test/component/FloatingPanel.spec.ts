@@ -133,7 +133,6 @@ describe('FloatingPanel 与顶栏开关联动', () => {
       components: { GameHud, FloatingPanel },
       setup() {
         const chatOpen = ref(true)
-        const toolsOpen = ref(true)
         return () =>
           h('div', [
             h(GameHud, {
@@ -141,11 +140,8 @@ describe('FloatingPanel 与顶栏开关联动', () => {
               game,
               secondsLeft: 30,
               progress: 0.5,
-              showTools: false,
               chatOpen: chatOpen.value,
               'onUpdate:chatOpen': (value: boolean) => (chatOpen.value = value),
-              toolsOpen: toolsOpen.value,
-              'onUpdate:toolsOpen': (value: boolean) => (toolsOpen.value = value),
             }),
             h(
               FloatingPanel,

@@ -16,7 +16,6 @@ import {
   Maximize,
   MessageSquare,
   Minimize,
-  Palette,
   Settings,
 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
@@ -35,8 +34,6 @@ const props = defineProps<{
   secondsLeft: number
   /** 当前阶段剩余进度（0～1），供进度条 scaleX。 */
   progress: number
-  /** 是否展示「工具」面板开关（仅画家）。 */
-  showTools: boolean
 }>()
 const emit = defineEmits<{
   /** 打开对局内设置弹窗（父组件维护弹窗开关）。 */
@@ -46,7 +43,6 @@ const emit = defineEmits<{
 }>()
 
 const chatOpen = defineModel<boolean>('chatOpen', { required: true })
-const toolsOpen = defineModel<boolean>('toolsOpen', { required: true })
 
 const store = useGameStore()
 
@@ -140,14 +136,6 @@ function handlePauseToggle(): void {
         @click="chatOpen = !chatOpen"
       >
         <MessageSquare />
-      </SquareIconButton>
-      <SquareIconButton
-        v-if="showTools"
-        :active="toolsOpen"
-        :label="strings.a11y.game.toggleTools"
-        @click="toolsOpen = !toolsOpen"
-      >
-        <Palette />
       </SquareIconButton>
     </div>
 

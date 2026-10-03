@@ -9,7 +9,6 @@ import {
   Keyboard,
   MessageSquare,
   PaintBucket,
-  Palette,
   SlidersHorizontal,
   Volume2,
 } from 'lucide-vue-next'
@@ -83,12 +82,6 @@ const shortcutRows: Array<{
     name: strings.ui.settings.panelChat,
     detail: strings.ui.settings.panelChatDetail,
     icon: MessageSquare,
-  },
-  {
-    setting: 'toolsPanelShortcut',
-    name: strings.ui.settings.panelTools,
-    detail: strings.ui.settings.panelToolsDetail,
-    icon: Palette,
   },
 ]
 

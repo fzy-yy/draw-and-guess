@@ -119,14 +119,11 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
       game,
       secondsLeft: 30,
       progress: 0.5,
-      showTools: true,
       chatOpen: true,
-      toolsOpen: true,
     }) as VueWrapper
 
-    // 顶栏只保留回合/题目/系统操作与聊天 / 工具开关（玩家面板为常驻左栏，不在顶栏）
+    // 顶栏只保留回合/题目/系统操作与聊天开关（工具条改为画家常驻且不可隐藏，玩家面板为常驻左栏）
     expect(wrapper.find(`[aria-label="${strings.a11y.game.toggleChat}"]`).exists()).toBe(true)
-    expect(wrapper.find(`[aria-label="${strings.a11y.game.toggleTools}"]`).exists()).toBe(true)
 
     // 画家默认按本地偏好显示遮罩
     expect(wrapper.text()).toContain(game.answerMask)

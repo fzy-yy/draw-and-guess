@@ -1,14 +1,24 @@
 <!--
-  底部横向绘图工具条：工具 / 色板 / 画笔大小 / 历史操作，单行、无阴影，浮于画布底部居中。
+  底部横向绘图工具条：手柄拖动 / 工具 / 色板 / 画笔大小 / 历史操作，单行，浮于画布底部居中。
+  最左侧提供六点拖动手柄，支持在画布可视区内自由拖拽移动；
   仅「画笔大小」显示数值，其余全 icon + title / aria；工具与色板复用共享原语，激活态由原语统一。
-  可见性由父组件经 visible 控制（顶栏「工具」开关），显隐走统一「淡入淡出 + 缩放」；
-  定位在自身外层完成，内层做缩放，避免 WAAPI 的 transform 覆盖 -translate-x-1/2 造成水平跳动。
-  tool / color / width 由父组件持有（v-model:tool / v-model:color / v-model:width）；
+  可见性由父组件控制（仅对画家自动显示，猜词者隐藏且不可被隐藏）；
+  定位在自身外层完成，内层做缩放，避免 WAAPI 的 transform 覆盖造成跳动。
+  tool / color / width / position 由父组件持有；
   清空需二次确认，故抛 clear 事件交父组件处理（撤销 / 重做直接调 store）。
 -->
 <script setup lang="ts">
-import { computed, type Component } from 'vue'
-import { Brush, Eraser, PaintBucket, Pipette, RotateCcw, RotateCw, Trash2 } from 'lucide-vue-next'
+import { computed, ref, type Component } from 'vue'
+import {
+  Brush,
+  Eraser,
+  GripVertical,
+  PaintBucket,
+  Pipette,
+  RotateCcw,
+  RotateCw,
+  Trash2,
+} from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { EVENTS, type ToolKind } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
@@ -17,8 +27,9 @@ import { ColorSwatchButton, GroupDivider, SquareIconButton } from '@/components/
 import { scaleFadeEnter, scaleFadeLeave } from '@/components/game/scale-fade.ts'
 import BrushSizeField from '@/components/game/BrushSizeField.vue'
 import { focusToolbar, toolbarZIndex } from '@/components/game/floating-panel-z'
+import type { PanelPosition } from '@/components/game'
+
 const props = defineProps<{
-  /** 是否可绘制（非画家或非作画阶段时整条置灰）。 */
   canDraw: boolean
   /** 是否展示（顶栏「工具」开关；隐藏时执行退出动画）。 */
   visible: boolean
@@ -28,6 +39,88 @@ const emit = defineEmits<{ clear: [] }>()
 const tool = defineModel<ToolKind>('tool', { required: true })
 const color = defineModel<string>('color', { required: true })
 const width = defineModel<number>('width', { required: true })
+const position = defineModel<PanelPosition | null>('position', { default: null })
+
+const toolbarRoot = ref<HTMLElement>()
+const dragging = ref(false)
+let dragOrigin:
+  | {
+      pointerX: number
+      pointerY: number
+      positionX: number
+      positionY: number
+    }
+  | undefined
+
+const rootStyle = computed<Record<string, string>>(() => {
+  const style: Record<string, string> = {
+    zIndex: String(toolbarZIndex.value),
+  }
+  if (position.value) {
+    style.left = `${position.value.x}%`
+    style.top = `${position.value.y}%`
+    style.bottom = 'auto'
+    style.transform = 'none'
+  }
+  return style
+})
+
+function beginDrag(event: PointerEvent): void {
+  if (event.button !== 0) return
+  const handle = event.currentTarget
+  if (!(handle instanceof HTMLElement)) return
+  event.preventDefault()
+  handle.setPointerCapture(event.pointerId)
+  focusToolbar()
+  dragging.value = true
+
+  const toolbar = toolbarRoot.value
+  const workspace = toolbar?.parentElement
+  if (!toolbar || !workspace) return
+
+  const bounds = workspace.getBoundingClientRect()
+  const toolbarBounds = toolbar.getBoundingClientRect()
+  if (!bounds.width || !bounds.height) return
+
+  const currentX = ((toolbarBounds.left - bounds.left) / bounds.width) * 100
+  const currentY = ((toolbarBounds.top - bounds.top) / bounds.height) * 100
+  position.value = { x: currentX, y: currentY }
+  dragOrigin = {
+    pointerX: event.clientX,
+    pointerY: event.clientY,
+    positionX: currentX,
+    positionY: currentY,
+  }
+}
+
+function moveDrag(event: PointerEvent): void {
+  const origin = dragOrigin
+  const toolbar = toolbarRoot.value
+  const workspace = toolbar?.parentElement
+  if (!dragging.value || !origin || !toolbar || !workspace) return
+
+  const bounds = workspace.getBoundingClientRect()
+  const toolbarBounds = toolbar.getBoundingClientRect()
+  if (!bounds.width || !bounds.height) return
+
+  const deltaX = ((event.clientX - origin.pointerX) / bounds.width) * 100
+  const deltaY = ((event.clientY - origin.pointerY) / bounds.height) * 100
+  const maxX = Math.max(0, 100 - (toolbarBounds.width / bounds.width) * 100)
+  const maxY = Math.max(0, 100 - (toolbarBounds.height / bounds.height) * 100)
+  position.value = {
+    x: Math.max(0, Math.min(maxX, origin.positionX + deltaX)),
+    y: Math.max(0, Math.min(maxY, origin.positionY + deltaY)),
+  }
+}
+
+function endDrag(event: PointerEvent): void {
+  const handle = event.currentTarget
+  if (handle instanceof HTMLElement && handle.hasPointerCapture(event.pointerId)) {
+    handle.releasePointerCapture(event.pointerId)
+  }
+  dragging.value = false
+  dragOrigin = undefined
+}
 
 const store = useGameStore()
 
@@ -81,8 +174,12 @@ function runHistory(key: HistoryKey): void {
 
 <template>
   <div
-    class="absolute bottom-[1.2cqh] left-1/2 -translate-x-1/2"
-    :style="{ zIndex: toolbarZIndex }"
+    ref="toolbarRoot"
+    class="pointer-events-auto absolute select-none"
+    :class="{
+      'bottom-[1.2cqh] left-1/2 -translate-x-1/2': !position,
+    }"
+    :style="rootStyle"
     @pointerdown.stop="focusToolbar"
   >
     <Transition :css="false" @enter="scaleFadeEnter" @leave="scaleFadeLeave">
@@ -92,6 +189,18 @@ function runHistory(key: HistoryKey): void {
         :aria-label="strings.a11y.game.toolbarAria"
         class="flex items-center gap-[0.55em] rounded-[0.5em] border-[0.25cqh] border-navy bg-paper/95 px-[0.7em] py-[0.45cqh]"
       >
+        <!-- 拖动手柄：按住可拖动工具条在画布内移动 -->
+        <div
+          class="flex cursor-grab touch-none items-center justify-center px-[0.1em] py-[0.2em] text-muted transition-colors hover:text-navy active:cursor-grabbing"
+          :title="strings.a11y.game.dragToolbarTitle"
+          :aria-label="strings.a11y.game.dragToolbarAria"
+          @pointerdown="beginDrag"
+          @pointermove="moveDrag"
+          @pointerup="endDrag"
+          @pointercancel="endDrag"
+        >
+          <GripVertical class="h-[2.4cqh] w-[2.4cqh]" />
+        </div>
         <!-- 工具组：画笔 / 橡皮擦 / 填充 -->
         <SquareIconButton
           v-for="item in TOOLS"

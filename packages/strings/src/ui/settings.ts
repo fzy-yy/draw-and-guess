@@ -46,8 +46,6 @@ export const settings = {
   fillDetail: '填充点击位置的封闭区域',
   panelChat: '聊天面板',
   panelChatDetail: '显示或隐藏聊天面板',
-  panelTools: '绘图工具条',
-  panelToolsDetail: '显示或隐藏底部绘图工具条（仅画家）',
   shortcutErrorSimple: '请直接按一个字母、数字或符号，不要同时按 Ctrl、Alt、Shift 或 Command。',
   shortcutErrorConflict: (key: string, name: string) => `“${key}”已用于${name}，请换一个按键。`,
   shortcutNote:

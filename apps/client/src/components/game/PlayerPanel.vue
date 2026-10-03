@@ -1,8 +1,9 @@
 <!--
   对局常驻左栏（收窄版，替代旧的左侧得分条）：
-  只保留头衔信息（头像 / 昵称 / 分数 / 局内角色）与座位色条，去掉「我」标记与多余留白，
+  只保留头衔信息（头像 / 昵称 / 分数 / 局内角色）与座位色条，
   以更窄的宽度容纳 6 人；数据仍来自真实 room 快照（store.room.members），字段语义不变。
-  画家 / 已猜中通过头像角标表达，掉线用虚线边框与半透明底表达。
+  画家仅通过「作画中」角色文案与画笔角标表达（无背景底色）；
+  玩家本人通过卡片背景显示自身座位色浅色底表达（自我高亮定位）；已猜中通过眼睛角标与文案表达，掉线用虚线边框与半透明底表达。
   宽度与高度由宿主（对局常驻左栏）给定：自身占位、不浮动、无标题栏、不可关闭。
 -->
 <script setup lang="ts">
@@ -36,9 +37,11 @@ const memberBadgeClass =
       :style="{
         '--seat-color': member.seatColor,
         borderLeftColor: member.seatColor,
-        backgroundColor: member.isDrawer
-          ? `color-mix(in srgb, ${member.seatColor} 12%, white)`
-          : undefined,
+        '--me-bg':
+          member.id === store.playerId
+            ? `color-mix(in srgb, ${member.seatColor} 14%, white)`
+            : undefined,
+        backgroundColor: member.id === store.playerId ? 'var(--me-bg)' : undefined,
       }"
     >
       <div class="relative">

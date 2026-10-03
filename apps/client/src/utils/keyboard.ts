@@ -6,7 +6,7 @@
 
 /** 快捷键设置键名类型（工具 / 面板 → 本地设置字段），ShortcutsTab 与 SettingsView 共用。 */
 export type ShortcutSettingKey =
-  'penShortcut' | 'eraserShortcut' | 'fillShortcut' | 'chatPanelShortcut' | 'toolsPanelShortcut'
+  'penShortcut' | 'eraserShortcut' | 'fillShortcut' | 'chatPanelShortcut'
 
 /** 快捷键比较口径：忽略大小写与首尾空白（与捕获存储口径一致）。 */
 export function normalizedShortcut(value: string): string {

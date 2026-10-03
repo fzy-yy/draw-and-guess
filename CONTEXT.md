@@ -47,9 +47,10 @@
 | 猜中礼花（guess confetti）                    | 本机反馈：`me.guessed` 严格跃迁（false→true）触发一次全屏礼花，不枚举阶段；`prev===false` 防止重载补放                                                                      | ADR-0031、ADR-0033、`useGuessConfetti.ts`                          |
 | 逐字遮罩（progressive mask）                  | 题目遮罩按节奏逐格揭示答案字符，是猜词者唯一的题目线索；结构化提示（词条 hint 文案）已从对局链路移除                                                                        | ADR-0042、ADR-0001                                                 |
 | 浮层面板（floating panel）                    | 对局界面覆盖画布、可拖动可关闭的聊天面板；玩家面板为常驻左栏（在流内占位、不浮动）；面板纵向撑满画布高，顶栏开关与面板内关闭双向同步                                        | ADR-0043                                                           |
-| 底部工具条（bottom toolbar）                  | 浮在画布底部、单行 icon 化的绘图工具条；仅画笔大小显示数值，可由顶栏开关整体收起                                                                                            | ADR-0043                                                           |
+| 底部工具条（bottom toolbar）                  | 浮在画布底部、单行 icon 化的绘图工具条；对画家自动显示，猜词者隐藏且不可被收起；最左侧提供六点拖动手柄支持在画布内移动位置，换人或新回合自动重置居中                        | ADR-0043、ADR-0054                                                 |
 | 顶栏按钮（StageHeaderButton）                 | StageHeader 顶栏内的统一操作与状态按钮原语（设置、退出、返回与网络状态底层呈现）；统一 4.6cqh 高度、rounded-[0.6em] 圆角与图标文字水平排版                                  | ADR-0052、`StageHeaderButton.vue`                                  |
 | 固定等宽倒计时（fixed-width timer pill）      | 对局顶栏倒计时胶囊固定为三位字符等宽容器（`w-[3ch]`），数字居中，不限时以 '---' 居中占位，避免数字位数变化导致胶囊抖动                                                      | ADR-0052、`GameHud.vue`                                            |
+| 玩家常驻左栏（player side column）            | 对局界面左侧独立黑框容器，与画板保持 0.7cqw 间距形成对称画框；本人以座位颜色浅色底高亮，画家仅以「作画中」文案与画笔角标表达（无背景色）                                    | ADR-0043、ADR-0055、`PlayerPanel.vue`                              |
 
 ## 待打磨（deliberately unresolved）
 

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { strings } from '@draw-guess/strings'
 import PlayerPanel from '@/components/game/PlayerPanel.vue'
 import { useRoomStore } from '@/stores/room'
+import { useSessionStore } from '@/stores/session'
 import { GUEST_ID, HOST_ID, createRoomFixture } from '../client/room-fixture'
 import { createPiniaWithFakeTransport } from '../client/fake-game-transport'
 
@@ -79,6 +80,27 @@ describe('PlayerPanel 成员展示', () => {
 
     const wrapper = mountPanel()
     expect(wrapper.text()).toContain(strings.ui.status.roleDrawing)
+    wrapper.unmount()
+  })
+
+  it('玩家本人以座位颜色浅色底高亮，非本人的画家仅以文案和角标表示而不加背景色', () => {
+    const roomStore = useRoomStore()
+    const session = useSessionStore()
+    roomStore.room = createRoomFixture('drawing')
+    // HOST_ID 为画家，GUEST_ID 为当前玩家本人
+    session.playerId = GUEST_ID
+
+    const wrapper = mountPanel()
+    const articles = wrapper.findAll('article')
+    const meArticle = articles.find((article) => article.text().includes('猜词者'))!
+    const drawerArticle = articles.find((article) => article.text().includes('房主'))!
+
+    const meStyleAttr = meArticle.attributes('style') ?? ''
+    const drawerStyleAttr = drawerArticle.attributes('style') ?? ''
+    expect(meStyleAttr).toContain('var(--me-bg)')
+    expect(meStyleAttr).toContain('color-mix')
+    expect(drawerStyleAttr).not.toContain('var(--me-bg)')
+    expect(drawerStyleAttr).not.toContain('color-mix')
     wrapper.unmount()
   })
 })

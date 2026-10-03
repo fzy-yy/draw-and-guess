@@ -8,7 +8,7 @@ import { roomSettingsDefaults } from './game.ts'
 export const room = {
   defaultName: '快乐画室',
   /** 六个固定席位的稳定识别色；房间页不展示，进入对局后用于玩家条带与消息气泡。 */
-  seatColors: ['#dc2626', '#facc15', '#16a34a', '#dbeafe', '#2563eb', '#c026d3'],
+  seatColors: ['#dc2626', '#facc15', '#16a34a', '#0284c7', '#2563eb', '#c026d3'],
   allowPlayerInvite: roomSettingsDefaults.allowPlayerInvite,
   allowPause: roomSettingsDefaults.allowPause,
   joinPolicy: roomSettingsDefaults.joinPolicy,

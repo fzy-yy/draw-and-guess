@@ -5,7 +5,7 @@
   本文件只保留画布装配、弹窗编排与浏览器级状态（全屏/弹窗开关/颜色线宽工具）。
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useFullscreen } from '@vueuse/core'
 import { Brush, LogOut, Trash2, X } from 'lucide-vue-next'
 import { APP_CONFIG } from '@draw-guess/config'
@@ -56,23 +56,30 @@ const showGameSettings = ref(false) // 对局内设置弹窗
 // ---- 浮层面板与工具条的本地状态（仅本机 UI，刷新即重置；位置为相对画布容器的百分比）----
 // 玩家面板是常驻左栏（占位、不浮动、不可关闭），因此只有聊天面板需要开合与位置状态。
 const chatOpen = ref(true)
-const toolsOpen = ref(true)
 // 聊天贴右缘：工作区宽度 = 舞台宽 - 两侧边距(1.4cqw) - 玩家左栏(10cqw) ≈ 88.6cqw，
 // 面板宽 24cqw ⇒ x 取 72% 时右缘约在舞台 98.5cqw 处，既不溢出舞台也贴住右缘。
 const chatPosition = ref<PanelPosition>({ x: 72, y: 0 })
+const toolbarPosition = ref<PanelPosition | null>(null)
+
+// 换人作画或新回合开始时，重置工具条位置到底部居中默认位置
+watch(
+  () => [game.value?.roundId, game.value?.drawerId],
+  () => {
+    toolbarPosition.value = null
+  },
+)
 
 /** 仅画家在作画阶段可绘制：驱动画布与底部工具条的启用，非画家/非该阶段整组置灰。 */
 const canDraw = computed(() => store.isDrawer && store.room?.phase === 'drawing')
-/** 底部工具条可见性：仅画家且顶栏「工具」开关为开。 */
-const showToolbar = computed(() => store.isDrawer && toolsOpen.value)
+/** 底部绘图工具条可见性：仅画家自动显示，猜词者不显示，且工具条不可被隐藏。 */
+const showToolbar = computed(() => store.isDrawer)
 
-// ---- 面板显隐快捷键：C / T（设置页可改）开关聊天面板与工具条，回车固定只打开聊天或聚焦猜词框 ----
+// ---- 面板显隐快捷键：C（设置页可改）开关聊天面板，回车固定只打开聊天或聚焦猜词框 ----
 // 对局内设置弹窗打开时让位，避免与设置页的输入控件冲突。
 const chatPanelRef = ref<{ focusInput: () => void }>()
 usePanelShortcuts({
   store,
   chatOpen,
-  toolsOpen,
   focusChatInput: () => chatPanelRef.value?.focusInput(),
   enabled: () => !showGameSettings.value,
 })
@@ -133,24 +140,21 @@ function handleFullscreenToggle(): void {
     <!-- 固定顶栏：回合 / 面板开关 / 题目 / 倒计时 / 网络 / 暂停·设置·全屏 -->
     <GameHud
       v-model:chat-open="chatOpen"
-      v-model:tools-open="toolsOpen"
       :is-fullscreen="isFullscreen"
       :game="game"
       :seconds-left="secondsLeft"
       :progress="progress"
-      :show-tools="store.isDrawer"
       @settings="showGameSettings = true"
       @toggle-fullscreen="handleFullscreenToggle"
     />
 
     <!-- 顶栏以下：玩家常驻左栏 + 画板并排；画板内承载聊天浮层与底部工具条 -->
     <div class="min-h-0 flex-1 p-[0.7cqh_0.7cqw]">
-      <div class="flex h-full">
-        <!-- 常驻玩家左栏：占位（挤窄画板）、不浮动、无标题栏、不可关闭 -->
-        <aside class="w-[10cqw] shrink-0 bg-paper">
+      <div class="flex h-full gap-[0.7cqw]">
+        <!-- 常驻玩家左栏：占位（挤窄画板）、不浮动、无标题栏、不可关闭，带独立黑框与画板视觉平衡 -->
+        <aside class="w-[10cqw] shrink-0 overflow-hidden border-[0.35cqh] border-black bg-paper">
           <PlayerPanel />
         </aside>
-
         <div
           class="relative min-w-0 flex-1 overflow-hidden border-[0.35cqh] border-black bg-white"
           @pointerdown="focusToolbar"
@@ -195,11 +199,12 @@ function handleFullscreenToggle(): void {
             <ChatPanel ref="chatPanelRef" :can-guess="canGuess" />
           </FloatingPanel>
 
-          <!-- 底部横向工具条：浮在画布底部居中，仅画家且开关为开时显示 -->
+          <!-- 底部横向工具条：仅画家显示，不可被隐藏，支持拖动手柄在画布内移动位置 -->
           <CanvasToolbar
             v-model:tool="tool"
             v-model:color="color"
             v-model:width="width"
+            v-model:position="toolbarPosition"
             :visible="showToolbar"
             :can-draw="canDraw"
             @clear="showClearConfirm = true"

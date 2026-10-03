@@ -1,7 +1,13 @@
 import { defineComponent, h, ref } from 'vue'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ERROR_CODES, type ErrorCode, type Stroke, type StrokeAck } from '@draw-guess/shared'
+import {
+  ERROR_CODES,
+  type ErrorCode,
+  type Stroke,
+  type StrokeAck,
+  type ToolKind,
+} from '@draw-guess/shared'
 import { useStrokeSession } from '@/composables/useStrokeSession'
 import type { RequestFailure, RequestResult } from '@/stores/request'
 
@@ -34,7 +40,7 @@ function accepted(stroke: Stroke): RequestResult<StrokeAck> {
   }
 }
 
-function createSessionHarness(options: { tool?: 'pen' | 'fill'; canFill?: () => boolean } = {}) {
+function createSessionHarness(options: { tool?: ToolKind; canFill?: () => boolean } = {}) {
   const sent: SentBatch[] = []
   const authoritativeStrokes: Stroke[] = []
   const onBatchFailure = vi.fn()

@@ -174,7 +174,7 @@ draw-and-guess/
 │       │   ├── useVirtualRows.ts # 通用行级虚拟化封装（@tanstack/vue-virtual；估算行高由调用方实测驱动）
 │       │   ├── useTableSort.ts / useSelectAllState.ts / useCopyWithFeedback.ts # 表格排序、全选三态与复制反馈（数据表格/词库表共用原语）
 │       │   ├── useShortcuts.ts    # 画板快捷键：自定义单键切换工具、撤销/重做组合键
-│       │   ├── usePanelShortcuts.ts # 面板显隐快捷键：C/T 开关聊天面板与底部工具条，回车固定只打开聊天（ADR-0044）
+│       │   ├── usePanelShortcuts.ts # 面板显隐快捷键：C 开关聊天面板，回车固定只打开聊天（ADR-0044、ADR-0054）
 │       │   ├── useGuessConfetti.ts # 猜中礼花反馈：严格跃迁触发、不枚举阶段（ADR-0031）
 │       │   ├── useContextMenu.ts  # 右键菜单单例状态层：任意场景 open(event, items)，配合 components/common/ContextMenu.vue
 │       │   ├── useVocabularyDialogSession.ts / useVocabularyQuery.ts / useVocabularySelection.ts / useVocabularyPackages.ts # 词库弹窗会话生命周期（打开/拉取/失效/关闭/保存）与查询、选择、包管理

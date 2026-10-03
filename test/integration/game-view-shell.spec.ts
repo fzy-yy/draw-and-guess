@@ -112,7 +112,7 @@ describe('GameView 新对局骨架', () => {
     wrapper.unmount()
   })
 
-  it('顶栏开关可收起并重新打开聊天面板与工具条，玩家面板常驻左栏', async () => {
+  it('顶栏开关可收起并重新打开聊天面板，工具条对画家常驻不可隐藏，玩家面板常驻左栏', async () => {
     const wrapper = mountGameView()
 
     // 玩家面板是常驻左栏：不参与开关，始终在 DOM 中
@@ -133,16 +133,12 @@ describe('GameView 新对局骨架', () => {
     await flushPromises()
     expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(true)
 
-    // 顶栏「绘图工具」开关 → 收起底部工具条
+    // 底部工具条对画家常驻显示且不可被隐藏
     expect(wrapper.find('[role="toolbar"]').exists()).toBe(true)
-    await wrapper.get(`[aria-label="${strings.a11y.game.toggleTools}"]`).trigger('click')
-    await flushPromises()
-    expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
-
     wrapper.unmount()
   })
 
-  it('面板快捷键：C/T 开关对应面板，回车只打开不隐藏，输入控件聚焦时让位', async () => {
+  it('面板快捷键：C 开关聊天面板，回车只打开不隐藏，输入控件聚焦时让位', async () => {
     const wrapper = mountGameView()
 
     // 回车：聊天已打开时只聚焦、不隐藏
@@ -157,14 +153,6 @@ describe('GameView 新对局骨架', () => {
     pressKey('Enter')
     await flushPromises()
     expect(findPanel(wrapper, strings.ui.game.chatPanelTitle)).toBe(true)
-
-    // T：底部工具条开 ↔ 关（本机为画家）
-    pressKey('t')
-    await flushPromises()
-    expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
-    pressKey('t')
-    await flushPromises()
-    expect(wrapper.find('[role="toolbar"]').exists()).toBe(true)
 
     // 输入控件聚焦时快捷键让位：事件目标是可编辑元素，面板不受影响
     const input = wrapper.find('input').element
