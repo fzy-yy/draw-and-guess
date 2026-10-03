@@ -28,7 +28,10 @@ const props = withDefaults(
   }>(),
   { ariaLabel: undefined, selected: false, paint: undefined, disabled: false, custom: false },
 )
-const emit = defineEmits<{ select: [color: string] }>()
+const emit = defineEmits<{
+  select: [color: string]
+  commit: [color: string]
+}>()
 
 // 色板属密集控件：仅保留 16px 视觉下限（responsive.minDenseTargetPx），其余随舞台等比缩放。
 const rootClass = computed(() =>
@@ -46,11 +49,19 @@ const rootClass = computed(() =>
 function selectPreset(): void {
   if (props.disabled || props.custom || !props.paint) return
   emit('select', props.paint)
+  emit('commit', props.paint)
 }
 
-/** 自定义取色器的原生 input 事件（转回字符串）。 */
+/** 自定义取色器的原生 input 事件（连续拖拽滑动中静音预览）。 */
 function onColorInput(event: Event): void {
   emit('select', (event.target as HTMLInputElement).value)
+}
+
+/** 自定义取色器的原生 change 事件（光标松开或关闭选择器时确认提交）。 */
+function onColorChange(event: Event): void {
+  const value = (event.target as HTMLInputElement).value
+  emit('select', value)
+  emit('commit', value)
 }
 
 /** 自定义模式下内嵌的原生取色控件；键盘激活时用它展开取色器。 */
@@ -95,6 +106,7 @@ function activateByKeyboard(): void {
       :value="paint"
       :disabled="disabled"
       @input="onColorInput"
+      @change="onColorChange"
     />
   </label>
 </template>

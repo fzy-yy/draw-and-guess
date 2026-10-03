@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Brush, CirclePause, CirclePlay, PenLine, RefreshCw, Trophy } from 'lucide-vue-next'
+import { CirclePause, CirclePlay, Paintbrush, PenLine, RefreshCw, Trophy } from 'lucide-vue-next'
 import { CUSTOM_WORD_MAX_LENGTH, type GameView } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
@@ -72,22 +72,22 @@ async function submitCustomWord(text: string): Promise<void> {
   <!-- display:contents —— 让遮罩不占 grid 格子，同时用 v-if 保证 store.room 与 game 已就绪 -->
   <div v-if="store.room && game" class="contents">
     <span class="sr-only" aria-live="polite" aria-atomic="true">{{ phaseAnnouncement }}</span>
-    <!-- 阶段遮罩：开局倒计时 -->
+    <!-- 阶段遮罩：开局倒计时，仅居中展示黄色圆形大数字 -->
     <div
       v-if="store.room.phase === 'starting'"
       class="absolute inset-0 z-30 grid place-items-center bg-navy/80 px-[5cqw] py-[4cqh] text-white"
     >
-      <span>{{ strings.ui.game.countdownTitle }}</span
-      ><b
-        class="grid place-items-center h-[20cqh] w-[20cqh] my-[2cqh] bg-yellow text-navy rounded-full text-fs-96"
+      <b
+        class="grid place-items-center h-[20cqh] w-[20cqh] bg-yellow text-navy rounded-full text-fs-96"
         >{{ secondsLeft }}</b
       >
-      <p>{{ strings.ui.game.countdownHint }}</p>
     </div>
     <!-- 阶段遮罩：画家选词（只有画家可见候选词按钮与换一组操作） -->
     <OverlayCard v-else-if="store.room.phase === 'choosing_word' && store.isDrawer">
-      <!-- 图标与文字留足内边距，避免画笔笔触溢出圆形底座被裁剪 -->
-      <Brush class="h-[7.5cqh] w-[7.5cqh] bg-blue p-[1.9cqh] text-white rounded-full" />
+      <!-- 居中圆形底座包裹 Paintbrush，避免笔触裁切 -->
+      <div class="grid place-items-center h-[7.5cqh] w-[7.5cqh] bg-blue rounded-full">
+        <Paintbrush class="h-[4cqh] w-[4cqh] text-white" />
+      </div>
       <p>{{ strings.ui.game.yourTurn }}</p>
       <div class="relative flex w-full items-center justify-center min-h-[4.5cqh]">
         <h2>{{ strings.ui.game.chooseWordTitle }}</h2>

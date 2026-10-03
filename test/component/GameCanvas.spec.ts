@@ -728,6 +728,39 @@ describe('GameCanvas 右键菜单与画作导出', () => {
     menu.close()
   })
 
+  it('保存图片使用语义化日期时间文件名格式 (draw-and-guess-YYYY-MM-DD-HH-mm-ss.png)', async () => {
+    const menu = useContextMenu()
+    const wrapper = mountCanvas({ canDraw: true })
+
+    const clickSpy = vi.fn()
+    let downloadAttr = ''
+    const origCreateElement = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation((tag) => {
+      const el = origCreateElement(tag)
+      if (tag === 'a') {
+        el.click = clickSpy
+        Object.defineProperty(el, 'download', {
+          set(val: string) {
+            downloadAttr = val
+          },
+          get() {
+            return downloadAttr
+          },
+        })
+      }
+      return el
+    })
+
+    await wrapper.trigger('contextmenu', { clientX: 100, clientY: 100 })
+    const saveItem = menu.state.items.find((i) => i.id === 'export-save')
+    expect(saveItem).toBeDefined()
+
+    saveItem?.action?.()
+    expect(clickSpy).toHaveBeenCalled()
+    expect(downloadAttr).toMatch(/^draw-and-guess-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.png$/)
+    menu.close()
+  })
+
   it('猜词者右键菜单包含微表情互动项，点击触发微表情发送', async () => {
     const menu = useContextMenu()
     const wrapper = mountCanvas({ canDraw: false })

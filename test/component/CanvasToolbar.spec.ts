@@ -5,6 +5,7 @@ import { EVENTS, type ToolKind } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import CanvasToolbar from '@/components/game/CanvasToolbar.vue'
 import { useGameStore } from '@/stores/game'
+import * as audioModule from '@/audio'
 import { createPiniaWithFakeTransport } from '../client/fake-game-transport'
 
 /**
@@ -68,6 +69,26 @@ describe('CanvasToolbar 交互', () => {
       .trigger('click')
     expect(wrapper.emitted('update:color')?.[0]).toEqual([nextColor])
     expect(wrapper.emitted('update:tool')?.[0]).toEqual(['pen'])
+    wrapper.unmount()
+  })
+
+  it('自定义取色预览时静音，取色提交时播放音效', async () => {
+    const soundSpy = vi.spyOn(audioModule, 'playInteractionSound')
+    const wrapper = mountToolbar()
+
+    const customSwatch = wrapper
+      .findAllComponents({ name: 'ColorSwatchButton' })
+      .find((c) => c.props('custom') === true)!
+    soundSpy.mockClear()
+
+    // 拖动预览：触发 select，更新颜色但保持静音
+    await customSwatch.vm.$emit('select', '#FF5500')
+    expect(wrapper.emitted('update:color')?.[0]).toEqual(['#FF5500'])
+    expect(soundSpy).not.toHaveBeenCalled()
+
+    // 确认提交：触发 commit，播放交互音效
+    await customSwatch.vm.$emit('commit', '#FF5500')
+    expect(soundSpy).toHaveBeenCalledWith('select')
     wrapper.unmount()
   })
 

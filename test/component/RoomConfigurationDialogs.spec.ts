@@ -162,7 +162,10 @@ describe('VocabularyDialog 权限与竞态', () => {
     const dialog = await screen.findByRole('dialog', { name: strings.ui.room.vocabTitleReadonly })
     expect(screen.getByText(strings.ui.room.vocabReadonlyHint)).toBeTruthy()
     expect(screen.queryByRole('button', { name: strings.ui.room.confirmSelection })).toBeNull()
-    expect(screen.queryByRole('checkbox')).toBeNull()
+    const selectAllCheckbox = screen.getByRole('checkbox', {
+      name: strings.a11y.room.vocabToggleAllAria,
+    })
+    expect((selectAllCheckbox as HTMLInputElement).disabled).toBe(true)
 
     await user.type(screen.getByLabelText(strings.a11y.room.vocabSearchAria), '苹果')
     await waitFor(() =>

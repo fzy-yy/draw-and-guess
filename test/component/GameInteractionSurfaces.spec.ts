@@ -186,7 +186,7 @@ describe('PhaseOverlay 阶段分支', () => {
       onRerollWords,
       onResume,
     })
-    expect(screen.getByText(strings.ui.game.countdownTitle)).toBeTruthy()
+    expect(screen.getByText('3')).toBeTruthy()
 
     room.room.phase = 'choosing_word'
     room.room.game!.wordOptions = [

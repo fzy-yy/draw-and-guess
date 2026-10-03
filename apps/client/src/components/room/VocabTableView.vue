@@ -22,6 +22,8 @@ const props = defineProps<{
   columns: DataTableColumn<VocabularyWord>[]
   /** 已选词条 ID 集合（受控）；不传（非房主只读）时复选列与表头统一选框整体隐藏 */
   selectedIds?: Set<string>
+  /** 是否禁用选择操作（非房主只读仍展示勾选状态） */
+  selectionDisabled?: boolean
   /** 当前排序字段（null = 未排序） */
   sortKey: string | null
   /** 当前排序方向 */
@@ -62,6 +64,7 @@ defineExpose({
     :sort-key="props.sortKey"
     :sort-dir="props.sortDir"
     :selected-ids="props.selectedIds"
+    :selection-disabled="props.selectionDisabled"
     :select-all-state="selectAllState"
     :select-all-aria="strings.a11y.room.vocabToggleAllAria"
     :empty-text="strings.ui.room.vocabNoMatch"

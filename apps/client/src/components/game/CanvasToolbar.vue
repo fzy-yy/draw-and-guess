@@ -158,12 +158,26 @@ const isCustomColor = computed(
   () => !presetColors.some((paint) => color.value.toUpperCase() === paint),
 )
 
-/** 选择颜色（预设或取色器）后播放统一交互音效。 */
+/** 选择预设颜色：更新颜色并在处于橡皮擦时自动切回画笔，播放交互音效。 */
 function selectColor(nextColor: string): void {
   color.value = nextColor
   if (tool.value === 'eraser') {
     tool.value = 'pen'
   }
+  playInteractionSound('select')
+}
+
+/** 自定义取色滑动预览：实时更新颜色与工具状态，保持静音避免拖拽发出高频杂音。 */
+function selectCustomColorPreview(nextColor: string): void {
+  color.value = nextColor
+  if (tool.value === 'eraser') {
+    tool.value = 'pen'
+  }
+}
+
+/** 自定义取色提交确认：在松开光标或关闭调色板时播放一次确认音效。 */
+function selectCustomColorCommit(nextColor: string): void {
+  color.value = nextColor
   playInteractionSound('select')
 }
 
@@ -237,7 +251,8 @@ function runHistory(key: HistoryKey): void {
           :label="strings.a11y.game.customColorTitle"
           :aria-label="strings.a11y.game.customColorAria"
           :disabled="!props.canDraw"
-          @select="selectColor"
+          @select="selectCustomColorPreview"
+          @commit="selectCustomColorCommit"
         >
           <Pipette class="pointer-events-none h-[62%] w-[62%] text-navy" aria-hidden="true" />
         </ColorSwatchButton>

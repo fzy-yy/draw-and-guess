@@ -226,6 +226,17 @@ function sendReactionPing(type: CanvasPingType): void {
 const allowReactions = computed(() => store.room?.settings.allowCanvasReactions ?? true)
 
 /**
+ * 生成语义化画作文件名：draw-and-guess-YYYY-MM-DD-HH-mm-ss.png。
+ */
+function formatDrawingFileName(date: Date = new Date()): string {
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  const stamp = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(
+    date.getHours(),
+  )}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`
+  return `draw-and-guess-${stamp}.png`
+}
+
+/**
  * 将当前逻辑画布内容保存为 PNG 文件下载。
  */
 function downloadCanvasImage(): void {
@@ -233,7 +244,7 @@ function downloadCanvasImage(): void {
   const dataUrl = logical.toDataURL('image/png')
   const link = document.createElement('a')
   link.href = dataUrl
-  link.download = `draw-guess-${props.roundId || 'canvas'}-${Date.now()}.png`
+  link.download = formatDrawingFileName()
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
