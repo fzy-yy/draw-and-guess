@@ -146,6 +146,8 @@ export class SnapshotBuilder {
       name: room.name,
       hostId: room.hostId,
       visibility: room.visibility,
+      // 玩法与可见性同级下发：客户端据此选择经典/接龙界面与快照门禁分支（S28 / S57）
+      gameMode: room.gameMode,
       // 房间码仅向当前私密房房主显示，普通成员和大厅快照均不可见。
       ...(room.visibility === 'private' && room.hostId === viewerId && room.privateJoinCode
         ? { privateJoinCode: room.privateJoinCode }
@@ -231,6 +233,8 @@ export class SnapshotBuilder {
       name: room.name,
       hostName: nicknameOf(this.port.players, room.hostId, serverStrings.notices.hostUnknown),
       playerCount: room.members.filter(occupiesSeat).length,
+      // 大厅行的模式徽标（S47 / S80）；容量固定为协议常量，不再下发人数上限
+      gameMode: room.gameMode,
       phase: room.phase,
       roundsPerPlayer: room.settings.roundsPerPlayer,
       drawSeconds: room.settings.drawSeconds,

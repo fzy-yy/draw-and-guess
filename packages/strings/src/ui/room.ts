@@ -7,6 +7,9 @@
 export const room = {
   publicRoomBadge: '公开房间 · 大厅自由加入',
   privateRoomBadge: '私密房间',
+  /** 模式徽标（S80）：固定在房间名之后，经典与接龙都显示，内容由房间模式决定。 */
+  modeClassic: '经典',
+  modeRelay: '接龙',
   privateCodeCopied: '房间码已复制',
   privateCodeCopyFailed: '无法自动复制，请手动记录房间码',
   playersTitle: '玩家席位',

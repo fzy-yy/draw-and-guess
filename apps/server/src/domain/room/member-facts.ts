@@ -135,6 +135,8 @@ export function countOnlinePlayers(room: MemberList, isOnline: OnlineLookup): nu
  * 无标称值，返回 undefined。
  * 选词阶段关闭限时（allowChooseTimeLimit=false）时同样返回 undefined——
  * 该阶段本就没有截止时间，调用方据此保持 `phaseEndsAt = 0` 哨兵而不是重建倒计时。
+ * 接龙阶段同样返回 undefined：接龙禁用暂停（S19），其阶段窗口由接龙状态机在写入时直接给出
+ *（`phaseStartedAt` / `phaseEndsAt`），不存在「暂停后按标称时长重建截止时间」的需求。
  */
 export function nominalPhaseDurationMs(
   phase: RoomPhase | undefined,

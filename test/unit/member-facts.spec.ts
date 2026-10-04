@@ -145,6 +145,18 @@ describe('nominalPhaseDurationMs 契约', () => {
     // 暂停现场缺失（pauseState 为 undefined）同样返回 undefined
     expect(nominalPhaseDurationMs(undefined, game, settings)).toBeUndefined()
   })
+
+  it('接龙阶段没有标称总时长：接龙禁用暂停，阶段窗口由接龙状态机直接写入（S19）', () => {
+    for (const phase of [
+      'relay_choose',
+      'relay_draw',
+      'relay_guess',
+      'relay_showcase',
+      'relay_vote',
+    ] as const) {
+      expect(nominalPhaseDurationMs(phase, game, settings), phase).toBeUndefined()
+    }
+  })
 })
 
 describe('createEmptyMemberStats 契约', () => {

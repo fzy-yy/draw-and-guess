@@ -1,8 +1,10 @@
 import {
+  DEFAULT_GAME_MODE,
   EVENTS,
   PLAYER_PROTOCOL_LIMITS,
   ROOM_CLOSE_CODE,
   createServerPush,
+  type GameMode,
   type MemberConnectionChange,
   type RoomCloseCode,
   type RoomPhase,
@@ -84,7 +86,13 @@ export class RoomMembershipService {
   }
   createRoom(
     playerId: string,
-    input: { name: string; visibility: RoomVisibility; settings: RoomSettings },
+    input: {
+      name: string
+      visibility: RoomVisibility
+      /** 玩法模式：协议层缺省为经典（`DEFAULT_GAME_MODE`），此处仅作兼容既有直接调用方的兜底。 */
+      gameMode?: GameMode
+      settings: RoomSettings
+    },
   ): RoomSnapshot {
     const player = this.requireAvailablePlayer(playerId) // 玩家必须不在其他房间
     // 规则范围由 RoomCreateSchema 内嵌的 RoomSettingsSchema 在绑定层裁决，服务端不再重校。
@@ -98,6 +106,8 @@ export class RoomMembershipService {
       name: input.name.trim(),
       hostId: player.id,
       visibility: input.visibility,
+      // 玩法只在建房时确定，房间内不可修改（S27 / S28）
+      gameMode: input.gameMode ?? DEFAULT_GAME_MODE,
       ...(privateJoinCode ? { privateJoinCode } : {}),
       phase: 'waiting',
       stateVersion: 1,

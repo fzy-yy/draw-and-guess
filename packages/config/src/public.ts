@@ -5,6 +5,7 @@ import { app, network } from './app.ts'
 import { player } from './player.ts'
 import { room } from './room.ts'
 import { game } from './game.ts'
+import { relay } from './relay.ts'
 import { drawing } from './drawing.ts'
 import { vocabulary } from './vocabulary.ts'
 import { audio } from './audio.ts'
@@ -30,6 +31,8 @@ export const PUBLIC_CONFIG = {
     privateCodeLength: room.privateCodeLength,
   },
   game,
+  // 接龙公开子集：三时长默认值供规则弹窗初值，复盘时长与胶囊过渡参数供客户端动画。
+  relay,
   // 画板公开子集：客户端只消费绘制/展示需要的字段；服务端限频与内存预算不下发。
   drawing: {
     colors: drawing.colors,

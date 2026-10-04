@@ -31,6 +31,15 @@ describe('房间规则产品闭环', () => {
     expect(settings.allowNearMissHint).toBe(true)
     expect(settings.allowCanvasReactions).toBe(true)
     expect(settings.allowRoundReplay).toBe(true)
+    // 接龙三时长默认值取自 relay 配置（档位白名单在协议常量），默认 20 / 90 / 45（S39）
+    expect(settings.relayChooseSeconds).toBe(APP_CONFIG.relay.chooseSeconds.default)
+    expect(settings.relayDrawSeconds).toBe(APP_CONFIG.relay.drawSeconds.default)
+    expect(settings.relayGuessSeconds).toBe(APP_CONFIG.relay.guessSeconds.default)
+    expect([
+      settings.relayChooseSeconds,
+      settings.relayDrawSeconds,
+      settings.relayGuessSeconds,
+    ]).toEqual([20, 90, 45])
   })
 
   it('协议 Schema 逐字段拒绝越界、非整数、错误枚举与非布尔值（唯一裁决点）', () => {
@@ -48,6 +57,10 @@ describe('房间规则产品闭环', () => {
       { allowWordReroll: null },
       { allowNearMissHint: 'yes' },
       { allowCanvasReactions: 123 },
+      // 接龙三时长同为白名单档位：区间内的旧值（40 / 105 / 50）一律非法（S39）
+      { relayChooseSeconds: 25 },
+      { relayDrawSeconds: 105 },
+      { relayGuessSeconds: 50 },
     ]
     for (const patch of invalidPatches) {
       expect(RoomSettingsSchema.safeParse({ ...valid, ...patch }).success).toBe(false)

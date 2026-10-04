@@ -17,6 +17,12 @@ import {
 } from './protocol/gameplay.ts'
 import { RespondInviteSchema, SendInviteSchema } from './protocol/invite.ts'
 import {
+  RelayDrawingRoundSchema,
+  SendChatSchema,
+  SubmitDrawingSchema,
+  SubmitGuessSchema,
+} from './protocol/relay.ts'
+import {
   CreateRoomSchema,
   JoinPrivateRoomSchema,
   JoinRoomSchema,
@@ -70,6 +76,15 @@ export const EVENTS = {
   gameReturnWaiting: 'game:returnWaiting',
   guessSubmit: 'guess:submit',
   chatPreset: 'chat:preset',
+  /* 接龙专属请求事件（S51 / S30 / S79）：绘图族用 stepId 定位本步画布，提交拆成猜词/作画两条，聊天独立。 */
+  relayDrawStrokeBatch: 'relay:drawStrokeBatch',
+  relayDrawFillCommit: 'relay:drawFillCommit',
+  relayDrawUndo: 'relay:drawUndo',
+  relayDrawRedo: 'relay:drawRedo',
+  relayDrawClear: 'relay:drawClear',
+  relaySubmitGuess: 'relay:submitGuess',
+  relaySubmitDrawing: 'relay:submitDrawing',
+  chatSay: 'chat:say',
   gameCanvasPing: 'game:canvas_ping',
   drawStrokeBatch: 'draw:strokeBatch',
   drawFillCommit: 'draw:fillCommit',
@@ -127,6 +142,17 @@ export const CLIENT_REQUEST_SCHEMAS = {
   [EVENTS.gameReturnWaiting]: RequestSchema,
   [EVENTS.guessSubmit]: GuessWordSchema,
   [EVENTS.chatPreset]: SendPresetSchema,
+  /* 接龙请求：绘图族共用一个「带 stepId」的载荷 Schema，两条提交与独立聊天各自登记。 */
+  [EVENTS.relayDrawStrokeBatch]: RelayDrawingRoundSchema.extend({
+    stroke: StrokeSchema,
+  }),
+  [EVENTS.relayDrawFillCommit]: RelayDrawingRoundSchema.extend({ fill: FillCommandSchema }),
+  [EVENTS.relayDrawUndo]: RelayDrawingRoundSchema,
+  [EVENTS.relayDrawRedo]: RelayDrawingRoundSchema,
+  [EVENTS.relayDrawClear]: RelayDrawingRoundSchema,
+  [EVENTS.relaySubmitGuess]: SubmitGuessSchema,
+  [EVENTS.relaySubmitDrawing]: SubmitDrawingSchema,
+  [EVENTS.chatSay]: SendChatSchema,
   [EVENTS.gameCanvasPing]: CanvasPingPayloadSchema,
   [EVENTS.drawStrokeBatch]: DrawingRoundSchema.extend({ stroke: StrokeSchema }),
   [EVENTS.drawFillCommit]: DrawingRoundSchema.extend({ fill: FillCommandSchema }),

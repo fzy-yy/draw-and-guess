@@ -43,6 +43,7 @@ function snapshot(settings: RoomSettings = testRoomSettings()): RoomSnapshot {
     name: '测试房',
     hostId: HOST_ID,
     visibility: 'public',
+    gameMode: 'classic',
     phase: 'drawing',
     stateVersion: 5,
     settings,
@@ -216,6 +217,13 @@ describe('请求响应注册表与 ack 边界', () => {
       EVENTS.drawUndo,
       EVENTS.drawRedo,
       EVENTS.drawClear,
+      // 接龙：提交与独立聊天都是空响应（猜词不判对错，S3 / S79）
+      EVENTS.relayDrawUndo,
+      EVENTS.relayDrawRedo,
+      EVENTS.relayDrawClear,
+      EVENTS.relaySubmitGuess,
+      EVENTS.relaySubmitDrawing,
+      EVENTS.chatSay,
       EVENTS.gameCanvasPing,
       // 成功但可能没有房间：invite:respond / state:resync 允许 data 缺省。
       EVENTS.inviteRespond,

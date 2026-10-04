@@ -1,5 +1,6 @@
 import { DRAW_SECONDS_OPTIONS, ROOM_RULE_LIMITS } from '@draw-guess/shared/protocol/constants'
 import type { RoomSettings } from '@draw-guess/shared'
+import { relay } from './relay.ts'
 
 /**
  * 领域配置：对局默认规则与计分；可提交范围复用 shared 协议约束。
@@ -27,6 +28,10 @@ export const roomSettingsDefaults = {
   allowNearMissHint: true,
   allowCanvasReactions: true,
   allowRoundReplay: true,
+  // 接龙三时长默认值来自 relay 配置（接龙房间才生效，经典房间保留但不参与推进）
+  relayChooseSeconds: relay.chooseSeconds.default,
+  relayDrawSeconds: relay.drawSeconds.default,
+  relayGuessSeconds: relay.guessSeconds.default,
 } as const satisfies RoomSettings
 
 /** 完整合法的默认房间规则设置（容量固定，不按建房场景注入）。 */

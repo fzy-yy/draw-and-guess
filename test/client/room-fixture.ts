@@ -52,6 +52,7 @@ export function createRoomFixture(
     name: '测试房间',
     hostId: HOST_ID,
     visibility: 'public',
+    gameMode: 'classic',
     phase,
     stateVersion: 1,
     settings: {
@@ -69,6 +70,9 @@ export function createRoomFixture(
       allowNearMissHint: true,
       allowCanvasReactions: true,
       allowRoundReplay: true,
+      relayChooseSeconds: 20,
+      relayDrawSeconds: 90,
+      relayGuessSeconds: 45,
     },
     members: [member(HOST_ID, '房主', true, true), member(GUEST_ID, '猜词者', false, false)],
     selectedWordCount: 60,

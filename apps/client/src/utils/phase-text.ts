@@ -17,6 +17,12 @@ const PHASE_TEXT: Record<RoomPhase, string> = {
   game_result: strings.ui.status.phaseGameResult,
   waiting: strings.ui.status.phaseWaiting,
   closed: strings.ui.status.phaseClosed,
+  // 接龙阶段（S10）：映射完整由类型保证，新增接龙阶段漏登记即编译失败
+  relay_choose: strings.ui.status.phaseRelayChoose,
+  relay_draw: strings.ui.status.phaseRelayDraw,
+  relay_guess: strings.ui.status.phaseRelayGuess,
+  relay_showcase: strings.ui.status.phaseRelayShowcase,
+  relay_vote: strings.ui.status.phaseRelayVote,
 }
 
 /** 阶段文案；缺省阶段按 waiting 展示（与服务端快照缺省一致）。 */

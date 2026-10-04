@@ -243,6 +243,8 @@ function makeRoom(
     name: '矩阵房间',
     hostId: HOST_ID,
     visibility: options.visibility ?? 'public',
+    // 矩阵主体是经典阶段：接龙维度由工单 04 起在快照矩阵中扩展
+    gameMode: 'classic',
     privateJoinCode: options.visibility === 'private' ? PRIVATE_CODE : undefined,
     phase,
     stateVersion: 7,

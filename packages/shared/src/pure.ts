@@ -99,12 +99,27 @@ export function guessScoreForOrder(correctOrder: number, orderScores: readonly n
  */
 const LEGAL_PHASES: Record<RoomPhase, readonly RoomPhase[]> = {
   waiting: ['starting', 'closed'],
-  starting: ['waiting', 'choosing_word', 'closed'],
+  // starting 之后按房间玩法分流：经典进选词，接龙进接龙选词（S22）
+  starting: ['waiting', 'choosing_word', 'relay_choose', 'closed'],
   // choosing_word → round_result 表示“画家弃权，本回合作废”后进入（由 abandonChoosing 使用）
   choosing_word: ['drawing', 'paused', 'closed', 'game_result', 'round_result'],
   drawing: ['round_result', 'paused', 'closed', 'game_result'],
   round_result: ['choosing_word', 'game_result', 'paused', 'closed'],
   paused: ['choosing_word', 'drawing', 'round_result', 'game_result', 'closed'],
+  /**
+   * 接龙四步链（S22 / S23）：
+   * `starting → relay_choose → relay_draw(步1) → relay_guess(步2) → relay_draw(步3) → relay_guess(步4)
+   *  → relay_showcase ⇄ relay_vote → game_result → waiting`。
+   * 接龙的 `relay_draw` 与 `relay_guess` 各出现两次，步骤号属接龙局状态（不在这里表达）。
+   * 对局期（choose/draw/guess）房主可提前结束进 `game_result`（S34 / S38）；
+   * 展示期（showcase/vote）禁止提前结束，故没有 `relay_showcase → game_result` 这条边（S12）。
+   * `paused` 在接龙全链不可达（接龙禁用暂停，S19）。
+   */
+  relay_choose: ['relay_draw', 'game_result', 'closed'],
+  relay_draw: ['relay_guess', 'relay_draw', 'game_result', 'closed'],
+  relay_guess: ['relay_draw', 'relay_showcase', 'game_result', 'closed'],
+  relay_showcase: ['relay_vote', 'closed'],
+  relay_vote: ['relay_showcase', 'game_result', 'closed'],
   game_result: ['waiting', 'closed'],
   closed: [],
 }

@@ -44,6 +44,12 @@ export const status = {
   phaseRoundResult: '回合结算',
   phasePaused: '游戏暂停',
   phaseGameResult: '最终结算',
+  /** 接龙阶段名（S10）：与经典阶段共用同一份 HUD/遮罩文案映射（`utils/phase-text.ts`）。 */
+  phaseRelayChoose: '接龙选词',
+  phaseRelayDraw: '接龙作画',
+  phaseRelayGuess: '接龙猜词',
+  phaseRelayShowcase: '接龙复盘',
+  phaseRelayVote: '接龙投票',
   phaseWaiting: '等待',
   phaseClosed: '关闭',
   roomWaiting: '等待中',

@@ -9,6 +9,9 @@ import {
   PLAYER_PROTOCOL_LIMITS,
   PRIVATE_ROOM_CODE,
   PROTOCOL_VERSION,
+  RELAY_CHOOSE_SECONDS_OPTIONS,
+  RELAY_DRAW_SECONDS_OPTIONS,
+  RELAY_GUESS_SECONDS_OPTIONS,
   ROOM_RULE_LIMITS,
 } from '@draw-guess/shared'
 import { APP_CONFIG } from '@draw-guess/config'
@@ -45,6 +48,13 @@ describe('monorepo 包边界', () => {
     expect(APP_CONFIG.drawing.colorPattern).toBe(DRAWING_PROTOCOL_LIMITS.colorPattern)
     expect(APP_CONFIG.drawing.width.min).toBe(DRAWING_PROTOCOL_LIMITS.width.min)
     expect(APP_CONFIG.drawing.maxPointsPerBatch).toBe(DRAWING_PROTOCOL_LIMITS.maxPointsPerBatch)
+    // 接龙三时长的档位白名单同样只有协议常量一份来源，默认值落在配置包（S17 / S39）
+    expect(APP_CONFIG.relay.chooseSeconds.options).toBe(RELAY_CHOOSE_SECONDS_OPTIONS)
+    expect(APP_CONFIG.relay.drawSeconds.options).toBe(RELAY_DRAW_SECONDS_OPTIONS)
+    expect(APP_CONFIG.relay.guessSeconds.options).toBe(RELAY_GUESS_SECONDS_OPTIONS)
+    expect(APP_CONFIG.relay.chooseSeconds.options).toContain(APP_CONFIG.relay.chooseSeconds.default)
+    expect(APP_CONFIG.relay.drawSeconds.options).toContain(APP_CONFIG.relay.drawSeconds.default)
+    expect(APP_CONFIG.relay.guessSeconds.options).toContain(APP_CONFIG.relay.guessSeconds.default)
   })
 
   it('浏览器配置包不声明服务端限频、数据库路径或清理策略', () => {

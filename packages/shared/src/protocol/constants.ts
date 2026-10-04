@@ -2,7 +2,7 @@
  * 线上协议的公开约束。前后端配置与 Zod Schema 都必须引用这里，避免边界两侧各维护一份。
  * 这里只放会影响协议兼容性或客户端可提交载荷的值；限频、持久化与清理策略属于服务端私有配置。
  */
-export const PROTOCOL_VERSION = '17' as const
+export const PROTOCOL_VERSION = '18' as const
 
 /**
  * room:closed 推送的稳定关闭码：客户端按码分支（例如被踢弹窗），展示文案只用于提示。
@@ -71,6 +71,39 @@ export const PLAYER_PROTOCOL_LIMITS = {
   roomNameMaxLength: 24,
   chatMaxLength: 60,
 } as const
+
+/**
+ * 房间玩法模式：建房时二选一、房间内不可修改（S27 / S28）。
+ * 与 `visibility` 同级放在房间顶层，不属可调房间规则。
+ */
+export const GAME_MODES = ['classic', 'relay'] as const
+
+/**
+ * 未显式声明玩法时的线上默认值：保持经典模式现状，
+ * 使「只加字段」的变更对既有客户端载荷保持向后兼容（新客户端在建房弹窗显式选择）。
+ */
+export const DEFAULT_GAME_MODE = 'classic' as const
+
+/**
+ * 接龙开局门禁：在线且可玩的成员不少于 4 人且全员准备才能开局（S62）。
+ * 与容量（`PLAYER_PROTOCOL_LIMITS.maxPlayers = 6`）分开：容量是上限，这是开局下限。
+ */
+export const RELAY_MIN_PLAYERS = 4
+
+/**
+ * 接龙专属阶段时长档位（秒）：三类阶段各有自己的白名单，
+ * 与经典「单回合时长」同手法——档位属协议可观察范围，故落在协议常量，
+ * 默认值（20 / 90 / 45）落在公开配置包（见 packages/config/src/relay.ts）。
+ */
+export const RELAY_CHOOSE_SECONDS_OPTIONS = [10, 15, 20, 30] as const
+export const RELAY_DRAW_SECONDS_OPTIONS = [60, 90, 120, 150] as const
+export const RELAY_GUESS_SECONDS_OPTIONS = [30, 45, 60, 75] as const
+
+/**
+ * 接龙步骤数：每条链固定 4 步（画 → 猜 → 画 → 猜），每步全员各对自己负责的链动手一次（S9）。
+ * 步骤号出现在线上（视图的 `currentStep`，见 `RelayStepSchema`），故与档位白名单同放在协议常量。
+ */
+export const RELAY_STEP_COUNT = 4
 
 /**
  * 单回合时长的合法档位（秒）：房间规则只允许在这四档之间选择。

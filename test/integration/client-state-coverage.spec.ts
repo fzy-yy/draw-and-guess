@@ -353,6 +353,7 @@ describe('大厅、房间与词库权威请求', () => {
                   name: fixture.name,
                   hostName: '房主',
                   playerCount: 2,
+                  gameMode: 'classic',
                   phase: 'waiting',
                   roundsPerPlayer: 1,
                   drawSeconds: 60,

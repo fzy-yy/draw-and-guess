@@ -24,7 +24,7 @@ function requireDefaultInRange(
  * 的关系、字符串格式、值域。参数化默认值便于测试注入非法配置验证失败路径。
  */
 export function validateBusinessConfig(config: typeof APP_CONFIG = APP_CONFIG): void {
-  const { player, game, drawing, vocabulary } = config
+  const { player, game, relay, drawing, vocabulary } = config
   requireConfig(player.minPlayers <= player.maxPlayers, '玩家最小人数不能大于最大人数')
   requireDefaultInRange('每人轮数', game.roundsPerPlayer)
   requireConfig(
@@ -32,6 +32,19 @@ export function validateBusinessConfig(config: typeof APP_CONFIG = APP_CONFIG): 
     '单回合时长默认值必须落在合法档位内',
   )
   requireDefaultInRange('选词秒数', game.chooseSeconds)
+  // 接龙三时长的默认值与协议白名单必须一致（档位在 shared，默认值在 config，漂移即启动失败）
+  requireConfig(
+    relay.chooseSeconds.options.includes(relay.chooseSeconds.default),
+    '接龙选词时长默认值必须落在合法档位内',
+  )
+  requireConfig(
+    relay.drawSeconds.options.includes(relay.drawSeconds.default),
+    '接龙作画时长默认值必须落在合法档位内',
+  )
+  requireConfig(
+    relay.guessSeconds.options.includes(relay.guessSeconds.default),
+    '接龙猜词时长默认值必须落在合法档位内',
+  )
   requireDefaultInRange('画笔宽度', drawing.width)
   requireConfig(
     Number.isInteger(drawing.fillTolerance) &&

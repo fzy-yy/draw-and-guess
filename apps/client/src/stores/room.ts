@@ -5,7 +5,9 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import {
+  DEFAULT_GAME_MODE,
   EVENTS,
+  type GameMode,
   type RoomSettings,
   type RoomSnapshot,
   type RoomVisibility,
@@ -32,9 +34,14 @@ export const useRoomStore = defineStore('room', () => {
   async function createRoom(input: {
     name: string
     visibility: RoomVisibility
+    /** 玩法模式：建房时确定（S27 / S28）；缺省保持经典模式，与协议默认值同源。 */
+    gameMode?: GameMode
     settings: RoomSettings
   }): Promise<boolean> {
-    const snapshot = await request(EVENTS.roomCreate, input)
+    const snapshot = await request(EVENTS.roomCreate, {
+      ...input,
+      gameMode: input.gameMode ?? DEFAULT_GAME_MODE,
+    })
     if (!snapshot.ok) return false
     room.value = snapshot.data
     return true

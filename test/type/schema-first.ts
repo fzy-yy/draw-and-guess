@@ -4,11 +4,14 @@ import {
   CLIENT_RESPONSE_SCHEMAS,
   EVENTS,
   createServerPush,
+  type ClientRequestPayload,
   type ClientResponse,
   type ClientResponseAck,
   type ErrorCode,
   type Invite,
   type PresenceSnapshot,
+  type RelayShowcase,
+  type RelayVoteChoice,
   type RoomSnapshot,
   type ServerPushData,
   type ServerToClientEvents,
@@ -119,3 +122,45 @@ const wrongRoomClosed: RoomClosedEnvelope = createServerPush(EVENTS.roomClosed, 
   code: 'unknown',
 })
 void wrongRoomClosed
+
+// —— 接龙契约（S30 / S51 / S57 / S63 / S79）：请求载荷、ack 与视图字段的编译期配对 ——
+declare const relayUndoPayload: ClientRequestPayload<typeof EVENTS.relayDrawUndo>
+expectTypeOf(relayUndoPayload).toEqualTypeOf<{ requestId: string; stepId: string }>()
+declare const relayGuessPayload: ClientRequestPayload<typeof EVENTS.relaySubmitGuess>
+expectTypeOf(relayGuessPayload).toEqualTypeOf<{ requestId: string; stepId: string; text: string }>()
+declare const relayChatPayload: ClientRequestPayload<typeof EVENTS.chatSay>
+expectTypeOf(relayChatPayload).toEqualTypeOf<{ requestId: string; text: string }>()
+
+// 猜词不判对错：提交与独立聊天都是空响应；绘图族沿用经典绘图 ack 口径
+expectTypeOf<ClientResponse<typeof EVENTS.relaySubmitDrawing>>().toEqualTypeOf<void | undefined>()
+expectTypeOf<ClientResponse<typeof EVENTS.chatSay>>().toEqualTypeOf<void | undefined>()
+expectTypeOf<ClientResponse<typeof EVENTS.relayDrawStrokeBatch>>().toEqualTypeOf<{
+  strokeId: string
+  pointCount: number
+  drawingRevision: number
+  remainingBudget: number
+}>()
+
+// 接龙视图由 schema 推导：模式、步骤、半场与未揭晓答案的 null 表达
+expectTypeOf<RoomSnapshot['gameMode']>().toEqualTypeOf<'classic' | 'relay'>()
+declare const relayView: NonNullable<RoomSnapshot['relay']>
+expectTypeOf(relayView.currentStep).toEqualTypeOf<1 | 2 | 3 | 4>()
+expectTypeOf<NonNullable<RoomSnapshot['relay']>['phase']>().toEqualTypeOf<
+  'relay_choose' | 'relay_draw' | 'relay_guess' | 'relay_showcase' | 'relay_vote'
+>()
+expectTypeOf<RelayShowcase['half']>().toEqualTypeOf<1 | 2>()
+expectTypeOf<RelayShowcase['answer']['text']>().toEqualTypeOf<string | null>()
+expectTypeOf<RelayVoteChoice>().toEqualTypeOf<'agree' | 'disagree'>()
+
+// 负向 1：经典 roundId 不是接龙载荷的一部分（stepId 才是唯一定位字段）
+expectTypeOf<ClientRequestPayload<typeof EVENTS.relayDrawUndo>>().not.toHaveProperty('roundId')
+// 负向 2：视图没有「未揭晓答案长度」「其余链内容」这类隐私字段
+expectTypeOf<NonNullable<RoomSnapshot['relay']>>().not.toHaveProperty('answerLength')
+expectTypeOf<NonNullable<RoomSnapshot['relay']>>().not.toHaveProperty('otherChains')
+// 负向 3：越界键在对象字面量上直接编译失败（strict 边界）
+const relayLeak: NonNullable<RoomSnapshot['relay']> = {
+  ...relayView,
+  // @ts-expect-error 未揭晓答案的长度绝不下发（S63 / S81）
+  answerLength: 2,
+}
+void relayLeak

@@ -5,6 +5,7 @@
 import type {
   Ack,
   ChatMessage,
+  GameMode,
   PresencePreferences,
   Profile,
   RoomPhase,
@@ -139,6 +140,8 @@ export interface RoomSecret {
   name: string
   hostId: string // 房主玩家 ID（可迁移）
   visibility: RoomVisibility
+  /** 房间玩法（经典 / 接龙）：建房时确定、房间内不可修改（S27 / S28），快照与大厅行据此显示模式徽标。 */
+  gameMode: GameMode
   /** 服务端生成的私密房间码；仅通过角色裁剪快照向当前房主显示。 */
   privateJoinCode?: string
   phase: RoomPhase

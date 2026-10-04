@@ -29,6 +29,9 @@ const settings: RoomSettings = {
   allowNearMissHint: true,
   allowCanvasReactions: true,
   allowRoundReplay: true,
+  relayChooseSeconds: 20,
+  relayDrawSeconds: 90,
+  relayGuessSeconds: 45,
 }
 
 /** 录制型 socket 桩：记录发给该成员的最新房间快照，供测试断言当前对局状态。 */

@@ -158,3 +158,66 @@ describe('房间阶段写入静态约束', () => {
     expect(assignments).toEqual([{ file: 'round-machine.ts', statement: 'room.phase = next' }])
   })
 })
+
+/** 接龙的五个专属阶段（S10 / S22 / S23）。 */
+const RELAY_PHASES = [
+  'relay_choose',
+  'relay_draw',
+  'relay_guess',
+  'relay_showcase',
+  'relay_vote',
+] as const satisfies readonly RoomPhase[]
+
+describe('接龙阶段转换白名单（S10 / S22 / S23 / S34）', () => {
+  it('四步链的每条边都放行：选词 → 步1画 → 步2猜 → 步3画 → 步4猜 → 复盘 ⇄ 投票 → 终局', () => {
+    const chain: Array<[RoomPhase, RoomPhase]> = [
+      ['starting', 'relay_choose'],
+      ['relay_choose', 'relay_draw'],
+      ['relay_draw', 'relay_guess'],
+      ['relay_guess', 'relay_draw'],
+      ['relay_guess', 'relay_showcase'],
+      ['relay_showcase', 'relay_vote'],
+      ['relay_vote', 'relay_showcase'],
+      ['relay_vote', 'game_result'],
+      ['game_result', 'waiting'],
+    ]
+    for (const [from, to] of chain) {
+      expect(canTransition(from, to), `${from} → ${to}`).toBe(true)
+    }
+  })
+
+  it('接龙不可暂停，也不允许跳步或越级进入复盘', () => {
+    for (const phase of RELAY_PHASES) {
+      expect(canTransition(phase, 'paused'), `${phase} → paused`).toBe(false)
+      // 任何活跃阶段都必须能关闭房间（成员清空 / 房主解散）
+      expect(canTransition(phase, 'closed'), `${phase} → closed`).toBe(true)
+    }
+    expect(canTransition('relay_choose', 'relay_guess')).toBe(false)
+    expect(canTransition('relay_choose', 'relay_showcase')).toBe(false)
+    expect(canTransition('relay_draw', 'relay_showcase')).toBe(false)
+    expect(canTransition('relay_guess', 'relay_vote')).toBe(false)
+    expect(canTransition('relay_vote', 'waiting')).toBe(false)
+  })
+
+  it('对局期（选词 / 作画 / 猜词）可提前结束；展示轮播期没有进终局的边（S34 / S12）', () => {
+    for (const phase of ['relay_choose', 'relay_draw', 'relay_guess'] as const) {
+      expect(canTransition(phase, 'game_result'), `${phase} → game_result`).toBe(true)
+    }
+    // 轮播期完全不可干预（无跳过、无提前结束）；投票期进终局是正常链路，是否放行「提前结束」由业务守卫裁决
+    expect(canTransition('relay_showcase', 'game_result')).toBe(false)
+    expect(canTransition('relay_showcase', 'waiting')).toBe(false)
+    expect(canTransition('relay_vote', 'waiting')).toBe(false)
+  })
+
+  it('经典阶段不获得接龙边，接龙也不回经典对局阶段', () => {
+    expect(canTransition('waiting', 'relay_choose')).toBe(false)
+    expect(canTransition('choosing_word', 'relay_draw')).toBe(false)
+    expect(canTransition('drawing', 'relay_guess')).toBe(false)
+    expect(canTransition('round_result', 'relay_showcase')).toBe(false)
+    expect(canTransition('relay_choose', 'choosing_word')).toBe(false)
+    expect(canTransition('relay_draw', 'drawing')).toBe(false)
+    expect(canTransition('relay_guess', 'round_result')).toBe(false)
+    expect(canTransition('relay_showcase', 'round_result')).toBe(false)
+    expect(canTransition('relay_vote', 'round_result')).toBe(false)
+  })
+})
