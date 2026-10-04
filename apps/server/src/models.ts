@@ -59,10 +59,6 @@ export interface PlayerSecret {
 export interface MemberState {
   playerId: string // 对应玩家 ID
   seatIndex: number // 固定席位序号，对局内颜色与玩家身份据此保持稳定
-  /** 是否为观战成员：不参与准备/画家轮换/猜词/计分，游戏中加入时置位。 */
-  spectating?: boolean
-  /** 是否为下一局候场成员：当前局按观战权限裁剪，回到 waiting 时自动转为普通未准备成员。 */
-  waitingForNextGame?: boolean
   /** 最终结算中本成员是否已表达“再来一局”；进入 waiting 时清除。 */
   rematchReady?: boolean
   /** 主动退出本局后保留结果卡片，但不再参与房间裁决或接收房间快照。 */

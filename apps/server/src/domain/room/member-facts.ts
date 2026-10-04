@@ -59,11 +59,13 @@ export function occupiesSeat(member: MemberState): boolean {
 }
 
 /**
- * 是否可玩成员：非观战且未离局。
- * 观战者与离局者都不参与准备、画家轮换、猜词与计分。
+ * 是否可玩成员：未离局。
+ * 观战与候场已删除，可玩与占席当前同为 `!leftGame`；两者语义不同、调用点不同——
+ * 占席用于容量与大厅人数，可玩用于准备 / 画家轮换 / 猜词 / 计分 / 开局门槛
+ *（留局占位在接力玩法里还要占链位，见 S37）。
  */
 export function isActivePlayer(member: MemberState): boolean {
-  return !member.spectating && !member.leftGame
+  return !member.leftGame
 }
 
 /**
@@ -72,22 +74,6 @@ export function isActivePlayer(member: MemberState): boolean {
  */
 export function isOnlinePlayer(member: MemberState, isOnline: OnlineLookup): boolean {
   return isActivePlayer(member) && isOnline(member.playerId)
-}
-
-/**
- * 是否下一局有效成员：非离局，且要么可玩、要么已登记候场。
- * 纯观战者不算有效成员；离局者即便登记过也不计入。
- */
-export function isRematchEligible(member: MemberState): boolean {
-  return !member.leftGame && (!member.spectating || member.waitingForNextGame === true)
-}
-
-/**
- * 是否进入最终榜单：排除观战者，但**保留离局者**。
- * 已公布的成绩属于本局历史，不随成员离开席位而消失（leaving 时冻结的 leftProfile 正是为展示成绩卡）。
- */
-export function isRankedMember(member: MemberState): boolean {
-  return !member.spectating
 }
 
 /** 成员连接三态：离局或缺身份为 left，在线为 online，否则为重连中。 */
@@ -99,7 +85,7 @@ export function connectionStatus(
   return player.connected ? 'online' : 'reconnecting'
 }
 
-/** 可玩成员集合（非观战且未离局）。 */
+/** 可玩成员集合（未离局）。 */
 export function activePlayers(room: MemberList): MemberState[] {
   return room.members.filter(isActivePlayer)
 }
@@ -107,16 +93,6 @@ export function activePlayers(room: MemberList): MemberState[] {
 /** 在线可玩成员集合。 */
 export function onlinePlayers(room: MemberList, isOnline: OnlineLookup): MemberState[] {
   return room.members.filter((member) => isOnlinePlayer(member, isOnline))
-}
-
-/** 下一局有效成员集合（候场者算数，纯观战不算）。 */
-export function rematchEligibleMembers(room: MemberList): MemberState[] {
-  return room.members.filter(isRematchEligible)
-}
-
-/** 最终榜单成员集合（排除观战、保留离局者）。 */
-export function rankedMembers(room: MemberList): MemberState[] {
-  return room.members.filter(isRankedMember)
 }
 
 /**
@@ -141,7 +117,7 @@ export function onlineGuessers(
   )
 }
 
-/** 可玩成员数（非观战且未离局）。 */
+/** 可玩成员数（未离局）。 */
 export function countActivePlayers(room: MemberList): number {
   return activePlayers(room).length
 }

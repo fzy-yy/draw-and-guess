@@ -353,11 +353,9 @@ describe('大厅、房间与词库权威请求', () => {
                   name: fixture.name,
                   hostName: '房主',
                   playerCount: 2,
-                  maxPlayers: 6,
                   phase: 'waiting',
                   roundsPerPlayer: 1,
                   drawSeconds: 60,
-                  joinPolicy: 'spectate',
                 },
               ]
             : event === EVENTS.inviteSend

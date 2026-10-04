@@ -4,13 +4,13 @@ import { freezeFinalRanking } from '../../apps/server/src/scoring.ts'
 import type { MemberState, PlayerSecret } from '../../apps/server/src/models.ts'
 
 /**
- * 最终榜单的成员口径回归：`round-machine.finishGame` 用 `rankedMembers`（内部即 `isRankedMember`，
- * 仅排除观战）而**保留离局者**。
+ * 最终榜单的成员口径回归：`round-machine.finishGame` 冻结 room.members 全员
+ *（离局者以冻结成绩卡保留在榜，实现在 scoring.freezeFinalRanking）。
  * 该行为此前无测试固定（既有用例只证明「候场观战者被排除」），一旦有人把口径改成「排除离局」，
  * 离局者的成绩卡会从结算榜消失。见 docs/adr/0023-member-facts-single-source.md。
  */
 describe('最终榜单成员口径', () => {
-  it('离局但非观战的成员仍进入最终榜单（成绩卡属于本局历史）', () => {
+  it('离局成员仍进入最终榜单（成绩卡属于本局历史）', () => {
     const harness = createGameHarness()
     const { host, guest, room } = startTwoPlayerGame(harness)
 
@@ -89,7 +89,6 @@ describe('freezeFinalRanking 直接用例', () => {
           leftGame: true,
           leftProfile: { nickname: '已离局', avatarId: '02' },
         }),
-        makeMember('d', 10, { joinedAt: 4, spectating: true }), // 观战不进榜
       ],
     }
     const ranking = freezeFinalRanking(

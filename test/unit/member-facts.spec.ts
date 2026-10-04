@@ -11,15 +11,11 @@ import {
   isActivePlayer,
   isOnlinePlayer,
   isPhaseExpired,
-  isRankedMember,
-  isRematchEligible,
   nicknameOf,
   nominalPhaseDurationMs,
   occupiesSeat,
   onlineGuessers,
   onlinePlayers,
-  rankedMembers,
-  rematchEligibleMembers,
 } from '../../apps/server/src/domain/room/member-facts.ts'
 import type { MemberState, PlayerSecret } from '../../apps/server/src/models.ts'
 
@@ -49,41 +45,22 @@ function online(...playerIds: string[]): (playerId: string) => boolean {
 }
 
 describe('member-facts 谓词契约', () => {
-  it('occupiesSeat 只看是否离局，观战仍占席', () => {
+  it('occupiesSeat 只看是否离局', () => {
     expect(occupiesSeat(member())).toBe(true)
-    expect(occupiesSeat(member({ spectating: true }))).toBe(true)
     expect(occupiesSeat(member({ leftGame: true }))).toBe(false)
   })
 
-  it('isActivePlayer 同时排除观战与离局', () => {
+  it('isActivePlayer 只排除离局者', () => {
     expect(isActivePlayer(member())).toBe(true)
-    expect(isActivePlayer(member({ spectating: true }))).toBe(false)
     expect(isActivePlayer(member({ leftGame: true }))).toBe(false)
-    expect(isActivePlayer(member({ spectating: true, leftGame: true }))).toBe(false)
   })
 
   it('isOnlinePlayer 在可玩基础上要求在线', () => {
     const onlineAll = online('p')
     expect(isOnlinePlayer(member(), onlineAll)).toBe(true)
     expect(isOnlinePlayer(member(), online())).toBe(false)
-    // 离局或观战即便玩家仍在线也不算在线可玩
+    // 离局者即便玩家仍在线也不算在线可玩
     expect(isOnlinePlayer(member({ leftGame: true }), onlineAll)).toBe(false)
-    expect(isOnlinePlayer(member({ spectating: true }), onlineAll)).toBe(false)
-  })
-
-  it('isRematchEligible 认候场、排除纯观战与离局', () => {
-    expect(isRematchEligible(member())).toBe(true)
-    expect(isRematchEligible(member({ spectating: true, waitingForNextGame: true }))).toBe(true)
-    expect(isRematchEligible(member({ spectating: true }))).toBe(false)
-    expect(isRematchEligible(member({ leftGame: true }))).toBe(false)
-    // 离局者即便登记过候场也不再有效
-    expect(isRematchEligible(member({ leftGame: true, waitingForNextGame: true }))).toBe(false)
-  })
-
-  it('isRankedMember 排除观战但保留离局者', () => {
-    expect(isRankedMember(member())).toBe(true)
-    expect(isRankedMember(member({ leftGame: true }))).toBe(true)
-    expect(isRankedMember(member({ spectating: true }))).toBe(false)
   })
 
   it('connectionStatus 区分 left / online / reconnecting', () => {
@@ -96,41 +73,32 @@ describe('member-facts 谓词契约', () => {
 
 describe('member-facts 选择器与计数契约', () => {
   const active = member({ playerId: 'active' })
-  const spectator = member({ playerId: 'spectator', spectating: true })
-  const nextGame = member({ playerId: 'next', spectating: true, waitingForNextGame: true })
+  const away = member({ playerId: 'away' })
   const departed = member({ playerId: 'departed', leftGame: true })
-  const parties = [active, spectator, nextGame, departed]
+  const parties = [active, away, departed]
 
   it('activePlayers / countActivePlayers 只取可玩成员', () => {
-    expect(activePlayers(room(...parties)).map((m) => m.playerId)).toEqual(['active'])
-    expect(countActivePlayers(room(...parties))).toBe(1)
+    expect(activePlayers(room(...parties)).map((m) => m.playerId)).toEqual(['active', 'away'])
+    expect(countActivePlayers(room(...parties))).toBe(2)
   })
 
   it('onlinePlayers / countOnlinePlayers 在可玩基础上过滤在线', () => {
-    const isOnline = online('active', 'spectator')
+    const isOnline = online('active', 'departed')
     expect(onlinePlayers(room(...parties), isOnline).map((m) => m.playerId)).toEqual(['active'])
     expect(countOnlinePlayers(room(...parties), isOnline)).toBe(1)
   })
 
-  it('rematchEligibleMembers 含可玩与候场、排除纯观战与离局', () => {
-    expect(rematchEligibleMembers(room(...parties)).map((m) => m.playerId)).toEqual([
+  it('activeGuessers 排除画家与离局者，保留掉线者', () => {
+    const guessers = activeGuessers(room(...parties), 'active')
+    expect(guessers.map((m) => m.playerId)).toEqual(['away'])
+    expect(activeGuessers(room(...parties), 'drawer').map((m) => m.playerId)).toEqual([
       'active',
-      'next',
+      'away',
     ])
   })
 
-  it('rankedMembers 保留离局者、排除观战者', () => {
-    expect(rankedMembers(room(...parties)).map((m) => m.playerId)).toEqual(['active', 'departed'])
-  })
-
-  it('activeGuessers 排除画家与观战/离局，保留掉线者', () => {
-    const guessers = activeGuessers(room(...parties), 'active')
-    expect(guessers.map((m) => m.playerId)).toEqual([])
-    expect(activeGuessers(room(...parties), 'drawer').map((m) => m.playerId)).toEqual(['active'])
-  })
-
   it('onlineGuessers 在 activeGuessers 基础上只留在线的', () => {
-    const drawRoom = room(active, spectator, departed, member({ playerId: 'away' }))
+    const drawRoom = room(active, away, departed, member({ playerId: 'last' }))
     expect(onlineGuessers(drawRoom, 'drawer', online('active')).map((m) => m.playerId)).toEqual([
       'active',
     ])
@@ -190,13 +158,11 @@ describe('createEmptyMemberStats 契约', () => {
 
 describe('member-facts 纯函数契约', () => {
   it('不修改传入的成员与房间', () => {
-    const memberList = [member({ playerId: 'a' }), member({ playerId: 'b', spectating: true })]
+    const memberList = [member({ playerId: 'a' }), member({ playerId: 'b', leftGame: true })]
     const input = room(...memberList)
     const before = structuredClone(input)
     activePlayers(input)
     onlinePlayers(input, online('a'))
-    rematchEligibleMembers(input)
-    rankedMembers(input)
     activeGuessers(input, 'a')
     onlineGuessers(input, 'a', online('a'))
     countActivePlayers(input)

@@ -127,7 +127,7 @@ for (const baseline of BASELINES) {
       await expect(avatarDialog).toBeHidden()
     })
 
-    test('大厅与建房弹窗无裁切、下拉框可交互', async ({ browser: _browser }, testInfo) => {
+    test('大厅与建房弹窗无裁切、单选项可交互', async ({ browser: _browser }, testInfo) => {
       const page = host.page
 
       // ---------- 3. 大厅 ----------
@@ -158,14 +158,15 @@ for (const baseline of BASELINES) {
       await expect(createDialog.getByRole('button', { name: /关闭创建房间弹窗/ })).toBeVisible()
       await expect(createDialog.getByRole('button', { name: /创建并进入/ })).toBeVisible()
       await expect(createDialog.getByRole('button', { name: /取消/ })).toBeVisible()
-      // 功能回归守卫：最大人数手写下拉必须真正可交互（点 combobox 展开 → 点 option 选中）。
-      // 旧缺陷：字段行 label 上的覆盖层（.touch-target::after）拦截指针事件，原生 select
-      // 收不到点击无法展开；改手写组件后本守卫验证新交互链路——指针被拦截则面板不出现。
-      const maxPlayersCombo = createDialog.getByLabel('最大人数')
-      await maxPlayersCombo.click()
-      await expect(createDialog.getByRole('listbox')).toBeVisible()
-      await createDialog.getByRole('option', { name: '3 人', exact: true }).click()
-      await expect(maxPlayersCombo).toContainText('3 人')
+      // 功能回归守卫：可见性单选组整行是命中区（label 包裹原生 radio），点击标签必须正确切换选中项。
+      // 旧缺陷：字段行 label 上的覆盖层（.touch-target::after）拦截指针事件，控件收不到点击。
+      // 原下拉字段已随房间容量固定而移除，改由本单选组承担同一交互回归。
+      const publicRadio = createDialog.locator('label:has-text("公开房间") input[type="radio"]')
+      const privateRadio = createDialog.locator('label:has-text("私密房间") input[type="radio"]')
+      await createDialog.locator('label:has-text("私密房间")').click()
+      await expect(privateRadio).toBeChecked()
+      await createDialog.locator('label:has-text("公开房间")').click()
+      await expect(publicRadio).toBeChecked()
       await captureBaseline(page, testInfo, baseline, '04-create-dialog')
       await page.keyboard.press('Escape')
       await expect(createDialog).toBeHidden()
@@ -254,12 +255,13 @@ for (const baseline of BASELINES) {
       await assertWithinStage(page, rulesDialog, '规则弹窗')
       await assertNoOverflow(rulesDialog, '规则弹窗')
       await expect(rulesDialog.getByRole('button', { name: /保存规则/ })).toBeVisible()
-      // 功能回归守卫：规则弹窗的下拉手写组件同样必须可交互（与建房弹窗同一 SelectDropdown 链路）
-      const rulesCombo = rulesDialog.getByLabel('最大玩家数')
+      // 功能回归守卫：规则弹窗的手写下拉（RuleSelectField）同样必须可交互——
+      // 点 combobox 展开面板、点选项写入并回显，指针被覆盖层拦截则面板不会出现。
+      const rulesCombo = rulesDialog.getByLabel('选词时间')
       await rulesCombo.click()
       await expect(rulesDialog.getByRole('listbox')).toBeVisible()
-      await rulesDialog.getByRole('option', { name: '5 人', exact: true }).click()
-      await expect(rulesCombo).toContainText('5 人')
+      await rulesDialog.getByRole('option', { name: '20 秒', exact: true }).click()
+      await expect(rulesCombo).toContainText('20 秒')
       await captureBaseline(page, testInfo, baseline, '08-rules-dialog')
       await page.keyboard.press('Escape')
       await expect(rulesDialog).toBeHidden()

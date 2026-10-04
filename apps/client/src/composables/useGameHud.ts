@@ -49,12 +49,11 @@ export function useGameHud(store: GameStore) {
       ),
     )
   })
-  // 当前玩家是否可猜词或发言：作画阶段、未猜中（或为当前画家）、非观战且在线
+  // 当前玩家是否可猜词或发言：作画阶段、未猜中（或为当前画家）且在线
   const canGuess = computed(
     () =>
       store.room?.phase === 'drawing' &&
       (store.isDrawer || !store.me?.guessed) &&
-      !store.me?.spectating &&
       !!store.me &&
       isOnlineActiveMember(store.me),
   )
@@ -65,9 +64,7 @@ export function useGameHud(store: GameStore) {
     // game_result 优先读取服务端在结算瞬间冻结的榜单；旧快照缺少该字段时才回退实时成员。
     if (store.room?.phase === 'game_result' && game.value?.finalRanking)
       return game.value.finalRanking
-    const members = [...(store.room?.members ?? [])]
-      .filter((member) => !member.spectating)
-      .sort((a, b) => b.score - a.score)
+    const members = [...(store.room?.members ?? [])].sort((a, b) => b.score - a.score)
     let previous = -1
     let rank = 0
     return members.map((member, index) => {

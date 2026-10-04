@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { EVENTS } from '../events.ts'
-import { AvatarIdSchema, JoinPolicySchema, RoomPhaseSchema, WordIdSchema } from './base.ts'
+import { AvatarIdSchema, RoomPhaseSchema, WordIdSchema } from './base.ts'
 import { PROTOCOL_VERSION, ROOM_CLOSE_CODES } from './constants.ts'
 import { FillCommandSchema, StrokeSchema } from './drawing.ts'
 import { CanvasPingBroadcastSchema } from './gameplay.ts'
@@ -24,11 +24,9 @@ export const PublicRoomSchema = z
     name: z.string(),
     hostName: z.string(),
     playerCount: z.number().int().nonnegative(),
-    maxPlayers: z.number().int().positive(),
     phase: RoomPhaseSchema,
     roundsPerPlayer: z.number().int().positive(),
     drawSeconds: z.number().int().positive(),
-    joinPolicy: JoinPolicySchema,
   })
   .strict()
 export const MemberStatsSchema = z
@@ -46,8 +44,6 @@ export const RoomMemberSchema = PublicPlayerSchema.extend({
   isHost: z.boolean(),
   isDrawer: z.boolean(),
   guessed: z.boolean(),
-  spectating: z.boolean(),
-  waitingForNextGame: z.boolean(),
   rematchReady: z.boolean(),
   leftGame: z.boolean(),
   connection: ConnectionStateSchema,

@@ -6,7 +6,6 @@ import { AVATAR_IDS, PLAYER_PROTOCOL_LIMITS } from '@draw-guess/shared/protocol/
 export const player = {
   minPlayers: PLAYER_PROTOCOL_LIMITS.minPlayers,
   maxPlayers: PLAYER_PROTOCOL_LIMITS.maxPlayers,
-  defaultMaxPlayers: PLAYER_PROTOCOL_LIMITS.maxPlayers,
   nicknameMinLength: PLAYER_PROTOCOL_LIMITS.nicknameMinLength,
   nicknameMaxLength: PLAYER_PROTOCOL_LIMITS.nicknameMaxLength,
   roomNameMaxLength: PLAYER_PROTOCOL_LIMITS.roomNameMaxLength,

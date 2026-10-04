@@ -63,7 +63,7 @@ export class SnapshotBuilder {
     // 强制全量：作废观看者的差分游标，使本次快照必须携带完整画布历史。
     // 游标语义归本构建器所有（重连恢复 / 客户端自检修复通道），调用方不再直接改写领域状态。
     if (options.forceFull) invalidateMemberCanvasSync(viewerMember)
-    // 候场/观战身份永远不能获得画家答案权限；即使异常状态下 ID 碰巧与 drawerId 相同也要裁剪。
+    // 已离局身份永远不能获得画家答案权限；即使异常状态下 ID 碰巧与 drawerId 相同也要裁剪。
     const viewerIsDrawer = isActivePlayer(viewerMember) && game?.drawerId === viewerId
     // game && 直接参与条件让 TS 收窄（Boolean(game) 不产生收窄，曾迫使下游写 game!）
     const canOmitStrokes =
@@ -182,8 +182,6 @@ export class SnapshotBuilder {
           isHost: room.hostId === member.playerId,
           isDrawer: isActivePlayer(member) && game?.drawerId === member.playerId,
           guessed: Boolean(member.guessedAt),
-          spectating: Boolean(member.spectating),
-          waitingForNextGame: Boolean(member.waitingForNextGame),
           rematchReady: Boolean(member.rematchReady),
           leftGame: Boolean(member.leftGame),
           connection: connectionStatus(member, player),
@@ -233,11 +231,9 @@ export class SnapshotBuilder {
       name: room.name,
       hostName: nicknameOf(this.port.players, room.hostId, serverStrings.notices.hostUnknown),
       playerCount: room.members.filter(occupiesSeat).length,
-      maxPlayers: room.settings.maxPlayers,
       phase: room.phase,
       roundsPerPlayer: room.settings.roundsPerPlayer,
       drawSeconds: room.settings.drawSeconds,
-      joinPolicy: room.settings.joinPolicy, // 大厅据此判断能否观战加入
     }
   }
 

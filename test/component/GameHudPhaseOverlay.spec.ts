@@ -73,7 +73,7 @@ describe('useGameHud 角色与计时派生', () => {
     wrapper.unmount()
   })
 
-  it('无倒计时安全归零，并在实时成员榜单中排除观战者和保留并列名次', () => {
+  it('无倒计时安全归零，并在实时成员榜单中包含全员且保留并列名次', () => {
     const roomStore = useRoomStore()
     const session = useSessionStore()
     roomStore.room = createRoomFixture('drawing', { phaseStartedAt: 2_000, phaseEndsAt: 1_000 })
@@ -81,9 +81,7 @@ describe('useGameHud 角色与计时派生', () => {
     roomStore.room.members.push({
       ...roomStore.room.members[1]!,
       id: '00000000-0000-4000-8000-000000000010',
-      nickname: '观战者',
-      spectating: true,
-      waitingForNextGame: false,
+      nickname: '后来者',
       rematchReady: false,
       score: 999,
     })
@@ -93,8 +91,9 @@ describe('useGameHud 角色与计时派生', () => {
 
     expect(hud.secondsLeft.value).toBe(0)
     expect(hud.progress.value).toBe(0)
-    expect(hud.rankings.value.map(({ rank }) => rank)).toEqual([1, 1])
-    expect(hud.rankings.value.map(({ nickname }) => nickname)).not.toContain('观战者')
+    // 观战与候场已删除：房间成员全员进榜（离局者以冻结成绩卡保留），同分并列同名次
+    expect(hud.rankings.value.map(({ nickname }) => nickname)).toEqual(['后来者', '房主', '猜词者'])
+    expect(hud.rankings.value.map(({ rank }) => rank)).toEqual([1, 2, 2])
 
     roomStore.room.members[1]!.guessed = true
     expect(hud.canGuess.value).toBe(false)

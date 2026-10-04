@@ -1,6 +1,6 @@
 import { APP_CONFIG } from '../../config/index.ts'
 import { serverStrings } from '@draw-guess/strings'
-import type { Invite, RoomSnapshot } from '@draw-guess/shared'
+import { PLAYER_PROTOCOL_LIMITS, type Invite, type RoomSnapshot } from '@draw-guess/shared'
 import { GameError } from '../../errors.ts'
 import type { InviteSecret, PlayerSecret, RoomSecret } from '../../models.ts'
 import type { RuntimePorts } from '../shared-ports.ts'
@@ -31,9 +31,9 @@ export class InviteService {
     const { room } = this.context.getMembership(playerId)
     const sender = this.context.getPlayer(playerId)
     const target = this.context.getPlayer(targetId)
-    // 容量按原始成员数（含离局占位与观战）判定：邀请只在 waiting 阶段发出，
-    // 而 setWaiting 已清理离局占位，此处长度即占席数；这一口径与 joinResolvedRoom 的占席判定等效。
-    if (room.phase !== 'waiting' || room.members.length >= room.settings.maxPlayers)
+    // 容量固定为协议常量（S61 / S67）；邀请只在 waiting 阶段发出，
+    // 而 setWaiting 已清理离局占位，此处长度即占席数，与 joinResolvedRoom 的占席判定等效。
+    if (room.phase !== 'waiting' || room.members.length >= PLAYER_PROTOCOL_LIMITS.maxPlayers)
       throw new GameError('ROOM_NOT_JOINABLE', serverStrings.errors.ROOM_NOT_JOINABLE_INVITE)
     if (room.hostId !== playerId && !room.settings.allowPlayerInvite)
       throw new GameError('FORBIDDEN', serverStrings.errors.FORBIDDEN_INVITE)

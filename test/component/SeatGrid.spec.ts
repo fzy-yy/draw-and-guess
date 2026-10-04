@@ -2,6 +2,7 @@ import { mount, type VueWrapper } from '@vue/test-utils'
 import { setActivePinia, type Pinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { strings } from '@draw-guess/strings'
+import { PLAYER_PROTOCOL_LIMITS } from '@draw-guess/shared'
 import SeatGrid from '@/components/room/SeatGrid.vue'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useRoomStore } from '@/stores/room'
@@ -70,7 +71,7 @@ describe('SeatGrid 席位右键菜单', () => {
     guestWrapper.unmount()
   })
 
-  it('席位计数按占席口径：离局占位不计容量，但成绩卡仍展示', () => {
+  it('席位计数按占席口径：离局占位不计容量，但成绩卡仍展示；席位槽位固定为协议常量', () => {
     const roomStore = useRoomStore()
     roomStore.room = createRoomFixture('waiting')
     roomStore.room.members[1]!.leftGame = true
@@ -79,11 +80,13 @@ describe('SeatGrid 席位右键菜单', () => {
 
     // 两张卡片里 1 人已离局：计数 1/6，与大厅人数、服务端容量校验同口径
     expect(wrapper.text()).toContain(
-      strings.ui.room.seatCount(1, roomStore.room.settings.maxPlayers),
+      strings.ui.room.seatCount(1, PLAYER_PROTOCOL_LIMITS.maxPlayers),
     )
     // 离局者仍保留卡片（成绩属于本局历史），计数与卡片数刻意不一致
     const seats = wrapper.findAll('article')
     expect(seats.filter((seat) => seat.text().includes('猜词者')).length).toBe(1)
+    // 席位槽位数不读房间字段，固定为协议常量（S61/S67）
+    expect(seats.length).toBe(PLAYER_PROTOCOL_LIMITS.maxPlayers)
     wrapper.unmount()
   })
 

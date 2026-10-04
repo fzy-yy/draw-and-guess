@@ -8,7 +8,7 @@ import { computed } from 'vue'
 import { BookOpenCheck, Send, Settings2 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { roomSettingsDefaults } from '@draw-guess/config'
-import type { RoomSettings } from '@draw-guess/shared'
+import { PLAYER_PROTOCOL_LIMITS, type RoomSettings } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
 import AppButton from '@/components/common/AppButton.vue'
 import RuleRow from '@/components/room/RuleRow.vue'
@@ -42,13 +42,14 @@ function enabled(value: boolean): string {
 }
 
 /**
- * 满员判定按**占席**口径（未离局即占席，观战者也占席），与服务端 room-membership-service 的
- * 容量校验、SeatGrid 的席位计数同口径（见 ADR-0023）；离局者为成绩卡保留的占位不算占席，
- * 否则会出现「明明还有空位却禁用邀请」的假满员。
+ * 满员判定按**占席**口径（未离局即占席），与服务端 room-membership-service 的
+ * 容量校验、SeatGrid 的席位计数同口径（见 ADR-0023）；容量固定为协议常量（S61/S67），
+ * 离局者为成绩卡保留的占位不算占席，否则会出现「明明还有空位却禁用邀请」的假满员。
  */
 const isRoomFull = computed(() => {
   const room = store.room
-  return room ? room.members.filter(occupiesSeatMember).length >= room.settings.maxPlayers : false
+  if (!room) return false
+  return room.members.filter(occupiesSeatMember).length >= PLAYER_PROTOCOL_LIMITS.maxPlayers
 })
 
 /** 非房主且房间未开放普通玩家邀请：与满员是两种不同的禁用原因，提示文案也不同。 */
@@ -61,16 +62,11 @@ const summaryRows = computed(() => {
   if (!settings) return []
   // 差异基线：旧「玩法预设」已移除，改为对照 config 的唯一默认规则组，仅展示房主真正改过的项。
   const differences = new Set(
-    (Object.keys(roomSettingsDefaults) as Array<keyof typeof roomSettingsDefaults>).filter(
+    (Object.keys(roomSettingsDefaults) as Array<keyof RoomSettings>).filter(
       (field) => settings[field] !== roomSettingsDefaults[field],
     ),
   )
   const rows: Array<{ key: string; label: string; value: string }> = [
-    {
-      key: 'maxPlayers',
-      label: strings.ui.room.ruleCapacityDt,
-      value: strings.ui.common.playersUnit(settings.maxPlayers),
-    },
     {
       key: 'roundsPerPlayer',
       label: strings.ui.room.ruleRoundsDt,
@@ -90,11 +86,7 @@ const summaryRows = computed(() => {
       ? strings.ui.common.secondsUnit(settings.chooseSeconds)
       : strings.ui.room.chooseTimeUnlimited,
   })
-  const addDifference = (
-    field: keyof Omit<RoomSettings, 'maxPlayers'>,
-    label: string,
-    value: string,
-  ): void => {
+  const addDifference = (field: keyof RoomSettings, label: string, value: string): void => {
     if (differences.has(field)) rows.push({ key: field, label, value })
   }
   addDifference(
@@ -139,15 +131,6 @@ const summaryRows = computed(() => {
     'allowRoundReplay',
     strings.ui.room.roundReplayLabel,
     enabled(settings.allowRoundReplay),
-  )
-  addDifference(
-    'joinPolicy',
-    strings.ui.room.joinPolicyField,
-    settings.joinPolicy === 'forbid'
-      ? strings.ui.room.joinPolicyForbid
-      : settings.joinPolicy === 'spectate'
-        ? strings.ui.room.joinPolicySpectate
-        : strings.ui.room.joinPolicyNextGame,
   )
   return rows
 })

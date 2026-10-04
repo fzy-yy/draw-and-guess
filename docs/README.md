@@ -20,7 +20,6 @@
 | [`canvas-resolution-model.md`](./canvas-resolution-model.md) | 画布双层分辨率模型：逻辑层重放 + DPR 封顶展示层 |
 | [`flood-fill-performance.md`](./flood-fill-performance.md)   | 洪泛填充性能与一致性基线（基准命令与历史数据）  |
 | [`game-result-exit.md`](./game-result-exit.md)               | 最终结算退出状态机（展示期与自动返回上限）      |
-| [`next-game-join-policy.md`](./next-game-join-policy.md)     | `joinPolicy = 'next_game'` 中途候场语义         |
 | [`wcag-aa-color-contrast.md`](./wcag-aa-color-contrast.md)   | WCAG AA 颜色对比基线（令牌与实测比值）          |
 
 ### 架构决策记录

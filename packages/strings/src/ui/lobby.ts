@@ -21,8 +21,8 @@ export const lobby = {
   roomMeta: (host: string, rounds: number, seconds: number) =>
     `房主 ${host} · ${rounds} 轮 · ${seconds} 秒`,
   joinButton: '加入',
-  spectateButton: '观战',
-  waitNextGameButton: '加入候场',
+  /** 开局后加入入口置灰时的按钮文案（容量固定、开局后不可加入）。 */
+  joinInProgress: '游戏中',
   emptyRoomsTitle: '还没有公开房间',
   emptyRoomsHint: '成为第一个房主，新房间会实时广播给所有在线玩家。',
   playersLabel: 'PLAYERS',
@@ -34,7 +34,6 @@ export const lobby = {
   newRoomLabel: 'NEW ROOM',
   createDialogTitle: '创建画室',
   roomNameField: '房间名称',
-  maxPlayersField: '最大人数',
   visibilityField: '房间类型',
   visibilityPublic: '公开房间',
   visibilityPublicHint: '出现在大厅列表，所有玩家均可自由加入',

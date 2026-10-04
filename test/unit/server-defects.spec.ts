@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
-import type { Stroke } from '@draw-guess/shared'
+import { PLAYER_PROTOCOL_LIMITS, type Stroke } from '@draw-guess/shared'
 import { GameError } from '../../apps/server/src/errors.ts'
 import { createGameHarness, startTwoPlayerGame, testRoomSettings } from './helpers/game-harness.ts'
 
@@ -76,11 +76,14 @@ describe('私密房与邀请竞态', () => {
     const harness = createGameHarness()
     const host = harness.register('邀请者')
     const target = harness.register('受邀者')
-    const filler = harness.register('占位者')
+    // 容量固定为协议常量：填满房间需要房主 + (maxPlayers - 1) 名占位者
+    const fillers = Array.from({ length: PLAYER_PROTOCOL_LIMITS.maxPlayers - 1 }, (_item, index) =>
+      harness.register(`占位者${index + 1}`),
+    )
     const room = harness.service.createRoom(host.playerId, {
       name: '邀请房',
       visibility: 'public',
-      settings: testRoomSettings({ maxPlayers: 2 }),
+      settings: testRoomSettings(),
     })
 
     const expiring = harness.service.sendInvite(host.playerId, target.playerId)
@@ -91,11 +94,11 @@ describe('私密房与邀请竞态', () => {
 
     harness.runtime.advance(APP_CONFIG.network.inviteCooldownMs)
     const pending = harness.service.sendInvite(host.playerId, target.playerId)
-    harness.service.joinRoom(filler.playerId, room.id)
+    for (const filler of fillers) harness.service.joinRoom(filler.playerId, room.id)
     expect(() => harness.service.respondInvite(target.playerId, pending.id, true)).toThrow(/满员/)
     expect(harness.service.invites.has(pending.id)).toBe(true)
 
-    harness.service.leaveRoom(filler.playerId)
+    harness.service.leaveRoom(fillers[0]!.playerId)
     expect(harness.service.respondInvite(target.playerId, pending.id, true)?.id).toBe(room.id)
     expect(() => harness.service.respondInvite(target.playerId, pending.id, true)).toThrow(
       /邀请|失效|过期/,

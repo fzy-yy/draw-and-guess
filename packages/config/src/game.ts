@@ -11,7 +11,7 @@ import type { RoomSettings } from '@draw-guess/shared'
  *（见 docs/adr/0047-fixed-100-point-scoring.md）。
  */
 
-/** 房间规则默认基线（不含容量；容量按建房场景注入）。 */
+/** 房间规则默认基线（容量固定为协议常量，不属可调规则）。 */
 export const roomSettingsDefaults = {
   roundsPerPlayer: 2,
   drawSeconds: 120,
@@ -27,12 +27,11 @@ export const roomSettingsDefaults = {
   allowNearMissHint: true,
   allowCanvasReactions: true,
   allowRoundReplay: true,
-  joinPolicy: 'next_game',
-} as const satisfies Omit<RoomSettings, 'maxPlayers'>
+} as const satisfies RoomSettings
 
-/** 由容量生成完整合法的默认房间规则设置。 */
-export function defaultRoomSettings(maxPlayers: number): RoomSettings {
-  return { maxPlayers, ...roomSettingsDefaults }
+/** 完整合法的默认房间规则设置（容量固定，不按建房场景注入）。 */
+export function defaultRoomSettings(): RoomSettings {
+  return { ...roomSettingsDefaults }
 }
 
 export const game = {

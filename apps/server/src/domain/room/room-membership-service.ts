@@ -1,5 +1,6 @@
 import {
   EVENTS,
+  PLAYER_PROTOCOL_LIMITS,
   ROOM_CLOSE_CODE,
   createServerPush,
   type MemberConnectionChange,
@@ -154,28 +155,14 @@ export class RoomMembershipService {
   ): RoomSnapshot {
     if (room.members.some((member) => member.playerId === player.id && member.leftGame))
       throw new GameError('GAME_ALREADY_LEFT', serverStrings.errors.GAME_ALREADY_LEFT)
-    // 容量按占席口径：仍保留的离局占位同样占席，故用 occupiesSeat 而非可玩口径。
+    // 开局后一律不可加入：公开房、私密码与邀请三条路径都汇聚到本方法，门禁只此一处。
+    // 观战 / 候场已删除（S36），不存在任何中途入座的身份。
+    if (room.phase !== 'waiting')
+      throw new GameError('GAME_IN_PROGRESS', serverStrings.errors.GAME_IN_PROGRESS_FORBID)
+    // 容量固定为协议常量（S61 / S67），房主不可调整；按占席口径：离局占位同样占席。
     const occupyingMembers = room.members.filter(occupiesSeat)
-    if (occupyingMembers.length >= room.settings.maxPlayers)
+    if (occupyingMembers.length >= PLAYER_PROTOCOL_LIMITS.maxPlayers)
       throw new GameError('ROOM_FULL', serverStrings.errors.ROOM_FULL)
-    const joiningInProgress = room.phase !== 'waiting'
-    if (joiningInProgress) {
-      if (room.settings.joinPolicy === 'forbid')
-        throw new GameError('GAME_IN_PROGRESS', serverStrings.errors.GAME_IN_PROGRESS_FORBID)
-      const waitingForNextGame = room.settings.joinPolicy === 'next_game'
-      const member = this.createMember(player, room, true, waitingForNextGame)
-      room.members.push(member)
-      room.stateVersion += 1
-      this.context.logger.info(
-        { roomId: room.id, playerId: player.id, source },
-        waitingForNextGame ? '玩家加入房间并等待下一局' : '玩家以观战身份加入房间',
-      )
-      player.roomId = room.id
-      void player.socket?.join(room.id)
-      this.context.emitRoom(room.id)
-      this.context.broadcastPresence()
-      return this.context.snapshot(room, player.id)
-    }
     const member = this.createMember(player, room)
     room.members.push(member)
     room.stateVersion += 1
@@ -223,10 +210,6 @@ export class RoomMembershipService {
     const { room, member, player } = this.requireMembership(playerId)
     if (room.phase === 'waiting')
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_LEAVE_GAME)
-    if (member.spectating) {
-      this.leaveRoom(playerId, serverStrings.notices.leaveReasonDefault)
-      return
-    }
     if (member.leftGame) return
 
     member.leftGame = true
@@ -332,8 +315,6 @@ export class RoomMembershipService {
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_TRANSFER_HOST)
     const targetMember = room.members.find((member) => member.playerId === targetId)
     if (!targetMember) throw new GameError('NOT_IN_ROOM', serverStrings.errors.NOT_IN_ROOM_TRANSFER)
-    if (targetMember.spectating)
-      throw new GameError('INVALID_TARGET', serverStrings.errors.SPECTATOR_CANNOT_HOST)
     this.applyHostChange(
       room,
       targetId,
@@ -356,7 +337,7 @@ export class RoomMembershipService {
       EVENTS.roomClosed,
       createServerPush(EVENTS.roomClosed, { reason, code }),
     )
-    // 房间即将从内存删除：必须同时解绑幸存成员（含观战者）的 roomId 与 Socket 房间，
+    // 房间即将从内存删除：必须同时解绑全部幸存成员的 roomId 与 Socket 房间，
     // 否则 requireAvailablePlayer 会永久抛 ALREADY_IN_ROOM，玩家无法再建房/加入/被邀请。
     for (const member of room.members) {
       const player = this.context.players.get(member.playerId)
@@ -372,7 +353,7 @@ export class RoomMembershipService {
   }
 
   private transferHostInternal(room: RoomSecret): boolean {
-    // 优先在线可玩成员；都不在线时兜底取第一个可玩成员（观战者不能任房主）。
+    // 优先在线可玩成员；都不在线时兜底取第一个可玩成员（离局者不能任房主）。
     const candidate =
       room.members.find((member) => isOnlinePlayer(member, this.isOnline)) ??
       room.members.find(isActivePlayer)
@@ -427,21 +408,14 @@ export class RoomMembershipService {
     this.context.roomsByPrivateCode.set(room.privateJoinCode, room.id)
   }
 
-  private createMember(
-    player: PlayerSecret,
-    room: RoomSecret,
-    spectating = false,
-    waitingForNextGame = false,
-  ): MemberState {
-    // 玩家加入房间时创建初始席位状态（spectating=true 表示观战身份）
+  private createMember(player: PlayerSecret, room: RoomSecret): MemberState {
+    // 席位按占席口径取第一个空闲编号；容量已在 joinResolvedRoom 用协议常量裁决。
     const occupied = new Set(room.members.filter(occupiesSeat).map((member) => member.seatIndex))
     const seatIndex = APP_CONFIG.room.seatColors.findIndex((_color, index) => !occupied.has(index))
     if (seatIndex < 0) throw new GameError('ROOM_FULL', serverStrings.errors.ROOM_FULL)
     return {
       playerId: player.id,
       seatIndex,
-      spectating,
-      waitingForNextGame,
       ready: false,
       score: 0,
       joinedAt: this.context.clock.now(),

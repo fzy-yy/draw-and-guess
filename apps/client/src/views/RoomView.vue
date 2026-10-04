@@ -32,7 +32,7 @@ const showLeaveConfirm = ref(false) // 退出确认弹窗
 const settingsDraft = ref<RoomSettings>() // 规则编辑草稿：打开弹窗时以当前规则初始化，作为 RulesDialog 本地副本的种子（保存直接用回传的 draft）
 const vocabularyLoading = ref(false) // 词库拉取中（RuleSummary 禁用按钮 + VocabularyDialog v-model）
 
-// 可玩成员集合（非观战且未离局，口径见 utils/room-facts）：allSet 与下方提示文案共用。
+// 可玩成员集合（未离局，口径见 utils/room-facts）：allSet 与下方提示文案共用。
 const activePlayers = computed(() => activeMembers(store.room?.members ?? []))
 
 // 开局/全员就绪判定：服务端快照已把房主裁剪为「隐式已准备」（见 snapshot.ts 的 ready 字段），
@@ -159,11 +159,11 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
         @edit-rules="openSettings"
       />
 
-      <!-- 房主只显示开始按钮；其他玩家保留准备按钮，观战者不能参与准备。 -->
+      <!-- 房主只显示开始按钮；其他玩家保留准备按钮。 -->
       <div class="mt-auto pt-[1.3cqh] border-t-[0.2cqh] border-t-line text-center">
         <!-- 准备按钮：复用 AppButton secondary（白底描边），已准备时经外部类切换为绿色高亮。 -->
         <AppButton
-          v-if="!store.isHost && !store.me?.spectating"
+          v-if="!store.isHost"
           variant="secondary"
           type="button"
           class="w-full"
@@ -172,16 +172,6 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           @click="store.setReady(!store.me?.ready)"
         >
           {{ store.me?.ready ? strings.ui.room.cancelReady : strings.ui.room.readyGo }}
-        </AppButton>
-        <AppButton
-          v-else-if="!store.isHost"
-          variant="secondary"
-          type="button"
-          class="w-full"
-          disabled
-          :title="strings.a11y.room.spectatorReadyTitle"
-        >
-          {{ strings.ui.room.spectatorReadyButton }}
         </AppButton>
         <AppButton
           v-if="store.isHost"

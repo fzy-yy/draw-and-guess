@@ -57,7 +57,6 @@ describe('差一字私密通知与全员猜中提前结算端到端行为', () =
       name: '测试房间',
       visibility: 'public',
       settings: testRoomSettings({
-        maxPlayers: 3,
         drawSeconds: 60,
         allowNearMissHint,
       }),

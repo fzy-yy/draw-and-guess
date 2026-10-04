@@ -11,7 +11,8 @@ import type { RoomSettingsSchema } from '../protocol/room.ts'
 
 /**
  * 房间规则设置：
- * 包含人数上限、回合轮数、单回合时长、选词时限、差一字私密提示与画布微表情开关等。
+ * 包含回合轮数、单回合时长、选词时限、差一字私密提示与画布微表情开关等；
+ * 房间容量固定为 `PLAYER_PROTOCOL_LIMITS.maxPlayers`（协议常量，不属可调规则）。
  */
 export type RoomSettings = z.infer<typeof RoomSettingsSchema>
 export type RoomMember = z.infer<typeof RoomMemberSchema>

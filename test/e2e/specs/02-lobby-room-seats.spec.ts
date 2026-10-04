@@ -75,50 +75,6 @@ test.describe('02 - 大厅房间与席位网格 (Lobby, Room & Seats)', () => {
     }
   })
 
-  test('F02 & F09 · 房间缩容后剩余席位玩家完整保留，离局不占可用容量', async ({ browser }) => {
-    const host = await createPlayer(browser, '容量房主')
-    const p2 = await createPlayer(browser, '玩家二号')
-    const p3 = await createPlayer(browser, '玩家三号')
-
-    try {
-      const roomName = `缩容测试-${Date.now()}`
-      // 初始容量 3
-      await host.lobby.createRoom({ name: roomName, visibility: 'public', maxPlayers: 3 })
-      await p2.lobby.joinPublicRoom(roomName)
-      await p3.lobby.joinPublicRoom(roomName)
-
-      // 验证 3 名玩家均入座
-      await expect(host.page.locator('article:has-text("玩家二号")')).toBeVisible()
-      await expect(host.page.locator('article:has-text("玩家三号")')).toBeVisible()
-
-      // 玩家二号离房
-      await p2.room.leaveRoom()
-      await expect(host.page.locator('article:has-text("玩家二号")')).toBeHidden()
-
-      // F02 验证：房主修改容量为 2 人（缩容）
-      await host.room.updateMaxPlayers(2)
-
-      // 关键断言：房主和玩家三号必须完整呈现，绝不能因为 seatIndex 差异而消失
-      await expect(host.page.locator('article:has-text("容量房主")')).toBeVisible()
-      await expect(host.page.locator('article:has-text("玩家三号")')).toBeVisible()
-      await expect(p3.page.locator('article:has-text("容量房主")')).toBeVisible()
-      await expect(p3.page.locator('article:has-text("玩家三号")')).toBeVisible()
-
-      // F09 验证：玩家二号离开后，大厅显示 2/2，此时新玩家无法再加入（已满）
-      const p4 = await createPlayer(browser, '候补玩家')
-      try {
-        const roomRow = p4.page.locator(`article:has-text("${roomName}")`)
-        await expect(roomRow.getByRole('button', { name: /加入/ })).toBeDisabled()
-      } finally {
-        await p4.close()
-      }
-    } finally {
-      await host.close()
-      await p2.close()
-      await p3.close()
-    }
-  })
-
   test('词库管理与多词库包视图切换', async ({ browser }) => {
     const host = await createPlayer(browser, '词库房主')
 

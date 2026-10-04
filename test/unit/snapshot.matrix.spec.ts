@@ -28,8 +28,6 @@ const NOW = 1_700_000_000_000
 const HOST_ID = '00000000-0000-4000-8000-0000000000a1'
 const DRAWER_ID = '00000000-0000-4000-8000-0000000000b2'
 const GUESSER_ID = '00000000-0000-4000-8000-0000000000c3'
-const SPECTATOR_ID = '00000000-0000-4000-8000-0000000000d4'
-const NEXT_GAME_ID = '00000000-0000-4000-8000-0000000000e5'
 const LEFT_GAME_ID = '00000000-0000-4000-8000-0000000000f6'
 const ROOM_ID = '00000000-0000-4000-8000-000000000101'
 const GAME_ID = '00000000-0000-4000-8000-000000000202'
@@ -128,8 +126,7 @@ const PHASES: RoomPhase[] = [
 ]
 
 /** 观看者在其所在格子中的身份标签。 */
-type ViewerRole =
-  'drawer-host' | 'drawer' | 'guesser' | 'host-not-drawer' | 'spectator' | 'next-game' | 'left-game'
+type ViewerRole = 'drawer-host' | 'drawer' | 'guesser' | 'host-not-drawer' | 'left-game'
 
 function makeGame(phase: RoomPhase, drawerId: string): GameSecret {
   const registry = createMemoryVocabularyRegistry()
@@ -209,13 +206,11 @@ const VIEWERS: MatrixCase[] = [
   { role: 'drawer', viewerId: GUESSER_ID }, // 画家（非房主）
   { role: 'guesser', viewerId: HOST_ID }, // 普通猜词者（此格是房主；房主身份不影响猜词裁剪）
   { role: 'host-not-drawer', viewerId: HOST_ID }, // 房主非画家（与上格同数据不同断言轴：privateJoinCode）
-  { role: 'spectator', viewerId: SPECTATOR_ID },
-  { role: 'next-game', viewerId: NEXT_GAME_ID },
   { role: 'left-game', viewerId: LEFT_GAME_ID },
 ]
 
 /**
- * 组装一个房间：画家固定为 drawerId，成员覆盖 7 种身份；
+ * 组装一个房间：画家固定为 drawerId，成员覆盖房主 / 画家 / 已离局三类身份；
  * 每个格子重建 fixture，避免跨用例串状态。
  */
 function makeRoom(
@@ -227,16 +222,13 @@ function makeRoom(
   const rawMembers: MemberState[] = [
     makeMember(HOST_ID, 0),
     makeMember(drawerId, 1),
-    makeMember(SPECTATOR_ID, 2, { spectating: true }),
-    makeMember(NEXT_GAME_ID, 3, { waitingForNextGame: true }),
     // 已离局成员：无 player 身份也能渲染（leftProfile 兜底路径）
     {
-      ...makeMember(LEFT_GAME_ID, 4, { leftGame: true }),
+      ...makeMember(LEFT_GAME_ID, 2, { leftGame: true }),
       leftProfile: { nickname: '已离局', avatarId: '02' },
     },
   ]
-  // drawerId 恰为固定角色成员时会产生重复 playerId：后写覆盖，保留带角色标记的席位
-  //（如「观战者兼任画家」防御格要求 spectating 席位不被普通席位遮蔽）。
+  // drawerId 恰为房主时会产生重复 playerId：后写覆盖，保留带画家角色的席位（drawer-host 格）。
   const deduped = new Map<string, MemberState>()
   for (const member of rawMembers) deduped.set(member.playerId, member)
   const members = [...deduped.values()]
@@ -293,10 +285,6 @@ function viewerIdFor(role: ViewerRole, drawerId: string): string {
       return drawerId
     case 'guesser':
       return HOST_ID
-    case 'spectator':
-      return SPECTATOR_ID
-    case 'next-game':
-      return NEXT_GAME_ID
     case 'left-game':
       return LEFT_GAME_ID
   }
@@ -340,7 +328,7 @@ describe('角色裁剪快照穷举矩阵', () => {
         const gameView = snapshot.game
         expect(gameView).toBeDefined()
         // 画家本人（房主与否无关）在任何阶段都收 answer 真值；
-        // 观战身份即使 ID 与 drawerId 相同也不算画家。
+        // 已离局身份即使 ID 碰巧等于 drawerId 也不算画家（isActivePlayer 排除离局者）。
         const isViewerDrawer =
           (role === 'drawer' || role === 'drawer-host') && viewerId === roomDrawerId
         // 答案明文只发给画家本人（所有对局阶段一致）；猜词者只有逐字遮罩
@@ -386,13 +374,13 @@ describe('角色裁剪快照穷举矩阵', () => {
       expect((view?.phaseEndsAt ?? 0) - (view?.phaseStartedAt ?? 0)).toBe(expectedNominalMs)
     })
 
-    it('私密房码只进当前房主的快照，普通成员与观战拿不到', () => {
+    it('私密房码只进当前房主的快照，普通成员拿不到', () => {
       const { room, players } = makeRoom('drawing', DRAWER_ID, { visibility: 'private' })
       const builder = new SnapshotBuilder(makePort(players, room))
 
       expect(builder.snapshot(room, HOST_ID).privateJoinCode).toBe(PRIVATE_CODE)
       expect(builder.snapshot(room, DRAWER_ID).privateJoinCode).toBeUndefined()
-      expect(builder.snapshot(room, SPECTATOR_ID).privateJoinCode).toBeUndefined()
+      expect(builder.snapshot(room, LEFT_GAME_ID).privateJoinCode).toBeUndefined()
     })
 
     it('逐字遮罩只经 answerMask 下发，已揭示字符下标簿记不出现在序列化结果中', () => {
@@ -440,14 +428,17 @@ describe('角色裁剪快照穷举矩阵', () => {
       const syncedMember = roomWithStrokes.members.find((m) => m.playerId === HOST_ID)!
       syncedMember.lastSyncedSeq = roomWithStrokes.game!.lastSequence
       // 离线防御格：追平但身份不在线——仍必须收全量（省略的前提是「确实在同步」）。
-      const offlineMember = roomWithStrokes.members.find((m) => m.playerId === NEXT_GAME_ID)!
+      const offlineId = '00000000-0000-4000-8000-0000000000e5'
+      const offlineMember = makeMember(offlineId, 3)
       offlineMember.lastSyncedSeq = roomWithStrokes.game!.lastSequence
-      players.get(NEXT_GAME_ID)!.connected = false
+      roomWithStrokes.members.push(offlineMember)
+      players.set(offlineId, makePlayer(offlineId, '离线成员'))
+      players.get(offlineId)!.connected = false
 
       const builder = new SnapshotBuilder(makePort(players, roomWithStrokes))
       const synced = builder.snapshot(roomWithStrokes, HOST_ID)
       const behind = builder.snapshot(roomWithStrokes, DRAWER_ID)
-      const offline = builder.snapshot(roomWithStrokes, NEXT_GAME_ID)
+      const offline = builder.snapshot(roomWithStrokes, offlineId)
 
       expect(synced.game?.strokes).toEqual([])
       expect(synced.game?.strokesOmitted).toBe(true)
@@ -455,16 +446,6 @@ describe('角色裁剪快照穷举矩阵', () => {
       expect(behind.game?.strokesOmitted).toBeUndefined()
       expect(offline.game?.strokes).toEqual(strokes)
       expect(offline.game?.strokesOmitted).toBeUndefined()
-    })
-
-    it('观战身份即使 ID 恰好等于 drawerId 也拿不到画家视图', () => {
-      const { players } = makeRoom('drawing', SPECTATOR_ID)
-      const { room } = makeRoom('drawing', SPECTATOR_ID)
-      // 画家即观战成员本人：异常时序防御路径
-      const builder = new SnapshotBuilder(makePort(players, room))
-      const snapshot = builder.snapshot(room, SPECTATOR_ID)
-      expect(snapshot.game?.answer).toBeUndefined()
-      expect(snapshot.game?.wordOptions).toBeUndefined()
     })
 
     it('非成员观看者被拒绝且不泄漏房间字段', () => {

@@ -35,7 +35,7 @@ import { APP_CONFIG } from './config/index.ts'
 import { serverStrings } from '@draw-guess/strings'
 import { RoomPublisher } from './application/room-publisher.ts'
 import { DomainContext } from './domain/domain-context.ts'
-import { DrawingService } from './domain/drawing/drawing-service.ts'
+import { DrawingService, createRoomBroadcastPublisher } from './domain/drawing/drawing-service.ts'
 import { InviteService } from './domain/invite/invite-service.ts'
 import { RoomVocabularyService } from './domain/vocabulary/room-vocabulary-service.ts'
 import { buildCustomWord } from './domain/vocabulary/custom-word.ts'
@@ -45,7 +45,6 @@ import {
   createOnlineLookup,
   isOnlinePlayer,
   isPhaseExpired,
-  occupiesSeat,
 } from './domain/room/member-facts.ts'
 import { isInMatchPhase } from './domain/room/phase-facts.ts'
 import {
@@ -286,14 +285,8 @@ export class GameService {
       ...runtimePorts,
       ...roomEventPorts,
       getSession: (playerId, roundId) => this.getDrawingSession(playerId, roundId),
-      publishStroke: (payload) =>
-        this.io
-          .to(payload.roomId)
-          .emit(EVENTS.drawStrokeBatch, createServerPush(EVENTS.drawStrokeBatch, payload)),
-      publishFill: (payload) =>
-        this.io
-          .to(payload.roomId)
-          .emit(EVENTS.drawFillCommit, createServerPush(EVENTS.drawFillCommit, payload)),
+      // 经典模式的发布策略：全房广播（接龙的装配件注入「不广播」实现，见工单 04）。
+      publisher: createRoomBroadcastPublisher(roomEventPorts),
     })
     this.invitation = new InviteService({
       ...runtimePorts,
@@ -434,13 +427,11 @@ export class GameService {
     return this.membership.leaveGame(playerId)
   }
 
-  /** 切换准备状态（仅等待阶段），并递增版本号通知全员；观战者不能准备。 */
+  /** 切换准备状态（仅等待阶段），并递增版本号通知全员。 */
   setReady(playerId: string, ready: boolean): RoomSnapshot {
     const { room, member } = this.membership.requireMembership(playerId)
     if (room.phase !== 'waiting')
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_READY)
-    if (member.spectating)
-      throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_SPECTATOR_READY)
     // 房主由服务端视为隐式准备；同值重复请求幂等返回，不污染状态版本。
     if (room.hostId === playerId || member.ready === ready)
       return this.snapshotter.snapshot(room, playerId)
@@ -462,17 +453,12 @@ export class GameService {
     if (room.stateVersion !== expectedVersion)
       throw new GameError('VERSION_CONFLICT', serverStrings.errors.VERSION_CONFLICT_SETTINGS)
     const next = { ...room.settings, ...patch }
-    // 规则范围由 RoomSettingsSchema（含 partial 更新）在绑定层裁决；
-    // 这里只保留 schema 给不了的房间态领域判定：最大人数不能小于当前占席成员数（含离局占位与观战），否则会出现超员
-    const seatedMembers = room.members.filter(occupiesSeat)
-    if (next.maxPlayers < seatedMembers.length)
-      throw new GameError('INVALID_SETTINGS', serverStrings.errors.INVALID_SETTINGS_MAX_PLAYERS)
+    // 规则范围由 RoomSettingsSchema（含 partial 更新）在绑定层裁决；容量固定为协议常量，
+    // 因此不存在「人数上限低于占席数」这类房间态领域判定。
     room.settings = next
-    // 本方法不改动成员数组（席位在创建/离房/回等待时已保持紧凑），无需重排；
-    // 人数上限的缩容下限已由上方超员校验拒绝。
     this.round.invalidateReady(room, serverStrings.notices.rulesUpdated)
     this.emitRoom(room.id)
-    // maxPlayers 会显示在大厅房间行中，规则变更后需同步广播大厅快照，避免列表展示陈旧人数。
+    // roundsPerPlayer / drawSeconds 会显示在大厅房间行中，规则变更后需同步广播大厅快照。
     this.broadcastPresence()
     return this.snapshotter.snapshot(room, playerId)
   }
@@ -614,13 +600,11 @@ export class GameService {
   submitGuess(playerId: string, roundId: string, rawText: string): { correct: boolean } {
     const { room, member } = this.membership.requireMembership(playerId)
     const game = this.requireGame(room)
-    // 仅作画阶段可猜词，且必须在当前回合，且答案已确定；观战者不能猜词
+    // 仅作画阶段可猜词，且必须在当前回合，且答案已确定
     if (room.phase !== 'drawing' || game.roundId !== roundId || !game.answer)
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_GUESS)
     if (isPhaseExpired(game, this.clock.now()))
       throw new GameError('PHASE_EXPIRED', serverStrings.errors.PHASE_EXPIRED)
-    if (member.spectating)
-      throw new GameError('SPECTATOR_CANNOT_GUESS', serverStrings.errors.SPECTATOR_CANNOT_GUESS)
 
     const text = rawText.trim()
     enforceEventRate(this.requirePlayer(playerId), 'guess', this.clock) // 猜词与发言限频
@@ -671,13 +655,11 @@ export class GameService {
   }
 
   sendPreset(playerId: string, roundId: string, preset: string): void {
-    const { room, member } = this.membership.requireMembership(playerId)
+    const { room } = this.membership.requireMembership(playerId)
     const game = this.requireGame(room)
-    // 预设短语只能在作画阶段发送，且必须是配置白名单内的内容；观战者不能发送
+    // 预设短语只能在作画阶段发送，且必须是配置白名单内的内容
     if (room.phase !== 'drawing' || game.roundId !== roundId)
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_PRESET)
-    if (member.spectating)
-      throw new GameError('SPECTATOR_CANNOT_CHAT', serverStrings.errors.SPECTATOR_CANNOT_CHAT)
     const allowedPresets: readonly string[] = [
       ...APP_CONFIG.presets.safeChat,
       ...APP_CONFIG.presets.chatReactions,

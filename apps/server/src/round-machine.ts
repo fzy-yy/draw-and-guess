@@ -19,14 +19,14 @@ import type { TimerHandle } from './runtime.ts'
 import type { RoundContext } from './domain/game/round-context.ts'
 import { selectDiverseCandidates } from './domain/vocabulary/candidate-selector.ts'
 import {
+  activePlayers,
   createEmptyMemberStats,
   createOnlineLookup,
+  isActivePlayer,
   isOnlinePlayer,
-  isRematchEligible,
   nicknameOf,
   nominalPhaseDurationMs,
   onlineGuessers,
-  rematchEligibleMembers,
   type OnlineLookup,
 } from './domain/room/member-facts.ts'
 import { isPausablePhase, isRoundSettlePhase } from './domain/room/phase-facts.ts'
@@ -413,14 +413,9 @@ export class RoundMachine {
     delete room.game
     room.members = room.members.filter((member) => !member.leftGame)
     reseatMembers(room)
-    // next_game 候场成员只在真正进入下一局 waiting 时晋升；纯观战成员保持观战。
+    // 回到等待时清除全员“再来一局”意愿；对局分数在下一局开局时统一重置。
     room.members.forEach((member) => {
       member.rematchReady = false
-      if (!member.waitingForNextGame) return
-      member.waitingForNextGame = false
-      member.spectating = false
-      member.ready = false
-      resetMemberScoreState(member)
     })
     if (resetReady) this.invalidateReady(room, notice, 'preserve')
     else this.addSystemNotice(room, notice)
@@ -430,7 +425,7 @@ export class RoundMachine {
   /** 记录单个成员的再来一局意愿；重复和阶段迟到请求均按成功处理。 */
   public requestRematch(room: RoomSecret, member: MemberState): void {
     if (room.phase !== 'game_result' || !room.game) return
-    if (!isRematchEligible(member)) return
+    if (!isActivePlayer(member)) return
     if (!member.rematchReady) {
       member.rematchReady = true
       room.stateVersion += 1
@@ -439,7 +434,7 @@ export class RoundMachine {
     this.evaluateRematch(room)
   }
 
-  /** 最短展示期后，房主请求或全部下一局有效成员就绪时一次性回到 waiting。 */
+  /** 最短展示期后，房主请求或全部可玩成员就绪时一次性回到 waiting。 */
   public evaluateRematch(room: RoomSecret): void {
     const game = room.game
     if (room.phase !== 'game_result' || !game || game.gameResultMinEndsAt === undefined) return
@@ -447,7 +442,7 @@ export class RoundMachine {
       this.service.emitRoom(room.id)
       return
     }
-    const eligible = rematchEligibleMembers(room)
+    const eligible = activePlayers(room)
     if (
       game.hostReturnRequested ||
       (eligible.length > 0 && eligible.every((member) => member.rematchReady))
@@ -569,7 +564,7 @@ export class RoundMachine {
       : undefined
   }
 
-  /** 从当前回合序号起，按开局洗牌顺序寻找第一位仍在房间、在线的可玩成员任画家（观战者跳过）。 */
+  /** 从当前回合序号起，按开局洗牌顺序寻找第一位仍在房间、在线的可玩成员任画家（离局者跳过）。 */
   private findNextDrawer(room: RoomSecret, game: GameSecret): string | undefined {
     const start = game.currentRound - 1
     for (let offset = 0; offset < game.drawerOrder.length; offset += 1) {
@@ -634,7 +629,7 @@ export class RoundMachine {
 }
 
 /**
- * 重置单个成员的局内得分状态（新局全员重置与候场晋升共用同一字段口径）。
+ * 重置单个成员的局内得分状态（新局开始时由 beginGame 全员重置）。
  * 统计结构走 createEmptyMemberStats，新增统计字段时只改一处。
  */
 function resetMemberScoreState(member: MemberState): void {

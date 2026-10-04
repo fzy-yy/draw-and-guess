@@ -1,5 +1,5 @@
 import { type Page, expect } from '@playwright/test'
-import { joinPolicyLabels, selectDropdownOption } from './dropdown'
+import { selectDropdownOption } from './dropdown'
 
 export class RoomPage {
   constructor(readonly page: Page) {}
@@ -27,27 +27,11 @@ export class RoomPage {
     await expect(this.page.getByRole('dialog')).toBeVisible({ timeout: 10_000 })
   }
 
-  async updateMaxPlayers(maxPlayers: number) {
-    await this.openRules()
-    const dialog = this.page.getByRole('dialog')
-    await selectDropdownOption(dialog, '最大玩家数', `${maxPlayers} 人`)
-    await dialog.getByRole('button', { name: /保存规则/ }).click()
-    await expect(dialog).toBeHidden({ timeout: 10_000 })
-  }
-
   async updateChooseSeconds(seconds: number) {
     await this.openRules()
     const dialog = this.page.getByRole('dialog')
     // 选词时间已合并成单个下拉（默认「不限时」）：选具体秒数即同时开启限时（见 ADR-0045、ADR-0051）
     await selectDropdownOption(dialog, '选词时间', `${seconds} 秒`)
-    await dialog.getByRole('button', { name: /保存规则/ }).click()
-    await expect(dialog).toBeHidden({ timeout: 10_000 })
-  }
-
-  async updateJoinPolicy(policy: 'forbid' | 'spectate' | 'next_game') {
-    await this.openRules()
-    const dialog = this.page.getByRole('dialog')
-    await selectDropdownOption(dialog, '中途加入', joinPolicyLabels[policy])
     await dialog.getByRole('button', { name: /保存规则/ }).click()
     await expect(dialog).toBeHidden({ timeout: 10_000 })
   }

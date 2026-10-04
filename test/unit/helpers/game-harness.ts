@@ -127,7 +127,7 @@ export function createGameHarness(
 export function testRoomSettings(patch: Partial<RoomSettings> = {}): RoomSettings {
   // 默认规则唯一来源就是公开配置的 defaultRoomSettings；测试不再经服务端中转工厂。
   return {
-    ...defaultRoomSettings(APP_CONFIG.player.defaultMaxPlayers),
+    ...defaultRoomSettings(),
     roundsPerPlayer: 1,
     ...patch,
   }

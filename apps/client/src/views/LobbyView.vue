@@ -11,6 +11,7 @@ import {
   Wifi,
 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
+import { PLAYER_PROTOCOL_LIMITS } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
 import {
   AppButton,
@@ -153,30 +154,25 @@ function openSettings(): void {
             }}</span>
           </div>
           <span class="text-muted text-fs-12">{{
-            strings.ui.status[
-              publicRoom.phase === 'waiting'
-                ? 'roomWaiting'
-                : publicRoom.joinPolicy === 'spectate'
-                  ? 'roomSpectatable'
-                  : publicRoom.joinPolicy === 'next_game'
-                    ? 'roomJoinNextGame'
-                    : 'roomInProgress'
-            ]
+            strings.ui.status[publicRoom.phase === 'waiting' ? 'roomWaiting' : 'roomInProgress']
           }}</span>
-          <!-- 6 席位入座可视化微型点阵：直观呈现已占席位与空余席位 -->
+          <!-- 固定 6 席位入座可视化微型点阵：直观呈现已占席位与空余席位 -->
           <div
             class="flex items-center gap-[0.45em]"
             :aria-label="
-              strings.a11y.lobby.seatOccupancyAria(publicRoom.playerCount, publicRoom.maxPlayers)
+              strings.a11y.lobby.seatOccupancyAria(
+                publicRoom.playerCount,
+                PLAYER_PROTOCOL_LIMITS.maxPlayers,
+              )
             "
           >
             <span class="flex items-center gap-[0.3em] font-bold text-navy">
               <Users class="h-[1.8cqh] w-[1.8cqh]" />
-              {{ publicRoom.playerCount }}/{{ publicRoom.maxPlayers }}
+              {{ publicRoom.playerCount }}/{{ PLAYER_PROTOCOL_LIMITS.maxPlayers }}
             </span>
             <div class="flex items-center gap-[0.3cqw]" aria-hidden="true">
               <span
-                v-for="seatIdx in Math.max(publicRoom.maxPlayers, 6)"
+                v-for="seatIdx in PLAYER_PROTOCOL_LIMITS.maxPlayers"
                 :key="seatIdx"
                 class="h-[1cqh] w-[1cqh] rounded-full transition-colors"
                 :class="
@@ -190,17 +186,15 @@ function openSettings(): void {
           <AppButton
             type="button"
             :disabled="
-              publicRoom.playerCount >= publicRoom.maxPlayers ||
-              (publicRoom.phase !== 'waiting' && publicRoom.joinPolicy === 'forbid')
+              publicRoom.playerCount >= PLAYER_PROTOCOL_LIMITS.maxPlayers ||
+              publicRoom.phase !== 'waiting'
             "
             @click="store.joinRoom(publicRoom.id)"
           >
             {{
-              publicRoom.phase !== 'waiting' && publicRoom.joinPolicy === 'spectate'
-                ? strings.ui.lobby.spectateButton
-                : publicRoom.phase !== 'waiting' && publicRoom.joinPolicy === 'next_game'
-                  ? strings.ui.lobby.waitNextGameButton
-                  : strings.ui.lobby.joinButton
+              publicRoom.phase === 'waiting'
+                ? strings.ui.lobby.joinButton
+                : strings.ui.lobby.joinInProgress
             }}
           </AppButton>
         </article>

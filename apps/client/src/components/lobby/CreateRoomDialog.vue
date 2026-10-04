@@ -1,19 +1,18 @@
 <!--
   大厅建房弹窗（CreateRoomDialog）：
-  支持公开/私密房间单选、房间名称与最大玩家数设定；其余规则进房间后在规则弹窗细调。
+  支持公开/私密房间单选与房间名称设定；其余规则进房间后在规则弹窗细调。
+  容量固定为协议常量（S61）、开局后不可加入，建房时不再有「最大人数」字段。
   旧「玩法预设」下拉已移除，初始设置取 @draw-guess/config 的唯一默认规则组。
 -->
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { reactive } from 'vue'
 import { strings } from '@draw-guess/strings'
 import type { RoomSettings, RoomVisibility } from '@draw-guess/shared'
 import { defaultRoomSettings } from '@draw-guess/config'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
-import RuleSelectField, { type RuleSelectOption } from '@/components/common/RuleSelectField.vue'
 import { useGameStore } from '@/stores/game'
-import { playerCountOptions } from '@/utils/room-facts'
 
 const open = defineModel<boolean>('open', { default: false })
 const store = useGameStore()
@@ -23,16 +22,7 @@ const createForm = reactive<{ name: string; visibility: RoomVisibility }>({
   visibility: 'public',
 })
 
-const roomSettings = reactive<RoomSettings>(
-  defaultRoomSettings(store.config.player.defaultMaxPlayers),
-)
-
-const playerOptions = computed<readonly RuleSelectOption<number>[]>(() =>
-  playerCountOptions({
-    min: store.config.player.minPlayers,
-    max: store.config.player.maxPlayers,
-  }),
-)
+const roomSettings = reactive<RoomSettings>(defaultRoomSettings())
 
 async function submitCreate(): Promise<void> {
   const ok = await store.createRoom({
@@ -102,12 +92,6 @@ async function submitCreate(): Promise<void> {
           input-class="font-bold"
         />
       </label>
-
-      <RuleSelectField
-        v-model="roomSettings.maxPlayers"
-        :label="strings.ui.lobby.maxPlayersField"
-        :options="playerOptions"
-      />
 
       <p class="col-span-full m-0 text-muted text-fs-12 leading-[1.6]">
         {{

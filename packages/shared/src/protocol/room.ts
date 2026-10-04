@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { JoinPolicySchema, RequestSchema } from './base.ts'
+import { RequestSchema } from './base.ts'
 import {
   DRAW_SECONDS_OPTIONS,
   PLAYER_PROTOCOL_LIMITS,
@@ -22,11 +22,6 @@ export const DrawSecondsSchema = z.union([
 
 export const RoomSettingsSchema = z
   .object({
-    maxPlayers: z
-      .number()
-      .int()
-      .min(PLAYER_PROTOCOL_LIMITS.minPlayers)
-      .max(PLAYER_PROTOCOL_LIMITS.maxPlayers),
     roundsPerPlayer: z
       .number()
       .int()
@@ -62,7 +57,6 @@ export const RoomSettingsSchema = z
     allowCanvasReactions: z.boolean().default(true),
     /** 回合结束时是否在画布上快速重播画家作画全过程（默认开启）。 */
     allowRoundReplay: z.boolean().default(true),
-    joinPolicy: JoinPolicySchema,
   })
   .strict()
 export const PrivateRoomCodeSchema = z

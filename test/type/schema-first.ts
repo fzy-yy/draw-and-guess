@@ -72,7 +72,6 @@ if (presence.ok) expectTypeOf(presence.data).toEqualTypeOf<PresenceSnapshot>()
 const room = decodeServerPush(EVENTS.roomSnapshot, raw)
 if (room.ok) {
   expectTypeOf(room.data).toEqualTypeOf<RoomSnapshot>()
-  expectTypeOf<RoomSnapshot['members'][number]['waitingForNextGame']>().toEqualTypeOf<boolean>()
   expectTypeOf<RoomSnapshot['members'][number]['rematchReady']>().toEqualTypeOf<boolean>()
   // @ts-expect-error room:snapshot 不可能解码成邀请 payload
   const invite: Invite = room.data

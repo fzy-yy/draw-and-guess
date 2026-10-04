@@ -302,7 +302,6 @@ async function submitCustomWord(text: string): Promise<void> {
       <div class="flex gap-[0.8em] mt-[1.5cqh]">
         <!-- 普通成员只登记个人再来一局意愿；房主请求在服务端最短展示期结束后全局生效。 -->
         <AppButton
-          v-if="!store.me?.spectating || store.me?.waitingForNextGame"
           variant="primary"
           :disabled="store.me?.rematchReady"
           @click="emit('return-waiting')"

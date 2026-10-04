@@ -8,6 +8,7 @@
   - 下拉字段排在前、复选框字段排在后，同类同行；区间字段（作画次数/选词时间/候选词）一律用下拉而非
     滑块——档位只有 4~6 档，下拉能一次列出全部取值，比滑块更精确也更省纵向空间；
   - 卡片固定高度（h-[82cqh]）+ 表单区滚动：弹窗尺寸恒定，不做「展开撑大」；
+  - 容量（人数上限）与中途加入策略已随观战/候场删除，不再是房间规则字段；
   - 旧「玩法预设」与「计分方式」下拉已移除：预设取消（唯一默认组见 config roomSettingsDefaults），
     计分固定为固定 100 分制（见 docs/adr/0047-fixed-100-point-scoring.md）。
 -->
@@ -22,7 +23,6 @@ import SectionHeader from '@/components/common/SectionHeader.vue'
 import RuleSelectField, { type RuleSelectOption } from '@/components/common/RuleSelectField.vue'
 import RuleToggleField from '@/components/common/RuleToggleField.vue'
 import { useGameStore } from '@/stores/game'
-import { occupiesSeatMember, playerCountOptions } from '@/utils/room-facts'
 
 /** 「选词时间」合并下拉的值域：不限时，或具体秒数（见下方 chooseTime 代理）。 */
 type ChooseTimeValue = 'unlimited' | number
@@ -56,31 +56,14 @@ function rangeValues(range: { min: number; max: number; step: number }): number[
 
 /**
  * 下拉选项：数值范围/枚举值一律来自公开配置与 strings。
- * 最大玩家数的下限不得低于当前占席数（与服务端 updateSettings 的校验同口径，见 ADR-0023）：
- * 非法值不出现在下拉里，因此这个字段不需要额外的容量提示文案。
+ * 容量固定为协议常量，已不再出现在规则里。
  */
-const maxPlayerOptions = computed(() =>
-  playerCountOptions({
-    min: Math.max(
-      store.config.player.minPlayers,
-      (store.room?.members ?? []).filter(occupiesSeatMember).length,
-    ),
-    max: store.config.player.maxPlayers,
-  }),
-)
 const roundsOptions: Array<RuleSelectOption<number>> = rangeValues(
   store.config.game.roundsPerPlayer,
 ).map((rounds) => ({ value: rounds, label: strings.ui.common.roundsUnit(rounds) }))
 const optionCountOptions: Array<RuleSelectOption<number>> = rangeValues(
   store.config.game.optionCount,
 ).map((count) => ({ value: count, label: strings.ui.room.optionCountUnit(count) }))
-// 显式标注选项值类型为协议联合：不加标注时 value 会被拓宽为 string，
-// RuleSelectField 的 v-model 与 options 泛型配对即失效（strictTemplates 试点抓出的真实缺陷）。
-const joinPolicyOptions: RuleSelectOption<RoomSettings['joinPolicy']>[] = [
-  { value: 'forbid', label: strings.ui.room.joinPolicyForbid },
-  { value: 'spectate', label: strings.ui.room.joinPolicySpectate },
-  { value: 'next_game', label: strings.ui.room.joinPolicyNextGame },
-]
 /**
  * 单回合时长档位：合法值来自公开配置（唯一来源是协议常量），
  * 展示文案由 strings 统一格式化；不使用原生 <select>。
@@ -101,7 +84,7 @@ const chooseTimeOptions: Array<RuleSelectOption<ChooseTimeValue>> = [
 
 // 本地编辑副本：所有字段均为原始值，浅拷贝即可；每次打开（draft 变化）时重新同步。
 // 初值用配置工厂生成完整合法对象，避免用类型断言绕过 RoomSettings 的字段约束。
-const localDraft = ref<RoomSettings>(defaultRoomSettings(store.config.player.maxPlayers))
+const localDraft = ref<RoomSettings>(defaultRoomSettings())
 watch(
   () => props.draft,
   (draft) => {
@@ -147,19 +130,12 @@ const chooseTime = computed<ChooseTimeValue>({
 
     <!-- 表单区在弹窗内自行滚动：卡片高度固定，内容超出才由滚动条容纳。
          行高用 minmax 下限而非写死 h：下拉字段的自然高约 8.4cqh（1280×720）～8.6cqh（1024×576，
-         字号像素下限在低高度舞台下占比更大），下限取 8.7cqh 既高于该自然高（6 行严格等高），
-         又让「6 行 + 行距 + 上下内边距」正好收在卡片可用高度内（不出现无谓滚动条）；
+         字号像素下限在低高度舞台下占比更大），下限取 8.7cqh 既高于该自然高，
+         又让「7 行（4 个下拉 + 9 个开关，两列）+ 行距 + 上下内边距」收在卡片可用高度内（不出现无谓滚动条）；
          极小舞台下字号下限把内容撑高时，该行自行变高而不裁切。 -->
     <div
       class="grid min-h-0 flex-1 auto-rows-[minmax(8.7cqh,auto)] grid-cols-2 content-start gap-x-[1.8em] gap-y-[1.5cqh] overflow-y-auto py-[1.6cqh] px-[2em] overscroll-contain"
     >
-      <RuleSelectField
-        v-model="localDraft.maxPlayers"
-        :label="strings.ui.room.maxPlayersField"
-        :options="maxPlayerOptions"
-        :disabled="readOnly"
-      />
-
       <RuleSelectField
         v-model="localDraft.roundsPerPlayer"
         :label="strings.ui.common.roundsField"
@@ -185,13 +161,6 @@ const chooseTime = computed<ChooseTimeValue>({
         v-model="localDraft.optionCount"
         :label="strings.ui.room.optionCountField"
         :options="optionCountOptions"
-        :disabled="readOnly"
-      />
-
-      <RuleSelectField
-        v-model="localDraft.joinPolicy"
-        :label="strings.ui.room.joinPolicyField"
-        :options="joinPolicyOptions"
         :disabled="readOnly"
       />
 

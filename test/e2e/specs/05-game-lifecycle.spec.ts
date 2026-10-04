@@ -64,40 +64,23 @@ test.describe('05 - 对局控制、暂停与完整生命周期 (Game Lifecycle &
     }
   })
 
-  test('next_game 玩家中途候场，结算后转为普通未准备成员', async ({ browser }) => {
-    const host = await createPlayer(browser, '候场局房主')
-    const guest = await createPlayer(browser, '当前局玩家')
-    const candidate = await createPlayer(browser, '下一局玩家')
+  test('开局后大厅加入入口置灰并显示游戏中', async ({ browser }) => {
+    const host = await createPlayer(browser, '置灰房主')
+    const guest = await createPlayer(browser, '置灰客人')
+    const latecomer = await createPlayer(browser, '迟到玩家')
 
     try {
-      const roomName = `下一局候场-${Date.now()}`
-      const { drawer } = await startTwoPlayerGame(host, guest, roomName, { maxPlayers: 3 })
-
+      const roomName = `置灰入口-${Date.now()}`
+      // 房主与客人开局后房间离开 waiting 阶段，进入对局
+      const { drawer } = await startTwoPlayerGame(host, guest, roomName)
       await drawer.game.chooseWord(0)
 
-      await candidate.lobby.joinNextGame(roomName)
-      const inGameCandidate = candidate.page
-        .getByLabel('玩家', { exact: true })
-        .locator('article:has-text("下一局玩家")')
-      await expect(inGameCandidate.getByText('0 分', { exact: true })).toBeVisible()
-
-      await host.game.pauseGame()
-      await host.page.getByRole('button', { name: /提前结束/ }).click()
-      const dialog = host.page.getByRole('dialog')
-      await dialog.getByRole('button', { name: /确认结束/ }).click()
-      await expect(candidate.page.getByText('最终排行')).toBeVisible({ timeout: 10_000 })
-      await expect(candidate.page.getByText('下一局玩家', { exact: true })).toBeVisible()
-
-      await host.game.returnToWaiting()
-      await expect(candidate.page.getByText('玩家席位')).toBeVisible({ timeout: 10_000 })
-      const candidateSeat = candidate.page.locator('article:has-text("下一局玩家")')
-      await expect(candidateSeat.getByText('未准备', { exact: true })).toBeVisible()
-      await candidate.room.toggleReady()
-      await expect(candidateSeat.getByText('已准备', { exact: true })).toBeVisible()
+      // 第三名玩家在大厅看到该房间行：加入入口置灰且文案为「游戏中」
+      await latecomer.lobby.expectRoomJoinDisabled(roomName)
     } finally {
       await host.close()
       await guest.close()
-      await candidate.close()
+      await latecomer.close()
     }
   })
 

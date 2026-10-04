@@ -102,7 +102,7 @@ function renderVocabularyDialog(): ReturnType<typeof render> {
 describe('RulesDialog 完整规则字段', () => {
   it('全部字段都有可访问名称，并把用户编辑后的完整草稿提交给父组件', async () => {
     const user = userEvent.setup()
-    const draft = defaultRoomSettings(6)
+    const draft = defaultRoomSettings()
     const onSave = vi.fn()
     render(RulesDialog, {
       props: { open: true, draft, onSave },
@@ -110,11 +110,9 @@ describe('RulesDialog 完整规则字段', () => {
     })
 
     const expectedLabels = [
-      strings.ui.room.maxPlayersField,
       strings.ui.common.roundsField,
       strings.ui.room.chooseTimeField,
       strings.ui.room.optionCountField,
-      strings.ui.room.joinPolicyField,
       strings.ui.room.toggleAllowCustomWord,
       strings.ui.room.togglePlayerInvite,
       strings.ui.room.toggleAllowWordReroll,
@@ -127,17 +125,14 @@ describe('RulesDialog 完整规则字段', () => {
       expect(screen.getByLabelText(new RegExp(label))).toBeTruthy()
 
     // 手写下拉（SelectDropdown）：点 combobox 展开 → 点 option 选中
-    await user.click(screen.getByLabelText(/最大玩家数/))
-    await user.click(await screen.findByRole('option', { name: '4 人' }))
-    await user.click(screen.getByLabelText(/中途加入/))
-    await user.click(await screen.findByRole('option', { name: '禁止' }))
+    await user.click(screen.getByLabelText(strings.ui.common.roundsField))
+    await user.click(await screen.findByRole('option', { name: strings.ui.common.roundsUnit(3) }))
     await user.click(screen.getByLabelText(strings.ui.room.togglePause))
     await user.click(screen.getByRole('button', { name: strings.ui.room.saveRules }))
 
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
-        maxPlayers: 4,
-        joinPolicy: 'forbid',
+        roundsPerPlayer: 3,
         allowPause: !draft.allowPause,
       }),
     )

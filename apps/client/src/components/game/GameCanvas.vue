@@ -355,7 +355,7 @@ const drawerMenuItems = computed<ContextMenuItem[]>(() => {
   ]
 })
 
-/** 猜词者 / 观战者专属右键菜单项 */
+/** 猜词者专属右键菜单项 */
 const guesserMenuItems = computed<ContextMenuItem[]>(() => {
   const items: ContextMenuItem[] = [
     {

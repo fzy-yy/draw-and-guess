@@ -14,7 +14,6 @@ export const room = {
   allowNearMissHint: roomSettingsDefaults.allowNearMissHint,
   allowCanvasReactions: roomSettingsDefaults.allowCanvasReactions,
   allowRoundReplay: roomSettingsDefaults.allowRoundReplay,
-  joinPolicy: roomSettingsDefaults.joinPolicy,
   privateCodeAlphabet: PRIVATE_ROOM_CODE.alphabet,
   privateCodeLength: PRIVATE_ROOM_CODE.length,
 } as const

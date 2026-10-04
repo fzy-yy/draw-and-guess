@@ -132,7 +132,7 @@ watch(
 
 // 按「自动聚焦猜词框」开关在进入可猜词状态时聚焦输入框（替代静态 autofocus）。
 // 可猜词判定唯一口径是父组件传入的 props.canGuess（useGameHud 计算，含连接态），
-// 组件内不再内联第二份 phase/drawer/guessed/spectating 组合（ADR-0028 客户端事实口径）。
+// 组件内不再内联第二份 phase/drawer/guessed 组合（ADR-0028 客户端事实口径）。
 // AppInput 经 defineExpose 暴露 focus()，输入元素本身仍是原语内部实现细节。
 const guessInput = ref<{ focus: () => void }>()
 watch(
@@ -160,7 +160,7 @@ defineExpose({ focusInput })
         }}</span>
         <h2 class="text-fs-18">{{ strings.ui.game.chatTitle }}</h2>
       </div>
-      <!-- 当前角色标签：观战中 / 已猜中 / 作画中 / 猜词中（与得分条共用同一映射） -->
+      <!-- 当前角色标签：已猜中 / 作画中 / 猜词中（与得分条共用同一映射） -->
       <span class="bg-sky px-[0.6em] py-[0.35cqh] text-blue rounded-[99em] text-fs-10 font-bold">{{
         roleTextFor(store.me)
       }}</span>

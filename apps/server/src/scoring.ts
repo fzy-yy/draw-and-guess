@@ -5,7 +5,6 @@
 import { APP_CONFIG } from './config/index.ts'
 import { guessScoreForOrder, type FinalRankingEntry, type ScoreDetail } from '@draw-guess/shared'
 import type { GameSecret, PlayerSecret, RoomSecret } from './models.ts'
-import { rankedMembers } from './domain/room/member-facts.ts'
 
 /**
  * 为单个猜中者构造得分明细：得分只由本回合猜中顺序决定。
@@ -41,7 +40,7 @@ export function buildDrawerScore(input: { game: GameSecret; drawerAbandoned: boo
  *
  * 排名必须在首次进入最终结算时一次性冻结：之后 leaveRoom 会从 room.members 移除成员，
  * 但已公布的成绩属于本局历史，不能跟随当前房间席位继续变化。
- * 成员口径走 member-facts 的 rankedMembers（排除观战、保留离局者）；
+ * 榜单口径为 room.members 全员：主动退出本局者以冻结成绩卡保留在榜（离局占位由 leftProfile 供资料），
  * 资料取 leftProfile 优先、玩家身份兜底，两者皆无（身份被删除且未冻结）的成员不产出条目。
  * 名次按实际产出的条目数递增，而不是用被丢弃成员后的 index+1，避免「成员无资料被丢弃」时
  * 后续名次跳号（见 docs/adr/0002-final-ranking-no-gaps.md）；同分并列同名次。
@@ -50,7 +49,7 @@ export function freezeFinalRanking(
   room: Pick<RoomSecret, 'members'>,
   players: ReadonlyMap<string, Pick<PlayerSecret, 'profile'>>,
 ): FinalRankingEntry[] {
-  const ranked = rankedMembers(room).sort(
+  const ranked = [...room.members].sort(
     (left, right) => right.score - left.score || left.joinedAt - right.joinedAt,
   )
   let previousScore: number | undefined
