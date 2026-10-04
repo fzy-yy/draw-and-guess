@@ -10,7 +10,8 @@
  * | `relay_draw`（步 3） | 向前回退 2 条 | 上家猜出的**文本**（看不到上家的画）+ 自己的第二幅画布 + 上家 chip（无画笔角标） |
  * | `relay_guess`（步 2） | 向前回退 1 条 | 上家的第一幅画作（只读）+ **画这幅画的人**（链发起人）chip（带画笔角标） |
  * | `relay_guess`（步 4） | 向前回退 3 条 | 上家的第二幅画作（只读）+ **画这幅画的人**（第三棒）chip（带画笔角标） |
- * | `relay_showcase` / `relay_vote` | —— | 阶段骨架（复盘与投票内容归工单 07/08） |
+ * | `relay_showcase`（游标所在链） | 全员同一份 | 当前链本半场的题面 / 画作（全量 strokes）/ 猜词者 chip；答案仅揭晓页给文本 |
+ * | `relay_vote`（游标所在链） | 全员同一份 | 同上，且答案已揭晓（投票卡要用两个答案）；匿名票行归工单 08 |
  *
  * 任何一格都**绝不下发**：其余链的画作与答案、未揭晓的答案（连长度也不给，S81 的占位由客户端按固定位数渲染）、
  * 他人的候选词池（S31）、以及全部提交 / 投票的归属记录（S35 / S63）。
@@ -19,7 +20,8 @@
  * 本模块只读快照：不修改任何权威状态，因此可以在快照矩阵里脱离整机服务独立穷举。
  */
 import { APP_CONFIG } from '../../config/index.ts'
-import type { RelayGameView, RoomPhase } from '@draw-guess/shared'
+import { serverStrings } from '@draw-guess/strings'
+import type { RelayCanvas, RelayGameView, RelayPlayerRef, RoomPhase } from '@draw-guess/shared'
 import type { DrawingCanvasState } from '../drawing/drawing-core.ts'
 import type { RelayGameSecret } from './relay-models.ts'
 import type { PlayerSecret, RoomSecret } from '../../models.ts'
@@ -47,7 +49,7 @@ function isRelayViewPhase(phase: RoomPhase): phase is RelayGameView['phase'] {
 }
 
 /** 把权威画布裁剪成下发形状：只带重放需要的四个字段（与经典 GameView 的绘图字段同形）。 */
-function toCanvasView(canvas: DrawingCanvasState): RelayGameView['ownCanvas'] {
+function toCanvasView(canvas: DrawingCanvasState): RelayCanvas {
   return {
     strokes: canvas.strokes,
     undoneStrokeIds: canvas.undoneStrokeIds,
@@ -121,8 +123,59 @@ export class RelaySnapshotBuilder {
       }
     }
 
-    // 复盘 / 投票：本单只给阶段骨架，`showcase` 内容归工单 07/08
-    return view
+    // 复盘 / 投票：只公开**当前链**（游标指向的那条），且只在该链轮播到的那半场（S32 / S63）。
+    // 对链阵容内的成员，展示期是公开复盘（S35）：不按观看者裁剪，所有人看到同一份内容。
+    const cursor = relay.showcase
+    if (!cursor) return view
+    const currentChain = relay.chains[cursor.chainIndex - 1]
+    // 半场 1＝第 1/2 棒（画家 = 链发起人 +0、猜词者 +1）；半场 2＝第 3/4 棒（+2 / +3）。
+    // 偏移即 S9 的环状顺延：链 j 的第 s 棒动手者是链 j+s-1 的发起人。
+    const actorAt = (offset: number) =>
+      relay.chains[(cursor.chainIndex - 1 + offset) % chainCount]?.originPlayerId
+    const artistId = actorAt(cursor.half === 1 ? 0 : 2)
+    const guesserId = actorAt(cursor.half === 1 ? 1 : 3)
+    // 残缺现场（游标越界 / 链数组不全）：只给阶段骨架，绝不猜一条链出来（fail-safe 不泄漏）
+    if (!currentChain || !artistId || !guesserId) return view
+    // 题面：半场 1＝发起人选的词；半场 2＝第二棒猜出的文本（它同时是第三棒的题面）。
+    // 两个值在轮播到本半场时都已公开（半场 2 的题面正是半场 1 揭晓的那个答案）。
+    const prompt = cursor.half === 1 ? currentChain.step1Word?.text : currentChain.step2Guess
+    // 答案：未揭晓（重播 / 停顿页）时 text 为 null——不下发文本、也不下发长度（S81），
+    // 客户端用经典遮罩同款的固定位数下划线占位。
+    const answer = cursor.half === 1 ? currentChain.step2Guess : currentChain.step4Guess
+    return {
+      ...view,
+      showcase: {
+        chainIndex: cursor.chainIndex,
+        chainCount,
+        half: cursor.half,
+        prompt: { player: this.showcaseChip(room, artistId), text: prompt ?? null },
+        answer: {
+          player: this.showcaseChip(room, guesserId),
+          text: cursor.page === 'reveal' ? (answer ?? null) : null,
+        },
+        // 重播的画作：半场 1＝第一幅、半场 2＝第二幅，**全量 strokes** 供客户端只读重放（S32）；
+        // 空白画布保持空白、不加任何标注（S66）。
+        drawing: toCanvasView(
+          cursor.half === 1 ? currentChain.step1Canvas : currentChain.step3Canvas,
+        ),
+      },
+    }
+  }
+
+  /**
+   * 复盘 chip 的玩家资料：复盘只有两个固定位置（画家 / 猜词者），两处都必须有名有姓，
+   * 因此这里不做对局期 `playerRef` 的「查不到就省略 chip」处理——链位在成员离场后依然占着（S7），
+   * 资料已随身份回收（离房 + 重连宽限超时）时回落到中性占位身份（与经典 `nicknameOf` 的兜底同口径），
+   * 轮播绝不为一个人的资料缺失而断（S12）。
+   */
+  private showcaseChip(room: RoomSecret, playerId: string): RelayPlayerRef {
+    return (
+      this.playerRef(room, playerId) ?? {
+        id: playerId,
+        nickname: serverStrings.notices.fallbackPlayerName,
+        avatarId: APP_CONFIG.player.defaultAvatarId,
+      }
+    )
   }
 
   /**

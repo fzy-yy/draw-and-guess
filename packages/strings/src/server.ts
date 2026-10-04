@@ -136,6 +136,11 @@ export const serverStrings = {
     relayStarted: '接龙开始，请从候选词中选择你的题目',
     /** 进入下一棒：第 step 棒开始（含作画与猜词）。 */
     relayStepStarted: (step: number) => `第 ${step} 棒开始`,
+    /** 复盘开始：四步走完、全员统一步调进入轮播（S65 的关键节点，只播一次）。 */
+    relayShowcaseStarted: '复盘开始，逐条链回放',
+    /** 每条链展示开始：轮播切到第 index / total 条链（S11 的席位顺序；S65 只播链与链的切换）。 */
+    relayChainShowcaseStarted: (index: number, total: number) =>
+      `第 ${index} / ${total} 条链开始展示`,
   },
 
   /* ---- 词库加载错误（服务启动校验，展示给运维 / 终端）---- */

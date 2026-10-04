@@ -10,7 +10,9 @@
  *   全员提交（`relay:submitDrawing`）或倒计时到即结算；步 1 进步 2、步 3 进步 4；
  * - 步 2/4 猜词：只提交文本、提交即锁定、**不进聊天流**（S3 / S20 / S23），步 2 进步 3、步 4 进复盘；
  * - 换手一律「全员提交即秒切」（S40）；掉队容错见下方 `refreshAutoSubmit` 与 `writeAutoSubmitProduct`；
- * - 步 4 结算后进入 `relay_showcase` 并停止对局计时（复盘游标与时序归工单 07）。
+ * - 步 4 结算后进入 `relay_showcase`：停止对局计时，按链发起人**席位顺序**（S11）逐条轮播——
+ *   每条链两个半场，每半场「重播 → 停顿 → 揭晓」（S43），半场 2 揭晓后切入该链投票（`relay_vote`）；
+ *   轮播完全自动、**不可干预**（S12），工单 08 在投票结束后调用 `beginShowcaseForChain` 继续下一条链。
  *
  * 阶段写入、准备失效、对局消息与全部计时器归本状态机所有，与经典的职责分工一致
  *（见 docs/adr/0024-round-machine-ownership.md）。
@@ -38,6 +40,12 @@ import {
   type RelayGameSecret,
 } from './relay-models.ts'
 import { relayChainIndexOf } from './relay-canvas-target.ts'
+import {
+  FIRST_SHOWCASE_CHAIN_INDEX,
+  nextShowcasePage,
+  showcasePageMs,
+  type RelayShowcaseCursor,
+} from './relay-showcase.ts'
 import {
   isDrawingStep,
   RELAY_AUTO_SUBMIT_GUESS_TEXT,
@@ -291,14 +299,112 @@ export class RelayMachine {
   }
 
   /**
-   * 步 4 结算后进入复盘阶段（S22 / S23）：停止接龙对局计时，复盘游标、每半场时序与投票归工单 07/08。
-   * `phaseEndsAt` 写 0 哨兵（「本阶段无权威截止时间」，与暂停期同一口径）：复盘每半场的截止时间
-   * 由 07 的轮播状态机写入，这里不预造一份会被覆盖的假时序。
+   * 步 4 结算后进入复盘阶段（S22 / S23）：停止接龙对局计时，播「复盘开始」关键节点通知（S65），
+   * 并从第 1 条链（席位最靠前的发起人，S11）的半场 1 重播页起跑轮播。
    */
   private beginShowcase(room: RoomSecret): void {
     const relay = this.requireRelay(room)
-    this.clearStepTimers(relay)
     this.transition(room, 'relay_showcase')
+    this.addSystemNotice(room, serverStrings.notices.relayShowcaseStarted)
+    this.startChainShowcase(room, relay, FIRST_SHOWCASE_CHAIN_INDEX)
+  }
+
+  /**
+   * 复盘轮播的链入口（工单 08 的接管点）：某条链的投票结束后，用它继续展示下一条链（S23）。
+   * 先校验链序号、再转换阶段——只从投票期可入（`relay_vote → relay_showcase` 是复盘期的合法边），
+   * 非法调用在动游标与计时器之前就显式失败，绝不留下半套轮播现场。
+   */
+  public beginShowcaseForChain(room: RoomSecret, chainIndex: number): void {
+    const relay = this.requireShowcaseChain(room, chainIndex)
+    this.transition(room, 'relay_showcase')
+    this.startChainShowcase(room, relay, chainIndex)
+  }
+
+  /** 链序号守卫：复盘轮播只认 1～N（N＝本局链数），越界说明调用方破坏了不变式。 */
+  private requireShowcaseChain(room: RoomSecret, chainIndex: number): RelayGameSecret {
+    const relay = this.requireRelay(room)
+    if (
+      !Number.isInteger(chainIndex) ||
+      chainIndex < FIRST_SHOWCASE_CHAIN_INDEX ||
+      chainIndex > relay.chains.length
+    )
+      throw new GameError('INTERNAL_ERROR')
+    return relay
+  }
+
+  /**
+   * 从某条链起跑展示（调用方已完成阶段转换）：清掉上一页 / 上一棒的计时器，播「第 k / N 条链」
+   * 关键节点通知（S65），再起半场 1 的重播页。
+   */
+  private startChainShowcase(room: RoomSecret, relay: RelayGameSecret, chainIndex: number): void {
+    this.clearStepTimers(relay)
+    this.addSystemNotice(
+      room,
+      serverStrings.notices.relayChainShowcaseStarted(chainIndex, relay.chains.length),
+    )
+    // 每条链都从半场 1 的重播页起跑（S43）；半场 1＝第一幅画 + 第二棒答案
+    this.beginShowcasePage(room, { chainIndex, half: 1, page: 'replay' })
+  }
+
+  /**
+   * 起一页（重播 / 停顿 / 揭晓）：写权威游标与本页阶段时间（时长取自配置包，S43），排下一页的计时器。
+   * 回调按「阶段 + 游标」复核：迟到的旧回调一律让路，绝不把新一页当成旧页再推进一次
+   * （与对局期的步 id 守卫同一手法）。
+   */
+  private beginShowcasePage(room: RoomSecret, cursor: RelayShowcaseCursor): void {
+    const relay = this.requireRelay(room)
+    relay.showcase = cursor
+    const pageMs = showcasePageMs(cursor.page)
+    relay.phaseStartedAt = this.service.clock.now()
+    relay.phaseEndsAt = relay.phaseStartedAt + pageMs
+    relay.timer = this.service.scheduler.set(pageMs, () =>
+      this.service.safeRun('relayShowcasePage', () => {
+        const current = room.relay
+        if (!current || room.phase !== 'relay_showcase') return
+        const now = current.showcase
+        // 迟到的旧回调一律让路：游标必须仍指向排这个计时器时的那一页
+        if (
+          !now ||
+          now.chainIndex !== cursor.chainIndex ||
+          now.half !== cursor.half ||
+          now.page !== cursor.page
+        )
+          return
+        this.advanceShowcase(room)
+      }),
+    )
+    this.service.emitRoom(room.id)
+  }
+
+  /**
+   * 一页到点：同半场内续到下一页；半场 2 的揭晓之后本链展示结束，切入该链投票（S43 / S23）。
+   * 轮播**完全自动**：这里没有任何「跳过 / 提前结束」分支（S12），成员变动也不影响本函数。
+   */
+  private advanceShowcase(room: RoomSecret): void {
+    const relay = this.requireRelay(room)
+    const cursor = relay.showcase
+    // 理论上不可达（进入复盘即写游标）；真出现残缺现场就停在本页，绝不猜一条链出来
+    if (!cursor) return
+    const next = nextShowcasePage(cursor.page, cursor.half)
+    if (next) {
+      this.beginShowcasePage(room, {
+        chainIndex: cursor.chainIndex,
+        half: next.half,
+        page: next.page,
+      })
+      return
+    }
+    this.enterChainVote(room)
+  }
+
+  /**
+   * 切入该链投票（S23）：游标**保留**在「半场 2 · 揭晓」——投票期的快照仍要展示这条链的两个答案与画作；
+   * 收票、固定 10 秒倒计时、票行与结算全部归工单 08，这里只把阶段交给它（`phaseEndsAt` 写 0 哨兵）。
+   */
+  private enterChainVote(room: RoomSecret): void {
+    const relay = this.requireRelay(room)
+    this.clearStepTimers(relay)
+    this.transition(room, 'relay_vote')
     relay.phaseStartedAt = this.service.clock.now()
     relay.phaseEndsAt = 0
     this.service.emitRoom(room.id)

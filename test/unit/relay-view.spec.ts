@@ -16,6 +16,7 @@ import type { RelayChainSecret } from '../../apps/server/src/domain/relay/relay-
 import type { MemberState, PlayerSecret, RoomSecret } from '../../apps/server/src/models.ts'
 import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
 import { createRelayCanvasState } from '../../apps/server/src/domain/relay/relay-models.ts'
+import type { RelayShowcaseCursor } from '../../apps/server/src/domain/relay/relay-showcase.ts'
 import { testRoomSettings } from './helpers/game-harness.ts'
 
 const NOW = 1_700_000_000_000
@@ -34,6 +35,7 @@ const OUTSIDER_ID = '00000000-0000-4000-8000-0000000000e5'
 /** 秘密内容的哨兵值：任何不该看见它们的一格，序列化结果里都不能出现（换键位泄漏也会被抓）。 */
 const wordTextOf = (chain: number) => `SENTINEL-题面-链${chain}`
 const guessTextOf = (chain: number) => `SENTINEL-猜词-链${chain}`
+const lastGuessTextOf = (chain: number) => `SENTINEL-末答-链${chain}`
 const strokeIdOf = (chain: number, half: 1 | 3) => `SENTINEL-笔画-链${chain}-第${half}幅`
 const candidateTextOf = (chain: number) => `SENTINEL-候选-链${chain}`
 
@@ -41,6 +43,7 @@ const candidateTextOf = (chain: number) => `SENTINEL-候选-链${chain}`
 const ALL_SENTINELS = PLAYER_IDS.flatMap((_id, chain) => [
   wordTextOf(chain),
   guessTextOf(chain),
+  lastGuessTextOf(chain),
   strokeIdOf(chain, 1),
   strokeIdOf(chain, 3),
   candidateTextOf(chain),
@@ -82,6 +85,7 @@ function makeChain(originPlayerId: string, chainIndex: number): RelayChainSecret
       collection: '物品',
     },
     step2Guess: guessTextOf(chainIndex),
+    step4Guess: lastGuessTextOf(chainIndex),
     votes: [],
   } satisfies RelayChainSecret
   chain.step1Canvas.strokes = [
@@ -133,6 +137,7 @@ function makePlayer(playerId: string, nickname: string): PlayerSecret {
 function makeRoom(
   phase: RoomPhase,
   currentStep: RelayStep,
+  cursor?: RelayShowcaseCursor,
 ): {
   room: RoomSecret
   builder: RelaySnapshotBuilder
@@ -178,6 +183,7 @@ function makeRoom(
       stepId: STEP_ID,
       phaseStartedAt: NOW - 5_000,
       phaseEndsAt: NOW + 5_000,
+      ...(cursor ? { showcase: cursor } : {}),
       chains: PLAYER_IDS.map((playerId, index) => makeChain(playerId, index)),
       stepSubmissions: new Set([PLAYER_IDS[0] ?? '']),
       autoSubmitTimers: new Map(),
@@ -195,18 +201,31 @@ function makeRoom(
   return { room, builder: new RelaySnapshotBuilder({ players }) }
 }
 
-const CELLS: { phase: RelayGameView['phase']; step: RelayStep }[] = [
+/**
+ * 矩阵格子：接龙阶段 × 步骤；复盘期（展示 / 投票）额外带**游标**（链序号 / 半场 / 页，工单 07），
+ * 未揭晓与已揭晓两页各占一格——「未揭晓的答案不下发」的最强证据就在这两格的差集上。
+ */
+const CELLS: { phase: RelayGameView['phase']; step: RelayStep; cursor?: RelayShowcaseCursor }[] = [
   { phase: 'relay_choose', step: 1 },
   { phase: 'relay_draw', step: 1 },
   { phase: 'relay_draw', step: 3 },
   { phase: 'relay_guess', step: 2 },
   { phase: 'relay_guess', step: 4 },
+  // 游标缺失的残缺现场：只给阶段骨架，一条链的内容都不猜（fail-safe 不泄漏）
   { phase: 'relay_showcase', step: 4 },
-  { phase: 'relay_vote', step: 4 },
+  { phase: 'relay_showcase', step: 4, cursor: { chainIndex: 2, half: 1, page: 'replay' } },
+  { phase: 'relay_showcase', step: 4, cursor: { chainIndex: 2, half: 1, page: 'reveal' } },
+  { phase: 'relay_showcase', step: 4, cursor: { chainIndex: 3, half: 2, page: 'pause' } },
+  { phase: 'relay_vote', step: 4, cursor: { chainIndex: 4, half: 2, page: 'reveal' } },
 ]
 
 /** 本格允许出现的哨兵值（格子里合法可见的那部分链内容）。 */
-function allowedSentinels(phase: RelayGameView['phase'], step: RelayStep, viewerIndex: number) {
+function allowedSentinels(
+  phase: RelayGameView['phase'],
+  step: RelayStep,
+  viewerIndex: number,
+  cursor?: RelayShowcaseCursor,
+) {
   const ownChain = chainForViewer(viewerIndex, step)
   if (phase === 'relay_choose') return [candidateTextOf(ownChain)]
   if (phase === 'relay_draw') {
@@ -217,14 +236,23 @@ function allowedSentinels(phase: RelayGameView['phase'], step: RelayStep, viewer
   if (phase === 'relay_guess') {
     return [strokeIdOf(ownChain, step === 2 ? 1 : 3)]
   }
-  return []
+  // 复盘期（展示 / 投票）：只公开游标指向的那条链，且只公开它轮播到的那半场——与观看者无关。
+  // 未揭晓的答案（重播 / 停顿页）不在允许清单里：它的文本与遮罩都不得出现。
+  if (!cursor) return []
+  const chain = cursor.chainIndex - 1
+  const revealed = phase === 'relay_vote' || cursor.page === 'reveal'
+  return [
+    cursor.half === 1 ? wordTextOf(chain) : guessTextOf(chain),
+    strokeIdOf(chain, cursor.half === 1 ? 1 : 3),
+    ...(revealed ? [cursor.half === 1 ? guessTextOf(chain) : lastGuessTextOf(chain)] : []),
+  ]
 }
 
 describe('接龙视图裁剪矩阵', () => {
   for (const cell of CELLS) {
     it(`${cell.phase}（第 ${cell.step} 棒）：每个观看者只拿到自己本棒所需的链内容`, () => {
       for (let viewerIndex = 0; viewerIndex < CHAIN_COUNT; viewerIndex += 1) {
-        const { room, builder } = makeRoom(cell.phase, cell.step)
+        const { room, builder } = makeRoom(cell.phase, cell.step, cell.cursor)
         const viewerId = PLAYER_IDS[viewerIndex]
         if (!viewerId) throw new Error('矩阵缺少观看者')
         const view = builder.build(room, viewerId)
@@ -243,7 +271,7 @@ describe('接龙视图裁剪矩阵', () => {
           label,
         ).toEqual(['大家加油'])
 
-        const allowed = allowedSentinels(cell.phase, cell.step, viewerIndex)
+        const allowed = allowedSentinels(cell.phase, cell.step, viewerIndex, cell.cursor)
         const serialized = JSON.stringify(view)
         for (const sentinel of ALL_SENTINELS) {
           if (allowed.includes(sentinel)) continue
@@ -251,6 +279,37 @@ describe('接龙视图裁剪矩阵', () => {
         }
         for (const sentinel of allowed) {
           expect(serialized, `${label}：缺少本棒应有的 ${sentinel}`).toContain(sentinel)
+        }
+
+        // 复盘期：公开内容与观看者无关，未揭晓的答案在载荷里只表达为 text 为 null
+        if (cell.cursor) {
+          const showcase = view.showcase
+          const chain = cell.cursor.chainIndex - 1
+          expect(showcase?.chainIndex, label).toBe(cell.cursor.chainIndex)
+          expect(showcase?.chainCount, label).toBe(CHAIN_COUNT)
+          expect(showcase?.half, label).toBe(cell.cursor.half)
+          expect(showcase?.prompt.text, label).toBe(
+            cell.cursor.half === 1 ? wordTextOf(chain) : guessTextOf(chain),
+          )
+          expect(
+            showcase?.drawing.strokes.map((command) => command.id),
+            label,
+          ).toEqual([strokeIdOf(chain, cell.cursor.half === 1 ? 1 : 3)])
+          const revealed = cell.phase === 'relay_vote' || cell.cursor.page === 'reveal'
+          expect(showcase?.answer.text, label).toBe(
+            revealed
+              ? cell.cursor.half === 1
+                ? guessTextOf(chain)
+                : lastGuessTextOf(chain)
+              : null,
+          )
+          // 两个 chip 恰好是本半场的画家与猜词者（带画笔角标与否由位置派生，不在载荷里）
+          expect(showcase?.prompt.player.id, label).toBe(
+            PLAYER_IDS[(chain + (cell.cursor.half === 1 ? 0 : 2)) % CHAIN_COUNT],
+          )
+          expect(showcase?.answer.player.id, label).toBe(
+            PLAYER_IDS[(chain + (cell.cursor.half === 1 ? 1 : 3)) % CHAIN_COUNT],
+          )
         }
 
         // 按阶段断言「本棒产物」的字段形状
@@ -306,6 +365,17 @@ describe('接龙视图裁剪矩阵', () => {
     expect(view?.previousDrawing).toBeUndefined()
     const serialized = JSON.stringify(view)
     for (const sentinel of ALL_SENTINELS) expect(serialized).not.toContain(sentinel)
+
+    // 复盘期同理：即使房间带着游标，链阵容外的成员也拿不到任何链内容（fail-safe 最小暴露）
+    const { room: showcaseRoom, builder: showcaseBuilder } = makeRoom('relay_showcase', 4, {
+      chainIndex: 1,
+      half: 1,
+      page: 'reveal',
+    })
+    const outsiderView = showcaseBuilder.build(showcaseRoom, OUTSIDER_ID)
+    expect(outsiderView?.showcase).toBeUndefined()
+    const showcaseSerialized = JSON.stringify(outsiderView)
+    for (const sentinel of ALL_SENTINELS) expect(showcaseSerialized).not.toContain(sentinel)
   })
 
   it('非接龙阶段（starting / waiting）与没有接龙局的房间不下发接龙视图', () => {

@@ -8,7 +8,7 @@
  * - 代交：超时与断线宽限「先到者」触发，内容按步骤类型（猜词＝「？」、作画＝已有笔画），
  *   两条路径由同一个提交集去重——代交后再提交一律 ALREADY_SUBMITTED（不可推翻）；
  * - 离开 / 退局者仍占链位、后续每步自动代交；可玩人数掉到 4 以下不中止，四步照常走完；
- * - 步 4 结算后进入复盘阶段并停止接龙对局计时（复盘游标与轮播时序归工单 07）；
+ * - 步 4 结算后进入复盘阶段并停止对局计时，改由复盘页计时驱动（游标与页时序见 relay-showcase 用例）；
  * - 隐私：步 3 快照不含上家的画，步 2/4 快照不含任何答案文本与自己的画布（S35）。
  */
 import { describe, expect, it } from 'vitest'
@@ -340,7 +340,7 @@ describe('接龙步 4 与复盘入口', () => {
     expect(view?.previousArtist?.nickname).toBe(painter.nickname)
   })
 
-  it('步 4 全员提交后进入复盘阶段并停止对局计时（复盘时序归工单 07）', () => {
+  it('步 4 全员提交后进入复盘阶段：对局计时停止、改由复盘页计时驱动（S22 / S43）', () => {
     const scenario = startRelayGame()
 
     scenario.playToShowcase()
@@ -353,17 +353,19 @@ describe('接龙步 4 与复盘入口', () => {
       expect(chain.step2Guess).toBeDefined()
       expect(chain.step4Guess).toBeDefined()
     }
-    const phaseAtShowcase = scenario.room.phase
-    // 对局计时已停：再推进超过「选词 + 作画 + 猜词」的时长也不会自行换棒或回到 waiting
+    // 复盘从第 1 条链的重播页起跑（游标与页时序见 relay-showcase 用例）
+    expect(scenario.showcaseCursor()).toEqual({ chainIndex: 1, half: 1, page: 'replay' })
+    // 对局计时已停：推进超过「选词 + 作画 + 猜词」也不会换棒；复盘页计时把轮播推进到该链投票（工单 08）
     const relayStepBudgetMs =
       (APP_CONFIG.relay.chooseSeconds.default +
         APP_CONFIG.relay.drawSeconds.default +
         APP_CONFIG.relay.guessSeconds.default) *
       1_000
     scenario.harness.runtime.advance(relayStepBudgetMs)
-    expect(scenario.room.phase).toBe(phaseAtShowcase)
     expect(scenario.room.relay?.currentStep).toBe(4)
-    expect(scenario.snapshotOf(scenario.host.playerId).relay?.phase).toBe('relay_showcase')
+    expect(scenario.room.phase).toBe('relay_vote')
+    expect(scenario.snapshotOf(scenario.host.playerId).relay?.phase).toBe('relay_vote')
+    expect(scenario.showcaseCursor()).toEqual({ chainIndex: 1, half: 2, page: 'reveal' })
   })
 })
 

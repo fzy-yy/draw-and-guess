@@ -32,6 +32,11 @@ import type {
   RelayDrawingStep,
   RelayGuessingStep,
 } from '../../../apps/server/src/domain/relay/relay-steps.ts'
+import {
+  RELAY_SHOWCASE_PAGES,
+  showcasePageMs,
+  type RelayShowcaseCursor,
+} from '../../../apps/server/src/domain/relay/relay-showcase.ts'
 import type { RoomSecret } from '../../../apps/server/src/models.ts'
 import {
   createGameHarness,
@@ -223,8 +228,14 @@ export interface RelayGameScenario {
   disconnect(player: RelayTestPlayer): void
   /** 断线重连（真实身份恢复路径）：宽限内重连可续接当前步，返回接管后的新连接。 */
   reconnect(player: RelayTestPlayer): RelayTestPlayer
-  /** 四个步骤各全员动手一次走完，停在复盘入口（步 4 结算后的 `relay_showcase`）。 */
+  /** 四个步骤各全员动手一次走完，停在复盘入口（步 4 结算后的 `relay_showcase` 第 1 条链重播页）。 */
   playToShowcase(): void
+  /** 复盘游标（服务端权威的链序号 / 半场 / 页）：不在复盘轮播中时为 undefined。 */
+  showcaseCursor(): RelayShowcaseCursor | undefined
+  /** 复盘推进一页（按当前页的配置时长走假时钟），返回推进后的游标；离开展示期后返回投票期的保留游标。 */
+  advanceShowcasePage(): RelayShowcaseCursor | undefined
+  /** 走完当前链的两个半场（6 页），停在等待该链投票的 `relay_vote`；返回依次经过的页游标。 */
+  finishShowcaseChain(): RelayShowcaseCursor[]
 }
 
 /**
@@ -330,7 +341,7 @@ export function startRelayGame(
     return submitted
   }
 
-  /** 四个步骤各全员动手一次走完，停在复盘入口（步 4 结算后的 `relay_showcase`）。 */
+  /** 四个步骤各全员动手一次走完，停在复盘入口（步 4 结算后的 `relay_showcase` 第 1 条链重播页）。 */
   const playToShowcase = (): void => {
     chooseAll()
     submitAllDrawings()
@@ -379,6 +390,26 @@ export function startRelayGame(
     submitAllDrawings,
     submitAllGuesses,
     playToShowcase,
+    showcaseCursor: () => room.relay?.showcase,
+    advanceShowcasePage: () => {
+      const cursor = room.relay?.showcase
+      if (!cursor) throw new Error('当前不在复盘轮播中')
+      harness.runtime.advance(showcasePageMs(cursor.page))
+      return room.relay?.showcase
+    },
+    finishShowcaseChain: () => {
+      const seen: RelayShowcaseCursor[] = []
+      // 一条链固定 6 页（两个半场 × 三页，S43）：页数即循环上界，走不动时显式失败而不是空转
+      const pageLimit = RELAY_SHOWCASE_PAGES.length * 2
+      while (room.phase === 'relay_showcase') {
+        const cursor = room.relay?.showcase
+        if (!cursor) throw new Error('复盘轮播缺少游标')
+        if (seen.length >= pageLimit) throw new Error('复盘轮播未在两个半场（6 页）内走完')
+        seen.push(cursor)
+        harness.runtime.advance(showcasePageMs(cursor.page))
+      }
+      return seen
+    },
     disconnect: (player) => {
       // 走真实断线编排：接龙对局阶段保席 + 短宽限代交，与「掉线者不入链」的经典口径分开
       harness.service.handleDisconnect(player.socket as never)

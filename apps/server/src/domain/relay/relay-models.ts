@@ -10,8 +10,8 @@
  * 按链隔离的候选词与换批状态（`RelayChainSecret.candidates` / `offeredWordIds` / `rerollUsed`）、
  * 本步已提交集（`RelayGameSecret.stepSubmissions`）与房间自由聊天流（`RelayGameSecret.messages`，S79）。
  * 工单 06 补齐步 2–4 的换手与掉队容错：四棒产出的写入口（`step2Guess` / `step4Guess` / 第二幅画布）
- * 与本步代交计时器（`autoSubmitTimers`，S8 / S16）；复盘游标归工单 07、投票结算归工单 08，
- * 各自落地时增量补齐（本文件不预置空占位字段）。
+ * 与本步代交计时器（`autoSubmitTimers`，S8 / S16）。工单 07 补上复盘游标（`showcase`，链 / 半场 / 页），
+ * 投票结算归工单 08，落地时增量补齐（本文件不预置空占位字段）。
  */
 import type {
   ChatMessage,
@@ -22,6 +22,7 @@ import type {
 } from '@draw-guess/shared'
 import type { TimerHandle } from '../../runtime.ts'
 import type { DrawingCanvasState } from '../drawing/drawing-core.ts'
+import type { RelayShowcaseCursor } from './relay-showcase.ts'
 
 /** 一条链的投票记录：按到达顺序入数组（S42）；倒计时结束后未投者由状态机补成不赞同（S14）。 */
 export interface RelayChainVote {
@@ -86,6 +87,12 @@ export interface RelayGameSecret {
   messages: ChatMessage[]
   /** 主阶段计时器（与经典 `game.timer` 同口径，切阶段前清理）。 */
   timer?: TimerHandle
+  /**
+   * 复盘游标（工单 07）：当前链序号（1 起，席位顺序 S11）、半场与页（重播 / 停顿 / 揭晓，S43）。
+   * 只在四步走完进入复盘后存在；切入该链投票时**保留**——投票期的快照仍要展示这条链的两个答案与画作，
+   * 工单 08 在投票结束后凭它调用 `beginShowcaseForChain(chainIndex + 1)` 继续轮播。
+   */
+  showcase?: RelayShowcaseCursor
 }
 
 /**

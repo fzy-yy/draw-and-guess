@@ -930,6 +930,10 @@ export class GameService {
   /** 房主提前结束比赛：仅对局进行中（不含开局倒计时，尚未正式开赛）或暂停时可触发，直接进入最终结算。 */
   endEarly(playerId: string): void {
     const room = this.membership.requireHostRoom(playerId)
+    // 复盘期（展示 + 投票）完全不可干预（S12）：没有「跳过」也没有「提前结束」——
+    // 推翻他人链的展示顺序会让全员的步调错位。接龙对局期的提前结束是另一条路径（归工单 08）。
+    if (room.phase === 'relay_showcase' || room.phase === 'relay_vote')
+      throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_END_EARLY)
     // starting（3 秒开局倒计时）不算可提前结束的比赛：此时 game 已预建但没有进行中的回合，
     // 若放行会试图执行领域不允许的 starting → game_result 转换。isPlaying 已含 paused。
     const inProgress = this.isPlaying(room.phase) && room.phase !== 'starting'
