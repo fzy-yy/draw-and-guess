@@ -88,13 +88,15 @@ const displayedAnswer = computed(() => {
   return props.game?.answerMask || strings.ui.game.awaitingWord
 })
 
-/** 呈现给用户的剩余秒数（回合结算前若有重播，重播期间为 3 秒倒计时，结束后为 5 秒倒计时） */
+/** 呈现给用户的剩余秒数（回合结算前若有重播，重播期间为倒计时，结束后为结算倒计时） */
 const displaySeconds = computed(() => {
   if (props.isReplaying) {
-    return Math.max(1, props.secondsLeft - 5)
+    const nonReplaySeconds =
+      store.config.game.roundResultSeconds + store.config.game.roundReplayPauseSeconds
+    return Math.max(1, props.secondsLeft - nonReplaySeconds)
   }
   if (store.room?.phase === 'round_result') {
-    return Math.min(5, props.secondsLeft)
+    return Math.min(store.config.game.roundResultSeconds, props.secondsLeft)
   }
   return props.secondsLeft
 })

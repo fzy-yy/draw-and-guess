@@ -170,7 +170,9 @@ export function nominalPhaseDurationMs(
   if (phase === 'choosing_word')
     return settings.allowChooseTimeLimit ? settings.chooseSeconds * 1_000 : undefined
   if (phase === 'round_result') {
-    const replayMs = settings.allowRoundReplay ? APP_CONFIG.game.roundReplaySeconds * 1_000 : 0
+    const replayMs = settings.allowRoundReplay
+      ? (APP_CONFIG.game.roundReplaySeconds + APP_CONFIG.game.roundReplayPauseSeconds) * 1_000
+      : 0
     return replayMs + APP_CONFIG.game.roundResultSeconds * 1_000
   }
   return undefined

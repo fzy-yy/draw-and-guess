@@ -79,29 +79,50 @@ const canDraw = computed(() => store.isDrawer && store.room?.phase === 'drawing'
 /** 底部绘图工具条可见性：仅画家在未主动隐藏时显示，猜词者完全隐藏。 */
 const showToolbar = computed(() => store.isDrawer && isToolbarVisible.value)
 
-/** 画布引用与回合结束 3 秒作画重播状态 */
+/** 画布引用与回合结束作画重播与停顿状态 */
 const gameCanvasRef = ref<{ speedrunReplay: (durationMs?: number) => Promise<void> }>()
 const isReplayingRound = ref(false)
+const isReplayPausing = ref(false)
+const isResultModalSuppressed = computed(() => isReplayingRound.value || isReplayPausing.value)
 
 watch(
   () => store.room?.phase,
   async (newPhase, oldPhase) => {
-    // 当从 drawing 进入 round_result 时，若房间开启 allowRoundReplay 且有笔迹，触发 3 秒快速重播
+    // 当从 drawing 进入 round_result 时，若房间开启 allowRoundReplay，触发重播与停顿
     if (newPhase === 'round_result' && oldPhase === 'drawing') {
       const allowReplay = store.room?.settings.allowRoundReplay ?? true
-      const hasStrokes = (game.value?.strokes.length ?? 0) > 0
-      if (allowReplay && hasStrokes) {
+      if (allowReplay) {
         isReplayingRound.value = true
+        isReplayPausing.value = false
         await nextTick()
         try {
-          await gameCanvasRef.value?.speedrunReplay()
+          const replayDurationMs = APP_CONFIG.game.roundReplaySeconds * 1_000
+          const hasStrokes = (game.value?.strokes.length ?? 0) > 0
+          if (hasStrokes) {
+            await gameCanvasRef.value?.speedrunReplay(replayDurationMs)
+          } else {
+            // 画布无内容时，同样等待配置的重放时长，避免弹窗瞬间弹出且倒计时卡住
+            await new Promise((resolve) => setTimeout(resolve, replayDurationMs))
+          }
         } finally {
           isReplayingRound.value = false
+        }
+
+        // 重播结束至弹出结算弹窗之间，停顿指定时长（默认 1 秒）以完整展示成品画作
+        const pauseDurationMs = APP_CONFIG.game.roundReplayPauseSeconds * 1_000
+        if (pauseDurationMs > 0 && store.room?.phase === 'round_result') {
+          isReplayPausing.value = true
+          try {
+            await new Promise((resolve) => setTimeout(resolve, pauseDurationMs))
+          } finally {
+            isReplayPausing.value = false
+          }
         }
         return
       }
     }
     isReplayingRound.value = false
+    isReplayPausing.value = false
   },
 )
 
@@ -253,8 +274,7 @@ function handleFullscreenToggle(): void {
       :seconds-left="secondsLeft"
       :game="game"
       :rankings="rankings"
-      :is-replaying="isReplayingRound"
-      @choose-word="store.chooseWord"
+      :is-replaying="isResultModalSuppressed"
       @reroll-words="store.rerollWords"
       @resume="store.resume"
       @open-end-confirm="showEndConfirm = true"

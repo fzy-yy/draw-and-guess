@@ -163,7 +163,12 @@ describe('nominalPhaseDurationMs 契约', () => {
     ).toBe(APP_CONFIG.game.roundResultSeconds * 1_000)
     expect(
       nominalPhaseDurationMs('round_result', game, { ...settings, allowRoundReplay: true }),
-    ).toBe((APP_CONFIG.game.roundReplaySeconds + APP_CONFIG.game.roundResultSeconds) * 1_000)
+    ).toBe(
+      (APP_CONFIG.game.roundReplaySeconds +
+        APP_CONFIG.game.roundReplayPauseSeconds +
+        APP_CONFIG.game.roundResultSeconds) *
+        1_000,
+    )
   })
 
   it('不可暂停阶段与阶段缺失返回 undefined', () => {

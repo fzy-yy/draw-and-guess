@@ -45,7 +45,9 @@ describe('统一假运行时驱动完整回合生命周期', () => {
     expect(game.roundResult?.details[0]).toEqual(detail)
     const resultDurationMs =
       (room.settings.allowRoundReplay
-        ? APP_CONFIG.game.roundReplaySeconds + APP_CONFIG.game.roundResultSeconds
+        ? APP_CONFIG.game.roundReplaySeconds +
+          APP_CONFIG.game.roundReplayPauseSeconds +
+          APP_CONFIG.game.roundResultSeconds
         : APP_CONFIG.game.roundResultSeconds) * 1_000
     expect(game.phaseEndsAt - game.phaseStartedAt).toBe(resultDurationMs)
 

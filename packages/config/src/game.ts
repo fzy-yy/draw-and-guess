@@ -56,8 +56,9 @@ export const game = {
     step: 1,
   },
   startingCountdownSeconds: 3, // 开局倒计时
-  roundReplaySeconds: 3, // 回合结束作画精彩重播时长（3 秒）
-  roundResultSeconds: 5, // 回合结算展示时长（5 秒）
+  roundReplaySeconds: 3, // 回合结束作画精彩重播时长（3 秒，可在 config 中配置）
+  roundReplayPauseSeconds: 1, // 重播结束至弹出结算弹窗之间的画作静止展示停顿时长（1 秒，可在 config 中配置）
+  roundResultSeconds: 5, // 回合结算展示时长（5 秒，可在 config 中配置）
   /** 作画阶段剩余秒数低于该值时进入“紧急”视觉/音效提示（GameHud 与 useAudioFeedback 共用，避免重复硬编码）。 */
   warningSeconds: 10,
   /** 逐步提示时间窗口比例：在作画时间的后半程开始逐步揭示字符（0.5 = 后 50% 时间开始） */

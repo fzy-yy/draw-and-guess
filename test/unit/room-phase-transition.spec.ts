@@ -37,7 +37,9 @@ describe('房间阶段转换边界', () => {
     expect(harness.runtime.pendingTimerCount()).toBe(1)
     const resultDurationMs =
       (room.settings.allowRoundReplay
-        ? APP_CONFIG.game.roundReplaySeconds + APP_CONFIG.game.roundResultSeconds
+        ? APP_CONFIG.game.roundReplaySeconds +
+          APP_CONFIG.game.roundReplayPauseSeconds +
+          APP_CONFIG.game.roundResultSeconds
         : APP_CONFIG.game.roundResultSeconds) * 1_000
     harness.runtime.advance(resultDurationMs)
     expect(room.phase).toBe('choosing_word')

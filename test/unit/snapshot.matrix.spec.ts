@@ -379,7 +379,9 @@ describe('角色裁剪快照穷举矩阵', () => {
       expect(view?.pausedRemainingMs).toBe(3_000)
       const expectedNominalMs =
         (room.settings.allowRoundReplay
-          ? APP_CONFIG.game.roundReplaySeconds + APP_CONFIG.game.roundResultSeconds
+          ? APP_CONFIG.game.roundReplaySeconds +
+            APP_CONFIG.game.roundReplayPauseSeconds +
+            APP_CONFIG.game.roundResultSeconds
           : APP_CONFIG.game.roundResultSeconds) * 1_000
       expect((view?.phaseEndsAt ?? 0) - (view?.phaseStartedAt ?? 0)).toBe(expectedNominalMs)
     })

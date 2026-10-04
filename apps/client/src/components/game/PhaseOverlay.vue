@@ -233,7 +233,11 @@ async function submitCustomWord(text: string): Promise<void> {
       <!-- 居中按钮：进入下一轮( 5 )，点击关闭弹窗以便查看画作 -->
       <div class="flex justify-center mt-[0.5cqh]">
         <AppButton variant="primary" class="min-w-[12em]" @click="showRoundResultModal = false">
-          {{ strings.ui.game.enterNextRound(Math.min(5, secondsLeft)) }}
+          {{
+            strings.ui.game.enterNextRound(
+              Math.min(store.config.game.roundResultSeconds, secondsLeft),
+            )
+          }}
         </AppButton>
       </div>
     </OverlayCard>

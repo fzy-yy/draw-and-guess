@@ -263,11 +263,11 @@ export class RoundMachine {
       drawer.score += drawerScore
       drawer.stats.drawingCorrectCount += game.correctOrder.length
     }
-    // 保存结算数据并开启结算展示窗口（开启重播时为 3 秒重播 + 5 秒结算 = 8 秒；关闭时为 5 秒），之后进入下一回合选词
+    // 保存结算数据并开启结算展示窗口（开启重播时为 重播时长 + 停顿时长 + 结算时长；关闭时仅为 结算时长），之后进入下一回合选词
     const result: RoundResult = { answer: game.answer.text, details, drawerScore }
     game.roundResult = result
     const replayDurationMs = room.settings.allowRoundReplay
-      ? APP_CONFIG.game.roundReplaySeconds * 1_000
+      ? (APP_CONFIG.game.roundReplaySeconds + APP_CONFIG.game.roundReplayPauseSeconds) * 1_000
       : 0
     const totalResultDurationMs = replayDurationMs + APP_CONFIG.game.roundResultSeconds * 1_000
     game.phaseStartedAt = this.service.clock.now()
