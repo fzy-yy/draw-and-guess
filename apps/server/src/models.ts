@@ -41,7 +41,7 @@ export interface PlayerSecret {
   connected: boolean // 是否在线（断线宽限期内为 false）
   joinedAt: number // 注册时间戳
   disconnectedAt?: number // 最近断线时间戳（用于宽限期判断）
-  /** 在作画阶段断线时保留的房间 ID；用于重连后只向同局成员广播恢复提示。 */
+  /** 对局阶段断线时保留的房间 ID（经典作画回合与接龙对局阶段共用）；用于重连后只向同局成员广播恢复提示。 */
   drawingDisconnectRoomId?: string
   /** 每次有效断线递增；画家/房主短宽限回调只处理创建它的断线代次。 */
   disconnectGeneration: number

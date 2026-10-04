@@ -45,9 +45,25 @@ const PAUSABLE_PHASES = [
  */
 const ROUND_SETTLE_PHASES = ['drawing', 'paused'] as const satisfies readonly RoomPhase[]
 
+/**
+ * 接龙对局阶段（步 1–4 的动手期）：选词、作画、猜词。
+ * 展示期（`relay_showcase` / `relay_vote`）不在其中——复盘没有个人棒次，掉线既不保席也不代交。
+ * 用途：断线保席（session）与「本步代交」的准入（relay 状态机），两处必须同一口径。
+ */
+const RELAY_PLAY_PHASES = [
+  'relay_choose',
+  'relay_draw',
+  'relay_guess',
+] as const satisfies readonly RoomPhase[]
+
 /** 阶段是否属于进行中的对局（含暂停态）。 */
 export function isInMatchPhase(phase: RoomPhase): boolean {
   return IN_MATCH_PHASES.some((candidate) => candidate === phase)
+}
+
+/** 阶段是否属于接龙对局期（动手期）。 */
+export function isRelayPlayPhase(phase: RoomPhase): boolean {
+  return RELAY_PLAY_PHASES.some((candidate) => candidate === phase)
 }
 
 /** 阶段是否允许暂停。 */

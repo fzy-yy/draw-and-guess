@@ -80,6 +80,7 @@ const FORBIDDEN_KEYS = [
   'step2Guess',
   'step4Guess',
   'stepSubmissions',
+  'autoSubmitTimers',
   // 注：`currentStep` / `stepId` / `phaseStartedAt` / `phaseEndsAt` / `messages` / `votes`(复盘票行)
   // 是接龙视图的**合法**字段，不能进禁止清单（禁止清单只收「任何观看者都不该看到」的簿记）。
   // 逐字遮罩已揭示字符下标是服务端秘密簿记；公开视图只经 answerMask 表达，
@@ -590,6 +591,7 @@ describe('角色裁剪快照穷举矩阵', () => {
           phaseEndsAt: NOW + 5_000,
           chains: CHAIN_ORIGINS.map((_origin, chain) => makeRelayChain(chain)),
           stepSubmissions: new Set([HOST_ID]),
+          autoSubmitTimers: new Map(),
           messages: [
             {
               id: '00000000-0000-4000-8000-000000000404',

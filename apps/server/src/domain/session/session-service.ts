@@ -18,6 +18,7 @@ import { serverStrings } from '@draw-guess/strings'
 import { GameError, runtimeErrorType, type RuntimeLogger } from '../../errors.ts'
 import type { PlayerSecret, RoomSecret } from '../../models.ts'
 import { phaseEquivalent } from '../room/room-facts.ts'
+import { isRelayPlayPhase } from '../room/phase-facts.ts'
 import type { PlayerRecord, PlayerRepository } from '../../repositories/index.ts'
 import type { AppSocket } from '../../socket-types.ts'
 import { digestRecoveryToken } from '../../security/recovery-token.ts'
@@ -38,6 +39,8 @@ export interface SessionServiceContext extends RuntimePorts, RoomEventPorts, Pla
   persistPlayer(player: PlayerSecret): void
   players: Map<string, PlayerSecret>
   playersByTokenDigest: Map<string, PlayerSecret>
+  /** 成员在场事实变化后重算接龙本步的代交安排（断线按短宽限、离开立即，S7 / S8）。 */
+  refreshRelayAutoSubmit(room: RoomSecret, playerId: string): void
   repositories: {
     players: Pick<
       PlayerRepository,
@@ -366,8 +369,12 @@ export class SessionService {
     const player = this.context.players.get(playerId)
     if (!player || player.socketId !== socket.id) return
     const room = player.roomId ? this.context.rooms.get(player.roomId) : undefined
-    // 暂停中的作画仍是同一未完成回合；只有暂停前阶段确为 drawing 才保留席位。
+    // 席位保留的两条路径（其余阶段断线一律离房）：
+    // ① 经典作画回合（暂停中的作画仍是同一未完成回合）；
+    // ② 接龙对局阶段（选词/作画/猜词）——宽限内重连可续接当前步，超宽限由本步代交兜底（S8）。
     const retainDrawingSeat = phaseEquivalent(room, 'drawing')
+    const retainRelaySeat = room !== undefined && isRelayPlayPhase(room.phase)
+    const retainsSeat = retainDrawingSeat || retainRelaySeat
     player.disconnectGeneration += 1
     const generation = player.disconnectGeneration
 
@@ -378,11 +385,11 @@ export class SessionService {
     player.disconnectedAt = disconnectedAt
     this.persistDisconnectState(player, disconnectedAt)
     this.context.logger.info(
-      { playerId, roomId: player.roomId, retainedSeat: retainDrawingSeat },
-      retainDrawingSeat ? '玩家作画阶段断线并保留席位' : '玩家断线并进入身份恢复宽限',
+      { playerId, roomId: player.roomId, retainedSeat: retainsSeat },
+      retainsSeat ? '玩家作画阶段断线并保留席位' : '玩家断线并进入身份恢复宽限',
     )
 
-    if (room && retainDrawingSeat) this.retainDrawingSeat(player, room, generation)
+    if (room && retainsSeat) this.retainDrawingSeat(player, room, generation)
     else {
       delete player.drawingDisconnectRoomId
       // 非作画阶段不保留房间席位：统一走标准离房流程，确保准备、房主迁移、选词画家离开
@@ -411,7 +418,9 @@ export class SessionService {
   }
 
   /**
-   * 作画阶段断线保席：作废画布游标、广播重连提示，并为画家/房主安排短宽限计时器。
+   * 对局阶段断线保席：作废画布游标、广播重连提示，并为画家/房主安排短宽限计时器。
+   * 接龙对局阶段（选词/作画/猜词）走同一保席路径：席位于断线期间保留在房间里（链位不受影响），
+   * 本步代交由接龙状态机按「断线时刻 + 短宽限」调度（S8）——宽限内重连可续接当前步。
    * 宽限期间房间可能被暂停（保留席位语义仍指向作画），因此暂停中同样认定「本回合未完成」：
    * 否则超时回调因阶段不是 drawing 而静默跳过，恢复后回合将无人作画直至自然超时。
    */
@@ -431,6 +440,8 @@ export class SessionService {
       EVENTS.roomMemberConnectionChanged,
       createServerPush(EVENTS.roomMemberConnectionChanged, payload),
     )
+    // 接龙：把「本步代交」按短宽限排上；重连后回调自行让路，超宽限则由服务端代交（S8）
+    this.context.refreshRelayAutoSubmit(room, playerId)
 
     // 当前画家断线：保留短宽限；超时仍未恢复则由权威状态机废弃本回合。
     if (room.game?.drawerId === playerId) {

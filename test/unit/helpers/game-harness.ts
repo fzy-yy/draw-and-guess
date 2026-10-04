@@ -62,9 +62,14 @@ export function createGameHarness(
   const repositories = options.repositories ?? createMemoryRepositories()
   const ioEvents: RecordedEvent[] = []
   const io = {
-    to: (target: string) => ({
-      emit: (event: string, payload: unknown) => ioEvents.push({ target, event, payload }),
-    }),
+    to: (target: string) => {
+      const broadcast = {
+        emit: (event: string, payload: unknown) => ioEvents.push({ target, event, payload }),
+      }
+      // 排除广播（`emitRoomEventExcept`）：被排除的连接由调用方给定，测试仍把事件记到同一房间，
+      // 断言口径是「房间里发出了什么」，不模拟 Socket.IO 的投递过滤。
+      return { ...broadcast, except: (_socketId: string) => broadcast }
+    },
     in: (target: string) => ({
       emit: (event: string, payload: unknown) => ioEvents.push({ target, event, payload }),
     }),

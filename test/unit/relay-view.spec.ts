@@ -47,8 +47,16 @@ const ALL_SENTINELS = PLAYER_IDS.flatMap((_id, chain) => [
 ])
 
 /** 测试侧独立算式：观看者 i 在第 s 棒动手的链（S9 的环状顺延）。 */
-function chainForViewer(viewerIndex: number, step: RelayStep): number {
+function chainForViewer(viewerIndex: number, step: number): number {
   return (viewerIndex - (step - 1) + CHAIN_COUNT) % CHAIN_COUNT
+}
+
+/**
+ * 测试侧独立算式：「我本棒的链的上一棒动手者」＝席位排在我前一位的玩家。
+ * 由 S9 的环状顺延推出（每换一棒动手者整体顺延一位），与被测实现的解析互为参照。
+ */
+function previousActorOf(viewerIndex: number): number {
+  return (viewerIndex - 1 + CHAIN_COUNT) % CHAIN_COUNT
 }
 
 /** 一条链的完整秘密现场：两幅画各一笔、题面与步 2 猜词文本都是哨兵值。 */
@@ -172,6 +180,7 @@ function makeRoom(
       phaseEndsAt: NOW + 5_000,
       chains: PLAYER_IDS.map((playerId, index) => makeChain(playerId, index)),
       stepSubmissions: new Set([PLAYER_IDS[0] ?? '']),
+      autoSubmitTimers: new Map(),
       messages: [
         {
           id: '00000000-0000-4000-8000-000000000404',
@@ -246,7 +255,6 @@ describe('接龙视图裁剪矩阵', () => {
 
         // 按阶段断言「本棒产物」的字段形状
         const ownChain = chainForViewer(viewerIndex, cell.step)
-        const chain = room.relay?.chains[ownChain]
         if (cell.phase === 'relay_choose') {
           expect(
             view.wordOptions?.map((word) => word.text),
@@ -273,8 +281,9 @@ describe('接龙视图裁剪矩阵', () => {
             view.previousDrawing?.strokes.map((command) => command.id),
             label,
           ).toEqual([strokeIdOf(ownChain, cell.step === 2 ? 1 : 3)])
-          // 上一家 = 该链发起人（他动笔画过，客户端据此加画笔角标）
-          expect(view.previousArtist?.id, label).toBe(chain?.originPlayerId)
+          // 上一家 = 上一棒的动手者（看上一家的画，客户端据此加画笔角标）：
+          // 步 2 是链发起人（画第一幅），步 4 是第三棒（画第二幅）——两幅画的画者不是同一个人
+          expect(view.previousArtist?.id, label).toBe(PLAYER_IDS[previousActorOf(viewerIndex)])
           expect(view.prompt, label).toBeUndefined()
           expect(view.ownCanvas, label).toBeUndefined()
           expect(view.wordOptions, label).toBeUndefined()

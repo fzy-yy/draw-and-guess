@@ -28,7 +28,10 @@ import {
   type RelayChainSecret,
   type RelayGameSecret,
 } from '../../../apps/server/src/domain/relay/relay-models.ts'
-import type { RelayDrawingStep } from '../../../apps/server/src/domain/relay/relay-steps.ts'
+import type {
+  RelayDrawingStep,
+  RelayGuessingStep,
+} from '../../../apps/server/src/domain/relay/relay-steps.ts'
 import type { RoomSecret } from '../../../apps/server/src/models.ts'
 import {
   createGameHarness,
@@ -56,6 +59,8 @@ export interface RelayTestPlayer {
   playerId: string
   nickname: string
   socket: TestSocket
+  /** 身份恢复令牌：断线重连用例凭它走真实恢复路径，拿回同一身份与链位。 */
+  recoveryToken: string
 }
 
 /** 接龙画布通路用例的场景：4～6 人接龙房 + 已就位的链数组 + 当前作画步骤。 */
@@ -112,6 +117,7 @@ export function startRelayDrawing(
     playerId: registration.playerId,
     nickname: registration.nickname,
     socket: registration.socket,
+    recoveryToken: registration.recoveryToken,
   }))
   // 分到链的成员（前 playerCount 名）与未分到链的成员（越权用例）。
   const players = allMembers.slice(0, playerCount)
@@ -142,6 +148,7 @@ export function startRelayDrawing(
     phaseEndsAt: harness.runtime.now() + APP_CONFIG.relay.drawSeconds.default * 1_000,
     chains: players.map((player) => createRelayChainSecret(player.playerId)),
     stepSubmissions: new Set<string>(),
+    autoSubmitTimers: new Map(),
     messages: [],
   }
   room.phase = 'relay_draw'
@@ -201,10 +208,23 @@ export interface RelayGameScenario {
   chainOf(playerId: string, step?: RelayStep): RelayChainSecret
   /** 取某玩家在某作画步骤负责的画布（步 1 → 第一幅，步 3 → 第二幅）。 */
   canvasOf(playerId: string, step: RelayDrawingStep): DrawingCanvasState
+  /** 取某玩家在某猜词步负责的链上写着的答案（步 2 → `step2Guess`，步 4 → `step4Guess`）。 */
+  guessOf(playerId: string, step: RelayGuessingStep): string | undefined
   /** 全员各选自己候选里的第一个词（真实 `game:chooseWord` 路径）：选满即秒切作画。 */
   chooseAll(): void
   /** 全员提交本棒作画（真实 `relay:submitDrawing` 路径）：提交满即结算并进入下一棒。 */
   submitAllDrawings(): void
+  /**
+   * 全员各提交一句本棒猜词（真实 `relay:submitGuess` 路径）；返回「玩家 ID → 提交的文本」。
+   * 默认文本为 `答案-<昵称>`；用例可传入自定义文本（如断言链上写着谁的那句）。
+   */
+  submitAllGuesses(textOf?: (player: RelayTestPlayer) => string): Map<string, string>
+  /** 断线（真实断线编排）：接龙对局阶段保留席位，并按短宽限安排本步代交（S8）。 */
+  disconnect(player: RelayTestPlayer): void
+  /** 断线重连（真实身份恢复路径）：宽限内重连可续接当前步，返回接管后的新连接。 */
+  reconnect(player: RelayTestPlayer): RelayTestPlayer
+  /** 四个步骤各全员动手一次走完，停在复盘入口（步 4 结算后的 `relay_showcase`）。 */
+  playToShowcase(): void
 }
 
 /**
@@ -234,6 +254,7 @@ export function startRelayGame(
     playerId: registration.playerId,
     nickname: registration.nickname,
     socket: registration.socket,
+    recoveryToken: registration.recoveryToken,
   }))
   const host = players[0]
   if (!host) throw new Error('接龙测试房缺少房主')
@@ -268,6 +289,56 @@ export function startRelayGame(
     return chain
   }
 
+  /**
+   * 本棒还能不能「替他提交」：只有在线、在席（未离局）、且本棒未提交的成员才由用例驱动。
+   * 离房（不在成员数组）与退局（leftGame）的成员不再是请求主体；掉线者的棒次由服务端按宽限代交——
+   * 三类都由服务端兜底，用例既不必也不能代替他们提交。
+   */
+  const stillCanAct = (player: RelayTestPlayer): boolean =>
+    harness.service.players.get(player.playerId)?.connected === true &&
+    room.members.some((member) => member.playerId === player.playerId && !member.leftGame) &&
+    !relay.stepSubmissions.has(player.playerId)
+
+  const chooseAll = (): void => {
+    for (const player of players) {
+      if (!stillCanAct(player)) continue
+      const chain = chainOf(player.playerId, 1)
+      const word = chain.candidates[0]
+      if (!word) throw new Error('步 1 选词候选为空')
+      harness.service.chooseWord(player.playerId, relay.stepId, word.id)
+    }
+  }
+
+  const submitAllDrawings = (): void => {
+    for (const player of players) {
+      if (!stillCanAct(player)) continue
+      harness.service.submitRelayDrawing(player.playerId, relay.stepId)
+    }
+  }
+
+  const submitAllGuesses = (
+    textOf: (player: RelayTestPlayer) => string = (player) => `答案-${player.nickname}`,
+  ): Map<string, string> => {
+    if (room.phase !== 'relay_guess') throw new Error('只有在猜词棒才能提交答案')
+    const submitted = new Map<string, string>()
+    for (const player of players) {
+      if (!stillCanAct(player)) continue
+      const text = textOf(player)
+      harness.service.submitRelayGuess(player.playerId, relay.stepId, text)
+      submitted.set(player.playerId, text)
+    }
+    return submitted
+  }
+
+  /** 四个步骤各全员动手一次走完，停在复盘入口（步 4 结算后的 `relay_showcase`）。 */
+  const playToShowcase = (): void => {
+    chooseAll()
+    submitAllDrawings()
+    submitAllGuesses()
+    submitAllDrawings()
+    submitAllGuesses()
+  }
+
   return {
     harness,
     room,
@@ -300,20 +371,22 @@ export function startRelayGame(
       const chain = chainOf(playerId, step)
       return step === 1 ? chain.step1Canvas : chain.step3Canvas
     },
-    chooseAll: () => {
-      for (const player of players) {
-        const chain = chainOf(player.playerId, 1)
-        // 已选过的成员跳过：用例可以先手动选一部分人，再用本方法补齐全员（触发秒切）
-        if (chain.step1Word) continue
-        const word = chain.candidates[0]
-        if (!word) throw new Error('步 1 选词候选为空')
-        harness.service.chooseWord(player.playerId, relay.stepId, word.id)
-      }
+    guessOf: (playerId, step) => {
+      const chain = chainOf(playerId, step)
+      return step === 2 ? chain.step2Guess : chain.step4Guess
     },
-    submitAllDrawings: () => {
-      for (const player of players) {
-        harness.service.submitRelayDrawing(player.playerId, relay.stepId)
-      }
+    chooseAll,
+    submitAllDrawings,
+    submitAllGuesses,
+    playToShowcase,
+    disconnect: (player) => {
+      // 走真实断线编排：接龙对局阶段保席 + 短宽限代交，与「掉线者不入链」的经典口径分开
+      harness.service.handleDisconnect(player.socket as never)
+    },
+    reconnect: (player) => {
+      const registration = harness.register(player.nickname, undefined, player.recoveryToken)
+      player.socket = registration.socket
+      return player
     },
   }
 }

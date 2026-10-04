@@ -47,6 +47,8 @@ export interface RoomMembershipServiceContext
   ): void
   evaluateRematch(room: RoomSecret): void
   finishRound(room: RoomSecret, drawerAbandoned: boolean): void
+  /** 成员在场事实变化后重算接龙本步的代交安排（离开立即代交、后续每步继续代交，S7）。 */
+  refreshRelayAutoSubmit(room: RoomSecret, playerId: string): void
   getRoomVocabularyStore(room?: RoomSecret): VocabularyStore
   isPlaying(phase: RoomPhase): boolean
   logger: RuntimeLogger
@@ -199,6 +201,8 @@ export class RoomMembershipService {
     void player.socket?.leave(room.id)
     room.members = room.members.filter((member) => member.playerId !== playerId)
     if (room.phase === 'waiting') reseatMembers(room)
+    // 接龙：离房者仍占链位（链挂在 relay 上，不受成员数组影响），本步立即代交、后续每步继续代交（S7）
+    this.context.refreshRelayAutoSubmit(room, playerId)
     this.context.logger.info({ roomId: room.id, playerId, reason }, '玩家已离开房间')
     delete player.roomId
     room.stateVersion += 1
@@ -239,6 +243,8 @@ export class RoomMembershipService {
       EVENTS.roomMemberConnectionChanged,
       createServerPush(EVENTS.roomMemberConnectionChanged, payload),
     )
+    // 接龙：退局者保留成绩卡与链位，本步立即代交、后续每步继续代交（S7 / S37）
+    this.context.refreshRelayAutoSubmit(room, playerId)
 
     if (this.reclaimHostOrClose(room, playerId)) return
 

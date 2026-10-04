@@ -296,6 +296,11 @@ export class GameService {
       random: this.random,
       getRoomVocabularyStore: this.ports.getRoomVocabularyStore,
       requireRelay: this.ports.requireRelay,
+      // 掉队代交的在场事实：断线时刻取自玩家身份（宽限 = 断线时刻 + 短宽限，S8）
+      getPlayerPresence: (playerId) => {
+        const player = this.players.get(playerId)
+        return { connected: player?.connected === true, disconnectedAt: player?.disconnectedAt }
+      },
       emitSystemNotice: this.ports.emitSystemNotice,
       emitRoom: (roomId) => this.publisher.emitRoom(roomId),
       broadcastPresence: () => this.publisher.broadcastPresence(),
@@ -318,6 +323,8 @@ export class GameService {
       players: this.players,
       rooms: this.rooms,
       roomsByPrivateCode: this.roomsByPrivateCode,
+      // 成员离开 / 退局后重算接龙本步的代交（离开者仍占链位、后续每步自动代交，S7 / S8）
+      refreshRelayAutoSubmit: (room, playerId) => this.relay.refreshAutoSubmit(room, playerId),
       setWaiting: (room, notice, resetReady) => {
         // 接龙局随经典对局一起清场：经典 setWaiting 只回收 room.game，
         // 接龙秘密必须由接龙状态机自己回收，否则等待中的房间会留着一份已作废的接龙局。
@@ -339,6 +346,8 @@ export class GameService {
       persistPlayer: (player) => this.persistence.persistPlayer(player),
       players: this.players,
       playersByTokenDigest: this.playersByTokenDigest,
+      // 接龙对局阶段断线：按短宽限安排本步代交（宽限内重连即让路，S8）
+      refreshRelayAutoSubmit: (room, playerId) => this.relay.refreshAutoSubmit(room, playerId),
       repositories: this.repositories,
       rooms: this.rooms,
       transferDisconnectedHost: (room, playerId) =>
@@ -867,6 +876,15 @@ export class GameService {
   submitRelayDrawing(playerId: string, stepId: string): void {
     const { room } = this.membership.requireMembership(playerId)
     this.relay.submitDrawing(room, playerId, stepId)
+  }
+
+  /**
+   * 提交本棒猜词（`relay:submitGuess`，S30 / S15）：只记录文本、提交即锁定，**不进聊天流**（S20）。
+   * 空提交 / 超长由状态机以 INVALID_MESSAGE 拒绝，重复提交以 ALREADY_SUBMITTED 拒绝。
+   */
+  submitRelayGuess(playerId: string, stepId: string, text: string): void {
+    const { room } = this.membership.requireMembership(playerId)
+    this.relay.submitGuess(room, playerId, stepId, text)
   }
 
   /**

@@ -9,7 +9,9 @@
  * 工单 05 起已落地「开局 → 步 1 选词 → 步 1 作画 → 进入步 2」所需的字段：
  * 按链隔离的候选词与换批状态（`RelayChainSecret.candidates` / `offeredWordIds` / `rerollUsed`）、
  * 本步已提交集（`RelayGameSecret.stepSubmissions`）与房间自由聊天流（`RelayGameSecret.messages`，S79）。
- * 代交内容归工单 06、复盘游标归工单 07、投票结算归工单 08，各自落地时增量补齐（本文件不预置空占位字段）。
+ * 工单 06 补齐步 2–4 的换手与掉队容错：四棒产出的写入口（`step2Guess` / `step4Guess` / 第二幅画布）
+ * 与本步代交计时器（`autoSubmitTimers`，S8 / S16）；复盘游标归工单 07、投票结算归工单 08，
+ * 各自落地时增量补齐（本文件不预置空占位字段）。
  */
 import type {
   ChatMessage,
@@ -71,6 +73,12 @@ export interface RelayGameSecret {
   chains: RelayChainSecret[]
   /** 本步已提交的玩家 ID 集合：快照里的「已提交 / 未提交」由它派生（S64）。 */
   stepSubmissions: Set<string>
+  /**
+   * 本步的代交计时器：玩家 ID → 「断线时刻 + 短宽限」到点后为他代交本步的句柄（S8）。
+   * 换手时整体清理；回调自身按「步 id 未变 + 仍不在线」复核，因此与超时扫掠共用同一个提交集，
+   * 绝不重复代交（S16）。离开 / 退局者的代交是立即的，不占计时器。
+   */
+  autoSubmitTimers: Map<string, TimerHandle>
   /**
    * 房间自由聊天流：接龙的聊天是独立社交频道（S79），与作答彻底分离——
    * 这里只可能收到 `chat:say` 的自由聊天与系统通知，作答永不进入（S20）。

@@ -3,6 +3,7 @@ import type { RoomPhase } from '@draw-guess/shared'
 import {
   isInMatchPhase,
   isPausablePhase,
+  isRelayPlayPhase,
   isRoundSettlePhase,
 } from '../../apps/server/src/domain/room/phase-facts.ts'
 
@@ -13,6 +14,8 @@ import {
  * 类守卫（提前结束、自动暂停），漏掉接龙阶段会让接龙房在大厅被显示成「房间中」。
  * 接龙禁用暂停（S19）：`isPausablePhase` 对接龙阶段必须为 false，
  * `LEGAL_PHASES` 中也不存在任何指向 `paused` 的接龙边（由 room-phase-transition 用例守护）。
+ * `isRelayPlayPhase` 是断线保席与「本步代交」的共同准入（S8）：只有动手期（选词/作画/猜词）
+ * 属于它，展示期的掉线既不保席也不代交。
  */
 const RELAY_PHASES = [
   'relay_choose',
@@ -33,6 +36,28 @@ describe('接龙阶段事实', () => {
     for (const phase of RELAY_PHASES) {
       expect(isPausablePhase(phase), phase).toBe(false)
       expect(isRoundSettlePhase(phase), phase).toBe(false)
+    }
+  })
+
+  it('只有动手期（选词/作画/猜词）属于接龙对局期，展示期不算', () => {
+    for (const phase of ['relay_choose', 'relay_draw', 'relay_guess'] as const) {
+      expect(isRelayPlayPhase(phase), phase).toBe(true)
+    }
+    // 复盘展示与投票没有个人棒次：掉线不保席、也不代交（轮播不因成员变动而中止，S12）
+    expect(isRelayPlayPhase('relay_showcase')).toBe(false)
+    expect(isRelayPlayPhase('relay_vote')).toBe(false)
+    // 经典阶段一律不属于接龙对局期（模式分流不重叠）
+    for (const phase of [
+      'waiting',
+      'starting',
+      'choosing_word',
+      'drawing',
+      'round_result',
+      'paused',
+      'game_result',
+      'closed',
+    ] as const) {
+      expect(isRelayPlayPhase(phase), phase).toBe(false)
     }
   })
 

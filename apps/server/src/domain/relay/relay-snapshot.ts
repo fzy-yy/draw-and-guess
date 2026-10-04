@@ -8,8 +8,8 @@
  * | `relay_choose`（步 1） | 自己发起的那条 | **自己的**候选 + 换批权限 |
  * | `relay_draw`（步 1） | 自己发起的那条 | 自己的题面（自己选的词）+ 自己的第一幅画布 |
  * | `relay_draw`（步 3） | 向前回退 2 条 | 上家猜出的**文本**（看不到上家的画）+ 自己的第二幅画布 + 上家 chip（无画笔角标） |
- * | `relay_guess`（步 2） | 向前回退 1 条 | 上家的第一幅画作（只读）+ 上家 chip（带画笔角标） |
- * | `relay_guess`（步 4） | 向前回退 3 条 | 上家的第二幅画作（只读）+ 上家 chip（带画笔角标） |
+ * | `relay_guess`（步 2） | 向前回退 1 条 | 上家的第一幅画作（只读）+ **画这幅画的人**（链发起人）chip（带画笔角标） |
+ * | `relay_guess`（步 4） | 向前回退 3 条 | 上家的第二幅画作（只读）+ **画这幅画的人**（第三棒）chip（带画笔角标） |
  * | `relay_showcase` / `relay_vote` | —— | 阶段骨架（复盘与投票内容归工单 07/08） |
  *
  * 任何一格都**绝不下发**：其余链的画作与答案、未揭晓的答案（连长度也不给，S81 的占位由客户端按固定位数渲染）、
@@ -21,6 +21,7 @@
 import { APP_CONFIG } from '../../config/index.ts'
 import type { RelayGameView, RoomPhase } from '@draw-guess/shared'
 import type { DrawingCanvasState } from '../drawing/drawing-core.ts'
+import type { RelayGameSecret } from './relay-models.ts'
 import type { PlayerSecret, RoomSecret } from '../../models.ts'
 import { relayChainIndexOf } from './relay-canvas-target.ts'
 
@@ -95,13 +96,10 @@ export class RelaySnapshotBuilder {
       // 步 1 画自己选的词、写第一幅画布；步 3 按上家猜出的文本画、写第二幅画布
       const isFirstStep = relay.currentStep === 1
       const prompt = isFirstStep ? chain.step1Word?.text : chain.step2Guess
-      // 步 3 的上一家是「出题者」：他给的是文本不是画，chip 因此不带画笔角标（S74）
+      // 步 3 的上一家是「出题者」（步 2 的动手者）：他给的是文本不是画，chip 因此不带画笔角标（S74）
       const previousArtist = isFirstStep
         ? undefined
-        : this.playerRef(
-            room,
-            relay.chains[relayChainIndexOf(chainCount, viewerIndex, 2)]?.originPlayerId,
-          )
+        : this.playerRef(room, this.previousActorId(relay, viewerIndex))
       return {
         ...view,
         ...(prompt ? { prompt } : {}),
@@ -111,8 +109,9 @@ export class RelaySnapshotBuilder {
     }
 
     if (room.phase === 'relay_guess') {
-      // 猜词棒只有步 2/4：步 2 看该链第一幅画、步 4 看第二幅；画者就是链发起人（带画笔角标）
-      const previousArtist = this.playerRef(room, chain.originPlayerId)
+      // 猜词棒只有步 2/4：步 2 看该链第一幅画（链发起人画的）、步 4 看第二幅（第三棒画的）；
+      // chip 的画笔角标语义＝「你正在看的这幅画是谁画的」，因此两棒的画者不是同一人（S74）
+      const previousArtist = this.playerRef(room, this.previousActorId(relay, viewerIndex))
       return {
         ...view,
         previousDrawing: toCanvasView(
@@ -124,6 +123,17 @@ export class RelaySnapshotBuilder {
 
     // 复盘 / 投票：本单只给阶段骨架，`showcase` 内容归工单 07/08
     return view
+  }
+
+  /**
+   * 观看者本棒的**上一棒动手者**（他给的画 / 文本就是本棒的全部输入，S35）：
+   * 链 j 的第 s 棒动手者是链 (j + s - 1) 的发起人（S9），于是「我本棒的链的第 s-1 棒动手者」
+   * 恰好是席位排在我前一位的链发起人——与步号无关（每换一棒，动手者整体顺延一位）。
+   * 步 2/4 的画者 chip 与步 3 的出题者 chip 共用这一处解析，避免同一环状关系在两处漂移。
+   */
+  private previousActorId(relay: RelayGameSecret, viewerIndex: number): string | undefined {
+    const previousIndex = (viewerIndex - 1 + relay.chains.length) % relay.chains.length
+    return relay.chains[previousIndex]?.originPlayerId
   }
 
   /** chip 用的极小资料：身份缺失时用成员冻结资料兜底（离局成员的链位仍会被展示，S37）。 */
