@@ -16,7 +16,7 @@
  *   （需要 roomId），因此其返回类型收窄为 RoomSnapshotDecision
  *   （见 docs/adr/0041-snapshot-gate-decision-narrowing.md）。
  */
-import type { RoomSnapshot } from '@draw-guess/shared'
+import type { RelayGameView, RoomSnapshot } from '@draw-guess/shared'
 
 type PushDecision = 'accept' | 'ignore' | 'resync'
 
@@ -26,6 +26,21 @@ type PushDecision = 'accept' | 'ignore' | 'resync'
  * （类型收窄后编译即强制删除该死分支，取舍见 docs/adr/0041-snapshot-gate-decision-narrowing.md）。
  */
 type RoomSnapshotDecision = Extract<PushDecision, 'accept' | 'ignore'>
+
+/**
+ * 接龙快照的画布修订口径：一件接龙快照里最多只有一幅画布（作画棒＝自己的、猜词棒＝上家的、
+ * 复盘期＝当前半场的），三者按观看者与步骤互斥，因此取任一存在者的修订即可（都没有时按 0）。
+ * 接龙**零广播**（S49），本客户端自己上传的笔画会先落到本地镜像上，所以这个修订正是
+ * 「快照里的画布是否被本客户端的在途提交甩在后面」的判据。
+ */
+function relayDrawingRevision(relay: RelayGameView): number {
+  return (
+    relay.ownCanvas?.drawingRevision ??
+    relay.previousDrawing?.drawingRevision ??
+    relay.showcase?.drawing.drawingRevision ??
+    0
+  )
+}
 
 /**
  * 房间快照统一门禁：拒绝旧房间、旧状态、旧对局、旧回合与画布修订倒退。
@@ -41,6 +56,23 @@ export function acceptRoomSnapshot(
   if (incoming.id !== current.id) return 'ignore'
   // 房间状态版本倒退：乱序旧包，丢弃。
   if (incoming.stateVersion < current.stateVersion) return 'ignore'
+
+  // 接龙分支（S60）：接龙房间没有经典 `game` 字段，改按「步骤 id + 画布修订 + 状态版本」裁决。
+  // 放在经典分支之前、并在本分支内穷尽返回，经典路径因此一行不动。
+  if (incoming.gameMode === 'relay') {
+    const currentRelay = current.relay
+    const incomingRelay = incoming.relay
+    // 本地还没有接龙视图（刚进房 / 开局首包）：无镜像可倒退，采纳。
+    if (!currentRelay) return 'accept'
+    // 本地有接龙视图而载荷没有（接龙局已结束的回退包）：只有状态版本前进才可信。
+    if (!incomingRelay) return incoming.stateVersion > current.stateVersion ? 'accept' : 'ignore'
+    // 换棒（步骤 id 变化）：服务端权威已交棒，采纳新的画布与题面。
+    if (incomingRelay.stepId !== currentRelay.stepId) return 'accept'
+    // 同一棒内：画布修订不允许倒退，否则会用旧画布覆盖本客户端已落地的笔画。
+    return relayDrawingRevision(incomingRelay) < relayDrawingRevision(currentRelay)
+      ? 'ignore'
+      : 'accept'
+  }
 
   const currentGame = current.game
   const incomingGame = incoming.game

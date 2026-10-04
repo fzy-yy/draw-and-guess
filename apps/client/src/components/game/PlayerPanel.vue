@@ -6,6 +6,8 @@
   画家仅通过「作画中」角色文案与画笔角标表达（无背景底色）；
   玩家本人通过卡片背景显示自身座位色浅色底表达（保留本人卡片自我高亮定位）；已猜中通过眼睛角标与文案表达，掉线用虚线边框与半透明底表达。
   宽度与高度由宿主（GameView 左栏 aside）给定：自身流内占位、不浮动、无标题栏、不可关闭。
+  `status` 插槽（S84）：第二行的「局内角色」位置可按模式替换——接龙传入「已提交 / 未提交 / 已投票 / 未投票」；
+  不传该插槽时按现状渲染经典局内角色，经典行为逐条不变。
 -->
 <script setup lang="ts">
 import { ref, watch } from 'vue'
@@ -14,13 +16,10 @@ import { strings } from '@draw-guess/strings'
 import { playSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
 import { AvatarImage } from '@/components/common'
+import { PLAYER_BADGE_CLASS } from '@/components/game/player-badge.ts'
 import { roleTextFor } from '@/utils/role-text'
 
 const store = useGameStore()
-
-// 头像右下角标（画家 / 已猜中）共用同一底座；提取常量避免长串在模板里逐字重复。
-const memberBadgeClass =
-  'absolute right-[-0.25cqh] bottom-[-0.15cqh] grid h-[2.1cqh] w-[2.1cqh] place-items-center rounded-full bg-blue text-white shadow-xs'
 
 /**
  * 画家即时飘字动效：
@@ -93,7 +92,11 @@ watch(
           :avatar-id="member.avatarId"
           :label="strings.a11y.common.playerAvatarAria(member.nickname)"
         />
-        <span v-if="member.isDrawer || member.guessed" :class="memberBadgeClass" aria-hidden="true">
+        <span
+          v-if="member.isDrawer || member.guessed"
+          :class="PLAYER_BADGE_CLASS"
+          aria-hidden="true"
+        >
           <Brush v-if="member.isDrawer" class="h-[62%] w-[62%]" />
           <Eye v-else-if="member.guessed" class="h-[62%] w-[62%]" />
         </span>
@@ -117,17 +120,20 @@ watch(
           <span class="shrink-0 text-blue text-fs-12 font-bold">{{
             strings.ui.common.scoreUnit(member.score)
           }}</span>
-          <span
-            class="truncate text-fs-10 font-bold"
-            :class="[
-              member.isDrawer
-                ? 'bg-[linear-gradient(90deg,var(--seat-color),var(--color-navy),var(--seat-color))] bg-size-[200%_100%] bg-clip-text text-transparent animate-[drawer-role-flow_1.4s_linear_infinite]'
-                : member.guessed
-                  ? 'text-warning-fg'
-                  : 'text-muted',
-            ]"
-            >{{ roleTextFor(member) }}</span
-          >
+          <!-- 状态位：缺省＝经典局内角色；接龙经 `status` 插槽换成提交 / 投票状态（S84） -->
+          <slot name="status" :member="member">
+            <span
+              class="truncate text-fs-10 font-bold"
+              :class="[
+                member.isDrawer
+                  ? 'bg-[linear-gradient(90deg,var(--seat-color),var(--color-navy),var(--seat-color))] bg-size-[200%_100%] bg-clip-text text-transparent animate-[drawer-role-flow_1.4s_linear_infinite]'
+                  : member.guessed
+                    ? 'text-warning-fg'
+                    : 'text-muted',
+              ]"
+              >{{ roleTextFor(member) }}</span
+            >
+          </slot>
         </div>
       </div>
     </article>

@@ -46,6 +46,8 @@ const emit = defineEmits<{
 }>()
 
 const store = useGameStore()
+/** 遮罩的数据源：经典对局视图或接龙视图（两者必居其一），决定本组件是否渲染任何遮罩。 */
+const hasOverlaySource = computed(() => Boolean(props.game || store.room?.relay))
 /** 计算终局荣誉称号列表映射（按成员 ID 索引） */
 const playerAccolades = computed(() => {
   return deriveAccolades(props.game, store.room?.members ?? [])
@@ -85,11 +87,40 @@ async function submitCustomWord(text: string): Promise<void> {
     customWordSubmitting.value = false
   }
 }
+
+// —— 选词卡（经典画家选词 / 接龙第 1 棒全员选词，复用同一张卡的标记与交互，S72 / S84）——
+/** 当前是否处于接龙选词阶段。 */
+const isRelayChoose = computed(() => store.room?.phase === 'relay_choose')
+/** 接龙选词视图：候选词与换批权限都来自它（经典仍走对局视图的字段，互不串源）。 */
+const relayChoose = computed(() => (isRelayChoose.value ? store.room?.relay : undefined))
+/** 选词卡显隐：经典只有画家看到；接龙人人各选自己那条链的词，全员都看到。 */
+const showChooseCard = computed(() =>
+  isRelayChoose.value
+    ? Boolean(store.room?.relay)
+    : store.room?.phase === 'choosing_word' && store.isDrawer,
+)
+/** 接龙已选完词、等待其他人：本步其余出口（重选 / 换批 / 自定义）在服务端都会被拒，界面据快照锁定。 */
+const chooseLocked = computed(() => isRelayChoose.value && relayChoose.value?.submitted === true)
+/** 候选词按钮的数据源（经典＝画家候选，接龙＝自己的候选）。 */
+const chooseOptions = computed(() =>
+  isRelayChoose.value ? (relayChoose.value?.wordOptions ?? []) : (props.game?.wordOptions ?? []),
+)
+/** 是否还能换一批（两种模式都来自各自视图的 canReroll）。 */
+const canReroll = computed(() =>
+  isRelayChoose.value ? relayChoose.value?.canReroll === true : props.game?.canReroll === true,
+)
+/** 卡片底部提示：接龙选词恒有截止时间（无「不限时」档位），经典按规则在限时与不限时之间切换。 */
+const chooseHint = computed(() => {
+  if (chooseLocked.value) return strings.ui.game.relayWaitingOthers
+  if (isRelayChoose.value || store.room?.settings.allowChooseTimeLimit)
+    return strings.ui.game.autoChoose(props.secondsLeft)
+  return strings.ui.game.chooseNoLimitHint
+})
 </script>
 
 <template>
-  <!-- display:contents —— 让遮罩不占 grid 格子，同时用 v-if 保证 store.room 与 game 已就绪 -->
-  <div v-if="store.room && game" class="contents">
+  <!-- display:contents —— 让遮罩不占 grid 格子，同时用 v-if 保证 store.room 与数据源已就绪 -->
+  <div v-if="store.room && hasOverlaySource" class="contents">
     <span class="sr-only" aria-live="polite" aria-atomic="true">{{ phaseAnnouncement }}</span>
     <!-- 阶段遮罩：开局倒计时，仅居中展示黄色圆形大数字 -->
     <div
@@ -101,8 +132,8 @@ async function submitCustomWord(text: string): Promise<void> {
         >{{ secondsLeft }}</b
       >
     </div>
-    <!-- 阶段遮罩：画家选词（只有画家可见候选词按钮与换一组操作） -->
-    <OverlayCard v-else-if="store.room.phase === 'choosing_word' && store.isDrawer">
+    <!-- 阶段遮罩：选词卡（经典＝画家选词；接龙＝第 1 棒全员各选自己那条链的词，复用同一张卡的标记与交互） -->
+    <OverlayCard v-else-if="showChooseCard">
       <!-- 居中圆形底座包裹 Brush，等比居中无裁切 -->
       <div class="grid place-items-center h-[7.5cqh] w-[7.5cqh] bg-blue rounded-full">
         <Brush class="h-[3.8cqh] w-[3.8cqh] text-white" />
@@ -110,14 +141,14 @@ async function submitCustomWord(text: string): Promise<void> {
       <p>{{ strings.ui.game.yourTurn }}</p>
       <div class="relative flex w-full items-center justify-center min-h-[4.5cqh]">
         <h2>{{ strings.ui.game.chooseWordTitle }}</h2>
-        <!-- 右侧动作组：换一组与自定义并排（关闭对应规则时整颗按钮不渲染） -->
-        <div class="absolute right-[1em] flex items-center gap-[0.6em]">
+        <!-- 右侧动作组：换一组与自定义并排（关闭对应规则时整颗按钮不渲染；已选完词时整组收起） -->
+        <div v-if="!chooseLocked" class="absolute right-[1em] flex items-center gap-[0.6em]">
           <AppButton
             v-if="store.room.settings.allowWordReroll"
             variant="secondary"
             class="min-h-[4cqh] px-[0.9em] text-fs-14"
-            :disabled="!game.canReroll"
-            :title="game.canReroll ? strings.a11y.game.rerollWords : strings.a11y.game.rerollUsed"
+            :disabled="!canReroll"
+            :title="canReroll ? strings.a11y.game.rerollWords : strings.a11y.game.rerollUsed"
             @click="emit('reroll-words')"
           >
             <RefreshCw class="h-[2cqh] w-[2cqh]" />
@@ -135,9 +166,9 @@ async function submitCustomWord(text: string): Promise<void> {
           </AppButton>
         </div>
       </div>
-      <div class="flex gap-[1em] my-[2cqh]">
+      <div v-if="!chooseLocked" class="flex gap-[1em] my-[2cqh]">
         <button
-          v-for="option in game.wordOptions ?? []"
+          v-for="option in chooseOptions"
           :key="option.id"
           type="button"
           class="flex min-h-[7cqh] min-w-[12cqw] flex-col items-center justify-center gap-[0.3cqh] rounded-[0.7em] bg-yellow text-navy px-[1em] text-fs-20 font-bold cursor-pointer transition-transform active:scale-95"
@@ -146,12 +177,8 @@ async function submitCustomWord(text: string): Promise<void> {
           <span class="leading-[1.2]">{{ option.text }}</span>
         </button>
       </div>
-      <!-- 选词阶段关闭限时时没有倒计时：提示「不限时」而不是「N 秒后自动选择」 -->
-      <span>{{
-        store.room.settings.allowChooseTimeLimit
-          ? strings.ui.game.autoChoose(secondsLeft)
-          : strings.ui.game.chooseNoLimitHint
-      }}</span>
+      <!-- 提示行：经典选词阶段关限时时提示「不限时」；接龙选完词后变成等待他人（S16 全员提交即秒切） -->
+      <span>{{ chooseHint }}</span>
       <CustomWordDialog
         v-model:open="customWordOpen"
         :submitting="customWordSubmitting"
@@ -179,7 +206,7 @@ async function submitCustomWord(text: string): Promise<void> {
     <OverlayCard
       v-else-if="
         store.room.phase === 'round_result' &&
-        game.roundResult &&
+        game?.roundResult &&
         !props.isReplaying &&
         showRoundResultModal
       "

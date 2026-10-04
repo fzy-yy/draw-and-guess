@@ -2,9 +2,13 @@
   右侧常驻聊天区（20cqw 独立黑框常驻版）：
   单行容纳 15~16 汉字，短句猜词不折行，猜词者边看画边打字，手感极其丝滑。
   消息列表 + 底部固定猜词输入。猜词输入、消息滚动跟随与自动聚焦逻辑全部收敛到内部；
-  是否可猜词由父组件经 canGuess 传入，提交猜词直接调用 store。
+  是否可提交由父组件经 canGuess 传入，提交直接调用 store。
   输入框对无权限角色直接禁用（禁用样式已表达状态，不再渲染冗余的文字提示行）。
   高度与宽度撑满父容器（GameView 右栏 aside），流内常驻，上部滚动消息流，底部固定输入。
+
+  聊天语义 props（S84 / S85）：标题 / 占位 / 提交目标由调用方给出——
+  经典不传即现状（标题＝猜词消息、占位按角色派生、提交走 `guess:submit`）；
+  接龙传入接龙标题与「发送消息」占位、提交目标为 chat（走独立事件 `chat:say`，与作答彻底分离）。
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
@@ -18,12 +22,29 @@ import { roleTextFor } from '@/utils/role-text'
 import AppInput from '@/components/common/AppInput.vue'
 
 // canGuess 由父组件（useGameHud）计算，这里只用于输入框权限与提交保护。
-const props = defineProps<{
-  canGuess: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    canGuess: boolean
+    /** 面板标题；缺省＝经典「猜词消息」。 */
+    title?: string
+    /** 输入框占位；缺省＝经典按当前角色派生（画家＝发消息、猜词者＝发猜词）。 */
+    placeholder?: string
+    /** 提交目标：guess＝经典猜词；chat＝接龙独立聊天（`chat:say`）。 */
+    submitTarget?: 'guess' | 'chat'
+  }>(),
+  { title: undefined, placeholder: undefined, submitTarget: 'guess' },
+)
 
 const store = useGameStore()
 const toasts = useToasts()
+
+/** 面板标题与输入占位：调用方给了就用，没给就回落到经典的按角色派生。 */
+const panelTitle = computed(() => props.title ?? strings.ui.game.chatTitle)
+const inputPlaceholder = computed(
+  () =>
+    props.placeholder ??
+    (store.isDrawer ? strings.ui.game.drawerChatPlaceholder : strings.ui.game.guessPlaceholder),
+)
 
 // 猜词输入本地状态（输入框内容随 submit 清空）。
 const guess = ref('')
@@ -86,11 +107,23 @@ function messageClass(message: ChatMessage): string {
   }
 }
 
-/** 提交猜词：先交由服务端判定，只有成功送达才清空输入框；
- * 超时或业务失败（如重复猜中）时保留草稿，避免玩家已输入的内容被吞。 */
+/**
+ * 提交输入内容：先交由服务端裁决，只有成功送达才清空输入框；
+ * 超时或业务失败（如重复猜中）时保留草稿，避免玩家已输入的内容被吞。
+ * 接龙的提交目标是独立聊天频道（`chat:say`），永不携带作答（S79 / S20）。
+ */
 async function sendGuess(): Promise<void> {
   const text = guess.value.trim()
   if (!text || !props.canGuess) return
+
+  if (props.submitTarget === 'chat') {
+    const delivered = await store.relayChat(text)
+    if (delivered) {
+      playInteractionSound('activate')
+      guess.value = ''
+    }
+    return
+  }
 
   // 画家如果发送内容为答案，则在客户端直接拦截并弹出 Toast 提示无法发送答案
   if (store.isDrawer && store.room?.game?.answer) {
@@ -158,12 +191,15 @@ defineExpose({ focusInput })
         <span class="text-blue text-fs-10 tracking-[0.15em]">{{
           strings.ui.game.liveChatLabel
         }}</span>
-        <h2 class="text-fs-18">{{ strings.ui.game.chatTitle }}</h2>
+        <h2 class="text-fs-18">{{ panelTitle }}</h2>
       </div>
-      <!-- 当前角色标签：已猜中 / 作画中 / 猜词中（与得分条共用同一映射） -->
-      <span class="bg-sky px-[0.6em] py-[0.35cqh] text-blue rounded-[99em] text-fs-10 font-bold">{{
-        roleTextFor(store.me)
-      }}</span>
+      <!-- 当前角色标签：已猜中 / 作画中 / 猜词中（与得分条共用同一映射）；
+           接龙聊天没有经典局内角色（画家与已猜中在接龙恒不成立），故按提交目标隐藏该标签 -->
+      <span
+        v-if="props.submitTarget !== 'chat'"
+        class="bg-sky px-[0.6em] py-[0.35cqh] text-blue rounded-[99em] text-fs-10 font-bold"
+        >{{ roleTextFor(store.me) }}</span
+      >
     </header>
     <!-- 消息列表：猜词、系统、猜中、预设等类型分别高亮 -->
     <div
@@ -229,9 +265,7 @@ defineExpose({ focusInput })
         class="min-w-0 flex-1"
         :maxlength="store.config.player.chatMaxLength"
         :disabled="!canGuess"
-        :placeholder="
-          store.isDrawer ? strings.ui.game.drawerChatPlaceholder : strings.ui.game.guessPlaceholder
-        "
+        :placeholder="inputPlaceholder"
       />
       <button
         type="submit"

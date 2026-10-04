@@ -77,6 +77,28 @@ export const game = {
   endGameTitle: '提前结束本局？',
   endGameBody: '所有玩家将立即进入提前结算，当前分数会保留。',
   confirmEnd: '确认结束',
+  // —— 接龙模式（S73 / S74 / S84）：顶栏阶段与棒次、玩家 chip 与提交状态、聊天语义、选词等待 ——
+  /**
+   * 接龙顶栏的阶段短名。阶段全名（`ui.status.phaseRelay*`）已带「接龙」前缀，
+   * 与顶栏的模式标签并排会读成「接龙 接龙作画」，故顶栏单独用短名。
+   */
+  relayPhaseChoose: '选词',
+  relayPhaseDraw: '作画',
+  relayPhaseGuess: '猜词',
+  relayPhaseShowcase: '复盘展示',
+  relayPhaseVote: '投票',
+  /** 棒次胶囊：与经典 ROUND 胶囊同构（前缀 / 大号数字 / 总数）。 */
+  relayStepPrefix: '第',
+  relayStepTotal: (total: number) => `/ ${total} 棒`,
+  /** 猜词棒的答案 UI 文案：这一段我拿到的是上家的画，要猜的正是它的词。 */
+  relayGuessPrompt: '看图猜词',
+  /** 选词后等待他人：与本步的候选词卡片同卡呈现（S16 全员提交即秒切）。 */
+  relayWaitingOthers: '已提交，等待其他玩家',
+  relayChatTitle: '接龙聊天',
+  relaySubmitted: '已提交',
+  relayNotSubmitted: '未提交',
+  relayVoted: '已投票',
+  relayNotVoted: '未投票',
   // —— 对局浮层布局：顶栏、可拖动浮层面板与底部横向工具条（见 docs/adr/0043-game-view-floating-layout.md）——
   chatPanelTitle: '聊天',
   brushUnit: 'px',

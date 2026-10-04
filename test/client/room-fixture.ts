@@ -1,10 +1,18 @@
-import type { GameView, RoomMember, RoomPhase, RoomSnapshot } from '@draw-guess/shared'
+import type {
+  GameView,
+  RelayGameView,
+  RelayViewPhase,
+  RoomMember,
+  RoomPhase,
+  RoomSnapshot,
+} from '@draw-guess/shared'
 
 export const HOST_ID = '00000000-0000-4000-8000-000000000001'
 export const GUEST_ID = '00000000-0000-4000-8000-000000000002'
 export const ROOM_ID = '00000000-0000-4000-8000-000000000003'
 export const GAME_ID = '00000000-0000-4000-8000-000000000004'
 export const ROUND_ID = '00000000-0000-4000-8000-000000000005'
+export const STEP_ID = '00000000-0000-4000-8000-000000000006'
 
 function member(id: string, nickname: string, isHost: boolean, isDrawer: boolean): RoomMember {
   return {
@@ -79,4 +87,35 @@ export function createRoomFixture(
     totalWordCount: 60,
     game,
   }
+}
+
+/**
+ * 接龙快照夹具：房间为接龙模式（**没有**经典 `game` 字段，数据全在 `relay` 视图里），
+ * 并带一份最小接龙视图；`relayPatch` / `roomPatch` 用于按用例定制幕、步骤与提交状态。
+ */
+export function createRelayRoomFixture(
+  phase: RelayViewPhase = 'relay_draw',
+  relayPatch: Partial<RelayGameView> = {},
+  roomPatch: Partial<RoomSnapshot> = {},
+): RoomSnapshot {
+  const relay: RelayGameView = {
+    phase,
+    currentStep: 1,
+    stepId: STEP_ID,
+    phaseStartedAt: 1_000,
+    phaseEndsAt: 61_000,
+    submitted: false,
+    submittedPlayerIds: [],
+    messages: [],
+    ...relayPatch,
+  }
+  const snapshot: RoomSnapshot = {
+    ...createRoomFixture(phase),
+    gameMode: 'relay',
+    relay,
+    ...roomPatch,
+  }
+  // 接龙房没有经典对局视图：夹具必须与线上形状一致，否则测不出「数据源只在 relay」这条契约。
+  delete snapshot.game
+  return snapshot
 }
