@@ -3,7 +3,8 @@
 > **状态**：共识已达成（2026-10-04），可转入实现。
 > 本文档是接龙模式的**唯一权威共识**：玩法规则、可见性约束、架构设计全部以本文为准；
 > 凡被推翻或修订的选项都在 §四 留痕（含理由），新决策只能往后追加、不改写历史。
-> 原 §七 的 8 条推定项已全部收敛为正式决策 **S63–S69**，本文**无遗留未决项**；
+> 原 §七 的 8 条推定项已全部收敛为正式决策 **S63–S69**，§九 的 1 项待确认已收敛为 **S79**，
+> §十 的 3 项自检分叉已收敛为 **S84–S86**——本文**无遗留未决项**，可转入实现；
 > 现 §七 为**项目级治理规则**（配置与文案的唯一落点，S70），接龙新增的每一项参数与文案都必须符合它。
 
 ---
@@ -89,36 +90,52 @@
 
 ### 2.5 界面
 
-| #   | 决策                                                                                                                                                                                                                                                                                             |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| S39 | 规则字段：共用（候选词数 / 自定义词 / 换一批 / 房间内邀请 / 词库合集）+ 接龙专属三时长（选词 10·15·20·30=20、作画 60·90·120·150=90、猜词 30·45·60·75=45）白名单档位                                                                                                                              |
-| S18 | 右栏**不禁用闲聊区**，玩家可自由聊天（与 §2.2 S19 的「仅保留聊天」一致）                                                                                                                                                                                                                         |
-| S41 | 顶栏中央显示当前题面（步 1 自己的词 / 步 3 上家文本 / 步 2·4「看图猜词」）；**作答框复用工具栏外壳**（去掉工具与色板、抽公共组件复用、保留可拖动）；提交与投票状态只进**左侧玩家面板**（已提交/未提交、已投票/未投票，**不显示数目**）；复盘期顶栏换双答案胶囊、投票浮层浮在画布上并新增实时票行 |
-| S47 | 大厅房间卡片**显示模式徽标**；接龙 <4 人时开始按钮置灰并提示「接龙模式至少需要 4 名玩家」；开局后加入按钮置灰显示「游戏中」                                                                                                                                                                      |
-| S58 | 客户端组件收敛为 **3 个**：`RelayAnswerPanel`（作答浮层）、`RelayVoteOverlay`（投票浮层含票行）、`RelayShowcaseHeader`（顶栏双胶囊）；抽出共用可拖动外壳；取消进度胶囊                                                                                                                           |
-| S17 | 时长边界：三个对局时长进 `RoomSettings`（房主可改·白名单档位）；四个复盘时长（重播 3 / 停顿 1 / 揭晓 3 / 投票 10）为**固定常量**不可改                                                                                                                                                           |
-| S65 | `systemNotice` 只播**关键节点**（开局、进入下一棒、复盘开始、每条链展示开始、投票开始、终局），不逐条播报成员提交                                                                                                                                                                                |
-| S69 | 复盘进度「第 k / N 条链」放**顶栏双胶囊旁**                                                                                                                                                                                                                                                      |
+| #   | 决策                                                                                                                                                                                                                                                                                                                                                 |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S39 | 规则字段：共用（候选词数 / 自定义词 / 换一批 / 房间内邀请 / 词库合集）+ 接龙专属三时长（选词 10·15·20·30=20、作画 60·90·120·150=90、猜词 30·45·60·75=45）白名单档位                                                                                                                                                                                  |
+| S18 | 右栏**不禁用闲聊区**，玩家可自由聊天（与 §2.2 S19 的「仅保留聊天」一致）                                                                                                                                                                                                                                                                             |
+| S41 | 顶栏中央显示当前题面（步 1 自己的词 / 步 3 上家文本 / 步 2·4「看图猜词」）；**作答框复用工具栏外壳**（去掉工具与色板、抽公共组件复用、保留可拖动）；提交与投票状态只进**左侧玩家面板**（已提交/未提交、已投票/未投票，**不显示数目**）；复盘期顶栏换双答案胶囊、投票浮层浮在画布上并新增实时票行                                                     |
+| S47 | 大厅房间卡片**显示模式徽标**；接龙 <4 人时开始按钮置灰并提示「接龙模式至少需要 4 名玩家」；开局后加入按钮置灰显示「游戏中」                                                                                                                                                                                                                          |
+| S58 | 客户端组件收敛为 **3 个**：`RelayAnswerPanel`（作答浮层）、`RelayVoteOverlay`（投票浮层含票行）、`RelayShowcaseHeader`（顶栏双胶囊）；抽出共用可拖动外壳；取消进度胶囊                                                                                                                                                                               |
+| S17 | 时长边界：三个对局时长进 `RoomSettings`（房主可改·白名单档位）；四个复盘时长（重播 3 / 停顿 1 / 揭晓 3 / 投票 10）为**固定常量**不可改                                                                                                                                                                                                               |
+| S65 | `systemNotice` 只播**关键节点**（开局、进入下一棒、复盘开始、每条链展示开始、投票开始、终局），不逐条播报成员提交                                                                                                                                                                                                                                    |
+| S69 | 复盘进度「第 k / N 条链」放**顶栏双胶囊旁**                                                                                                                                                                                                                                                                                                          |
+| S71 | **单一版本 + 复用优先**：接龙界面严格复用经典模式现有组件与样式，**禁止自造 UI**（原型的 B/C 变体与变体切换条一并废弃）                                                                                                                                                                                                                              |
+| S72 | 复用清单：选词＝经典 `PhaseOverlay` 的**选词遮罩**（黄底候选词大按钮）；终局＝经典**最终结算**（`OverlayCard wide` + 奖杯圆底 + 「最终排行」）；投票＝同一 `OverlayCard` 卡片形态（只换 icon）；作答＝画布底部**可拖动浮层**                                                                                                                         |
+| S73 | 新增共用组件 **`RelayPlayerChip`**（头像 + 昵称 + 按条件显示的右下角画笔角标），对局期与复盘期**共用同一实现**以保证 UI 统一                                                                                                                                                                                                                         |
+| S74 | **对局期顶栏**：左＝`接龙` / 阶段 / `第 N 棒`（复用经典 ROUND 胶囊的样式与位置）；正中＝**单个答案 UI**；答案 UI 左侧＝**上一家 chip**（步 1 没有上一家则不渲染）——步 2/4「看上一家的画」**带画笔角标**，步 3「按上一家的词作画」**不带角标**                                                                                                        |
+| S75 | **复盘期顶栏**：最左＝`接龙 复盘展示 · 第 k/N 条链`（链条进度文案紧跟在最左标签之后）；中间＝四元组 `[画家 chip（带角标）] [答案 UI A] → [答案 UI B] [猜词者 chip（无角标）]`                                                                                                                                                                        |
+| S76 | **复盘单链动画顺序**（每半场一个画家 + 一个猜词者，chip 位置固定不动、只换内容）：半场 1 左＝发起人（带角标）与**他选的词**，揭晓后右＝第二人（无角标）与**他猜的答案**；过渡时右答案 UI 平移到左、左答案 UI 渐隐，左 chip **就地**换成第三人（带角标，因为接下来展示他画的画）；半场 2 右＝第四人（无角标）与**他猜的答案**，本链结束，下一条链重复 |
+| S77 | 终局结算**复用经典结算布局**，但行内第二行换成**接龙口径统计**（参与 N 条链 · 共获 M 张赞同票），**不显示称号**（接龙猜词不判对错，经典统计无数据源）                                                                                                                                                                                                |
+| S78 | **投票浮层形态**：`OverlayCard` 卡片 + 圆形 icon 底（沿用经典圆底、仅换 icon）+「这个匹配吗？」+「词 A →(箭头 icon) 词 B」+ 横条票行 + 底部赞同 / 不赞同按钮；**不显示倒计时文案**（只看顶栏倒计时）                                                                                                                                                 |
+| S80 | **模式徽标位置**：固定在**房间名之后**（房间头 leading 区），且**经典与接龙都显示**，内容由 `gameMode` 决定（不在顶栏中央另起一个徽标）                                                                                                                                                                                                              |
+| S81 | 复盘顶栏**未揭晓**的右答案用**经典遮罩同款全角下划线 `＿`**（`createAnswerMask` 的字符）占位，**不用问号**；被猜的答案在揭晓前对客户端保密、服务端也不下发长度，故占位取固定位数                                                                                                                                                                     |
+| S82 | 投票卡：左右两个答案底色**统一浅黄**（`bg-yellow/25`，不再一白一黄）；匿名票行**不带底色**，只保留居中排列的票图标                                                                                                                                                                                                                                   |
+| S83 | 文案：选词遮罩只写「接龙 · 第 1 棒」（不带括号说明）；接龙规则弹窗**不显示**「经典专属字段在接龙下不生效」的说明段（只留接龙生效字段本身）                                                                                                                                                                                                           |
+| S84 | 接龙与经典不同的四个组件一律**改造原组件 + 插槽/props**，不并排复制：`GameHud` 加 `leading`/`center` 插槽、`PhaseOverlay` 加 `relay_choose` 分支复用同一张选词卡、`ChatPanel` 加聊天语义 props、`PlayerPanel` 加状态插槽；**经典不传新数据时行为与现状完全一致**                                                                                     |
+| S86 | 抽出共用组件 `DraggablePanelShell.vue`（S72 的可拖动浮层外壳）：`CanvasToolbar` 与接龙作答浮层**共用同一实现**，拖动逻辑单点维护                                                                                                                                                                                                                     |
 
 ### 2.6 工程与协议
 
-| #   | 决策                                                                                                                                                                                          |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| S3  | 猜词：**新增 `relay:submitGuess`**（只记录文本，不判对错、不计分、无聊天流）                                                                                                                  |
-| S30 | 提交事件两个：`relay:submitGuess`（带文本，提交即锁定）+ `relay:submitDrawing`（仅标记本步完成并锁定）                                                                                        |
-| S48 | **新增接龙绘图事件族**（字段 `relayStepId`）                                                                                                                                                  |
-| S51 | 绘图事件族 **5 个对位事件**：`relay:drawStrokeBatch` / `relay:drawFillCommit` / `relay:drawUndo` / `relay:drawRedo` / `relay:drawClear`                                                       |
-| S50 | 选词三步动作（`game:chooseWord` / `game:rerollWords` / `game:customWord`）**复用经典事件**，服务端按 `gameMode` 分支                                                                          |
-| S53 | `relayStepId` 粒度：**每步一个全局 id**（该步所有玩家共用），服务端按 `(playerId, relayStepId)` 解析链画布                                                                                    |
-| S49 | `DrawingCore` 为**纯函数集合**（吃画布状态 + 命令、返回结果）；画布状态仍留在领域模型；`DrawingService` 退为薄协调层（会话解析 + 预算 + 注入发布策略）                                        |
-| S45 | 画布预算**每幅画独立**计数（`maxHistoryCommands` 1500 / `maxPointsPerRound` 40000 / `maxFillsPerRound` 60）；每链两幅画各自独立                                                               |
-| S52 | 设置校验：服务端**严格拒绝**当前模式不生效的字段（`INVALID_SETTINGS`）                                                                                                                        |
-| S64 | 提交与投票的**权威记录全挂接龙结构**（`RelayChainSecret` 的产物与 `votes[]`、`RelayGameSecret` 的本步已提交集）；`MemberState` **零新增字段**，左侧面板状态在快照期派生                       |
-| S46 | 状态下发**复用 `room:snapshot`**（按 `viewerId` 裁剪），不新增细粒度推送                                                                                                                      |
-| S67 | **移除 `PublicRoom.maxPlayers`**，容量统一由 `PLAYER_PROTOCOL_LIMITS.maxPlayers = 6` 提供；`playerCount` 保留                                                                                 |
-| S59 | `game_archive` 新增 `mode` 列用**追加新迁移**实现（基线不动）                                                                                                                                 |
-| S54 | 交付与验收：**全量 + 至少 1 条 e2e**，并扩展 `snapshot.matrix` 角色×阶段穷举与事件 Schema 配对                                                                                                |
-| S70 | **配置与文案治理**：一切可配置项（时长 / 默认值 / 阈值 / 档位 / 开关）必须有**唯一落点**，一切展示文案必须进 `packages/strings`；禁止在组件与业务代码内联魔法数字或硬编码文案，细则见 **§七** |
+| #   | 决策                                                                                                                                                                                                                                         |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S3  | 猜词：**新增 `relay:submitGuess`**（只记录文本，不判对错、不计分、无聊天流）                                                                                                                                                                 |
+| S30 | 提交事件两个：`relay:submitGuess`（带文本，提交即锁定）+ `relay:submitDrawing`（仅标记本步完成并锁定）                                                                                                                                       |
+| S48 | **新增接龙绘图事件族**（字段 `relayStepId`）                                                                                                                                                                                                 |
+| S51 | 绘图事件族 **5 个对位事件**：`relay:drawStrokeBatch` / `relay:drawFillCommit` / `relay:drawUndo` / `relay:drawRedo` / `relay:drawClear`                                                                                                      |
+| S50 | 选词三步动作（`game:chooseWord` / `game:rerollWords` / `game:customWord`）**复用经典事件**，服务端按 `gameMode` 分支                                                                                                                         |
+| S53 | `relayStepId` 粒度：**每步一个全局 id**（该步所有玩家共用），服务端按 `(playerId, relayStepId)` 解析链画布                                                                                                                                   |
+| S49 | `DrawingCore` 为**纯函数集合**（吃画布状态 + 命令、返回结果）；画布状态仍留在领域模型；`DrawingService` 退为薄协调层（会话解析 + 预算 + 注入发布策略）                                                                                       |
+| S45 | 画布预算**每幅画独立**计数（`maxHistoryCommands` 1500 / `maxPointsPerRound` 40000 / `maxFillsPerRound` 60）；每链两幅画各自独立                                                                                                              |
+| S52 | 设置校验：服务端**严格拒绝**当前模式不生效的字段（`INVALID_SETTINGS`）                                                                                                                                                                       |
+| S64 | 提交与投票的**权威记录全挂接龙结构**（`RelayChainSecret` 的产物与 `votes[]`、`RelayGameSecret` 的本步已提交集）；`MemberState` **零新增字段**，左侧面板状态在快照期派生                                                                      |
+| S46 | 状态下发**复用 `room:snapshot`**（按 `viewerId` 裁剪），不新增细粒度推送                                                                                                                                                                     |
+| S67 | **移除 `PublicRoom.maxPlayers`**，容量统一由 `PLAYER_PROTOCOL_LIMITS.maxPlayers = 6` 提供；`playerCount` 保留                                                                                                                                |
+| S59 | `game_archive` 新增 `mode` 列用**追加新迁移**实现（基线不动）                                                                                                                                                                                |
+| S54 | 交付与验收：**全量 + 至少 1 条 e2e**，并扩展 `snapshot.matrix` 角色×阶段穷举与事件 Schema 配对                                                                                                                                               |
+| S70 | **配置与文案治理**：一切可配置项（时长 / 默认值 / 阈值 / 档位 / 开关）必须有**唯一落点**，一切展示文案必须进 `packages/strings`；禁止在组件与业务代码内联魔法数字或硬编码文案，细则见 **§七**                                                |
+| S79 | **新增独立聊天事件**（如 `chat:say`）：接龙的自由聊天与作答彻底分离；`ChatPanel` 在接龙下的标题与占位改为聊天语义、输入不再走 `guess:submit`，作答只走 `relay:submitGuess`（取代既有「聊天＝猜词未命中分支」的实现，S20 的保密要求据此成立） |
+| S85 | `chat:say` **只服务接龙**：经典模式保持现状（猜词未命中即当聊天广播，玩家能看到猜错的字），不改经典的对局通信与既有测试                                                                                                                      |
 
 ### 2.7 编号补录（被细化 / 被取代的早期编号）
 
@@ -210,9 +227,9 @@ N 名玩家同时开启 **N 条平行链**，每条链固定 **4 步**，环状�
   - 删除 `joinPolicy` 相关项与 `maxPlayers` 的协议约束（容量改用 `PLAYER_PROTOCOL_LIMITS.maxPlayers`）。
 - `protocol/base.ts`：`RoomPhaseSchema` 追加 `'relay_choose' | 'relay_draw' | 'relay_guess' | 'relay_showcase' | 'relay_vote'`。
 - `protocol/room.ts`：`RoomSettingsSchema` 删除 `maxPlayers` 与 `joinPolicy`，新增 `relayChooseSeconds` / `relayDrawSeconds` / `relayGuessSeconds`（字面量联合由档位常量展开）；`CreateRoomSchema` 新增 `gameMode: 'classic' | 'relay'`。
-- `protocol/relay.ts`（新）：`RelayStepIdSchema`、`RelayDrawingRoundSchema`（`stepId`）、`SubmitGuessSchema`（`stepId` + 1–60 字文本）、`SubmitDrawingSchema`（`stepId`）。
+- `protocol/relay.ts`（新）：`RelayStepIdSchema`、`RelayDrawingRoundSchema`（`stepId`）、`SubmitGuessSchema`（`stepId` + 1–60 字文本）、`SubmitDrawingSchema`（`stepId`）、`SendChatSchema`（1–`chatMaxLength` 字聊天文本，S79）。
 - `protocol/push.ts`：新增 `RelayGameViewSchema`（strict，按 S63 的最小集字段）；`RoomSnapshotSchema` 追加可选 `relay?: RelayGameView`；`PublicRoomSchema` 追加 `gameMode`、**移除 `maxPlayers`**（S67）；删除 `spectating` / `waitingForNextGame` 相关字段。
-- `events.ts`：新增 7 个客户端请求事件（§2.6 S30/S51），`CLIENT_REQUEST_SCHEMAS` 与 `protocol/response.ts` 的 ack Schema 同步登记。
+- `events.ts`：新增 **8** 个客户端请求事件——5 个接龙绘图（S51）+ 2 个提交（S30）+ **1 个独立聊天 `chat:say`**（S79，**仅接龙使用**，S85）；`CLIENT_REQUEST_SCHEMAS` 与 `protocol/response.ts` 的 ack Schema 同步登记。
 - `pure.ts` / `LEGAL_PHASES`：追加接龙阶段的白名单转换（`starting → relay_choose → relay_draw(1) → relay_guess(2) → relay_draw(3) → relay_guess(4) → relay_showcase ⇄ relay_vote → game_result → waiting`）；`paused` 在接龙不可达。
 - `types/relay.ts`（新）：由 Schema 推导的接龙 DTO。
 
@@ -235,9 +252,14 @@ N 名玩家同时开启 **N 条平行链**，每条链固定 **4 步**，环状�
 - `stores/relay.ts`（新）：接龙对局状态子 Store，并入 `useGameStore` Facade（**必须同步 `test/integration/store-contracts.ts` 的成员名单**）。
 - `stores/snapshot-gate.ts`：新增接龙分支（`relayStepId` + `drawingRevision` + `stateVersion`），经典分支不动。
 - `utils/phase-text.ts` / `composables/useGameHud.ts`：补齐接龙阶段文案与 HUD 派生（题面、步骤、提交状态、复盘进度）。
-- `components/game/DraggablePanelShell.vue`（新，共用）：从 `CanvasToolbar` 抽出的可拖动浮层外壳。
-- `components/game/relay/`（新）：`RelayAnswerPanel.vue`（作答浮层）、`RelayVoteOverlay.vue`（投票浮层 + 匿名票行）、`RelayShowcaseHeader.vue`（顶栏双答案胶囊 + 「第 k / N 条链」进度）。
-- `components/game/PlayerPanel.vue`：接龙下承担「已提交 / 未提交 / 已投票 / 未投票」状态展示。
+- **客户端复用方式（S84）**：接龙与经典的差异一律**改造原组件 + 插槽/props**，不并排复制组件：
+  - `components/game/GameHud.vue`：新增 `leading` / `center` 插槽；接龙传入「上一家 chip + 单个答案 UI」（对局期）或「画家 chip + 答案 A → 答案 B + 猜词者 chip」（复盘期）。经典不传插槽时渲染现状。
+  - `components/game/PhaseOverlay.vue`：新增 `relay_choose` 分支，复用同一张选词卡标记（蓝底圆 + 黄底候选词大按钮），仅文案与数据来源不同。
+  - `components/game/ChatPanel.vue`：新增聊天语义 props（标题 / 占位 / 提交目标），接龙下改走 `chat:say`（S85）；经典默认值即现状。
+  - `components/game/PlayerPanel.vue`：新增状态插槽，接龙传入「已提交 / 未提交 / 已投票 / 未投票」（经典继续显示局内角色）。
+- `components/game/RelayPlayerChip.vue`（新，共用，S73）：头像 + 昵称 + 按条件显示的画笔角标；对局期与复盘期共用同一实现。
+- `components/game/DraggablePanelShell.vue`（新，共用，S86）：从 `CanvasToolbar` 抽出的拖动外壳，`CanvasToolbar` 与作答浮层共用。
+- `components/game/relay/`（新，**只放接龙独有内容**）：`RelayTopBarContent.vue`（GameHud 插槽里的接龙顶栏内容，两种形态）、`RelayAnswerPanel.vue`（作答浮层，外壳用 `DraggablePanelShell`）、`RelayVoteOverlay.vue`（投票内容，外壳复用 `OverlayCard`，S78）、`RelayPlayerStatus.vue`（PlayerPanel 插槽里的接龙状态行）。
 - `views/GameView.vue`：按 `room.gameMode` 挂载接龙部件；右栏保留 `ChatPanel`（S18）。
 - `application/game-transport.ts` + `composables/useAppBootstrap.ts`：本设计为**零新增推送**，仅新增请求事件，无需扩展推送注册表。
 
@@ -247,6 +269,7 @@ N 名玩家同时开启 **N 条平行链**，每条链固定 **4 步**，环状�
 - 猜词期：上家画作随快照全量下发，客户端**只读**渲染（复用 `DrawingReplayMachine`）。
 - 复盘期：该链两幅画随快照下发，使用 `DrawingReplayMachine.replay()` / `speedrun()` 做高速重播 + 停顿 + 揭晓；空白画布保持空白、不加标注（S66）。
 - 只读渲染必须沿用「原子提交」口径（ADR-0017），不得直接改逻辑层。
+- 复盘顶栏**未揭晓**的右答案用**经典遮罩同款全角下划线 `＿`** 占位（S81），不用问号；上家画作与复盘画作都走同一重放机器、不新建渲染路径。
 
 ### 5.5 持久化与迁移
 
@@ -258,6 +281,7 @@ N 名玩家同时开启 **N 条平行链**，每条链固定 **4 步**，环状�
 - `test/unit/`：`relay-machine`（四步流转、全员秒切、代交、提前结束、复盘轮播、投票结算）、`relay-scoring`、`relay-view` 裁剪。
 - `test/unit/snapshot.matrix.spec.ts`：**必须扩展**到接龙阶段 × `currentStep` × 角色（发起人 / 上家 / 无关链 / 离局），并登记接龙的秘密键（其余链的画作与文本、未揭晓的答案）。
 - `test/unit/`（边界）：`error-codes` / `protocol-schema-pairing` / `response-contract` 覆盖新事件；`room-settings-product` 与 `documentation.consistency` 同步规则字段变更。
+- 本轮新增的回归点：**聊天与作答互不串**（`chat:say` ≠ `relay:submitGuess`，S79/S20）、**未揭晓占位不是问号**（S81）、**模式徽标在房间名之后且经典/接龙都显示**（S80）、**投票卡两答案底色一致且票行无底色**（S82）。
 - `test/component/`：作答浮层、投票浮层、顶栏双胶囊、`PlayerPanel` 状态。
 - `test/integration/`：`store-contracts.ts` 名单同步；`snapshot-gate` 接龙分支。
 - `test/e2e/specs/`：**新增 1 条接龙全流程**（4 人开局 → 四步 → 复盘轮播 → 投票 → 终局）。
@@ -268,7 +292,7 @@ N 名玩家同时开启 **N 条平行链**，每条链固定 **4 步**，环状�
 ## 六、文档卫生修正（C1–C5）
 
 1. 章节编号缺失：原文跳号「一、二、四、五、六、七」，本次重构为连续编号。
-2. 术语统一：原文混用「步 / 棒 / 回合 / 阶段」，统一为 **步骤（step，1–4）**、**阶段（phase，如 `relay_draw`）**、**链（chain）**；`CONTEXT.md` 需新增「链 / 步骤 / relay 阶段」词条。
+2. 术语统一：原文混用「步 / 棒 / 回合 / 阶段」，统一为 **步骤（step，1–4）**、**半场（half，一条链的两个展示段）**、**阶段（phase，如 `relay_draw`）**、**链（chain）**；`CONTEXT.md` 需新增「链 / 步骤 / 半场 / relay 阶段」词条。
 3. 时长常量去重：明确 **接龙用 relay 专属常量**（`relayReplaySeconds` / `relayReplayPauseSeconds` / `relayRevealSeconds` / `relayVoteSeconds`），不复用经典 `game.roundReplaySeconds` 等，避免改经典节奏误改接龙。
 4. 可改边界：三个对局时长在 `RoomSettings`（房主可改·档位），四个复盘时长在 `packages/config`（固定）。
 5. 接入点补全：新增 `RoomPhase` 值必须同步的穷尽点已列在 §5.1/§5.2（`LEGAL_PHASES`、`phase-facts`、`nominalPhaseDurationMs`、`phase-text.ts`、快照门禁、`GameHud`）。
@@ -283,13 +307,13 @@ N 名玩家同时开启 **N 条平行链**，每条链固定 **4 步**，环状�
 
 ### 7.1 唯一落点表
 
-| 类别                             | 唯一落点                                                                                              | 接龙相关项                                                                                                                                                                  |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 协议可观察范围与档位白名单       | `packages/shared/src/protocol/constants.ts`                                                           | `PROTOCOL_VERSION`、`RELAY_MIN_PLAYERS`、三个时长档位表（`RELAY_*_SECONDS_OPTIONS`）                                                                                        |
-| 浏览器安全的默认值与 UI/行为配置 | `packages/config/src/`（`game.ts`，必要时新增 `relay.ts`）                                            | 三时长默认值（20 / 90 / 45）、四个复盘时长（`relayReplaySeconds` 3 / `relayReplayPauseSeconds` 1 / `relayRevealSeconds` 3 / `relayVoteSeconds` 10）、票行与双胶囊等展示参数 |
-| 服务端私有策略                   | `apps/server/src/config/private.ts`（或同目录分文件）                                                 | 接龙**不新增**私有策略（沿用断线宽限、限频、幂等缓存上限）；若将来确有，必须写在此处                                                                                        |
-| 展示文案                         | `packages/strings/src/`：`ui/`（界面可见）、`a11y/`（`aria-*` 与 `title`）、`server.ts`（服务端文案） | 接龙阶段名、题面与作答浮层文案、投票浮层文案、模式徽标、系统通知、错误文案                                                                                                  |
-| 领域数据                         | `vocabulary/`（SQLite 词库包）                                                                        | —                                                                                                                                                                           |
+| 类别                             | 唯一落点                                                                                              | 接龙相关项                                                                                                                                                                                                                                      |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 协议可观察范围与档位白名单       | `packages/shared/src/protocol/constants.ts`                                                           | `PROTOCOL_VERSION`、`RELAY_MIN_PLAYERS`、三个时长档位表（`RELAY_*_SECONDS_OPTIONS`）                                                                                                                                                            |
+| 浏览器安全的默认值与 UI/行为配置 | `packages/config/src/`（`game.ts`，必要时新增 `relay.ts`）                                            | 三时长默认值（20 / 90 / 45）、四个复盘时长（`relayReplaySeconds` 3 / `relayReplayPauseSeconds` 1 / `relayRevealSeconds` 3 / `relayVoteSeconds` 10）、**复盘胶囊平移动画时长等过渡参数**（§八 的动画，S70 禁止魔法数字）、票行与双胶囊等展示参数 |
+| 服务端私有策略                   | `apps/server/src/config/private.ts`（或同目录分文件）                                                 | 接龙**不新增**私有策略（沿用断线宽限、限频、幂等缓存上限）；若将来确有，必须写在此处                                                                                                                                                            |
+| 展示文案                         | `packages/strings/src/`：`ui/`（界面可见）、`a11y/`（`aria-*` 与 `title`）、`server.ts`（服务端文案） | 接龙阶段名、题面与作答浮层文案、投票浮层文案、模式徽标、系统通知、错误文案                                                                                                                                                                      |
+| 领域数据                         | `vocabulary/`（SQLite 词库包）                                                                        | —                                                                                                                                                                                                                                               |
 
 ### 7.2 硬性约束
 
@@ -298,3 +322,78 @@ N 名玩家同时开启 **N 条平行链**，每条链固定 **4 步**，环状�
 3. **不得跨边界复制**：协议档位白名单（shared）与默认值（config）即使数值相同也各写一份、引用同一常量，禁止互相复制字面量。
 4. **新增即登记**：任何新配置项都要同时更新其落点、对应的 Schema（若协议可见）与守护测试（`room-settings-product` / `protocol-schema-pairing` / `documentation.consistency` / `responsive-standards` 等），否则视为未完成。
 5. **文案分类写**：`strings.ui` 与 `strings.a11y` 按领域分子目录（`game` / `room` / `lobby` / `common` …），接龙文案归入 `game`，不新建平铺的散乱命名空间。
+
+---
+
+## 八、接龙顶栏与复盘编排（S74–S76 的细化）
+
+### 8.1 共用玩家组件 `RelayPlayerChip`
+
+一个组件、对局期与复盘期两处复用（S73），保证同一视觉语言：
+
+| 属性         | 说明                                                                  |
+| ------------ | --------------------------------------------------------------------- |
+| `player`     | 玩家（内置头像编号 + 昵称）                                           |
+| `brushBadge` | 是否在头像右下角挂画笔角标（底座与经典 `PlayerPanel` 的画家角标同款） |
+
+**角标语义**：只表达「此人在这一段里是**动手画**的那个人」。他画了你正在看的画 → 有角标；他只留给你一句词/一个答案 → 没有角标。
+
+### 8.2 对局期（`relay_choose` / `relay_draw` / `relay_guess`）顶栏
+
+```text
+[接龙][阶段][第 N 棒 / 共 4 棒]      [上一家 chip]  [答案 UI]      [倒计时][网络][设置][全屏]
+```
+
+- 左侧复用经典 **ROUND 胶囊**的样式与位置；链条进度在对局期不出现。
+- 正中**只有一个答案 UI**：步 1＝自己选的词，步 3＝上一家的猜词文本（即要画的题面），步 2/4＝「看图猜词」。
+- 答案 UI 左侧**按条件**渲染上一家 chip：
+  - 步 1：没有上一家 → **不渲染**；
+  - 步 2/4（猜上一家的**画**）→ 渲染，**带**画笔角标；
+  - 步 3（按上一家的**词**作画）→ 渲染，**不带**角标。
+
+### 8.3 复盘期顶栏
+
+```text
+[接龙][复盘展示 · 第 k/N 条链]   [画家 chip(角标)] [答案 UI A] → [答案 UI B] [猜词者 chip]   [倒计时][网络][设置][全屏]
+```
+
+- 链条进度文案**紧跟在最左标签之后**（S75），不再单独占一个胶囊位。
+- 中间四元组**位置固定**：两个 chip 永不移动，两个答案 UI 负责平移 / 渐隐 / 出现。
+
+### 8.4 单链复盘的四步动画（每半场＝一个画家 + 一个猜词者）
+
+| 时刻                       | 左 chip                      | 答案 UI A              | 箭头 | 答案 UI B                                               | 右 chip          |
+| -------------------------- | ---------------------------- | ---------------------- | ---- | ------------------------------------------------------- | ---------------- |
+| 半场 1 开始（重播第 1 棒） | 发起人（**带角标**）         | 他选的词               | →    | `?` 占位                                                | 第二人（无角标） |
+| 半场 1 揭晓                | 不变                         | 不变                   | →    | 第二人猜的答案                                          | 不变             |
+| 过渡                       | 就地换成第三人（**带角标**） | 左答案 UI **渐隐消失** | →    | **右答案 UI 平移到左**成为新左答案、右侧渐显出空答案 UI | 不变             |
+| 半场 2 开始（重播第 3 棒） | 第三人（带角标）             | 第二人的答案（题面）   | →    | `?` 占位                                                | 第四人（无角标） |
+| 半场 2 揭晓                | 不变                         | 不变                   | →    | 第四人猜的答案                                          | 不变             |
+
+> 过渡那一刻的视觉：**右答案 UI 左移、左答案 UI 淡出、左 chip 就地换人、右侧渐显新的空答案 UI**——两个 chip 全程不移动，动的是答案 UI。
+> 该动画的时长等参数属可配置项，落点见 §7.1（禁止魔法数字，S70）。
+
+一条链走完 → 切到下一条链，同构重复；链与链之间可补一条系统通知（S65）。
+
+---
+
+## 九、原待确认项（已收敛）
+
+- **接龙需要一条独立的聊天事件** → 已确定为 **S79**（见 §2.6）：新增自由文本聊天事件，与作答事件彻底分开；`ChatPanel` 在接龙下改用聊天语义并改走新事件。
+- 至此 §九 收敛。
+
+---
+
+## 十、一致性自检结论（3 项均已收敛）
+
+> 2026-10-04 对 S1–S83 与 §三 / §五 / §七 / §八 做了一次交叉自检。机械性过期内容已就地同步：
+> 协议事件数 7→8（补 `chat:say`）、`protocol/relay.ts` 补 `SendChatSchema`、测试矩阵补 4 个回归点、
+> 术语补「半场」、§七 落点表补复盘动画参数、§5.3 组件清单定稿。
+>
+> 自检暴露的 3 项分叉已全部拍板：
+
+- **B1 → S84**：接龙与经典不同的四个组件一律**改造原组件 + 插槽/props**（`GameHud` 插槽、`PhaseOverlay` 加 `relay_choose` 分支、`ChatPanel` 加聊天语义 props、`PlayerPanel` 加状态插槽），经典不传新数据时行为与现状完全一致。
+- **B2 → S85**：`chat:say` **只服务接龙**，经典保持「猜词未命中即聊天」的现状。
+- **B3 → S86**：抽出共用 `DraggablePanelShell.vue`，`CanvasToolbar` 与作答浮层共用同一拖动实现。
+
+至此本文**无遗留未决项**，可转入实现。
