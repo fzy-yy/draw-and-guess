@@ -282,7 +282,7 @@ describe('GameCanvas 权威重放与增量投影', () => {
     const wrapper = mountCanvas()
     await wrapper.find('canvas').trigger('wheel', { deltaY: -100 })
 
-    expect(wrapper.emitted('update:width')?.[0]).toEqual([6])
+    expect(wrapper.emitted('update:width')?.[0]).toEqual([5 + APP_CONFIG.drawing.width.wheelStep])
   })
 })
 

@@ -248,9 +248,9 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
 
     const answerHeading = overlay.get('h2')
     expect(answerHeading.text()).toBe('自行车')
-    expect(answerHeading.classes()).toContain('text-yellow')
+    expect(answerHeading.classes()).toContain('text-navy')
     expect(answerHeading.classes()).toContain('font-bold')
-    expect(answerHeading.element.parentElement?.classList.contains('bg-navy')).toBe(true)
+    expect(answerHeading.element.parentElement?.classList.contains('bg-yellow')).toBe(true)
     // 画家置顶第一条
     const articles = overlay.findAll('article')
     expect(articles).toHaveLength(2)

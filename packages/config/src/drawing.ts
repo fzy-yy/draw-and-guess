@@ -7,9 +7,17 @@ export const drawing = {
   colors: ['#1F2937', '#EF4444', '#F97316', '#EAB308', '#22C55E', '#3B82F6', '#8B5CF6', '#FFFFFF'],
   colorPattern: DRAWING_PROTOCOL_LIMITS.colorPattern,
   defaultColor: '#1F2937',
-  /** 画笔与橡皮擦共用同一粗细值，画板滚轮按 wheelStep 连续调整。 */
-  width: { ...DRAWING_PROTOCOL_LIMITS.width, default: 5, wheelStep: 1 },
-  /** DOM 展示层设备像素比封顶；逻辑填充缓冲固定短边 720，不随 DPR 增长。 */
+  /**
+   * 画笔与橡皮擦共用同一粗细值，画板滚轮按 wheelStep 连续调整。
+   * min（最小像素）、max（最大像素）、step、default、wheelStep 均在此显式定义，可直接修改。
+   */
+  width: {
+    min: 1,
+    max: 30,
+    step: 1,
+    default: 6,
+    wheelStep: 2,
+  },
   devicePixelRatioCap: 2.0,
   /** 线宽相对画布缩放的基准分辨率（drawStroke 用 min(宽,高)/referenceResolution 算缩放）。 */
   referenceResolution: 720,

@@ -26,11 +26,20 @@ const emit = defineEmits<{
 }>()
 
 const draft = ref('')
+/**
+ * 监听输入并执行截断：达到 CUSTOM_WORD_MAX_LENGTH 上限直接截断，
+ * 与设置昵称的直接截断逻辑保持完全一致，杜绝超出后无法提交的糟糕体验。
+ */
+watch(draft, (val) => {
+  if (countGraphemes(val) > CUSTOM_WORD_MAX_LENGTH) {
+    const graphemes = Array.from(new Intl.Segmenter().segment(val)).map((s) => s.segment)
+    draft.value = graphemes.slice(0, CUSTOM_WORD_MAX_LENGTH).join('')
+  }
+})
+
 /** 折叠内部连续空白：与提交时服务端的规范化口径一致，长度按折叠后的文本计算 */
 const normalized = computed(() => draft.value.trim().replace(/\s+/gu, ' '))
-const length = computed(() => countGraphemes(normalized.value))
-const tooLong = computed(() => length.value > CUSTOM_WORD_MAX_LENGTH)
-const canSubmit = computed(() => normalized.value.length > 0 && !tooLong.value && !props.submitting)
+const canSubmit = computed(() => normalized.value.length > 0 && !props.submitting)
 
 // 每次打开都从空白开始：上一回合输了一半的词不该带到下一回合
 watch(open, (isOpen) => {
@@ -69,18 +78,14 @@ function handleEnter(event: KeyboardEvent): void {
           v-model="draft"
           align="center"
           input-class="font-bold text-fs-20"
-          :maxlength="CUSTOM_WORD_MAX_LENGTH * 4"
+          :maxlength="CUSTOM_WORD_MAX_LENGTH"
           :placeholder="strings.ui.game.customWordPlaceholder"
           :aria-label="strings.a11y.game.customWordTitle"
           @enter="handleEnter"
         />
       </div>
-      <small class="font-bold" :class="tooLong ? 'text-red' : 'text-muted'">
-        {{
-          tooLong
-            ? strings.ui.game.customWordTooLong(CUSTOM_WORD_MAX_LENGTH)
-            : strings.ui.game.customWordLength(length, CUSTOM_WORD_MAX_LENGTH)
-        }}
+      <small class="font-bold text-muted">
+        {{ strings.ui.game.customWordTooLong(CUSTOM_WORD_MAX_LENGTH) }}
       </small>
     </div>
 

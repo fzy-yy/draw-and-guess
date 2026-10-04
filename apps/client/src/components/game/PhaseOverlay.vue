@@ -186,9 +186,9 @@ async function submitCustomWord(text: string): Promise<void> {
     >
       <p class="text-muted text-fs-12 font-bold">{{ strings.ui.game.roundAnswerLabel }}</p>
       <div
-        class="mt-[0.5cqh] inline-flex items-center justify-center rounded-[0.7em] bg-navy px-[1.4em] py-[0.5cqh] shadow-xs"
+        class="mt-[0.5cqh] inline-flex items-center justify-center rounded-[0.7em] bg-yellow px-[1.4em] py-[0.5cqh] shadow-xs"
       >
-        <h2 class="text-yellow text-fs-24 font-bold tracking-[0.16em]">
+        <h2 class="text-navy text-fs-24 font-bold tracking-[0.16em]">
           {{ game.roundResult.answer }}
         </h2>
       </div>
