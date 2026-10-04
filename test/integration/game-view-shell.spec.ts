@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { setActivePinia, type Pinia } from 'pinia'
+import { EVENTS } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import GameView from '@/views/GameView.vue'
 import { useRoomStore } from '@/stores/room'
@@ -153,6 +154,27 @@ describe('GameView 黄金平衡三栏对局骨架', () => {
 
     // 断言 position 依然保持为 { x: 20, y: 30 }，没有被重置为 null
     expect(toolbar.props('position')).toEqual({ x: 20, y: 30 })
+
+    wrapper.unmount()
+  })
+
+  it('选词阶段点击词按钮，通过 store.chooseWord 发送选词请求', async () => {
+    const roomStore = useRoomStore()
+    roomStore.room = createRoomFixture('choosing_word', {
+      wordOptions: [{ id: 'w-apple', text: '苹果' }],
+    })
+    const wrapper = mountGameView()
+    // 查找选词按钮并点击
+    const buttons = wrapper.findAll('button')
+    const wordBtn = buttons.find((btn) => btn.text().includes('苹果'))
+    expect(wordBtn).toBeDefined()
+    await wordBtn!.trigger('click')
+    await flushPromises()
+    const chooseReq = fakeTransport.requests.find((r) => r.event === EVENTS.gameChooseWord)
+    expect(chooseReq).toBeDefined()
+    expect(chooseReq?.payload).toMatchObject({
+      wordId: 'w-apple',
+    })
 
     wrapper.unmount()
   })

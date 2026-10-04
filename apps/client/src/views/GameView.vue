@@ -275,6 +275,7 @@ function handleFullscreenToggle(): void {
       :game="game"
       :rankings="rankings"
       :is-replaying="isResultModalSuppressed"
+      @choose-word="store.chooseWord"
       @reroll-words="store.rerollWords"
       @resume="store.resume"
       @open-end-confirm="showEndConfirm = true"
