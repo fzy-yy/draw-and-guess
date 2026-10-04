@@ -12,6 +12,10 @@ export const serverStrings = {
     PROFILE_LOCKED: '进入房间后不能修改昵称，请先退出房间',
     /** 接龙：重复提交同一棒（提交即锁定，不可撤回修改）。 */
     ALREADY_SUBMITTED: '本棒已提交，不能修改',
+    /** 接龙：重复投票（点下即锁定；与 ALREADY_SUBMITTED 同码，只是投票场景的专属文案）。 */
+    ALREADY_VOTED: '本链已投过票，不能修改',
+    /** 接龙：投票窗口只在每条链的复盘展示之后打开（其余阶段投票一律按非法阶段拒绝）。 */
+    INVALID_PHASE_VOTE: '当前不在投票阶段',
     /** 接龙开局门槛：下限取自协议常量 RELAY_MIN_PLAYERS，与经典的 2 人口径分开表述。 */
     NOT_ENOUGH_PLAYERS_RELAY: (min: number) => `接龙模式至少需要 ${min} 名在线玩家才能开始`,
     INVALID_NICKNAME: (min: number, max: number) => `昵称需为 ${min}～${max} 个可见字符`,
@@ -141,6 +145,10 @@ export const serverStrings = {
     /** 每条链展示开始：轮播切到第 index / total 条链（S11 的席位顺序；S65 只播链与链的切换）。 */
     relayChainShowcaseStarted: (index: number, total: number) =>
       `第 ${index} / ${total} 条链开始展示`,
+    /** 投票开始：该链展示完毕、进入固定时长的投标窗口（S65 的关键节点，只播一次）。 */
+    relayVoteStarted: '投票开始',
+    /** 终局：全部链走完（或房主提前结束），进入最终结算页。 */
+    relayFinished: '本局结束，查看最终成绩',
   },
 
   /* ---- 词库加载错误（服务启动校验，展示给运维 / 终端）---- */

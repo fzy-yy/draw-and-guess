@@ -24,21 +24,32 @@ import {
   normalizeAnswer,
   type ChatMessage,
   type RelayStep,
+  type RelayVoteChoice,
   type RoomPhase,
   type VocabularyWord,
 } from '@draw-guess/shared'
-import type { MemberState, RoomSecret } from '../../models.ts'
-import { GameError, type RuntimeLogger } from '../../errors.ts'
+import type { MemberState, PlayerSecret, RoomSecret } from '../../models.ts'
+import { GameError, runtimeErrorType, type RuntimeLogger } from '../../errors.ts'
 import type { RuntimeDependencies } from '../../runtime.ts'
 import type { VocabularyStore } from '../../vocabulary/index.ts'
 import { selectDiverseCandidates } from '../vocabulary/candidate-selector.ts'
-import { createEmptyMemberStats, isPhaseExpired } from '../room/member-facts.ts'
+import {
+  activePlayers,
+  createEmptyMemberStats,
+  isActivePlayer,
+  isPhaseExpired,
+} from '../room/member-facts.ts'
 import { isRelayPlayPhase } from '../room/phase-facts.ts'
 import {
   createRelayChainSecret,
   type RelayChainSecret,
   type RelayGameSecret,
 } from './relay-models.ts'
+import {
+  freezeRelayFinalRanking,
+  relayParticipantIndices,
+  tallyChainVotes,
+} from './relay-voting.ts'
 import { relayChainIndexOf } from './relay-canvas-target.ts'
 import {
   FIRST_SHOWCASE_CHAIN_INDEX,
@@ -77,6 +88,12 @@ export interface RelayContext {
   emitRoom(roomId: string): void
   broadcastPresence(): void
   safeRun(label: string, action: () => void): void
+  /** 本局成员身份只读视图：终局榜冻结时取昵称与头像（离局成员另用 leftProfile，S37）。 */
+  players: ReadonlyMap<string, Pick<PlayerSecret, 'profile'>>
+  /** 整局战报落盘（game_archive + game_results），`reason` 即结束原因（S25 / S38）。 */
+  persistGameResult(room: RoomSecret, reason: string): void
+  /** 回等待：清接龙局并复用经典的等待收敛（清计时器、移除离局成绩卡、重置准备位）。 */
+  setWaiting(room: RoomSecret, notice: string): void
 }
 
 /** 接龙生命周期状态机；只操作房间的 `relay` 与阶段，不直接接触 socket。 */
@@ -398,15 +415,185 @@ export class RelayMachine {
   }
 
   /**
-   * 切入该链投票（S23）：游标**保留**在「半场 2 · 揭晓」——投票期的快照仍要展示这条链的两个答案与画作；
-   * 收票、固定 10 秒倒计时、票行与结算全部归工单 08，这里只把阶段交给它（`phaseEndsAt` 写 0 哨兵）。
+   * 切入该链投票（S23）：游标**保留**在「半场 2 · 揭晓」——投票期的快照仍要展示这条链的两个答案与画作。
+   * 写权威投票窗口（固定 `relay.voteSeconds`，S21）、播「投票开始」关键节点通知（S65），
+   * 并排投票到点计时器：到点一律结算，**从不**因为「全员投完」提前公布（S21）。
    */
   private enterChainVote(room: RoomSecret): void {
     const relay = this.requireRelay(room)
     this.clearStepTimers(relay)
     this.transition(room, 'relay_vote')
+    const voteMs = APP_CONFIG.relay.voteSeconds * 1_000
     relay.phaseStartedAt = this.service.clock.now()
-    relay.phaseEndsAt = 0
+    relay.phaseEndsAt = relay.phaseStartedAt + voteMs
+    this.addSystemNotice(room, serverStrings.notices.relayVoteStarted)
+    relay.timer = this.service.scheduler.set(voteMs, () =>
+      this.service.safeRun('relayVoteTimeout', () => {
+        // 迟到的旧回调一律让路（房间可能已关闭或已被结算）：只有仍在投票期才结算
+        if (room.phase !== 'relay_vote' || room.relay?.id !== relay.id) return
+        this.settleChainVote(room)
+      }),
+    )
+    this.service.emitRoom(room.id)
+  }
+
+  /**
+   * 收一票（`relay:vote`，S13 / S14）：只有赞同 / 不赞同（其它值在协议边界被 strict 拒绝），
+   * 点下即**锁定**、重复投票被拒；票行按到达顺序追加并向全房公开（S42 匿名行）。
+   * 投票者是本局链阵容成员（＝开局玩家）；离局 / 离房者不会再发请求，由结算按未投补票（S14）。
+   */
+  public vote(room: RoomSecret, playerId: string, choice: RelayVoteChoice): void {
+    const relay = this.requireRelay(room)
+    // 顺序即优先级：阶段 → 到期 → 投票权 → 是否已投（锁定优先于内容之外的任何事后校验）。
+    if (room.phase !== 'relay_vote')
+      throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_VOTE)
+    if (isPhaseExpired(relay, this.service.clock.now()))
+      throw new GameError('PHASE_EXPIRED', serverStrings.errors.PHASE_EXPIRED)
+    const cursor = relay.showcase
+    const chain = cursor ? relay.chains[cursor.chainIndex - 1] : undefined
+    if (!chain || !this.isParticipant(relay, playerId))
+      throw new GameError('NOT_DRAWER', serverStrings.errors.NOT_DRAWER)
+    if (chain.votes.some((vote) => vote.playerId === playerId))
+      throw new GameError('ALREADY_SUBMITTED', serverStrings.errors.ALREADY_VOTED)
+    chain.votes.push({ playerId, choice })
+    // 票行是全房实时可见的状态：递增版本号让客户端门禁接受这份快照（其他高频刷新不动版本号）
+    room.stateVersion += 1
+    this.service.emitRoom(room.id)
+  }
+
+  /**
+   * 投票窗口到点：无弃权结算 + 推进（S13 / S14 / S23 / S42）。
+   * 先给链阵容里仍未投的成员补一张不赞同（追加在票行末尾，离局 / 离房者同样按未投处理），
+   * 再按同一份明细算票、冻结在链上并给 4 名参与者入账；随后「还有下一条链就继续轮播，否则进终局」。
+   */
+  private settleChainVote(room: RoomSecret): void {
+    const relay = this.requireRelay(room)
+    const cursor = relay.showcase
+    // 残缺现场（投票期没有游标 / 链越界）：不猜一条链出来结算，也绝不卡住房间——直接进终局兜底
+    const chain = cursor ? relay.chains[cursor.chainIndex - 1] : undefined
+    if (!cursor || !chain) {
+      this.finishGame(room, serverStrings.notices.relayFinished)
+      return
+    }
+    for (const originPlayerId of relay.chains.map((candidate) => candidate.originPlayerId)) {
+      if (chain.votes.some((vote) => vote.playerId === originPlayerId)) continue
+      chain.votes.push({ playerId: originPlayerId, choice: 'disagree' })
+    }
+    const tally = tallyChainVotes(chain.votes)
+    chain.result = tally
+    if (tally.matched)
+      this.creditChainParticipants(room, relay, cursor.chainIndex, tally.pointsPerParticipant)
+    if (cursor.chainIndex < relay.chains.length) {
+      this.beginShowcaseForChain(room, cursor.chainIndex + 1)
+      return
+    }
+    this.finishGame(room, serverStrings.notices.relayFinished)
+  }
+
+  /**
+   * 把本链的入账分发给 4 名参与者（S13）：参与者＝链 (发起人 + k) 的发起人（环状顺延，S9）。
+   * 链位上已离房的成员不再有成绩卡，自然不入账；分数与终局统计都取结算时冻结的同一份明细。
+   */
+  private creditChainParticipants(
+    room: RoomSecret,
+    relay: RelayGameSecret,
+    chainIndex: number,
+    points: number,
+  ): void {
+    for (const participantIndex of relayParticipantIndices(relay.chains.length, chainIndex)) {
+      const participant = relay.chains[participantIndex]
+      if (!participant) continue
+      const member = room.members.find(
+        (candidate) => candidate.playerId === participant.originPlayerId,
+      )
+      if (member) member.score += points
+    }
+  }
+
+  /**
+   * 进入终局（S33 / S38 / S60）：与经典 `finishGame` 同口径的双时限结算——
+   * 先冻结终局榜（只有名次、分数与接龙口径统计），再写最短展示期与无条件自动返回上限，
+   * 播结束原因（同时是战报里记的结束原因），战报落盘（`mode = relay`，S25 / S59）。
+   * 落盘异常不阻塞结算广播（与经典一致：数据库问题不该把房间卡在结算页）。
+   */
+  public finishGame(room: RoomSecret, reason: string): void {
+    const relay = this.requireRelay(room)
+    this.clearStepTimers(relay)
+    if (!relay.finalRanking)
+      relay.finalRanking = freezeRelayFinalRanking(room, relay, this.service.players)
+    if (room.phase !== 'game_result') this.transition(room, 'game_result')
+    const now = this.service.clock.now()
+    const minimumResultMs = APP_CONFIG.game.gameResultMinSeconds * 1_000
+    // 即使未来配置误把自动上限设得更短，也绝不能绕过产品定义的最短展示期。
+    const autoReturnMs = Math.max(
+      minimumResultMs,
+      APP_CONFIG.game.gameResultAutoReturnSeconds * 1_000,
+    )
+    relay.phaseStartedAt = now
+    relay.gameResultMinEndsAt = now + minimumResultMs
+    relay.phaseEndsAt = now + autoReturnMs
+    relay.hostReturnRequested = false
+    room.members.forEach((member) => {
+      member.rematchReady = false
+    })
+    this.addSystemNotice(room, reason)
+    try {
+      this.service.persistGameResult(room, reason)
+    } catch (err) {
+      // 与经典结算共用同一条脱敏日志（模式无关：落盘失败不阻塞结算广播）
+      this.service.logger.error(
+        { errorType: runtimeErrorType(err), roomId: room.id },
+        '战绩落盘失败，已保障结算广播正常进行',
+      )
+    }
+    relay.rematchTimer = this.service.scheduler.set(minimumResultMs, () =>
+      this.service.safeRun('relayResultMinimumElapsed', () => this.evaluateRematch(room)),
+    )
+    relay.timer = this.service.scheduler.set(autoReturnMs, () =>
+      this.service.safeRun('relayResultAutoReturn', () => {
+        if (room.phase !== 'game_result') return
+        this.service.setWaiting(room, serverStrings.notices.backToRoom)
+        this.service.broadcastPresence()
+      }),
+    )
+    this.service.emitRoom(room.id)
+    this.service.broadcastPresence()
+  }
+
+  /** 记录单个成员的「再来一局」意愿；非结算期与重复请求都按成功处理（与经典同口径）。 */
+  public requestRematch(room: RoomSecret, member: MemberState): void {
+    const relay = room.relay
+    if (room.phase !== 'game_result' || !relay) return
+    if (!isActivePlayer(member)) return
+    if (!member.rematchReady) {
+      member.rematchReady = true
+      room.stateVersion += 1
+    }
+    if (room.hostId === member.playerId) relay.hostReturnRequested = true
+    this.evaluateRematch(room)
+  }
+
+  /**
+   * 最短展示期后评估退场意愿（与 `docs/game-result-exit.md` 同口径）：
+   * 房主已请求或全部可玩（未离局）成员都点了「再来一局」时一次性回等待；
+   * 最短期未到只刷新快照（让新房主的全局返回按钮解锁）；自动返回上限由 `finishGame` 的第二个计时器兜底。
+   */
+  public evaluateRematch(room: RoomSecret): void {
+    const relay = room.relay
+    if (room.phase !== 'game_result' || !relay || relay.gameResultMinEndsAt === undefined) return
+    if (this.service.clock.now() < relay.gameResultMinEndsAt) {
+      this.service.emitRoom(room.id)
+      return
+    }
+    const eligible = activePlayers(room)
+    if (
+      relay.hostReturnRequested ||
+      (eligible.length > 0 && eligible.every((member) => member.rematchReady))
+    ) {
+      this.service.setWaiting(room, serverStrings.notices.backToRoom)
+      this.service.broadcastPresence()
+      return
+    }
     this.service.emitRoom(room.id)
   }
 
@@ -762,6 +949,9 @@ export class RelayMachine {
   public discard(room: RoomSecret): void {
     if (!room.relay) return
     this.clearStepTimers(room.relay)
+    // 结算期的两个时限计时器一并回收：否则等待中的房间会被旧的「自动返回」回调再清一次场
+    this.service.scheduler.clear(room.relay.rematchTimer)
+    room.relay.rematchTimer = undefined
     delete room.relay
   }
 

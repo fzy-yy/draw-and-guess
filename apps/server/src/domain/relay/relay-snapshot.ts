@@ -27,9 +27,10 @@ import type { RelayGameSecret } from './relay-models.ts'
 import type { PlayerSecret, RoomSecret } from '../../models.ts'
 import { relayChainIndexOf } from './relay-canvas-target.ts'
 
-/** 视图构建所需的最小读取端口：chip 只用到玩家昵称与头像。 */
+/** 视图构建所需的最小读取端口：chip 只用到玩家昵称与头像，终局另需时钟判定「房主可返回」。 */
 export interface RelayViewPort {
   players: ReadonlyMap<string, Pick<PlayerSecret, 'profile'>>
+  now(): number
 }
 
 /**
@@ -62,19 +63,32 @@ function toCanvasView(canvas: DrawingCanvasState): RelayCanvas {
 export class RelaySnapshotBuilder {
   constructor(private readonly port: RelayViewPort) {}
 
-  /** 生成观看者的接龙视图；房间没有接龙局或当前不是接龙阶段时返回 undefined。 */
+  /**
+   * 生成观看者的接龙视图；房间没有接龙局、或当前阶段既不属接龙也不是终局时返回 undefined。
+   * 终局（`game_result`）仍由本视图承载：接龙的排名与统计只在 `relay` 里下发（S33 / S77）。
+   */
   build(room: RoomSecret, viewerId: string): RelayGameView | undefined {
     const relay = room.relay
-    if (!relay || !isRelayViewPhase(room.phase)) return undefined
+    if (!relay) return undefined
+    if (room.phase === 'game_result') return this.buildResultView(room, relay, viewerId)
+    if (!isRelayViewPhase(room.phase)) return undefined
     const viewerIndex = relay.chains.findIndex((chain) => chain.originPlayerId === viewerId)
+    // 本步已提交 / 已投（投票期）的权威集合：成员状态零新增字段，面板状态在这里派生（S64）
+    const votedChain = this.votingChain(room, relay)
+    const submittedIds = votedChain
+      ? votedChain.votes.map((vote) => vote.playerId)
+      : [...relay.stepSubmissions]
     const view: RelayGameView = {
       phase: room.phase,
       currentStep: relay.currentStep,
       stepId: relay.stepId,
       phaseStartedAt: relay.phaseStartedAt,
       phaseEndsAt: relay.phaseEndsAt,
-      // 我是否已提交本步：权威记录挂接龙结构，快照期派生（S64）
-      submitted: relay.stepSubmissions.has(viewerId),
+      // 我是否已提交本步（作画/猜词）或已投票（投票期）；权威记录挂接龙结构，快照期派生（S64）
+      submitted: votedChain
+        ? votedChain.votes.some((vote) => vote.playerId === viewerId)
+        : relay.stepSubmissions.has(viewerId),
+      submittedPlayerIds: submittedIds,
       // 房间自由聊天流：与经典视图同源口径（只取最近 N 条）
       messages: relay.messages.slice(-APP_CONFIG.ui.recentMessageCount),
     }
@@ -158,8 +172,54 @@ export class RelaySnapshotBuilder {
         drawing: toCanvasView(
           cursor.half === 1 ? currentChain.step1Canvas : currentChain.step3Canvas,
         ),
+        // 匿名票行（S42）：只在投票期下发，按到达顺序的下标插入即可，单元里没有投票者身份。
+        // 倒计时结束仍未投的成员由状态机补成不赞同，同样只以选择的形式出现在行尾（S14）。
+        ...(room.phase === 'relay_vote'
+          ? { votes: currentChain.votes.map((vote) => vote.choice) }
+          : {}),
       },
     }
+  }
+
+  /**
+   * 终局视图（S33 / S77）：只下发排名、分数、接龙口径统计与结算退出的时限。
+   * 链明细（画作 / 答案 / 票行）在终局一律不下发；最短展示期与「房主可全局返回」
+   * 与经典结算退出状态机同口径（docs/game-result-exit.md）。
+   */
+  private buildResultView(
+    room: RoomSecret,
+    relay: RelayGameSecret,
+    viewerId: string,
+  ): RelayGameView {
+    return {
+      phase: 'game_result',
+      currentStep: relay.currentStep,
+      stepId: relay.stepId,
+      phaseStartedAt: relay.phaseStartedAt,
+      phaseEndsAt: relay.phaseEndsAt,
+      // 终局不再有「本步提交」，但仍如实反映最后一步的权威集合（离线面板用不到它）
+      submitted: relay.stepSubmissions.has(viewerId),
+      submittedPlayerIds: [...relay.stepSubmissions],
+      messages: relay.messages.slice(-APP_CONFIG.ui.recentMessageCount),
+      ...(relay.finalRanking ? { finalRanking: relay.finalRanking } : {}),
+      ...(relay.gameResultMinEndsAt !== undefined
+        ? {
+            gameResultMinEndsAt: relay.gameResultMinEndsAt,
+            canReturnWaiting:
+              room.hostId === viewerId && this.port.now() >= relay.gameResultMinEndsAt,
+          }
+        : {}),
+    }
+  }
+
+  /** 投票期当前链（票行的权威来源）；不在投票期或游标残缺时返回 undefined。 */
+  private votingChain(
+    room: RoomSecret,
+    relay: RelayGameSecret,
+  ): RelayGameSecret['chains'][number] | undefined {
+    if (room.phase !== 'relay_vote') return undefined
+    const cursor = relay.showcase
+    return cursor ? relay.chains[cursor.chainIndex - 1] : undefined
   }
 
   /**

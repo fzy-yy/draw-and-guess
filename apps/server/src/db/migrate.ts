@@ -1,9 +1,10 @@
 /**
- * SQLite 表结构定义（单基线迁移）。
+ * SQLite 表结构定义（基线迁移 + 追加迁移）。
  *
  * 原则：只持久化「低频关键态」，高频瞬态（画布笔画、聊天消息、计时器）不入库。
  * 项目处于开发阶段、无已发布用户，因此表结构只保留一条**最终 schema 基线**；
- * 历史上「建旧表/旧列再删除」的兼容迁移链已压缩掉。
+ * 历史上「建旧表/旧列再删除」的兼容迁移链已压缩掉，此后的结构变更一律**追加**新迁移
+ * （如 v2 的战报模式列），已应用的迁移绝不改动。
  * 启动时若检测到旧版本数据库（schema_version 记录与基线不一致），直接报错提示删除本地库，不做静默升级。
  *
  * 设计取舍：
@@ -75,6 +76,14 @@ export const MIGRATIONS: readonly Migration[] = [
       );
       CREATE INDEX IF NOT EXISTS idx_rounds_game ON rounds(game_id);
     `,
+  },
+  {
+    version: 2,
+    name: 'game-archive-mode',
+    // 战报新增**模式**列（S25 / S59）：只追加一列、基线不动。
+    // 历史行按产品口径默认经典（当时只有经典模式），因此用 NOT NULL DEFAULT 'classic' 补齐既有行；
+    // 接龙局的战报写入 'relay'，其余口径不变——依然只存最终排名与玩家总分，链明细 / 画布 / 投票不落盘。
+    up: `ALTER TABLE game_archive ADD COLUMN mode TEXT NOT NULL DEFAULT 'classic';`,
   },
 ]
 

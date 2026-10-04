@@ -60,3 +60,17 @@ export const SubmitDrawingSchema = RequestSchema.extend({ stepId: RelayStepIdSch
 export const SendChatSchema = RequestSchema.extend({
   text: z.string().min(1).max(PLAYER_PROTOCOL_LIMITS.chatMaxLength),
 })
+
+/**
+ * 投票选项：一条链只判「这个匹配吗？」（S13 / S14）。
+ * 定义在请求模块（投票是唯一上传它的地方），视图侧的票行直接复用同一枚举，
+ * 保证「线上只有一个赞同 / 不赞同的定义」。
+ */
+export const RelayVoteChoiceSchema = z.enum(['agree', 'disagree'])
+
+/**
+ * 对当前复盘链投票（S13 / S14 / S21）：只有赞同 / 不赞同两项，其它值在协议边界即被 strict 拒绝。
+ * 没有 `stepId`——投票目标是**服务端权威游标**指向的那条链，玩家无法指定投给哪条链；
+ * 点下即锁定（重复投票由服务端以 ALREADY_SUBMITTED 拒绝），倒计时一律等满、无弃权。
+ */
+export const RelayVoteSchema = RequestSchema.extend({ choice: RelayVoteChoiceSchema })

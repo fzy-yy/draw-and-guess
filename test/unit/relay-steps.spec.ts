@@ -355,17 +355,24 @@ describe('接龙步 4 与复盘入口', () => {
     }
     // 复盘从第 1 条链的重播页起跑（游标与页时序见 relay-showcase 用例）
     expect(scenario.showcaseCursor()).toEqual({ chainIndex: 1, half: 1, page: 'replay' })
-    // 对局计时已停：推进超过「选词 + 作画 + 猜词」也不会换棒；复盘页计时把轮播推进到该链投票（工单 08）
-    const relayStepBudgetMs =
-      (APP_CONFIG.relay.chooseSeconds.default +
-        APP_CONFIG.relay.drawSeconds.default +
-        APP_CONFIG.relay.guessSeconds.default) *
+    // 对局计时已停：时间只由复盘页与投票窗口驱动——一条链的展示（14s）走完切入投票，
+    // 投票窗口（10s）走完才进入下一条链，而对局步号全程停在 4（不再换棒）。
+    const showcaseMs =
+      2 *
+      (APP_CONFIG.relay.replaySeconds +
+        APP_CONFIG.relay.replayPauseSeconds +
+        APP_CONFIG.relay.revealSeconds) *
       1_000
-    scenario.harness.runtime.advance(relayStepBudgetMs)
-    expect(scenario.room.relay?.currentStep).toBe(4)
+    scenario.harness.runtime.advance(showcaseMs)
     expect(scenario.room.phase).toBe('relay_vote')
+    expect(scenario.room.relay?.currentStep).toBe(4)
     expect(scenario.snapshotOf(scenario.host.playerId).relay?.phase).toBe('relay_vote')
     expect(scenario.showcaseCursor()).toEqual({ chainIndex: 1, half: 2, page: 'reveal' })
+
+    scenario.harness.runtime.advance(APP_CONFIG.relay.voteSeconds * 1_000)
+    expect(scenario.room.phase).toBe('relay_showcase')
+    expect(scenario.showcaseCursor()).toEqual({ chainIndex: 2, half: 1, page: 'replay' })
+    expect(scenario.room.relay?.currentStep).toBe(4)
   })
 })
 

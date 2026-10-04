@@ -10,11 +10,14 @@
  * 按链隔离的候选词与换批状态（`RelayChainSecret.candidates` / `offeredWordIds` / `rerollUsed`）、
  * 本步已提交集（`RelayGameSecret.stepSubmissions`）与房间自由聊天流（`RelayGameSecret.messages`，S79）。
  * 工单 06 补齐步 2–4 的换手与掉队容错：四棒产出的写入口（`step2Guess` / `step4Guess` / 第二幅画布）
- * 与本步代交计时器（`autoSubmitTimers`，S8 / S16）。工单 07 补上复盘游标（`showcase`，链 / 半场 / 页），
- * 投票结算归工单 08，落地时增量补齐（本文件不预置空占位字段）。
+ * 与本步代交计时器（`autoSubmitTimers`，S8 / S16）。工单 07 补上复盘游标（`showcase`，链 / 半场 / 页）。
+ * 工单 08 补上投票与终局：链上的票行（`votes`）与冻结的结算明细（`result`）、
+ * 局上的终局榜（`finalRanking`）与结算退出时限（`gameResultMinEndsAt` / `hostReturnRequested` / `rematchTimer`）。
+ * 成员状态始终零新增字段：投票与提交的权威记录全挂在这里，快照期派生（S64）。
  */
 import type {
   ChatMessage,
+  RelayFinalRankingEntry,
   RelayStep,
   RelayStepId,
   RelayVoteChoice,
@@ -23,6 +26,7 @@ import type {
 import type { TimerHandle } from '../../runtime.ts'
 import type { DrawingCanvasState } from '../drawing/drawing-core.ts'
 import type { RelayShowcaseCursor } from './relay-showcase.ts'
+import type { RelayChainVoteTally } from './relay-voting.ts'
 
 /** 一条链的投票记录：按到达顺序入数组（S42）；倒计时结束后未投者由状态机补成不赞同（S14）。 */
 export interface RelayChainVote {
@@ -54,8 +58,17 @@ export interface RelayChainSecret {
   step2Guess?: string
   /** 步 4 产出：第四棒猜出的文本（复盘第二半场的答案）。 */
   step4Guess?: string
-  /** 本链投票：按到达顺序追加（工单 08 写入）。 */
+  /**
+   * 本链投票：按到达顺序追加（工单 08 写入 S42）。
+   * 投票窗口内只含真实投票；倒计时结束时状态机把仍未投的链阵容成员补成 `disagree` 追加在行尾（S14），
+   * 因此票行长度最终恒等于链阵容人数，且单元里没有「补票 vs 真投」的区分（无弃权）。
+   */
   votes: RelayChainVote[]
+  /**
+   * 本链结算明细（投票窗口结束时算一次并冻结）：入账与终局统计都取这一份，不各算一遍（S13）。
+   * 未走到投票的链（房主在作画期提前结束，S38）没有明细，票数与得分都按 0 处理。
+   */
+  result?: RelayChainVoteTally
 }
 
 /** 接龙局秘密状态：阶段时序、当前步骤、链数组、本步已提交集合与房间聊天流（S56 / S64）。 */
@@ -93,6 +106,17 @@ export interface RelayGameSecret {
    * 工单 08 在投票结束后凭它调用 `beginShowcaseForChain(chainIndex + 1)` 继续轮播。
    */
   showcase?: RelayShowcaseCursor
+  /**
+   * 终局榜（工单 08 首次进入 `game_result` 时一次性冻结，S33 / S37）：
+   * 之后成员离房 / 退局都不再改变已公布的排名与统计。
+   */
+  finalRanking?: RelayFinalRankingEntry[]
+  /** 终局最短展示期截止时间（与经典 `GameSecret.gameResultMinEndsAt` 同口径，见 docs/game-result-exit.md）。 */
+  gameResultMinEndsAt?: number
+  /** 房主在最短展示期内已请求全局返回；最短展示期到点后一次性执行（S60）。 */
+  hostReturnRequested?: boolean
+  /** 最短展示期计时器（到点评估全房 / 房主意愿），与 `timer`（无条件自动返回）成对。 */
+  rematchTimer?: TimerHandle
 }
 
 /**

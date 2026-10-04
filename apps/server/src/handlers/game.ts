@@ -32,6 +32,11 @@ export function registerGameHandlers(socket: AppSocket, service: GameService): v
   bindRequest(socket, EVENTS.relaySubmitDrawing, (input, playerId) =>
     service.submitRelayDrawing(playerId, input.stepId),
   )
+  // 接龙投票（S13 / S14）：只有赞同 / 不赞同（schema 在协议层 strict 拒绝其它值）；
+  // 目标是服务端权威游标指向的那条链，请求里不带链信息，点下即锁定。
+  bindRequest(socket, EVENTS.relayVote, (input, playerId) =>
+    service.voteRelay(playerId, input.choice),
+  )
   bindRequest(socket, EVENTS.gameLeave, (_input, playerId) => service.leaveGame(playerId))
   bindRequest(socket, EVENTS.gameReturnWaiting, (_input, playerId) =>
     service.returnWaiting(playerId),

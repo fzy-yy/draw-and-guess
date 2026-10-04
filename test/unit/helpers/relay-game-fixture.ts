@@ -16,6 +16,7 @@ import {
   SERVER_PUSH_SCHEMAS,
   type ErrorCode,
   type RelayStep,
+  type RelayVoteChoice,
   type RoomPhase,
   type RoomSettings,
   type RoomSnapshot,
@@ -236,6 +237,25 @@ export interface RelayGameScenario {
   advanceShowcasePage(): RelayShowcaseCursor | undefined
   /** 走完当前链的两个半场（6 页），停在等待该链投票的 `relay_vote`；返回依次经过的页游标。 */
   finishShowcaseChain(): RelayShowcaseCursor[]
+  /**
+   * 当前链投票：投出自己的一票（真实 `relay:vote` 路径）。
+   * 票行匿名、点下即锁定，重复投票由服务端拒绝。
+   */
+  vote(player: RelayTestPlayer, choice: RelayVoteChoice): void
+  /** 全员投出同一票（只驱动仍能动手的成员；离局 / 掉线者由服务端按未投处理）。 */
+  voteAll(choice?: RelayVoteChoice): void
+  /** 推进固定投票倒计时到点：服务端结算本链并推进到下一条链的展示入口或终局。 */
+  advanceVoteWindow(): void
+  /**
+   * 走完当前链的「展示 → 投票 → 结算」：投票窗口按 `choice` 全员投（缺省无人投票），
+   * 结束后停在下一条链的展示入口（`relay_showcase`）或终局（`game_result`）。
+   */
+  finishChainVote(choice?: RelayVoteChoice): void
+  /**
+   * 完整一局：四步 → 复盘轮播 → 逐链投票 → 终局。
+   * `choiceOf` 决定某名玩家对第 chainIndex 条链投什么（缺省全投赞同）。
+   */
+  playToResult(choiceOf?: (chainIndex: number, player: RelayTestPlayer) => RelayVoteChoice): void
 }
 
 /**
@@ -310,6 +330,14 @@ export function startRelayGame(
     room.members.some((member) => member.playerId === player.playerId && !member.leftGame) &&
     !relay.stepSubmissions.has(player.playerId)
 
+  /**
+   * 还能不能自己投票：与「能不能自己动手」同口径，但**不看本步提交集**——
+   * 四步走完时全员都提交过本步，投票权与提交记录无关（重复投票由服务端拒绝）。
+   */
+  const stillCanVote = (player: RelayTestPlayer): boolean =>
+    harness.service.players.get(player.playerId)?.connected === true &&
+    room.members.some((member) => member.playerId === player.playerId && !member.leftGame)
+
   const chooseAll = (): void => {
     for (const player of players) {
       if (!stillCanAct(player)) continue
@@ -348,6 +376,36 @@ export function startRelayGame(
     submitAllGuesses()
     submitAllDrawings()
     submitAllGuesses()
+  }
+
+  /** 走完当前链的两个半场（6 页），停在等待该链投票的 `relay_vote`；返回依次经过的页游标。 */
+  const finishShowcaseChain = (): RelayShowcaseCursor[] => {
+    const seen: RelayShowcaseCursor[] = []
+    // 一条链固定 6 页（两个半场 × 三页，S43）：页数即循环上界，走不动时显式失败而不是空转
+    const pageLimit = RELAY_SHOWCASE_PAGES.length * 2
+    while (room.phase === 'relay_showcase') {
+      const cursor = room.relay?.showcase
+      if (!cursor) throw new Error('复盘轮播缺少游标')
+      if (seen.length >= pageLimit) throw new Error('复盘轮播未在两个半场（6 页）内走完')
+      seen.push(cursor)
+      harness.runtime.advance(showcasePageMs(cursor.page))
+    }
+    return seen
+  }
+
+  /** 全员就当前链投同一票（只驱动仍能自己投票的成员；其余人由服务端按未投处理）。 */
+  const voteAll = (choice: RelayVoteChoice): void => {
+    if (room.phase !== 'relay_vote') throw new Error('只有在投票期才能投票')
+    for (const player of players) {
+      if (!stillCanVote(player)) continue
+      harness.service.voteRelay(player.playerId, choice)
+    }
+  }
+
+  /** 推进固定投票倒计时到点：服务端结算本链并推进到下一条链的展示入口或终局。 */
+  const advanceVoteWindow = (): void => {
+    if (room.phase !== 'relay_vote') throw new Error('只有在投票期才能推进投票倒计时')
+    harness.runtime.advance(APP_CONFIG.relay.voteSeconds * 1_000)
   }
 
   return {
@@ -397,19 +455,7 @@ export function startRelayGame(
       harness.runtime.advance(showcasePageMs(cursor.page))
       return room.relay?.showcase
     },
-    finishShowcaseChain: () => {
-      const seen: RelayShowcaseCursor[] = []
-      // 一条链固定 6 页（两个半场 × 三页，S43）：页数即循环上界，走不动时显式失败而不是空转
-      const pageLimit = RELAY_SHOWCASE_PAGES.length * 2
-      while (room.phase === 'relay_showcase') {
-        const cursor = room.relay?.showcase
-        if (!cursor) throw new Error('复盘轮播缺少游标')
-        if (seen.length >= pageLimit) throw new Error('复盘轮播未在两个半场（6 页）内走完')
-        seen.push(cursor)
-        harness.runtime.advance(showcasePageMs(cursor.page))
-      }
-      return seen
-    },
+    finishShowcaseChain,
     disconnect: (player) => {
       // 走真实断线编排：接龙对局阶段保席 + 短宽限代交，与「掉线者不入链」的经典口径分开
       harness.service.handleDisconnect(player.socket as never)
@@ -418,6 +464,27 @@ export function startRelayGame(
       const registration = harness.register(player.nickname, undefined, player.recoveryToken)
       player.socket = registration.socket
       return player
+    },
+    vote: (player, choice) => {
+      harness.service.voteRelay(player.playerId, choice)
+    },
+    voteAll: (choice = 'agree') => voteAll(choice),
+    advanceVoteWindow,
+    finishChainVote: (choice) => {
+      finishShowcaseChain()
+      if (choice) voteAll(choice)
+      advanceVoteWindow()
+    },
+    playToResult: (choiceOf = () => 'agree' as RelayVoteChoice) => {
+      playToShowcase()
+      for (let chainIndex = 1; chainIndex <= relay.chains.length; chainIndex += 1) {
+        finishShowcaseChain()
+        for (const player of players) {
+          if (!stillCanVote(player)) continue
+          harness.service.voteRelay(player.playerId, choiceOf(chainIndex, player))
+        }
+        advanceVoteWindow()
+      }
     },
   }
 }

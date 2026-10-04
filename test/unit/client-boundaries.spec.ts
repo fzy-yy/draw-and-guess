@@ -217,12 +217,13 @@ describe('请求响应注册表与 ack 边界', () => {
       EVENTS.drawUndo,
       EVENTS.drawRedo,
       EVENTS.drawClear,
-      // 接龙：提交与独立聊天都是空响应（猜词不判对错，S3 / S79）
+      // 接龙：提交、独立聊天与投票都是空响应（猜词不判对错、投票只记票，S3 / S79 / S13）
       EVENTS.relayDrawUndo,
       EVENTS.relayDrawRedo,
       EVENTS.relayDrawClear,
       EVENTS.relaySubmitGuess,
       EVENTS.relaySubmitDrawing,
+      EVENTS.relayVote,
       EVENTS.chatSay,
       EVENTS.gameCanvasPing,
       // 成功但可能没有房间：invite:respond / state:resync 允许 data 缺省。

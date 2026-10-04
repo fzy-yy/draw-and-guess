@@ -155,6 +155,7 @@ export const CLIENT_RESPONSE_SCHEMAS = {
   [EVENTS.relayDrawClear]: emptyAckSchema,
   [EVENTS.relaySubmitGuess]: emptyAckSchema,
   [EVENTS.relaySubmitDrawing]: emptyAckSchema,
+  [EVENTS.relayVote]: emptyAckSchema,
   [EVENTS.chatSay]: emptyAckSchema,
   [EVENTS.gameCanvasPing]: emptyAckSchema,
   [EVENTS.drawStrokeBatch]: eventAckSchema(StrokeAckSchema),

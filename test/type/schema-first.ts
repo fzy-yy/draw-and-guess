@@ -130,10 +130,14 @@ declare const relayGuessPayload: ClientRequestPayload<typeof EVENTS.relaySubmitG
 expectTypeOf(relayGuessPayload).toEqualTypeOf<{ requestId: string; stepId: string; text: string }>()
 declare const relayChatPayload: ClientRequestPayload<typeof EVENTS.chatSay>
 expectTypeOf(relayChatPayload).toEqualTypeOf<{ requestId: string; text: string }>()
+// 投票只有赞同 / 不赞同两个取值，且不带链信息（目标是服务端权威游标，S13 / S14）
+declare const relayVotePayload: ClientRequestPayload<typeof EVENTS.relayVote>
+expectTypeOf(relayVotePayload).toEqualTypeOf<{ requestId: string; choice: 'agree' | 'disagree' }>()
 
-// 猜词不判对错：提交与独立聊天都是空响应；绘图族沿用经典绘图 ack 口径
+// 猜词不判对错：提交、独立聊天与投票都是空响应；绘图族沿用经典绘图 ack 口径
 expectTypeOf<ClientResponse<typeof EVENTS.relaySubmitDrawing>>().toEqualTypeOf<void | undefined>()
 expectTypeOf<ClientResponse<typeof EVENTS.chatSay>>().toEqualTypeOf<void | undefined>()
+expectTypeOf<ClientResponse<typeof EVENTS.relayVote>>().toEqualTypeOf<void | undefined>()
 expectTypeOf<ClientResponse<typeof EVENTS.relayDrawStrokeBatch>>().toEqualTypeOf<{
   strokeId: string
   pointCount: number
@@ -146,14 +150,25 @@ expectTypeOf<RoomSnapshot['gameMode']>().toEqualTypeOf<'classic' | 'relay'>()
 declare const relayView: NonNullable<RoomSnapshot['relay']>
 expectTypeOf(relayView.currentStep).toEqualTypeOf<1 | 2 | 3 | 4>()
 expectTypeOf<NonNullable<RoomSnapshot['relay']>['phase']>().toEqualTypeOf<
-  'relay_choose' | 'relay_draw' | 'relay_guess' | 'relay_showcase' | 'relay_vote'
+  'relay_choose' | 'relay_draw' | 'relay_guess' | 'relay_showcase' | 'relay_vote' | 'game_result'
 >()
 expectTypeOf<RelayShowcase['half']>().toEqualTypeOf<1 | 2>()
 expectTypeOf<RelayShowcase['answer']['text']>().toEqualTypeOf<string | null>()
 expectTypeOf<RelayVoteChoice>().toEqualTypeOf<'agree' | 'disagree'>()
+// 终局榜只有名次、分数与接龙口径统计：称号 / 最佳链条 / 链明细都不在形状里（S33 / S77）
+declare const relayRanking: NonNullable<NonNullable<RoomSnapshot['relay']>['finalRanking']>[number]
+expectTypeOf(relayRanking).toHaveProperty('rank')
+expectTypeOf(relayRanking).toHaveProperty('score')
+expectTypeOf(relayRanking.chainCount).toEqualTypeOf<number>()
+expectTypeOf(relayRanking.agreeVotes).toEqualTypeOf<number>()
+expectTypeOf<NonNullable<RoomSnapshot['relay']>>().not.toHaveProperty('accolade')
+expectTypeOf<NonNullable<RoomSnapshot['relay']>>().not.toHaveProperty('bestChain')
 
 // 负向 1：经典 roundId 不是接龙载荷的一部分（stepId 才是唯一定位字段）
 expectTypeOf<ClientRequestPayload<typeof EVENTS.relayDrawUndo>>().not.toHaveProperty('roundId')
+// 负向 1b：投票载荷不带链信息、也不接受第三个选项（目标链由服务端权威游标决定，S13 / S14）
+expectTypeOf<ClientRequestPayload<typeof EVENTS.relayVote>>().not.toHaveProperty('stepId')
+expectTypeOf<ClientRequestPayload<typeof EVENTS.relayVote>>().not.toHaveProperty('chainIndex')
 // 负向 2：视图没有「未揭晓答案长度」「其余链内容」这类隐私字段
 expectTypeOf<NonNullable<RoomSnapshot['relay']>>().not.toHaveProperty('answerLength')
 expectTypeOf<NonNullable<RoomSnapshot['relay']>>().not.toHaveProperty('otherChains')

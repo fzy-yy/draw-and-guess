@@ -92,6 +92,7 @@ describe('SQLite 迁移与事务边界', () => {
       finishedAt: 2,
       totalRounds: 1,
       finalRanking: '[]',
+      mode: 'classic' as const,
     }
     expect(() =>
       repository.saveGame(archive, [

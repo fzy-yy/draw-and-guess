@@ -18,6 +18,7 @@ import {
 import { RespondInviteSchema, SendInviteSchema } from './protocol/invite.ts'
 import {
   RelayDrawingRoundSchema,
+  RelayVoteSchema,
   SendChatSchema,
   SubmitDrawingSchema,
   SubmitGuessSchema,
@@ -84,6 +85,8 @@ export const EVENTS = {
   relayDrawClear: 'relay:drawClear',
   relaySubmitGuess: 'relay:submitGuess',
   relaySubmitDrawing: 'relay:submitDrawing',
+  /* 投票（S13 / S14）：每条链展示完后收赞同 / 不赞同，点下即锁定、一律等满倒计时。 */
+  relayVote: 'relay:vote',
   chatSay: 'chat:say',
   gameCanvasPing: 'game:canvas_ping',
   drawStrokeBatch: 'draw:strokeBatch',
@@ -152,6 +155,7 @@ export const CLIENT_REQUEST_SCHEMAS = {
   [EVENTS.relayDrawClear]: RelayDrawingRoundSchema,
   [EVENTS.relaySubmitGuess]: SubmitGuessSchema,
   [EVENTS.relaySubmitDrawing]: SubmitDrawingSchema,
+  [EVENTS.relayVote]: RelayVoteSchema,
   [EVENTS.chatSay]: SendChatSchema,
   [EVENTS.gameCanvasPing]: CanvasPingPayloadSchema,
   [EVENTS.drawStrokeBatch]: DrawingRoundSchema.extend({ stroke: StrokeSchema }),

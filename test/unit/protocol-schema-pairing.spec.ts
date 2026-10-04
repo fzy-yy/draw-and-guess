@@ -11,6 +11,7 @@ import {
   RELAY_GUESS_SECONDS_OPTIONS,
   RELAY_MIN_PLAYERS,
   RELAY_STEP_COUNT,
+  RelayFinalRankingEntrySchema,
   RelayGameViewSchema,
   RelayShowcaseSchema,
   RelayStepSchema,
@@ -221,7 +222,7 @@ const RELAY_PHASES = [
   'relay_vote',
 ] as const
 
-/** 8 条新增请求事件：事件名常量键 → 线上事件名（S51 / S30 / S79）。 */
+/** 新增请求事件：事件名常量键 → 线上事件名（S51 / S30 / S79 / S13 的投票）。 */
 const RELAY_REQUEST_EVENT_NAMES = [
   ['relayDrawStrokeBatch', 'relay:drawStrokeBatch'],
   ['relayDrawFillCommit', 'relay:drawFillCommit'],
@@ -230,6 +231,7 @@ const RELAY_REQUEST_EVENT_NAMES = [
   ['relayDrawClear', 'relay:drawClear'],
   ['relaySubmitGuess', 'relay:submitGuess'],
   ['relaySubmitDrawing', 'relay:submitDrawing'],
+  ['relayVote', 'relay:vote'],
   ['chatSay', 'chat:say'],
 ] as const
 
@@ -244,6 +246,7 @@ function relayChooseView(): Record<string, unknown> {
     phaseStartedAt: 1_000,
     phaseEndsAt: 21_000,
     submitted: false,
+    submittedPlayerIds: [],
     wordOptions: [{ id: 'word-1', text: '苹果' }],
     canReroll: true,
     messages: [],
@@ -259,13 +262,14 @@ function relayGuessView(): Record<string, unknown> {
     phaseStartedAt: 30_000,
     phaseEndsAt: 75_000,
     submitted: true,
+    submittedPlayerIds: [HOST_ID],
     previousDrawing: { strokes: [], undoneStrokeIds: [], lastSequence: -1, drawingRevision: 1 },
     previousArtist: { id: HOST_ID, nickname: '画家', avatarId: '01' },
     messages: [{ id: ROUND_ID, type: 'guess', text: '哈哈哈哈', playerId: HOST_ID, createdAt: 1 }],
   }
 }
 
-/** 复盘期（投票中）的接龙视图：双胶囊 + 本半场画作 + 匿名票行。 */
+/** 复盘期（投票中）的接龙视图：双胶囊 + 本半场画作 + 匿名票行 + 已投票集合。 */
 function relayVoteView(): Record<string, unknown> {
   return {
     phase: 'relay_vote',
@@ -274,6 +278,7 @@ function relayVoteView(): Record<string, unknown> {
     phaseStartedAt: 90_000,
     phaseEndsAt: 100_000,
     submitted: false,
+    submittedPlayerIds: [HOST_ID],
     showcase: {
       chainIndex: 1,
       chainCount: 4,
@@ -283,6 +288,33 @@ function relayVoteView(): Record<string, unknown> {
       drawing: { strokes: [], undoneStrokeIds: [], lastSequence: -1, drawingRevision: 2 },
       votes: ['agree', 'disagree'],
     },
+    messages: [],
+  }
+}
+
+/** 终局（game_result）的接龙视图：只有名次、分数与接龙口径统计 + 结算退出时限（S33 / S77）。 */
+function relayResultView(): Record<string, unknown> {
+  return {
+    phase: 'game_result',
+    currentStep: 4,
+    stepId: GAME_ID,
+    phaseStartedAt: 120_000,
+    phaseEndsAt: 150_000,
+    submitted: false,
+    submittedPlayerIds: [],
+    finalRanking: [
+      {
+        id: HOST_ID,
+        nickname: '冠军',
+        avatarId: '01',
+        rank: 1,
+        score: 120,
+        chainCount: 4,
+        agreeVotes: 9,
+      },
+    ],
+    gameResultMinEndsAt: 130_000,
+    canReturnWaiting: false,
     messages: [],
   }
 }
@@ -456,7 +488,10 @@ describe('接龙视图 Schema（按观看者的最小集，S57 / S63）', () => 
   it('视图字段是封闭可数集合：新增字段必须显式登记到本断言', () => {
     expect(Object.keys(RelayGameViewSchema.shape).sort()).toEqual([
       'canReroll',
+      'canReturnWaiting',
       'currentStep',
+      'finalRanking',
+      'gameResultMinEndsAt',
       'messages',
       'ownCanvas',
       'phase',
@@ -468,6 +503,7 @@ describe('接龙视图 Schema（按观看者的最小集，S57 / S63）', () => 
       'showcase',
       'stepId',
       'submitted',
+      'submittedPlayerIds',
       'wordOptions',
     ])
     expect(Object.keys(RelayShowcaseSchema.shape).sort()).toEqual([
@@ -478,6 +514,16 @@ describe('接龙视图 Schema（按观看者的最小集，S57 / S63）', () => 
       'half',
       'prompt',
       'votes',
+    ])
+    // 终局榜的一行只有身份 / 名次 / 分数与接龙口径统计：称号、最佳链条、明细一律进不来（S33）
+    expect(Object.keys(RelayFinalRankingEntrySchema.shape).sort()).toEqual([
+      'agreeVotes',
+      'avatarId',
+      'chainCount',
+      'id',
+      'nickname',
+      'rank',
+      'score',
     ])
   })
 
@@ -534,5 +580,39 @@ describe('接龙视图 Schema（按观看者的最小集，S57 / S63）', () => 
         showcase: { ...showcase, votes: [{ playerId: HOST_ID, choice: 'agree' }] },
       }).success,
     ).toBe(false)
+  })
+
+  it('终局视图：rank/score/chainCount/agreeVotes 通过，称号与链明细被 strict 拒绝（S33 / S77）', () => {
+    const view = relayResultView()
+    expect(RelayGameViewSchema.safeParse(view).success).toBe(true)
+    // 阶段放宽只到 game_result：等待中的房间没有接龙视图（S57 / S63）
+    expect(RelayGameViewSchema.safeParse({ ...view, phase: 'waiting' }).success).toBe(false)
+    const ranking = view.finalRanking as Array<Record<string, unknown>>
+    const [entry] = ranking
+    if (!entry) throw new Error('终局榜样例缺少条目')
+    for (const leak of [
+      { accolade: '最佳默契' },
+      { title: '神笔马良' },
+      { bestChain: 1 },
+      { chains: [{ chainIndex: 1, matched: true }] },
+      { votes: ['agree'] },
+      { stats: { correctCount: 1 } },
+    ]) {
+      expect(
+        RelayGameViewSchema.safeParse({ ...view, finalRanking: [{ ...entry, ...leak }] }).success,
+        JSON.stringify(leak),
+      ).toBe(false)
+    }
+    // 已投票集合必须是 id 列表：计数、对象或选择值都不合法（S41 / S42 / S64）
+    expect(RelayGameViewSchema.safeParse({ ...view, submittedPlayerIds: 2 }).success).toBe(false)
+    expect(
+      RelayGameViewSchema.safeParse({
+        ...view,
+        submittedPlayerIds: [{ playerId: HOST_ID }],
+      }).success,
+    ).toBe(false)
+    expect(RelayGameViewSchema.safeParse({ ...view, submittedPlayerIds: ['agree'] }).success).toBe(
+      false,
+    )
   })
 })

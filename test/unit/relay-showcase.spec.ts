@@ -11,7 +11,7 @@
  * - 关键节点通知只在「复盘开始」与「每条链展示开始」播（S65），页推进一条都不播。
  */
 import { describe, expect, it } from 'vitest'
-import { ERROR_CODES, RoomSnapshotSchema, type Stroke } from '@draw-guess/shared'
+import { ERROR_CODES, type Stroke } from '@draw-guess/shared'
 import { serverStrings } from '@draw-guess/strings'
 import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
 import type { RelayShowcasePage } from '../../apps/server/src/domain/relay/relay-showcase.ts'
@@ -193,8 +193,12 @@ describe('接龙复盘轮播（工单 07）', () => {
     const voteView = showcaseOf(scenario, viewer.playerId)
     expect(voteView?.prompt.text).toBe(content.step2Of(0))
     expect(voteView?.answer.text).toBe(content.step4Of(0))
-    // 投票的权威截止时间由工单 08 的收票状态机写入：本单只留「无截止时间」的 0 哨兵
-    expect(scenario.relay.phaseEndsAt).toBe(0)
+    // 投票窗口由工单 08 的收票状态机写入：固定 relay.voteSeconds，到点才结算（S21）
+    expect(scenario.relay.phaseEndsAt - scenario.relay.phaseStartedAt).toBe(
+      APP_CONFIG.relay.voteSeconds * 1_000,
+    )
+    // 票行此刻还没有任何票（只有投票期才下发该字段）
+    expect(voteView?.votes).toEqual([])
   })
 
   it('每链展示总时长＝14s（2 × (3+1+3)，S43）：到点前 1ms 仍在揭晓页，到点才切投票', () => {
@@ -407,34 +411,29 @@ describe('接龙复盘轮播（工单 07）', () => {
     expect(scenario.room.phase).toBe('relay_vote')
   })
 
-  it('掉线超宽限被回收身份的发起人：其链照常展示，chip 回落到中性占位身份（S7 / S12）', () => {
-    const { scenario, content } = playToShowcaseWithSentinels()
+  it('掉线成员身份被回收不中止轮播：本局照常走完并落盘（S7 / S12）', () => {
+    const { scenario } = playToShowcaseWithSentinels()
     const dropped = scenario.players[1]
     if (!dropped) throw new Error('场景缺少玩家')
 
-    // 第 2 条链的发起人掉线并越过重连宽限：身份被回收（不在成员表，也不在玩家册）
+    // 第 2 条链的发起人掉线：轮播不为他停下，第 1 条链走完照常进入投票（S12）
     scenario.disconnect(dropped)
+    scenario.finishShowcaseChain()
+    expect(scenario.room.phase).toBe('relay_vote')
+
+    // 推进到超过重连宽限：身份被回收（不在玩家册，展示他的链时 chip 走中性占位身份兜底），
+    // 本局不因成员离场而中止——按服务端计时走完全部链与投票并落盘（S7）
     scenario.harness.runtime.advance(APP_CONFIG.network.reconnectGraceMs)
     expect(scenario.harness.service.players.has(dropped.playerId)).toBe(false)
-
-    // 第 1 条链展示完（掉线不影响轮播）→ 08 的投票结束后继续第 2 条链
-    scenario.finishShowcaseChain()
-    scenario.harness.service.relay.beginShowcaseForChain(scenario.room, 2)
-
-    const showcase = showcaseOf(scenario, scenario.host.playerId)
-    expect(showcase?.prompt.text).toBe(content.promptOf(1))
-    expect(showcase?.prompt.player).toEqual({
-      id: dropped.playerId,
-      nickname: serverStrings.notices.fallbackPlayerName,
-      avatarId: APP_CONFIG.player.defaultAvatarId,
-    })
-    // 整份快照仍通过协议闸门：占位 chip 是合法载荷，绝不是缺字段
-    expect(RoomSnapshotSchema.safeParse(scenario.snapshotOf(scenario.host.playerId)).success).toBe(
-      true,
-    )
+    const games = scenario.harness.repositories.archive.games
+    expect(games).toHaveLength(1)
+    expect(games[0]?.archive.mode).toBe('relay')
+    expect(games[0]?.archive.reason).toBe(serverStrings.notices.relayFinished)
+    // 未投票的链一律按不赞同结算：全员 0 分（无弃权，S14）
+    for (const result of games[0]?.results ?? []) expect(result.score).toBe(0)
   })
 
-  it('关键节点通知：复盘开始播一次、每条链展示开始播一次，页推进一条都不播（S65）', () => {
+  it('关键节点通知：复盘开始播一次、每条链展示开始与投票开始各播一次，页推进一条都不播（S65）', () => {
     const { scenario } = playToShowcaseWithSentinels()
     const chainCount = scenario.players.length
 
@@ -442,10 +441,14 @@ describe('接龙复盘轮播（工单 07）', () => {
     expect(scenario.notices()).toContain(
       serverStrings.notices.relayChainShowcaseStarted(1, chainCount),
     )
-    // 页推进（重播 → 停顿 → 揭晓）不播任何通知：S65 只播关键节点
+    // 页推进（重播 → 停顿 → 揭晓）不播任何通知：整条链走完只多出「投票开始」这一条关键节点（S65）
     const noticesBefore = scenario.notices().length
     scenario.finishShowcaseChain()
-    expect(scenario.notices().length).toBe(noticesBefore)
+    const added = scenario.notices().slice(noticesBefore)
+    expect(added).toEqual([serverStrings.notices.relayVoteStarted])
+    expect(
+      scenario.notices().filter((text) => text === serverStrings.notices.relayVoteStarted),
+    ).toHaveLength(1)
 
     // 切到下一条链才再播「第 k / N 条链开始展示」，而「复盘开始」全程只有一次
     scenario.harness.service.relay.beginShowcaseForChain(scenario.room, 2)
@@ -459,5 +462,9 @@ describe('接龙复盘轮播（工单 07）', () => {
         (text) => text === serverStrings.notices.relayChainShowcaseStarted(1, chainCount),
       ),
     ).toHaveLength(1)
+    // 一条链的投票通知只播一次（投票期不因收票重复播）
+    expect(notices.filter((text) => text === serverStrings.notices.relayVoteStarted)).toHaveLength(
+      1,
+    )
   })
 })

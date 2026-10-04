@@ -11,6 +11,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { RelayGameView, RelayStep, RoomPhase } from '@draw-guess/shared'
+import { serverStrings } from '@draw-guess/strings'
 import { RelaySnapshotBuilder } from '../../apps/server/src/domain/relay/relay-snapshot.ts'
 import type { RelayChainSecret } from '../../apps/server/src/domain/relay/relay-models.ts'
 import type { MemberState, PlayerSecret, RoomSecret } from '../../apps/server/src/models.ts'
@@ -141,6 +142,7 @@ function makeRoom(
 ): {
   room: RoomSecret
   builder: RelaySnapshotBuilder
+  players: Map<string, PlayerSecret>
 } {
   const players = new Map<string, PlayerSecret>()
   const members: MemberState[] = []
@@ -198,7 +200,32 @@ function makeRoom(
       ],
     },
   }
-  return { room, builder: new RelaySnapshotBuilder({ players }) }
+  // 投票期：游标所在链上先落两张真票（第一人赞同、第三人反对）——
+  // 「我已投票」与已投票集合都从链上的票箱派生（S41 / S42 / S64），与动手期的提交集是两套记录。
+  if (phase === 'relay_vote' && cursor) {
+    const chain = room.relay?.chains[cursor.chainIndex - 1]
+    if (!chain) throw new Error('投票格缺少游标指向的链')
+    chain.votes.push(
+      { playerId: PLAYER_IDS[0] ?? '', choice: 'agree' },
+      { playerId: PLAYER_IDS[2] ?? '', choice: 'disagree' },
+    )
+  }
+  // 终局：榜单一经冻结就只读；这里给出一行真实形状的条目（其余链内容仍在秘密里，矩阵会证明它们不下发）
+  if (phase === 'game_result' && room.relay) {
+    room.relay.finalRanking = [
+      {
+        id: PLAYER_IDS[0] ?? '',
+        nickname: '玩家1',
+        avatarId: '01',
+        rank: 1,
+        score: 120,
+        chainCount: 4,
+        agreeVotes: 9,
+      },
+    ]
+    room.relay.gameResultMinEndsAt = NOW + 5_000
+  }
+  return { room, builder: new RelaySnapshotBuilder({ players, now: () => NOW }), players }
 }
 
 /**
@@ -217,6 +244,8 @@ const CELLS: { phase: RelayGameView['phase']; step: RelayStep; cursor?: RelaySho
   { phase: 'relay_showcase', step: 4, cursor: { chainIndex: 2, half: 1, page: 'reveal' } },
   { phase: 'relay_showcase', step: 4, cursor: { chainIndex: 3, half: 2, page: 'pause' } },
   { phase: 'relay_vote', step: 4, cursor: { chainIndex: 4, half: 2, page: 'reveal' } },
+  // 终局：排名与统计照常下发，但一条链的内容都不在（游标虽在状态里，视图必须丢掉它）
+  { phase: 'game_result', step: 4, cursor: { chainIndex: 4, half: 2, page: 'reveal' } },
 ]
 
 /** 本格允许出现的哨兵值（格子里合法可见的那部分链内容）。 */
@@ -236,6 +265,8 @@ function allowedSentinels(
   if (phase === 'relay_guess') {
     return [strokeIdOf(ownChain, step === 2 ? 1 : 3)]
   }
+  // 终局：排名与统计之外没有任何链内容（画作、题面、答案、候选一个都不发）
+  if (phase === 'game_result') return []
   // 复盘期（展示 / 投票）：只公开游标指向的那条链，且只公开它轮播到的那半场——与观看者无关。
   // 未揭晓的答案（重播 / 停顿页）不在允许清单里：它的文本与遮罩都不得出现。
   if (!cursor) return []
@@ -259,13 +290,18 @@ describe('接龙视图裁剪矩阵', () => {
         if (!view) throw new Error('接龙阶段必须下发接龙视图')
         const label = `第 ${viewerIndex + 1} 人 / ${cell.phase} / 第 ${cell.step} 棒`
 
-        // 公共骨架：阶段、步骤、阶段时间、我是否已提交、房间聊天流
+        // 公共骨架：阶段、步骤、阶段时间、我是否已动作、房间聊天流
         expect(view.phase, label).toBe(cell.phase)
         expect(view.currentStep, label).toBe(cell.step)
         expect(view.stepId, label).toBe(STEP_ID)
         expect(view.phaseStartedAt, label).toBe(room.relay?.phaseStartedAt)
         expect(view.phaseEndsAt, label).toBe(room.relay?.phaseEndsAt)
-        expect(view.submitted, label).toBe(viewerIndex === 0)
+        // 已动作集合：动手期＝本步已提交（只第一人）、投票期＝已投票（第一、三人，S41 / S64）；
+        // 集合里只有 id，永远不含选择与计数
+        const actors =
+          cell.phase === 'relay_vote' ? [PLAYER_IDS[0], PLAYER_IDS[2]] : [PLAYER_IDS[0]]
+        expect(view.submitted, label).toBe(actors.includes(viewerId))
+        expect(view.submittedPlayerIds, label).toEqual(actors)
         expect(
           view.messages.map((message) => message.text),
           label,
@@ -281,8 +317,19 @@ describe('接龙视图裁剪矩阵', () => {
           expect(serialized, `${label}：缺少本棒应有的 ${sentinel}`).toContain(sentinel)
         }
 
-        // 复盘期：公开内容与观看者无关，未揭晓的答案在载荷里只表达为 text 为 null
-        if (cell.cursor) {
+        // 复盘期：公开内容与观看者无关，未揭晓的答案在载荷里只表达为 text 为 null；
+        // 终局：连游标都失去意义——showcase 必须缺席，只有排名与统计（S33）
+        if (cell.phase === 'game_result') {
+          expect(view.showcase, label).toBeUndefined()
+          expect(view.finalRanking?.[0], label).toMatchObject({
+            rank: 1,
+            score: 120,
+            chainCount: 4,
+            agreeVotes: 9,
+          })
+          // 观众不是房主 / 尚未过最短展示期 → 没有全局返回权
+          expect(view.canReturnWaiting, label).toBe(false)
+        } else if (cell.cursor) {
           const showcase = view.showcase
           const chain = cell.cursor.chainIndex - 1
           expect(showcase?.chainIndex, label).toBe(cell.cursor.chainIndex)
@@ -310,6 +357,12 @@ describe('接龙视图裁剪矩阵', () => {
           expect(showcase?.answer.player.id, label).toBe(
             PLAYER_IDS[(chain + (cell.cursor.half === 1 ? 1 : 3)) % CHAIN_COUNT],
           )
+          // 票行只在投票期出现，且是按到达顺序的选择列表（无归属，S42）
+          expect(showcase?.votes, label).toEqual(
+            cell.phase === 'relay_vote' ? ['agree', 'disagree'] : undefined,
+          )
+          // 票行与已投票集合合起来也不能还原「谁投了什么」：载荷里不存在成对的归属结构
+          expect(JSON.stringify(view), label).not.toContain('"choice"')
         }
 
         // 按阶段断言「本棒产物」的字段形状
@@ -350,6 +403,30 @@ describe('接龙视图裁剪矩阵', () => {
       }
     })
   }
+
+  it('身份已回收的链发起人：其链照常展示，chip 回落到中性占位身份（S7 / S12）', () => {
+    // 第 2 条链（半场 1 的画家＝链发起人）正在展示，而他的身份已被回收：
+    // 成员表没有、玩家册也没有——轮播绝不为一个人的资料缺失而断（S12）。
+    const { room, builder, players } = makeRoom('relay_showcase', 4, {
+      chainIndex: 2,
+      half: 1,
+      page: 'reveal',
+    })
+    const missingId = PLAYER_IDS[1]
+    if (!missingId) throw new Error('矩阵缺少第二条链的发起人')
+    room.members = room.members.filter((member) => member.playerId !== missingId)
+    players.delete(missingId)
+
+    const view = builder.build(room, PLAYER_IDS[0] ?? '')
+
+    expect(view?.showcase?.prompt.player).toEqual({
+      id: missingId,
+      nickname: serverStrings.notices.fallbackPlayerName,
+      avatarId: APP_CONFIG.player.defaultAvatarId,
+    })
+    // 占位 chip 是合法载荷，不是缺字段（客户端按同一形状渲染头像与昵称）
+    expect(view?.showcase?.prompt.text).toBe(wordTextOf(1))
+  })
 
   it('不在本局链阵容中的成员只拿阶段骨架：不含任何链内容', () => {
     const { room, builder } = makeRoom('relay_draw', 1)

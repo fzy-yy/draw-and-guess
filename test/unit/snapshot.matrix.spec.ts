@@ -519,6 +519,8 @@ describe('角色裁剪快照穷举矩阵', () => {
       { phase: 'relay_showcase', step: 4, cursor: { chainIndex: 2, half: 1, page: 'reveal' } },
       { phase: 'relay_showcase', step: 4, cursor: { chainIndex: 3, half: 2, page: 'pause' } },
       { phase: 'relay_vote', step: 4, cursor: { chainIndex: 4, half: 2, page: 'reveal' } },
+      // 终局：只有排名与统计值得下发，链内容一条都不在（游标虽在状态里，也不该出现在快照里）
+      { phase: 'game_result', step: 4, cursor: { chainIndex: 4, half: 2, page: 'reveal' } },
     ]
 
     /** 链 j 的两幅画布各一笔哨兵笔画 + 题面与步 2 文本都是哨兵值。 */
@@ -620,9 +622,33 @@ describe('角色裁剪快照穷举矩阵', () => {
           ],
         },
       }
+      // 投票期：游标所在链上先落两张真票（房主赞同、猜词者反对）——票行与「已投票」集合
+      // 都从链上的票箱派生（S41 / S42 / S64），与动手期的本步提交集是两套记录。
+      if (phase === 'relay_vote' && cursor) {
+        const chain = room.relay?.chains[cursor.chainIndex - 1]
+        if (!chain) throw new Error('投票格缺少游标指向的链')
+        chain.votes.push(
+          { playerId: HOST_ID, choice: 'agree' },
+          { playerId: GUESSER_ID, choice: 'disagree' },
+        )
+      }
+      // 终局：榜单一经冻结即只读；这里给出一行真实形状（链内容仍留在秘密里，由哨兵扫描证明不下发）
+      if (phase === 'game_result' && room.relay) {
+        room.relay.finalRanking = [
+          {
+            id: HOST_ID,
+            nickname: '接龙1',
+            avatarId: '01',
+            rank: 1,
+            score: 120,
+            chainCount: 4,
+            agreeVotes: 9,
+          },
+        ]
+        room.relay.gameResultMinEndsAt = NOW + 5_000
+      }
       return { room, players }
     }
-
     /** 测试侧独立算式：观看者 i 在第 s 棒动手的链 = (i - s + 1) mod N。 */
     function chainForViewer(viewerIndex: number, step: number): number {
       return (viewerIndex - (step - 1) + CHAIN_ORIGINS.length) % CHAIN_ORIGINS.length
@@ -642,6 +668,8 @@ describe('角色裁剪快照穷举矩阵', () => {
           ? [relayWordText(chain), relayStrokeId(chain, 1)]
           : [relayGuessText(chain), relayStrokeId(chain, 3)]
       if (phase === 'relay_guess') return [relayStrokeId(chain, step === 2 ? 1 : 3)]
+      // 终局：排名与统计之外没有任何链内容
+      if (phase === 'game_result') return []
       // 复盘期：只公开游标指向的那条链的本半场；未揭晓的答案（重播 / 停顿页）不在允许清单里
       if (!cursor) return []
       const showcaseChain = cursor.chainIndex - 1
@@ -672,7 +700,27 @@ describe('角色裁剪快照穷举矩阵', () => {
           expect(snapshot.game).toBeUndefined()
           expect(snapshot.relay?.phase).toBe(cell.phase)
           expect(snapshot.relay?.currentStep).toBe(cell.step)
-          if (cell.cursor) {
+          // 已动作集合（S41 / S64）：动手期＝本步已提交者、投票期＝该链已投票者；只有 id、无选择与计数
+          const actors = cell.phase === 'relay_vote' ? [HOST_ID, GUESSER_ID] : [HOST_ID]
+          expect(snapshot.relay?.submittedPlayerIds).toEqual(actors)
+          expect(snapshot.relay?.submitted).toBe(actors.includes(viewerId))
+          // 票行只在投票期出现：纯选择列表（匿名，S42），且载荷里不存在「谁投了什么」的归属结构
+          expect(snapshot.relay?.showcase?.votes).toEqual(
+            cell.phase === 'relay_vote' ? ['agree', 'disagree'] : undefined,
+          )
+          if (cell.phase === 'game_result') {
+            // 终局：只有排名 / 分数 / 接龙统计 + 退出时限，链内容（含游标）一条都不在
+            expect(snapshot.relay?.showcase).toBeUndefined()
+            expect(snapshot.relay?.finalRanking?.[0]).toMatchObject({
+              rank: 1,
+              score: 120,
+              chainCount: 4,
+              agreeVotes: 9,
+            })
+            expect(snapshot.relay?.gameResultMinEndsAt).toBe(NOW + 5_000)
+            expect(snapshot.relay?.canReturnWaiting).toBe(false)
+          }
+          if (cell.cursor && cell.phase !== 'game_result') {
             // 复盘期：链进度与半场随快照下发；未揭晓的答案只表达为 text 为 null（S63 / S81）
             expect(snapshot.relay?.showcase?.chainIndex).toBe(cell.cursor.chainIndex)
             expect(snapshot.relay?.showcase?.chainCount).toBe(CHAIN_ORIGINS.length)
@@ -692,6 +740,8 @@ describe('角色裁剪快照穷举矩阵', () => {
           // ② 禁止键清单（含接龙秘密键）与哨兵值
           for (const key of FORBIDDEN_KEYS)
             expect(serialized, `泄漏键 ${key}`).not.toContain(`"${key}"`)
+          // 票的「选择」只以字符串出现在匿名票行里，绝不与投票者成对出现（S42）
+          expect(serialized, '泄漏了票归属').not.toContain('"choice"')
           const allowed = allowedSentinels(cell.phase, cell.step, viewerIndex, cell.cursor)
           for (const sentinel of RELAY_SENTINELS) {
             if (allowed.includes(sentinel)) continue

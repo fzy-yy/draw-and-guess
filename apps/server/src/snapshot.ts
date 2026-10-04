@@ -50,7 +50,10 @@ export class SnapshotBuilder {
   private readonly relayViews: RelaySnapshotBuilder
 
   constructor(private readonly port: SnapshotViewPort) {
-    this.relayViews = new RelaySnapshotBuilder({ players: port.players })
+    this.relayViews = new RelaySnapshotBuilder({
+      players: port.players,
+      now: () => port.clock.now(),
+    })
   }
 
   /** 为指定观看者生成裁剪后的房间快照（画家可见答案与候选词，结算阶段全员可见答案）。 */

@@ -24,6 +24,7 @@ import {
   type PresenceSnapshot,
   type Profile,
   type PublicPlayer,
+  type RelayVoteChoice,
   type RoomPhase,
   type RoomSettings,
   type RoomSnapshot,
@@ -305,6 +306,14 @@ export class GameService {
       emitRoom: (roomId) => this.publisher.emitRoom(roomId),
       broadcastPresence: () => this.publisher.broadcastPresence(),
       safeRun: this.ports.safeRun,
+      // 终局榜冻结要昵称与头像；离局成员另用 leftProfile（S37）
+      players: this.players,
+      persistGameResult: (room, reason) => this.persistence.persistGameResult(room, reason),
+      // 回等待复用经典的等待收敛：接龙局秘密先由接龙状态机自己回收（否则等待中的房间会留着已作废的接龙局）
+      setWaiting: (room, notice) => {
+        this.relay.discard(room)
+        this.round.setWaiting(room, notice)
+      },
     })
     this.membership = new RoomMembershipService({
       ...runtimePorts,
@@ -314,7 +323,11 @@ export class GameService {
       addSystemNotice: (room, text) => this.lifecycle(room).addSystemNotice(room, text),
       clearHintTimers: (game) => this.round.clearHintTimers(game),
       emitToPlayer: this.ports.emitToPlayer,
-      evaluateRematch: (room) => this.round.evaluateRematch(room),
+      // 结算期的「再来一局」评估按模式分流（接龙与经典的结算字段各自独立，S55）
+      evaluateRematch: (room) =>
+        room.gameMode === 'relay'
+          ? this.relay.evaluateRematch(room)
+          : this.round.evaluateRematch(room),
       finishRound: (room, drawerAbandoned) => this.round.finishRound(room, drawerAbandoned),
       getRoomVocabularyStore: this.ports.getRoomVocabularyStore,
       isPlaying: this.ports.isPlaying,
@@ -898,6 +911,15 @@ export class GameService {
     this.relay.chat(room, playerId, text.trim())
   }
 
+  /**
+   * 投票（`relay:vote`，S13 / S14）：只有赞同 / 不赞同，点下即锁定、无弃权、一律等满倒计时。
+   * 目标是服务端权威游标指向的那条链（请求里不带链信息），收票与结算全归接龙状态机。
+   */
+  voteRelay(playerId: string, choice: RelayVoteChoice): void {
+    const { room } = this.membership.requireMembership(playerId)
+    this.relay.vote(room, playerId, choice)
+  }
+
   pause(playerId: string, reason: string): void {
     const { room, player } = this.membership.requireMembership(playerId)
     if (!room.settings.allowPause)
@@ -931,7 +953,7 @@ export class GameService {
   endEarly(playerId: string): void {
     const room = this.membership.requireHostRoom(playerId)
     // 复盘期（展示 + 投票）完全不可干预（S12）：没有「跳过」也没有「提前结束」——
-    // 推翻他人链的展示顺序会让全员的步调错位。接龙对局期的提前结束是另一条路径（归工单 08）。
+    // 推翻他人链的展示顺序会让全员的步调错位。接龙对局期（选词/作画/猜词）可提前结束（S34）。
     if (room.phase === 'relay_showcase' || room.phase === 'relay_vote')
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_END_EARLY)
     // starting（3 秒开局倒计时）不算可提前结束的比赛：此时 game 已预建但没有进行中的回合，
@@ -939,13 +961,17 @@ export class GameService {
     const inProgress = this.isPlaying(room.phase) && room.phase !== 'starting'
     if (!inProgress)
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_END_EARLY)
-    this.round.finishGame(room, serverStrings.notices.endEarlyByHost)
+    // 结算路径按模式分流：接龙的入账与战报（mode = relay）归接龙状态机，S38 的
+    // 「直接进终局、按当前分数结算」由两边的 finishGame 同口径实现。
+    if (room.gameMode === 'relay') this.relay.finishGame(room, serverStrings.notices.endEarlyByHost)
+    else this.round.finishGame(room, serverStrings.notices.endEarlyByHost)
   }
 
   /** 最终结算再来一局入口：普通成员只登记个人意愿，房主请求由状态机在最短展示期后全局执行。 */
   returnWaiting(playerId: string): void {
     const { room, member } = this.membership.requireMembership(playerId)
-    this.round.requestRematch(room, member)
+    if (room.gameMode === 'relay') this.relay.requestRematch(room, member)
+    else this.round.requestRematch(room, member)
   }
 
   kick(playerId: string, targetId: string): void {
