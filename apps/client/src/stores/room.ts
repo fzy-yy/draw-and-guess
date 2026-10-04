@@ -14,6 +14,7 @@ import {
 } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { useGameTransport } from '@/application/game-transport'
+import { scopeSettingsPatch } from '@/utils/room-facts'
 import { useSessionStore } from './session.ts'
 
 export const useRoomStore = defineStore('room', () => {
@@ -74,8 +75,10 @@ export const useRoomStore = defineStore('room', () => {
 
   async function updateRoomSettings(patch: Partial<RoomSettings>): Promise<boolean> {
     if (!room.value) return false
+    // 规则弹窗回传完整草稿，而服务端按模式白名单严格拒绝不生效字段（S52），
+    // 因此先按当前模式裁剪成生效键补丁再上送（清单与服务端同口径，见 utils/room-facts.ts）。
     const result = await request(EVENTS.roomUpdateSettings, {
-      patch,
+      patch: scopeSettingsPatch(patch, room.value.gameMode),
       expectedVersion: room.value.stateVersion,
     })
     return result.ok

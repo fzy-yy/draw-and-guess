@@ -1,6 +1,7 @@
 <!--
   规则摘要 + 词库管理入口 + 邀请在线玩家按钮：原 RoomView.vue 右侧控制区的前三段。
   数据全部来自 store 的房间快照；仅通过事件把「打开词库 / 打开邀请 / 编辑规则」上抛给父组件。
+  字段集合按房间模式裁剪：接龙只列接龙下真正生效的字段（三时长 + 共用字段），经典维持原有集合（S39 / S52）；
   保持三块为片段（多根节点），使其仍作为 aside（flex-col）的直接子项，保留原有间距。
 -->
 <script setup lang="ts">
@@ -57,6 +58,12 @@ const inviteForbidden = computed(
   () => !store.isHost && !(store.room?.settings.allowPlayerInvite ?? false),
 )
 
+/**
+ * 规则摘要的模式分支：接龙只列接龙下真正生效的字段（三时长 + 共用字段），
+ * 经典维持原有集合（S39 / S52 在等待页摘要上的同一口径）；两者都不显示「不生效」说明段（S83）。
+ */
+const isRelay = computed(() => store.room?.gameMode === 'relay')
+
 const summaryRows = computed(() => {
   const settings = store.room?.settings
   if (!settings) return []
@@ -66,47 +73,62 @@ const summaryRows = computed(() => {
       (field) => settings[field] !== roomSettingsDefaults[field],
     ),
   )
-  const rows: Array<{ key: string; label: string; value: string }> = [
-    {
-      key: 'roundsPerPlayer',
-      label: strings.ui.room.ruleRoundsDt,
-      value: strings.ui.room.ruleRoundsDd(settings.roundsPerPlayer),
-    },
-    {
-      key: 'drawSeconds',
-      label: strings.ui.room.ruleDrawDt,
-      value: strings.ui.room.ruleDrawValue(settings.drawSeconds),
-    },
-  ]
-  // 选词阶段是否计时是本局的关键行为（默认为不限时），常驻展示而不是按差异判定。
-  rows.push({
-    key: 'chooseTime',
-    label: strings.ui.room.ruleChooseTimeDt,
-    value: settings.allowChooseTimeLimit
-      ? strings.ui.common.secondsUnit(settings.chooseSeconds)
-      : strings.ui.room.chooseTimeUnlimited,
-  })
+  const rows: Array<{ key: string; label: string; value: string }> = []
+  if (isRelay.value) {
+    // 接龙常驻三时长：它们是接龙对局的节奏来源，默认值也要展示（不像其他字段按差异追加）。
+    rows.push(
+      {
+        key: 'relayChooseSeconds',
+        label: strings.ui.room.relayChooseSecondsField,
+        value: strings.ui.common.secondsUnit(settings.relayChooseSeconds),
+      },
+      {
+        key: 'relayDrawSeconds',
+        label: strings.ui.room.relayDrawSecondsField,
+        value: strings.ui.common.secondsUnit(settings.relayDrawSeconds),
+      },
+      {
+        key: 'relayGuessSeconds',
+        label: strings.ui.room.relayGuessSecondsField,
+        value: strings.ui.common.secondsUnit(settings.relayGuessSeconds),
+      },
+    )
+  } else {
+    rows.push(
+      {
+        key: 'roundsPerPlayer',
+        label: strings.ui.room.ruleRoundsDt,
+        value: strings.ui.room.ruleRoundsDd(settings.roundsPerPlayer),
+      },
+      {
+        key: 'drawSeconds',
+        label: strings.ui.room.ruleDrawDt,
+        value: strings.ui.room.ruleDrawValue(settings.drawSeconds),
+      },
+    )
+    // 选词阶段是否计时是本局的关键行为（默认为不限时），常驻展示而不是按差异判定。
+    rows.push({
+      key: 'chooseTime',
+      label: strings.ui.room.ruleChooseTimeDt,
+      value: settings.allowChooseTimeLimit
+        ? strings.ui.common.secondsUnit(settings.chooseSeconds)
+        : strings.ui.room.chooseTimeUnlimited,
+    })
+  }
   const addDifference = (field: keyof RoomSettings, label: string, value: string): void => {
     if (differences.has(field)) rows.push({ key: field, label, value })
   }
+  // 共用字段：两种模式都生效，差异按同一顺序追加
   addDifference(
     'optionCount',
     strings.ui.room.ruleOptionsDt,
     strings.ui.room.ruleOptionsDd(settings.optionCount),
-  )
-  if (differences.has('progressiveHints'))
-    rows.push({ key: 'hints', label: strings.ui.room.ruleHintsDt, value: hintsSummary.value })
-  addDifference(
-    'showWordLength',
-    strings.ui.room.toggleShowWordLength,
-    enabled(settings.showWordLength),
   )
   addDifference(
     'allowPlayerInvite',
     strings.ui.room.togglePlayerInvite,
     enabled(settings.allowPlayerInvite),
   )
-  addDifference('allowPause', strings.ui.room.togglePause, enabled(settings.allowPause))
   addDifference(
     'allowWordReroll',
     strings.ui.room.ruleRerollDt,
@@ -117,21 +139,32 @@ const summaryRows = computed(() => {
     strings.ui.room.ruleCustomWordDt,
     settings.allowCustomWord ? strings.ui.room.ruleCustomWordOn : strings.ui.room.ruleCustomWordOff,
   )
-  addDifference(
-    'allowNearMissHint',
-    strings.ui.room.nearMissHintLabel,
-    enabled(settings.allowNearMissHint),
-  )
-  addDifference(
-    'allowCanvasReactions',
-    strings.ui.room.canvasReactionsLabel,
-    enabled(settings.allowCanvasReactions),
-  )
-  addDifference(
-    'allowRoundReplay',
-    strings.ui.room.roundReplayLabel,
-    enabled(settings.allowRoundReplay),
-  )
+  // 经典专属字段的差异只在经典房展示：接龙下它们不生效，列出来只会误导
+  if (!isRelay.value) {
+    if (differences.has('progressiveHints'))
+      rows.push({ key: 'hints', label: strings.ui.room.ruleHintsDt, value: hintsSummary.value })
+    addDifference(
+      'showWordLength',
+      strings.ui.room.toggleShowWordLength,
+      enabled(settings.showWordLength),
+    )
+    addDifference('allowPause', strings.ui.room.togglePause, enabled(settings.allowPause))
+    addDifference(
+      'allowNearMissHint',
+      strings.ui.room.nearMissHintLabel,
+      enabled(settings.allowNearMissHint),
+    )
+    addDifference(
+      'allowCanvasReactions',
+      strings.ui.room.canvasReactionsLabel,
+      enabled(settings.allowCanvasReactions),
+    )
+    addDifference(
+      'allowRoundReplay',
+      strings.ui.room.roundReplayLabel,
+      enabled(settings.allowRoundReplay),
+    )
+  }
   return rows
 })
 </script>

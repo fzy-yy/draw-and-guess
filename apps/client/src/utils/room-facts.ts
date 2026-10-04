@@ -7,7 +7,70 @@
  * 注意：最终榜单的成员口径**不是**可玩成员——服务端榜单保留离局者（ADR-0023），
  * 因此榜单回退不使用 `activeMembers`。
  */
-import type { RoomMember } from '@draw-guess/shared'
+import {
+  DEFAULT_GAME_MODE,
+  type GameMode,
+  type RoomMember,
+  type RoomSettings,
+} from '@draw-guess/shared'
+
+/**
+ * 模式 → 生效的规则键名，**按服务端 `apps/server/src/game-service.ts` 的 `MODE_SETTINGS_KEYS` 逐条镜像**
+ * （客户端不能 import 服务端模块，因此这里只能声明一份；两端一致由
+ * `test/unit/room-settings-mode-whitelist.spec.ts` 守护，禁止只改一边）。
+ *
+ * 用途：规则弹窗据此决定渲染哪些字段、`updateRoomSettings` 据此把完整草稿裁剪成当前模式生效的补丁
+ * ——服务端会严格拒绝出现不生效键的补丁（S52），不裁剪的完整草稿必然被拒。
+ */
+export const MODE_SETTINGS_KEYS: Record<GameMode, readonly (keyof RoomSettings)[]> = {
+  classic: [
+    'roundsPerPlayer',
+    'drawSeconds',
+    'chooseSeconds',
+    'allowChooseTimeLimit',
+    'showWordLength',
+    'progressiveHints',
+    'allowPause',
+    'allowNearMissHint',
+    'allowCanvasReactions',
+    'allowRoundReplay',
+    'optionCount',
+    'allowWordReroll',
+    'allowCustomWord',
+    'allowPlayerInvite',
+  ],
+  relay: [
+    'relayChooseSeconds',
+    'relayDrawSeconds',
+    'relayGuessSeconds',
+    'optionCount',
+    'allowWordReroll',
+    'allowCustomWord',
+    'allowPlayerInvite',
+  ],
+}
+
+/** 取某模式生效的规则键名（缺省按协议默认模式，用于尚未装配房间快照的调用点）。 */
+export function modeSettingsKeys(gameMode: GameMode | undefined): readonly (keyof RoomSettings)[] {
+  return MODE_SETTINGS_KEYS[gameMode ?? DEFAULT_GAME_MODE]
+}
+
+/**
+ * 按模式裁剪规则补丁：只保留该模式生效的键。
+ * 规则弹窗回传的是完整草稿（含全部字段），而服务端按模式白名单严格拒绝不生效键（S52），
+ * 因此发送前必须过这一层；逐键赋值保持键与值的一一对应，不使用 `any` 或非空断言。
+ */
+export function scopeSettingsPatch(
+  patch: Partial<RoomSettings>,
+  gameMode: GameMode | undefined,
+): Partial<RoomSettings> {
+  const scoped: Partial<RoomSettings> = {}
+  for (const key of modeSettingsKeys(gameMode)) {
+    const value = patch[key]
+    if (value !== undefined) Object.assign(scoped, { [key]: value })
+  }
+  return scoped
+}
 
 /** 可玩成员：未离局（与服务端 `isActivePlayer` 同口径；观战与候场已删除）。 */
 export function isActiveMember(member: RoomMember): boolean {

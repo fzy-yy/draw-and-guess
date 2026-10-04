@@ -42,6 +42,12 @@ export const lobby = {
   publicNote: '公开房间会实时显示在大厅，其他玩家可以直接加入。',
   privateNote: '私密房间不会出现在大厅；创建后房主可在房间顶部查看房间码。',
   createAndEnter: '创建并进入',
+  /** 建房弹窗顶部的玩法模式单选（S27 / S28）：模式建房时选定、房间内不可修改。 */
+  gameModeField: '玩法模式',
+  gameModeClassic: '经典模式',
+  gameModeClassicHint: '轮流当画家，一轮一题',
+  gameModeRelay: '接龙模式',
+  gameModeRelayHint: '4 人起；四棒传话，全员同时开画',
   privateJoinLabel: 'PRIVATE ROOM',
   privateJoinTitle: '输入房间码',
   privateJoinBody: '请输入私密房房主分享的房间码。字母不区分大小写。',

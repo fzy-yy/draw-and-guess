@@ -144,7 +144,15 @@ function openSettings(): void {
             <Gamepad2 />
           </div>
           <div class="flex min-w-0 flex-col">
-            <b class="truncate">{{ publicRoom.name }}</b>
+            <!-- 房间名 + 模式徽标（S47 / S80）：徽标紧跟在房间名之后，经典与接龙都显示 -->
+            <span class="flex min-w-0 items-center gap-[0.5em]">
+              <b class="truncate">{{ publicRoom.name }}</b>
+              <span class="shrink-0 rounded-full bg-yellow px-[0.6em] text-fs-10 text-navy">{{
+                publicRoom.gameMode === 'relay'
+                  ? strings.ui.room.modeRelay
+                  : strings.ui.room.modeClassic
+              }}</span>
+            </span>
             <span class="text-muted text-fs-12">{{
               strings.ui.lobby.roomMeta(
                 publicRoom.hostName,

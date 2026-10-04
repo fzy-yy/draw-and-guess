@@ -135,6 +135,43 @@ const RELAY_CANVAS_ERROR_CODES: Record<RelayCanvasRejection, ErrorCode> = {
 }
 
 /**
+ * 模式 → 生效的规则键名（S52 的**唯一来源**）。
+ *
+ * 共用键（候选词数 / 换一批 / 自定义题目 / 房间内邀请）两种模式都生效；
+ * 经典专属键只在经典房生效，接龙三时长只在接龙房生效。
+ * `updateSettings` 据此**严格拒绝**补丁里出现的不生效键（S52）；
+ * 客户端无法 import 服务端模块，在 `apps/client/src/utils/room-facts.ts` 按同一清单声明，
+ * 两端一致由 `test/unit/room-settings-mode-whitelist.spec.ts` 守护。
+ */
+export const MODE_SETTINGS_KEYS = {
+  classic: [
+    'roundsPerPlayer',
+    'drawSeconds',
+    'chooseSeconds',
+    'allowChooseTimeLimit',
+    'showWordLength',
+    'progressiveHints',
+    'allowPause',
+    'allowNearMissHint',
+    'allowCanvasReactions',
+    'allowRoundReplay',
+    'optionCount',
+    'allowWordReroll',
+    'allowCustomWord',
+    'allowPlayerInvite',
+  ],
+  relay: [
+    'relayChooseSeconds',
+    'relayDrawSeconds',
+    'relayGuessSeconds',
+    'optionCount',
+    'allowWordReroll',
+    'allowCustomWord',
+    'allowPlayerInvite',
+  ],
+} as const satisfies Record<GameMode, readonly (keyof RoomSettings)[]>
+
+/**
  * 计时器全部保存在房间秘密状态中。每次切换阶段前清理旧计时器，可阻止旧回调在新回合中误执行。
  */
 export class GameService {
@@ -550,9 +587,14 @@ export class GameService {
     // 乐观并发控制：版本号不匹配说明有其他玩家改过规则，拒绝本次修改
     if (room.stateVersion !== expectedVersion)
       throw new GameError('VERSION_CONFLICT', serverStrings.errors.VERSION_CONFLICT_SETTINGS)
+    // 模式白名单（S52）：补丁里只允许出现当前模式生效的键。不生效键一律按非法设置拒绝而不是静默忽略，
+    // 否则房主会以为改动生效；客户端的完整草稿由 stores/room.ts 按同一清单裁剪后再上送。
+    const effectiveKeys: readonly string[] = MODE_SETTINGS_KEYS[room.gameMode]
+    if (Object.keys(patch).some((key) => !effectiveKeys.includes(key)))
+      throw new GameError('INVALID_SETTINGS', serverStrings.errors.INVALID_SETTINGS)
     const next = { ...room.settings, ...patch }
-    // 规则范围由 RoomSettingsSchema（含 partial 更新）在绑定层裁决；容量固定为协议常量，
-    // 因此不存在「人数上限低于占席数」这类房间态领域判定。
+    // 规则范围由 RoomSettingsSchema（含 partial 更新）在绑定层裁决，模式生效键由上方白名单裁决；
+    // 容量固定为协议常量，因此不存在「人数上限低于占席数」这类房间态领域判定。
     room.settings = next
     this.lifecycle(room).invalidateReady(room, serverStrings.notices.rulesUpdated)
     this.emitRoom(room.id)

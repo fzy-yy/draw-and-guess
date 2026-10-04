@@ -54,6 +54,9 @@ export const room = {
   inviteDisabledTip: '邀请当前服务中的空闲玩家',
   invitePlayers: '邀请在线玩家',
   needMorePlayers: '还需要至少 1 名玩家',
+  /** 接龙开局门禁（S47 / S62）：在线且可玩不足门槛时置灰「开始游戏」的原因（含当前人数）。 */
+  relayGateNeedPlayers: (min: number, current: number) =>
+    `接龙模式至少需要 ${min} 名在线玩家才能开始（当前 ${current} 名）`,
   waitForReady: '等待其他玩家准备',
   waitForGuestsReady: '等待其他玩家全部准备',
   allReady: '全员准备就绪',
@@ -98,6 +101,10 @@ export const room = {
   settingsLabel: 'ROOM SETTINGS',
   settingsTitle: '房间规则',
   drawSecondsField: '单回合时长',
+  /** 接龙专属三时长（S39）：只在接龙规则弹窗渲染，档位白名单来自协议常量。 */
+  relayChooseSecondsField: '选词时长',
+  relayDrawSecondsField: '作画时长',
+  relayGuessSecondsField: '猜词时长',
   chooseTimeField: '选词时间',
   chooseTimeUnlimited: '不限时',
   optionCountField: '候选词数量',
