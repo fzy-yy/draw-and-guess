@@ -184,10 +184,14 @@ async function submitCustomWord(text: string): Promise<void> {
         showRoundResultModal
       "
     >
-      <p>{{ strings.ui.game.roundAnswerLabel }}</p>
-      <h2 class="text-yellow text-fs-24 font-bold tracking-[0.16em]">
-        {{ game.roundResult.answer }}
-      </h2>
+      <p class="text-muted text-fs-12 font-bold">{{ strings.ui.game.roundAnswerLabel }}</p>
+      <div
+        class="mt-[0.5cqh] inline-flex items-center justify-center rounded-[0.7em] bg-navy px-[1.4em] py-[0.5cqh] shadow-xs"
+      >
+        <h2 class="text-yellow text-fs-24 font-bold tracking-[0.16em]">
+          {{ game.roundResult.answer }}
+        </h2>
+      </div>
       <div class="my-[1.5cqh] flex w-full flex-col gap-[0.6cqh]">
         <!-- 画家本回合得分条状项目（置于第一行） -->
         <article
@@ -270,7 +274,11 @@ async function submitCustomWord(text: string): Promise<void> {
                 :title="accolade.description"
                 :aria-label="strings.a11y.game.accoladeBadgeAria(member.nickname, accolade.title)"
               >
-                <span>{{ accolade.icon }}</span>
+                <component
+                  :is="accolade.icon"
+                  class="h-[1.4cqh] w-[1.4cqh] shrink-0"
+                  aria-hidden="true"
+                />
                 <span>{{ accolade.title }}</span>
               </span>
             </span>

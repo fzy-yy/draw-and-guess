@@ -29,4 +29,18 @@ describe('BaseDialog 生命周期', () => {
     expect(onClose).toHaveBeenCalledOnce()
     expect(playInteractionSound).toHaveBeenLastCalledWith('close')
   })
+
+  it('headerCenter 为 true 时使用三列居中网格并保留关闭按钮', () => {
+    const { container } = render(BaseDialog, {
+      props: {
+        open: true,
+        headerCenter: true,
+        closeAria: '关闭',
+      },
+      slots: { header: '自定义' },
+    })
+    const header = container.querySelector('header')
+    expect(header?.classList.contains('grid')).toBe(true)
+    expect(header?.classList.contains('grid-cols-[1fr_auto_1fr]')).toBe(true)
+  })
 })

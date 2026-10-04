@@ -53,12 +53,12 @@ function handleEnter(event: KeyboardEvent): void {
   <BaseDialog
     v-model:open="open"
     width-class="w-[42cqw]"
+    header-center
     labelledby="custom-word-title"
     :close-aria="strings.a11y.game.customWordCancel"
   >
     <template #header>
-      <p class="eyebrow-light">{{ strings.ui.game.customWord }}</p>
-      <h2 id="custom-word-title">{{ strings.ui.game.customWordTitle }}</h2>
+      <h2 id="custom-word-title" class="text-fs-18 font-bold">{{ strings.ui.game.customWord }}</h2>
     </template>
 
     <div class="grid justify-items-center gap-[1.5cqh] px-[3cqw] py-[3cqh] text-center">

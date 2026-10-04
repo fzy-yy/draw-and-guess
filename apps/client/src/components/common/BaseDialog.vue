@@ -30,6 +30,8 @@ const props = withDefaults(
     dismissible?: boolean
     /** 遮罩层级等附加类；系统断线提示需高于普通弹窗与 Toast。 */
     overlayClass?: string
+    /** 标题栏是否使用三列网格居中布局（中间内容严格水平居中，右侧保留关闭按钮） */
+    headerCenter?: boolean
   }>(),
   {
     widthClass: '',
@@ -40,6 +42,7 @@ const props = withDefaults(
     closeAria: undefined,
     dismissible: true,
     overlayClass: 'z-30',
+    headerCenter: false,
   },
 )
 
@@ -153,18 +156,26 @@ onBeforeUnmount(releaseFocus)
       >
         <header
           v-if="closeAria || $slots.header"
-          class="flex min-h-[9cqh] items-center justify-between bg-navy px-[1.7em] py-[1.3cqh] text-white"
+          class="min-h-[9cqh] bg-navy px-[1.7em] py-[1.3cqh] text-white"
+          :class="[
+            headerCenter
+              ? 'grid grid-cols-[1fr_auto_1fr] items-center'
+              : 'flex items-center justify-between',
+          ]"
         >
-          <div><slot name="header" /></div>
-          <button
-            v-if="closeAria && dismissible"
-            type="button"
-            class="grid h-[4cqh] w-[4cqh] place-items-center rounded-full bg-white/10 text-white text-fs-18"
-            :aria-label="closeAria"
-            @click="closeDialog"
-          >
-            <X />
-          </button>
+          <div v-if="headerCenter" aria-hidden="true" />
+          <div :class="headerCenter ? 'text-center' : ''"><slot name="header" /></div>
+          <div :class="headerCenter ? 'flex justify-end' : 'contents'">
+            <button
+              v-if="closeAria && dismissible"
+              type="button"
+              class="grid h-[4cqh] w-[4cqh] place-items-center rounded-full bg-white/10 text-white text-fs-18"
+              :aria-label="closeAria"
+              @click="closeDialog"
+            >
+              <X />
+            </button>
+          </div>
         </header>
         <slot />
         <footer

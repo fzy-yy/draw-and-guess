@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { Send } from 'lucide-vue-next'
+import { Lightbulb, Send } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { normalizeAnswer, type ChatMessage, type RoomMember } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
@@ -196,8 +196,11 @@ defineExpose({ focusInput })
           :style="messageStyle(message)"
         >
           <!-- 差一字私密提示专属图标 -->
-          <span v-if="message.type === 'near_miss'" class="select-none" aria-hidden="true">💡</span>
-          <!-- 玩家发言：独立胶囊标签徽章展示昵称，与正文明显区隔 -->
+          <Lightbulb
+            v-if="message.type === 'near_miss'"
+            class="h-[1.8cqh] w-[1.8cqh] text-warning-fg shrink-0 select-none"
+            aria-hidden="true"
+          />
           <span
             v-if="message.playerId && message.type !== 'near_miss'"
             class="inline-flex items-center px-[0.45em] py-[0.1cqh] rounded-full text-fs-10 font-bold border"

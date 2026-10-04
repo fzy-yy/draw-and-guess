@@ -126,4 +126,13 @@ describe('deriveAccolades 荣誉称号推导纯函数', () => {
     const result = deriveAccolades(game, [p1, p2])
     expect(result['p1']?.some((a) => a.key === 'soulPainter')).toBe(true)
   })
+
+  it('所有荣誉称号元数据中的图标均为组件而非 emoji 字符串', () => {
+    const p1 = createMember('p1', 'Alice', { drawingCorrectCount: 5 })
+    const game = createGameView()
+    const result = deriveAccolades(game, [p1])
+    const masterDrawer = result['p1']?.find((a) => a.key === 'masterDrawer')
+    expect(masterDrawer).toBeDefined()
+    expect(typeof masterDrawer?.icon).not.toBe('string')
+  })
 })

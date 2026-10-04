@@ -9,6 +9,8 @@
  *
  * 称号计算完全在前端完成，纯函数输入输出，无副作用，不依赖 SQLite 数据库迁移。
  */
+import type { Component } from 'vue'
+import { Brush, Flame, Palette, Zap } from 'lucide-vue-next'
 import type { GameView, RoomMember } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 
@@ -20,7 +22,7 @@ export interface AccoladeInfo {
   key: AccoladeKey
   title: string
   description: string
-  icon: string
+  icon: Component
   /** 颜色风格类名 */
   colorClass: string
 }
@@ -31,28 +33,28 @@ export const ACCOLADE_CONFIG: Record<AccoladeKey, AccoladeInfo> = {
     key: 'masterDrawer',
     title: strings.ui.game.accolades.masterDrawer,
     description: strings.ui.game.accolades.masterDrawerDesc,
-    icon: '🖌️',
+    icon: Brush,
     colorClass: 'bg-yellow/15 text-warning-fg',
   },
   soulPainter: {
     key: 'soulPainter',
     title: strings.ui.game.accolades.soulPainter,
     description: strings.ui.game.accolades.soulPainterDesc,
-    icon: '🎨',
+    icon: Palette,
     colorClass: 'bg-purple/15 text-purple',
   },
   mindReader: {
     key: 'mindReader',
     title: strings.ui.game.accolades.mindReader,
     description: strings.ui.game.accolades.mindReaderDesc,
-    icon: '⚡',
+    icon: Zap,
     colorClass: 'bg-sky text-blue',
   },
   activeGuesser: {
     key: 'activeGuesser',
     title: strings.ui.game.accolades.activeGuesser,
     description: strings.ui.game.accolades.activeGuesserDesc,
-    icon: '🔥',
+    icon: Flame,
     colorClass: 'bg-red/15 text-red',
   },
 }
