@@ -52,7 +52,9 @@ const guess = ref('')
 const messageList = ref<HTMLElement>()
 const shouldFollowMessages = ref(true)
 // 消息数据直接读取房间快照中的聊天记录，无需独立 ticker。
-const messages = computed(() => store.room?.game?.messages ?? [])
+// 经典房的聊天流在 `game.messages`；接龙房没有经典 `game`，其房间级自由聊天在 `relay.messages`
+// （与作答彻底分离，S79 / S20）——两者互斥，一次回退即可同时覆盖两种模式，经典读取顺序与改造前一致。
+const messages = computed(() => store.room?.game?.messages ?? store.room?.relay?.messages ?? [])
 function memberForMessage(message: ChatMessage): RoomMember | undefined {
   return message.playerId
     ? store.room?.members.find((member) => member.id === message.playerId)

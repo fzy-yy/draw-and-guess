@@ -99,6 +99,29 @@ export const game = {
   relayNotSubmitted: '未提交',
   relayVoted: '已投票',
   relayNotVoted: '未投票',
+  /**
+   * 接龙作答浮层（S41 / S72，工单 10）：猜词棒＝写答案，作画棒＝完成提交；
+   * 提交后的等待态复用上面的 `relayWaitingOthers`（与选词卡同一句「已提交，等待其他玩家」）。
+   */
+  relayAnswerHint: '看完上图，写下你猜的词',
+  relayAnswerPlaceholder: '输入答案（提交后锁定）',
+  relayAnswerSubmit: '确定提交',
+  relayDrawingHint: '画完了就提交，交给下一位',
+  relayDrawingSubmit: '完成提交',
+  /**
+   * 复盘展示与投票（S75 / S78 / S82，工单 11）：链条进度紧跟在顶栏最左标签之后，
+   * 投票卡只留标题与两个动作（倒计时只看顶栏，卡内不重复）。
+   */
+  relayChainProgress: (index: number, total: number) => `第 ${index} / ${total} 条链`,
+  relayVoteTitle: '这个匹配吗？',
+  relayVoteAgree: '赞同',
+  relayVoteDisagree: '不赞同',
+  /**
+   * 终局接龙口径统计（S77）：替代经典第二行的「猜中 N 次 · 平均 X 秒」——
+   * 接龙猜词不判对错，用参与链数与累计赞同票数表达这一局的贡献。
+   */
+  relayPlayerStats: (chainCount: number, agreeVotes: number) =>
+    `参与 ${chainCount} 条链 · 共获 ${agreeVotes} 张赞同票`,
   // —— 对局浮层布局：顶栏、可拖动浮层面板与底部横向工具条（见 docs/adr/0043-game-view-floating-layout.md）——
   chatPanelTitle: '聊天',
   brushUnit: 'px',

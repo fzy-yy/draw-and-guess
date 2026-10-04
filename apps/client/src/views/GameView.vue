@@ -23,9 +23,11 @@ import {
   GameHud,
   PhaseOverlay,
   PlayerPanel,
+  RelayAnswerPanel,
   RelayPlayerStatus,
   RelayTopBarCenter,
   RelayTopBarLeading,
+  RelayVoteOverlay,
   type PanelPosition,
 } from '@/components/game'
 import { useGameHud } from '@/composables/useGameHud'
@@ -62,6 +64,7 @@ const {
   relayArtistPaints,
   relayStatusMode,
   relaySubmittedIds,
+  relayChainProgress,
 } = useGameHud(store)
 
 /**
@@ -71,15 +74,28 @@ const {
 const isRelay = computed(() => store.room?.gameMode === 'relay')
 
 /**
+ * 接龙画布会话键：动手期＝步骤 id（每步一画布）；复盘期再叠加「链序号 + 半场」，
+ * 让重放机器在每个半场都当作新画面重新起步（否则机器会把两条不同的历史当成同一条续接）。
+ */
+const relayCanvasRoundId = computed(() => {
+  const view = relay.value
+  if (!view) return ''
+  const showcase = view.showcase
+  return showcase ? `${view.stepId}:${showcase.chainIndex}-${showcase.half}` : view.stepId
+})
+
+/**
  * 画布数据源：经典＝对局视图的权威历史；接龙＝**本棒**画布（作画棒＝自己的、猜词棒＝上家的只读画作）。
- * 两种来源的字段同形（strokes / undoneStrokeIds / lastSequence / drawingRevision），
- * 因此画布组件与工具条都不需要知道模式，只按这一份快照渲染。
+ * 复盘 / 投票期没有「本棒画布」，改取当前半场的公开画作（`showcase.drawing`，随快照全量下发，S32）——
+ * 三条来源字段同形（strokes / undoneStrokeIds / lastSequence / drawingRevision），
+ * 因此画布组件与工具条都不需要知道模式，只按这一份快照渲染，**不新建渲染路径**。
  */
 const canvasSource = computed(() => {
   if (isRelay.value) {
-    const canvas = relay.value?.ownCanvas ?? relay.value?.previousDrawing
+    const view = relay.value
+    const canvas = view?.ownCanvas ?? view?.previousDrawing ?? view?.showcase?.drawing
     return {
-      roundId: relay.value?.stepId ?? '',
+      roundId: relayCanvasRoundId.value,
       strokes: canvas?.strokes ?? [],
       undoneStrokeIds: canvas?.undoneStrokeIds ?? [],
       lastSequence: canvas?.lastSequence ?? -1,
@@ -133,6 +149,20 @@ const canDraw = computed(() =>
     ? relay.value?.phase === 'relay_draw' && relay.value.ownCanvas !== undefined
     : store.isDrawer && store.room?.phase === 'drawing',
 )
+
+/**
+ * 接龙作答浮层的动作形态（工单 10 / S72）：猜词棒＝提交答案文本；作画棒＝完成提交（S30）。
+ * 只有「有自己的画布」才可提交作画——不在本棒链阵容内的残留连接没有画布，不该看到完成按钮；
+ * 其余阶段（选词 / 复盘 / 投票 / 终局）一律不挂载作答浮层。
+ */
+const relayAnswerMode = computed<'guess' | 'draw' | 'none'>(() => {
+  if (!isRelay.value) return 'none'
+  const view = relay.value
+  if (view?.phase === 'relay_guess') return 'guess'
+  if (view?.phase === 'relay_draw' && view.ownCanvas) return 'draw'
+  return 'none'
+})
+
 /**
  * 底部绘图工具条可见性：仅可绘制且未主动隐藏时显示（接龙作画棒同样适用）；
  * 经典侧保持改造前的口径（画家在选词等阶段仍看到工具条，只是整组置灰）。
@@ -196,6 +226,23 @@ watch(
     isReplayPausing.value = false
   },
 )
+
+/**
+ * 复盘半场（链序号 + 半场）：变化即该半场的画作换了一幅，按配置时长只读重播一次（S32 / S43）。
+ * 页序「重播 → 停顿 → 揭晓」的节奏由服务端权威计时（每页各是一个快照窗口），客户端只负责
+ * 重播这一段；空白画布保持空白、不加标注（S66）——机器在没有笔画时不会绘制任何东西。
+ */
+const relayShowcaseKey = computed(() => {
+  const showcase = isRelay.value ? relay.value?.showcase : undefined
+  return showcase ? `${showcase.chainIndex}-${showcase.half}` : ''
+})
+
+watch(relayShowcaseKey, async (key) => {
+  if (!key) return
+  // 等本帧的子组件同步完画布数据源再重播，避免重播跑在旧快照上（与经典重播同一手法）
+  await nextTick()
+  await gameCanvasRef.value?.speedrunReplay(APP_CONFIG.relay.replaySeconds * 1_000)
+})
 
 // ---- 猜词框快捷键：Enter 键自动聚焦猜词输入框 ----
 // 对局内设置弹窗打开时让位，避免与设置页的输入控件冲突。
@@ -274,7 +321,11 @@ function handleFullscreenToggle(): void {
       @toggle-fullscreen="handleFullscreenToggle"
     >
       <template v-if="isRelay && relay" #leading>
-        <RelayTopBarLeading :phase="relay.phase" :step="relayStep" />
+        <RelayTopBarLeading
+          :phase="relay.phase"
+          :step="relayStep"
+          :chain-progress="relayChainProgress"
+        />
       </template>
       <template v-if="isRelay && relay" #center>
         <RelayTopBarCenter
@@ -282,6 +333,7 @@ function handleFullscreenToggle(): void {
           :prompt-kind="relayPromptKind"
           :artist="relayArtist"
           :artist-paints="relayArtistPaints"
+          :showcase="relay.showcase"
         />
       </template>
     </GameHud>
@@ -355,6 +407,20 @@ function handleFullscreenToggle(): void {
             :can-draw="canDraw"
             @clear="showClearConfirm = true"
           />
+
+          <!-- 接龙作答浮层（S41 / S72）：猜词棒写答案、作画棒完成提交；外壳共用 DraggablePanelShell（S86）。
+               位置与工具条同层（画布容器内、工具条之后），经典房 relayAnswerMode 恒为 none，不渲染。 -->
+          <RelayAnswerPanel
+            v-if="isRelay && relay && relayAnswerMode !== 'none'"
+            :step-id="relay.stepId"
+            :mode="relayAnswerMode"
+            :submitted="relay.submitted"
+            :enabled="canGuess"
+          />
+
+          <!-- 接龙投票卡（S78）：轮到投票时浮在画布上（画布容器内、与作答浮层同层），
+               卡片自带 OverlayCard 遮罩；其余阶段不挂载。 -->
+          <RelayVoteOverlay v-if="isRelay && relay?.phase === 'relay_vote'" />
         </div>
 
         <!-- 右栏：20cqw 常驻聊天区，独立粗黑边框包裹，单行容纳 15~16 汉字不折行。

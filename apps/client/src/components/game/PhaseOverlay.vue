@@ -9,7 +9,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Brush, CirclePause, CirclePlay, PenLine, RefreshCw, Trophy } from 'lucide-vue-next'
-import { CUSTOM_WORD_MAX_LENGTH, type GameView } from '@draw-guess/shared'
+import {
+  CUSTOM_WORD_MAX_LENGTH,
+  type GameView,
+  type RelayFinalRankingEntry,
+} from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
@@ -51,6 +55,56 @@ const hasOverlaySource = computed(() => Boolean(props.game || store.room?.relay)
 /** 计算终局荣誉称号列表映射（按成员 ID 索引） */
 const playerAccolades = computed(() => {
   return deriveAccolades(props.game, store.room?.members ?? [])
+})
+/**
+ * 房间是否接龙模式：终局结算的行内第二行与称号展示据此分流（S33 / S77）。
+ * 接龙房没有经典 `game`，排名与统计只在 `relay.finalRanking` 里下发。
+ */
+const isRelay = computed(() => store.room?.gameMode === 'relay')
+/** 接龙终局榜（仅 `game_result` 下发）：只有名次、分数与接龙口径统计（S33）。 */
+const relayFinalRanking = computed<RelayFinalRankingEntry[]>(
+  () => store.room?.relay?.finalRanking ?? [],
+)
+
+/** 终局结算的一行：两种模式同形，版式复用经典结算（`OverlayCard wide`），只有第二行口径不同。 */
+interface ResultRow {
+  id: string
+  nickname: string
+  avatarId: string
+  rank: number
+  score: number
+  /** 行内第二行：经典＝猜中次数 / 平均秒数；接龙＝参与链数与累计赞同票（S77）。 */
+  statText: string
+}
+
+/**
+ * 结算行数据：经典取父组件下发的冻结榜单，接龙取接龙视图的 `finalRanking`——
+ * 两者都是服务端冻结的公开结算项，只有统计口径不同（接龙猜词不判对错，S33 / S77）。
+ */
+const resultRows = computed<ResultRow[]>(() => {
+  if (isRelay.value)
+    return relayFinalRanking.value.map((entry) => ({
+      id: entry.id,
+      nickname: entry.nickname,
+      avatarId: entry.avatarId,
+      rank: entry.rank,
+      score: entry.score,
+      statText: strings.ui.game.relayPlayerStats(entry.chainCount, entry.agreeVotes),
+    }))
+  return props.rankings.map((member) => ({
+    id: member.id,
+    nickname: member.nickname,
+    avatarId: member.avatarId,
+    rank: member.rank,
+    score: member.score,
+    statText: strings.ui.game.playerStats(
+      member.stats.correctCount,
+      member.stats.correctCount
+        ? Math.round(member.stats.totalGuessMs / member.stats.correctCount / 1000)
+        : 0,
+      member.stats.drawingCorrectCount,
+    ),
+  }))
 })
 const phaseAnnouncement = computed(() => phaseTextFor(store.room?.phase))
 
@@ -268,7 +322,8 @@ const chooseHint = computed(() => {
         </AppButton>
       </div>
     </OverlayCard>
-    <!-- 阶段遮罩：最终结算（排行榜、统计） -->
+    <!-- 阶段遮罩：最终结算（排行榜、统计）——两种模式复用同一版式：
+         经典＝称号 + 猜中 / 用时统计；接龙＝无称号 + 接龙口径统计（S33 / S77） -->
     <OverlayCard v-else-if="store.room.phase === 'game_result'" wide>
       <!-- 奖杯图标：深色图形配淡黄圆形衬底（黄底黄字会让图标消失），复用 HostCrownBadge 的衬底思路 -->
       <span
@@ -281,7 +336,7 @@ const chooseHint = computed(() => {
       <h2>{{ strings.ui.game.finalRanking }}</h2>
       <div class="my-[1cqh] flex w-full flex-col gap-[0.6cqh]">
         <article
-          v-for="member in rankings"
+          v-for="member in resultRows"
           :key="member.id"
           class="grid grid-cols-[3em_auto_1fr_auto] items-center gap-[0.8em] px-[1em] py-[0.6cqh] text-left"
           :class="member.rank === 1 ? 'text-navy bg-yellow/20' : 'bg-line text-navy'"
@@ -295,33 +350,27 @@ const chooseHint = computed(() => {
           <span class="flex flex-col font-bold">
             <span class="flex items-center gap-[0.4em] flex-wrap">
               <span>{{ member.nickname }}</span>
-              <!-- 荣誉称号胶囊徽章列表 -->
-              <!-- 荣誉称号胶囊徽章列表（无边框纯色浅底设计） -->
-              <span
-                v-for="accolade in playerAccolades[member.id] ?? []"
-                :key="accolade.key"
-                class="inline-flex items-center gap-[0.2em] rounded-full px-[0.55em] py-[0.1cqh] text-fs-10 font-bold select-none"
-                :class="accolade.colorClass"
-                :title="accolade.description"
-                :aria-label="strings.a11y.game.accoladeBadgeAria(member.nickname, accolade.title)"
-              >
-                <component
-                  :is="accolade.icon"
-                  class="h-[1.4cqh] w-[1.4cqh] shrink-0"
-                  aria-hidden="true"
-                />
-                <span>{{ accolade.title }}</span>
-              </span>
+              <!-- 荣誉称号胶囊徽章列表（无边框纯色浅底设计）——接龙不显示称号：猜词不判对错，经典统计无数据源（S33 / S77） -->
+              <template v-if="!isRelay">
+                <span
+                  v-for="accolade in playerAccolades[member.id] ?? []"
+                  :key="accolade.key"
+                  class="inline-flex items-center gap-[0.2em] rounded-full px-[0.55em] py-[0.1cqh] text-fs-10 font-bold select-none"
+                  :class="accolade.colorClass"
+                  :title="accolade.description"
+                  :aria-label="strings.a11y.game.accoladeBadgeAria(member.nickname, accolade.title)"
+                >
+                  <component
+                    :is="accolade.icon"
+                    class="h-[1.4cqh] w-[1.4cqh] shrink-0"
+                    aria-hidden="true"
+                  />
+                  <span>{{ accolade.title }}</span>
+                </span>
+              </template>
             </span>
-            <small class="text-muted text-fs-10 font-bold">{{
-              strings.ui.game.playerStats(
-                member.stats.correctCount,
-                member.stats.correctCount
-                  ? Math.round(member.stats.totalGuessMs / member.stats.correctCount / 1000)
-                  : 0,
-                member.stats.drawingCorrectCount,
-              )
-            }}</small>
+            <!-- 行内第二行：经典＝猜中 / 用时统计，接龙＝参与链数与累计赞同票（S77） -->
+            <small class="text-muted text-fs-10 font-bold">{{ member.statText }}</small>
           </span>
           <strong>{{ strings.ui.common.scoreUnit(member.score) }}</strong>
         </article>

@@ -165,7 +165,7 @@ describe('接龙舞台三栏骨架', () => {
     expect(canvas.props('strokes')).toEqual([previous])
     expect(canvas.props('canDraw')).toBe(false)
     expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
-    // 猜词棒没有候选与作答入口：左栏显示提交进度
+    // 猜词棒没有候选与底部工具条（写答案的浮层由工单 10 提供）：左栏显示提交进度
     expect(wrapper.text()).toContain(strings.ui.game.relayNotSubmitted)
 
     wrapper.unmount()

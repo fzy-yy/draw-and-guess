@@ -45,6 +45,13 @@ export const game = {
   toggleChat: '聊天面板',
   dragToolbarTitle: '拖动工具条',
   dragToolbarAria: '拖动移动工具条位置',
+  // 接龙作答浮层（S41，工单 10）：拖动手柄与输入框的无障碍名。
+  dragAnswerPanelTitle: '拖动作答框',
+  dragAnswerPanelAria: '拖动移动作答框位置',
+  answerInputAria: '接龙作答输入框',
+  // 复盘双胶囊与投票卡（S75 / S78 / S82，工单 11）：未揭晓答案与匿名票行的无障碍名。
+  relayHiddenAnswerAria: '答案尚未揭晓',
+  relayVoteRowAria: '匿名票行',
   playersPanelTitle: '玩家',
   closePanelAria: '关闭面板',
   toolbarAria: '绘图工具栏',

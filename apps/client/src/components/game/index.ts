@@ -13,6 +13,8 @@ export { default as PhaseOverlay } from './PhaseOverlay.vue'
 export { default as PlayerPanel } from './PlayerPanel.vue'
 export { default as RelayPlayerChip } from './RelayPlayerChip.vue'
 // 接龙独有内容（`relay/`）：顶栏插槽内容与左栏状态行，由 GameView 按模式挂载（S84）。
+export { default as RelayAnswerPanel } from './relay/RelayAnswerPanel.vue'
 export { default as RelayPlayerStatus } from './relay/RelayPlayerStatus.vue'
 export { default as RelayTopBarCenter } from './relay/RelayTopBarCenter.vue'
 export { default as RelayTopBarLeading } from './relay/RelayTopBarLeading.vue'
+export { default as RelayVoteOverlay } from './relay/RelayVoteOverlay.vue'
