@@ -18,8 +18,8 @@
 | 公开房 / 私密房 · 私密短码                       | 公开房进大厅列表；私密房仅凭服务端生成的短码或定向邀请加入                                                                                                                  | AGENTS、`room.ts`(handlers)                                        |
 | 恢复令牌（recovery token）                       | 玩家短期身份凭证：落盘仅 SHA-256 摘要、成功恢复必旋转；不是公开快照字段                                                                                                     | AGENTS「配置、安全与敏感信息」                                     |
 | 回合流转状态机（round state machine）            | LEGAL_PHASES 白名单裁决阶段转换，非法即 INVALID_TRANSITION                                                                                                                  | `round-machine.ts`、`pure.ts`                                      |
-| 作画资格（drawing turn）                         | 每回合由服务端指派画家；笔画/填充按序号单调递增，超预算/越资格被拒                                                                                                          | `drawing-service.ts`                                               |
-| 绘图命令历史（drawing command history）          | 权威历史只增不删，达 `maxHistoryCommands` 拒绝新增（撤销/清空释放名额）；橡皮/填充只传点击与颜色，像素由客户端重放                                                          | ADR-0010、`drawing-service.ts`                                     |
+| 作画资格（drawing turn）                         | 每回合由服务端指派画家；笔画/填充按序号单调递增，超预算/越资格被拒                                                                                                          | `apps/server/src/domain/drawing/drawing-core.ts`                   |
+| 绘图命令历史（drawing command history）          | 权威历史只增不删，达 `maxHistoryCommands` 拒绝新增（撤销/清空释放名额）；橡皮/填充只传点击与颜色，像素由客户端重放                                                          | ADR-0010、`apps/server/src/domain/drawing/drawing-core.ts`         |
 | 画布同步游标（canvas sync cursor）               | 成员最近一次快照已同步到的权威绘图序号（`member.lastSyncedSeq`）：整帧下发推进、历史作废重置，差分快照据此只补新增笔画                                                      | `domain/drawing/canvas-sync.ts`                                    |
 | 画布重放状态机（Drawing Replay Machine）         | 「权威历史 → 逻辑栅格」的单一所有者：增量 vs 整帧决策、世代取代、undone 过滤、后备缓冲原子提交与在途预览全在其内                                                            | ADR-0018、`canvas/replay-machine.ts`                               |
 | 原子换入（atomic commit）                        | 重放只画进后备缓冲，整帧成功后一次性 clearRect+drawImage 换入逻辑层；被取代的重放零可见副作用                                                                               | ADR-0017                                                           |
@@ -53,6 +53,10 @@
 | 画板右键菜单（canvas context menu）              | 画布拦截右键呼出全局单例菜单，画家专属创作/撤销/导出/清空二次确认，猜词者专属复制/下载/微表情全员广播；作画中防冲突且点外关闭不留杂墨                                       | ADR-0056、`GameCanvas.vue`                                         |
 | 差一字私密提示（near-miss hint）                 | 猜词与答案长度 >= 2 且编辑距离严格等于 1 时，由服务端定向向当前玩家独占推送的私密线索，公屏绝不剧透                                                                         | ADR-0056、`handlers/chat.ts`                                       |
 | 作画快速重播（round speedrun replay）            | 回合结束进入结算展示前，客户端在画布上以 3 秒高速递进重现画家从第 0 笔至末笔的全部运笔细节；由房间设置 allowRoundReplay 控制，画布保留画作直至下一回合选词才清空            | ADR-0057、`DrawingReplayMachine`                                   |
+| 链（chain）                                      | 接龙模式下并行开出的 N 条传话链（N＝开局人数）：每条链固定 4 步、持有发起人与两幅画布，环状顺延让每名玩家参与全部链                                                         | ADR-0058、`apps/server/src/domain/relay/relay-models.ts`           |
+| 步骤（step）                                     | 接龙链上的棒次（固定 1–4：画 → 猜 → 画 → 猜），每步一个全局 `stepId`，服务端据「观看者 + 步骤 id」解析该玩家本棒负责的链画布                                                | ADR-0058、`apps/server/src/domain/relay/relay-steps.ts`            |
+| 半场（half）                                     | 单条链复盘的两段（第 1 幅画 → 第 2 幅画）：每段「重播 → 停顿 → 揭晓」，两个半场走完才切入该链投票                                                                           | ADR-0058、`packages/shared/src/protocol/relay.ts`                  |
+| 接龙阶段（relay phase）                          | 接龙专属的房间阶段（选词 / 作画 / 猜词 / 复盘展示 / 投票），与经典回合阶段平级并存、由装配层按房间模式委托其一                                                              | ADR-0058、`apps/server/src/domain/relay/relay-machine.ts`          |
 
 ## 待打磨（deliberately unresolved）
 

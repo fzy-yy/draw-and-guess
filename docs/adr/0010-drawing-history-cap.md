@@ -55,7 +55,7 @@
 
 ## 关联
 
-- 代码：`apps/server/src/domain/drawing/drawing-service.ts`（`assertHistoryCapacity`）、
+- 代码：`apps/server/src/domain/drawing/drawing-core.ts`（`assertHistoryCapacity`）、
   `packages/shared/src/error-codes.ts`、`packages/strings/src/server.ts`、
   `packages/config/src/drawing.ts`、`apps/client/src/stores/gameplay.ts`、
   `apps/client/src/stores/error-recovery.ts`

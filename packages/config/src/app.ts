@@ -5,7 +5,7 @@ import { PROTOCOL_VERSION } from '@draw-guess/shared/protocol/constants'
  */
 export const app = {
   name: '你画我猜',
-  version: '2.6.0',
+  version: '2.7.0',
   protocolVersion: PROTOCOL_VERSION, // 服务端主动推送改为版本化信封并增加完整运行时解码，不匹配时拒绝注册
   storageKey: 'draw-and-guess-profile-v1', // localStorage 资料键
   settingsStorageKey: 'draw-and-guess-settings-v1', // localStorage 设置键

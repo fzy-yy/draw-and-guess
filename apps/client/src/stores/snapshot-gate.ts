@@ -43,6 +43,18 @@ function relayDrawingRevision(relay: RelayGameView): number {
 }
 
 /**
+ * 一件接龙快照里那幅画的**身份**：同一时刻只有一幅画，但它会随阶段与复盘游标更换
+ * （作画棒＝自己的、猜词棒＝上家的；复盘期每个「链 + 半场」各是一幅画）。
+ * 只有身份相同，「画布修订」才比得出大小——换了一幅画就与换棒同理：两幅画的写入次数
+ * 本来就没有可比性，拿它们的修订号比较会把整场复盘卡死在上一幅画上（半场 2 常比半场 1 画得少）。
+ * 复盘期 `stepId` 是不变的（停机时停在最后一步），因此游标必须进身份。
+ */
+function relayCanvasKey(relay: RelayGameView): string {
+  const cursor = relay.showcase
+  return cursor ? `${relay.stepId}:${cursor.chainIndex}-${cursor.half}` : relay.stepId
+}
+
+/**
  * 房间快照统一门禁：拒绝旧房间、旧状态、旧对局、旧回合与画布修订倒退。
  * 相同 stateVersion 仍可接收，因为聊天/绘图等高频状态不会为每条消息增加房间版本。
  */
@@ -66,9 +78,9 @@ export function acceptRoomSnapshot(
     if (!currentRelay) return 'accept'
     // 本地有接龙视图而载荷没有（接龙局已结束的回退包）：只有状态版本前进才可信。
     if (!incomingRelay) return incoming.stateVersion > current.stateVersion ? 'accept' : 'ignore'
-    // 换棒（步骤 id 变化）：服务端权威已交棒，采纳新的画布与题面。
-    if (incomingRelay.stepId !== currentRelay.stepId) return 'accept'
-    // 同一棒内：画布修订不允许倒退，否则会用旧画布覆盖本客户端已落地的笔画。
+    // 换棒（步骤 id 变化）或复盘游标切换（链 / 半场变化）：快照里已换成另一幅画，修订号不具可比性。
+    if (relayCanvasKey(incomingRelay) !== relayCanvasKey(currentRelay)) return 'accept'
+    // 同一幅画布内：画布修订不允许倒退，否则会用旧画布覆盖本客户端已落地的笔画。
     return relayDrawingRevision(incomingRelay) < relayDrawingRevision(currentRelay)
       ? 'ignore'
       : 'accept'

@@ -12,11 +12,12 @@
 
 - **服务端权威**：身份、房间、阶段、答案、计时、绘画资格与分数全部由服务端裁决；客户端只发操作请求，结果经「角色裁剪快照」回写。
 - **公开 / 私密房间**：公开房进入大厅列表；私密房不公开，只能通过服务端生成的短码或定向邀请加入；不支持自定义密码、邀请链接或二维码。房间容量固定为 **6 人**（`PLAYER_PROTOCOL_LIMITS.maxPlayers`），房主不可调整；开局后不可加入——公开房、私密短码与定向邀请三条路径一律被拒，大厅与房间内的加入入口置灰显示「游戏中」。
+- **玩法模式（建房时选定，房间内不可改）**：**经典模式**轮流当画家、一轮一题；**接龙模式**下 N 名玩家并行开出 N 条链，每条链固定 4 步「画 → 猜 → 画 → 猜」，四步走完后按链发起人席位顺序逐条复盘（每半场「重播 → 停顿 → 揭晓」，每链 24 秒）并对「初始词与最终答案是否匹配」投票（固定 10 秒、无弃权、赞同严格多于反对才通过，通过后该链每名参与者得「赞同票数 × 10」分）。接龙开局门槛为在线可玩 ≥ 4 人（`RELAY_MIN_PLAYERS`）且全员准备；玩家只能看到自己本棒所需的内容，作答与聊天是两条独立通道（见 `docs/adr/0058-relay-mode-authoritative-flow-and-reuse.md`）。
 - **内存态 + 低频持久化**：房间、成员席位、画布笔画、聊天消息、计时器与对局实时状态全部在内存，重启即清空；仅**玩家短期身份**（恢复令牌/资料/偏好）和**完成局战报**经 **SQLite（better-sqlite3，WAL）** 落盘：重启后身份可凭令牌在宽限内恢复到大厅，历史战报可查。数据库文件位于 `apps/server/data/game.db`（已忽略入库）。
 - **日志文件化**：服务端日志**不输出到控制台**（规避 Windows 控制台 GBK 解码 UTF-8 中文乱码），通过 Pino 异步缓冲写入 `apps/server/log/app-<秒级时间戳>.log`（每次启动新建一个、最多保留 `LOG_MAX_FILES` 条），优雅关闭时 flush/close；可通过 `.env` 的 `LOG_ENABLED` 完全关闭（零内存开销）。
 - **画板**：高 DPI 实时画布，支持自由画笔、橡皮擦（`destination-out`）与封闭区域洪泛填充；画笔/橡皮擦共用连续粗细，可滚轮调整；支持预设或任意 HEX 颜色，工具可自定义单键切换。**渲染模型为「归一化点列 + 直线段描边」增量同步**（不引入轮廓填充型平滑库，曾因此导致白边/闪烁/空心缺陷）。
 - **头像**：仅允许从 40 个内置 SVG 白名单编号中选择，协议只传编号；禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像。
-- **应用标识**：名称「你画我猜」、版本 `2.6.0`、协议版本 `protocolVersion: '16'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
+- **应用标识**：名称「你画我猜」、版本 `2.7.0`、协议版本 `protocolVersion: '18'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
 - **Windows 分发包**：`pnpm package:dist` 把服务端打成 **ESM 单文件 `server.mjs`**（依赖内联、`better-sqlite3` 外置），产出**单一自带 Node 的包**——附 `client/`、`vocabulary/`（含空白词库样板 `vocabulary/templates/example.db`）、`better-sqlite3` Node-API 预编译、`runtime/node.exe`（内置 **Node 24 LTS** 运行时 + 其 LICENSE）与 `start.cmd`（直用内置运行时，不检测系统 Node）。数据（`game.db`/`logs/`/`vocabulary/custom/`/可选 `.env`）写在产物旁 `data/`；内置 Node 默认从国内镜像下载（`NODE_DIST_MIRROR` 可切官网、`NODE_VERSION` 可钉版本），**下载经同源 SHASUMS256 sha256 校验、缓存损坏自动重下一次**。产物模式自动顺延端口并打开默认浏览器（`DRAW_GUESS_OPEN_BROWSER=false` 关闭后者）。仅 Windows x64，详见 `docs/adr/0034-node-single-file-distribution.md` 与 `docs/adr/0050-single-dist-package.md`。
 
 ### 技术栈与运行环境
@@ -46,14 +47,14 @@ draw-and-guess/
 ├── .env.example                  # 部署变量：HOST/PORT/日志开关、HEALTH_METRICS_ENABLED 与浏览器开关（复制为 .env 使用）
 ├── .env                          # 本地部署覆盖（已被 .gitignore 忽略，不入库）
 ├── .gitignore                    # 忽略 node_modules/dist/日志/数据库/.env/.pi/.playwright-mcp 等
-├── packages/config/              # @draw-guess/config：仅浏览器安全的应用默认值与 UI/音频配置
+├── packages/config/              # @draw-guess/config：仅浏览器安全的应用默认值与 UI/音频配置（含接龙三时长默认值与复盘四时长 `relay.ts`）
 ├── packages/strings/             # @draw-guess/strings：唯一展示文案表（strings.ui 可见 / strings.a11y 无障碍 / serverStrings 服务端）
 ├── vocabulary/                   # ★唯一权威词库目录：SQLite 数据库（metadata/words 表）
 ├── vitest.config.ts               # Vitest projects：Node 单元 + happy-dom 组件/集成
 ├── test/                          # 自动化测试目录（隔离环境）
 │   ├── unit/                      # Vitest 单元/规则测试（test:unit）
 │   │   ├── game.deadline.spec.ts  # 假时钟下 submitGuess 截止校验示例
-│   │   └── helpers/               # fake-clock.ts / in-memory-repositories.ts / mini-vocabulary.ts / fake-audio.ts / game-harness.ts（GameService 全栈假运行时）
+│   │   └── helpers/               # fake-clock.ts / in-memory-repositories.ts / mini-vocabulary.ts / fake-audio.ts / game-harness.ts（GameService 全栈假运行时）/ relay-game-fixture.ts（接龙装配缝：一次调用得到 4 人接龙房与已开局，并可推进到指定幕）
 │   ├── client/                    # happy-dom 公共 setup（DOM 清理、媒体/焦点边界 mock）
 │   ├── component/                 # Vue Testing Library / Test Utils 组件测试
 │   ├── integration/               # Pinia + MSW 客户端集成测试与网络边界；store-contracts.ts 为 Facade/composable 成员契约的编译期快照（非 spec，由 vue-tsc 把关）
@@ -63,7 +64,7 @@ draw-and-guess/
 │       ├── launcher.mts           # 隔离 webServer：临时目录 + fixture 词库 + 前端构建 + 清理/清扫
 │       ├── pages/                 # 页面封装（profile/lobby/room/game）+ responsive.page.ts（响应式与触控验收断言辅助）+ dropdown.ts（手写下拉操作封装）
 │       ├── fixtures/              # 测试基类 test-base.ts（建玩家/连接）与 canvas-probe.ts（逻辑栅格哈希探针）
-│       └── specs/                 # 01-profile-session / 02-lobby-room-seats / 03-game-drawing / 04-game-guessing / 05-game-lifecycle / 06-browser-compatibility / 07-responsive-touch / 08-static-asset-cache / 09-drawing-history-limit
+│       └── specs/                 # 01-profile-session / 02-lobby-room-seats / 03-game-drawing / 04-game-guessing / 05-game-lifecycle / 06-browser-compatibility / 07-responsive-touch / 08-static-asset-cache / 09-drawing-history-limit / 10-relay-mode
 ├── README.md                     # 项目总览、十分钟启动（依赖/结构/样式/持久化/版本章节与代码保持一致）
 ├── docs/adr/                     # 架构决策记录：每条含背景 / 决策 / 后果，源码注释只链接此处
 ├── AGENTS.md                     # 本文件：导读、硬性限制、启动方法、编码/测试/提交流程
@@ -73,8 +74,8 @@ draw-and-guess/
 │       ├── index.ts               # 聚合出口（直连再导出 types/ 与 protocol/）；引用路径保持 @draw-guess/shared
 │       ├── events.ts              # Socket.IO 事件名及客户端请求/响应类型契约（前后端唯一事件名来源）
 │       ├── error-codes.ts         # ERROR_CODES / ErrorCode：线上与客户端合成错误码唯一注册表
-│       ├── types/                 # common/drawing/gameplay/room/session/vocabulary/invite 分域 DTO
-│       ├── protocol/              # 分域 Zod 协议（含 constants.ts 版本/头像/昵称/房间/画板约束、response.ts ack 响应边界）
+│       ├── types/                 # common/drawing/gameplay/room/session/vocabulary/invite/relay 分域 DTO
+│       ├── protocol/              # 分域 Zod 协议（含 constants.ts 版本/头像/昵称/房间/接龙档位约束、relay.ts 接龙请求与视图契约、response.ts ack 响应边界）
 │       └── pure.ts                # 纯函数：答案规范化、遮罩生成、计分、状态机转换表
 │
 ├── apps/server/                   # 服务端（Express 5 + Socket.IO + Zod + SQLite，权威领域）
@@ -102,7 +103,7 @@ draw-and-guess/
 │       ├── runtime.ts             # 统一 Clock/Scheduler/RandomSource（生产实现与测试注入边界）
 │       ├── socket-types.ts        # AppServer/AppSocket 泛型别名 + AppSocketData（socket.data 显式契约，禁任意键）
 │       ├── application/           # 应用协作者：room-publisher 发布快照；room-persistence-coordinator 映射低频仓储记录
-│       ├── domain/                # 领域协作者：session 会话、room 成员、drawing/invite/vocabulary/game 窄接口；candidate-selector 为纯函数
+│       ├── domain/                # 领域协作者：session 会话、room 成员、drawing/invite/vocabulary/game 窄接口、relay 接龙状态机与视图裁剪；candidate-selector 为纯函数
 │       ├── startup/               # 启动期配置校验、环境加载、局域网地址与本机名枚举、端口顺延（产物）、自动开浏览器、优雅关闭
 │       ├── logging/               # 文件日志初始化与保留策略
 │       ├── observability/         # 有界进程指标：连接/房间/ack/错误/重同步（仅安全聚合）
@@ -155,6 +156,7 @@ draw-and-guess/
 │       │   ├── room.ts            # 房间内生命周期 Store（成员席位、准备、房主权限与规则变动）
 │       │   ├── resync.ts          # 重连/重同步 Store（受限全量重同步与会话失效跨域重置，ADR-0025）
 │       │   ├── gameplay.ts        # 实时对局业务 Store（回合状态、词语选项、实时猜词流）
+│       │   ├── relay.ts           # 接龙对局 Store（接龙绘图/提交/投票/独立聊天 + 本棒画布镜像自补）
 │       │   ├── vocabulary.ts      # 词库选择与配置 Store
 │       │   ├── socket.ts          # Socket 窄端口类型 + 推送事件绑定/解绑（io() 构造在 application/game-transport；注册/解绑由推送清单派生；HMR dispose）
 │       │   ├── request.ts         # 请求封装：timeout+同 requestId 自动重试+ack 运行时校验+错误翻译
@@ -187,7 +189,7 @@ draw-and-guess/
 │       │   ├── AvatarPickerDialog.vue # 40 个 SVG 头像选择模态框（v-model:open）
 │       │   ├── ActionPopover.vue  # 悬浮操作面板（聊天快捷互动用）
 │       │   ├── AppToaster.vue     # 自建 Toast 堆栈渲染：画框内右上角、白色长条+橙色小条+加粗文字、样式闭环在组件内、点击消失、淡入淡出、去重左弹跳（WAAPI）
-│       │   ├── game/              # 对局组件（提供 index.ts）：GameCanvas / GameHud / ChatPanel / PlayerPanel / FloatingPanel / CanvasToolbar / BrushSizeField / PhaseOverlay / OverlayCard / HudPill；scale-fade.ts 为浮层出入场过渡（对局布局见 docs/adr/0056-three-column-layout-and-canvas-menu.md）
+│       │   ├── game/              # 对局组件（提供 index.ts）：GameCanvas / GameHud / ChatPanel / PlayerPanel / FloatingPanel / CanvasToolbar / BrushSizeField / PhaseOverlay / OverlayCard / HudPill / RelayPlayerChip；relay/ 子目录为接龙专属内容（顶栏两形态 / 作答浮层 / 投票卡 / 玩家状态行）；scale-fade.ts 为浮层出入场过渡（对局布局见 docs/adr/0056-three-column-layout-and-canvas-menu.md）
 │       │   ├── room/              # 房间组件（提供 index.ts）：SeatGrid / RuleSummary / RuleRow / RulesDialog / InviteDialog / VocabularyDialog / VocabTableView / VocabPackageTableView
 │       │   ├── lobby/             # 大厅组件（提供 index.ts）：CreateRoomDialog / JoinPrivateDialog
 │       │   ├── common/            # 通用原语组件（提供 index.ts）：含 DataTable 与 DataTableHeader、ContextMenu（右键菜单，白底浮层）、SelectDropdown（手写下拉，替代原生 select）、SquareIconButton / ColorSwatchButton / GroupDivider 等共享原语、各输入/按钮/规则原语
@@ -301,6 +303,7 @@ pnpm format:check  # 仅检查格式
 - **统一运行时依赖**：`GameService`、`RoundMachine`、`rate-limit.ts`、`snapshot.ts`、`scoring.ts`、`hint-scheduler.ts` 及 `apps/server/src/domain/`、`application/`、`protocol/` 全目录的领域时间、定时器与随机数统一来自 `runtime.ts` 的 `Clock` / `Scheduler` / `RandomSource`；这些作用域禁止直接调用系统时间、随机数或定时器，只有 `runtime.ts` 生产适配层放行，ESLint 会阻止回退。
 - **回合状态机**：`round-machine.ts` + `packages/shared/src/pure.ts` 的 `LEGAL_PHASES` 白名单；非法转换由服务端拒绝（`INVALID_TRANSITION`）。**阶段写入、准备失效、对局消息/系统通知与候选抽取、画家轮换、逐步提示计时器只归 `round-machine.ts` 所有**（阶段写入静态守卫见 `test/unit/room-phase-transition.spec.ts`）；`RoundContext` 是运行时/副作用窄端口，`GameService` 退为请求 API 与装配适配（见 `docs/adr/0024-round-machine-ownership.md`）。
 - **计分统一口径（固定 100 分制）**：`scoring.ts` 与 `pure.ts` 的 `guessScoreForOrder` 使用同一规则——猜词者按本回合猜中顺序得 100/80/60/40/20（第 5 名及以后取最低档），画家每名猜中者 20 分、单回合上限 100；速度奖、顺序奖、全员猜中奖、词条权重与「统一猜词基础分」均已删除（见 `docs/adr/0047-fixed-100-point-scoring.md`）。
+- **接龙状态机（与回合状态机平级）**：`apps/server/src/domain/relay/` 承载接龙的开局门禁、选词、四步换手、复盘轮播、投票结算、终局与代交兜底，只依赖窄端口、不反向依赖整机服务；装配层按 `room.gameMode` 委托给回合状态机或接龙状态机（经典回归路径零改动）。三条必须守住的边界：**绘图发布策略按模式分流**（经典＝全房广播、接龙＝不广播、命令只写入链内权威历史，由 `DrawingPublisher` 单点注入）；**接龙快照按观看者下发最小集**（其余链的画作与答案、未揭晓答案及其长度绝不出现）；**计分与复盘时序单口径**（「赞同严格多于反对」才通过、通过后 4 名参与者每人得「赞同票数 × 10」，复盘重播 3 / 停顿 1 / 揭晓 3 / 投票 10 秒取自 `packages/config/src/relay.ts`，每链 24 秒）。取舍见 `docs/adr/0058-relay-mode-authoritative-flow-and-reuse.md`。
 - **成员事实单一口径**：房间内「占席 / 可玩 / 在线可玩 / 进榜」与连接三态、阶段标称时长只写在 `apps/server/src/domain/room/member-facts.ts`（纯函数，连通性经显式 `isOnline` 入参注入），其他模块经具名谓词 / 选择器调用；守护测试 `test/unit/member-facts-boundaries.spec.ts` 防止已删字段与加入策略回潮（取舍见 `docs/adr/0023-member-facts-single-source.md`）。
 - **画布增量绘制**（`GameCanvas.vue` + `canvas/replay-machine.ts`）：坐标一律**归一化 0～1**；绘图序号单调递增，服务端拒绝旧包；橡皮擦/填充只传「点击位置 + 颜色」，不传像素，客户端按同一历史重放；`lastSequence` 用于重连续接。**渲染为直线段描边（`stroke()` + `round` 线帽），增量只补画新增段（fromIndex）**。**权威重放原子提交**：重放只画进后备 canvas，整帧成功后一次换入逻辑层——中止/取消的重放不得触碰逻辑层，`drawnPoints` 簿记与后备内容同口径（见 `docs/adr/0017-drawing-replay-atomic-commit.md`）。**「历史 → 栅格」的全部决策归画布重放状态机 `DrawingReplayMachine`**：唯一入口 `sync({commands, undoneIds, roundId})` + `resize/replay/预览方法`，增量 vs 整帧、undone 可见性过滤、世代取代、原子提交都是机器内政；组件与笔画会话不得直接绘制或清空逻辑层（见 `docs/adr/0018-canvas-replay-machine.md`）。
 - **持久化分层**：每个应用由 `createDatabase(filePath)` 创建独占 `DatabaseContext`，迁移、身份/战报仓储和事务显式绑定同一连接，不允许模块级数据库单例或路径覆盖；恢复令牌落盘时只存 SHA-256 摘要且成功恢复必须旋转，运行期房间禁止写穿数据库。`RunningApplication.close()` 负责关闭自身 Socket、HTTP 和数据库。
@@ -589,6 +592,9 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 | 新增一个请求事件                               | `packages/shared/src/events.ts` 契约 → `packages/shared/src/protocol/` Schema → `game-service.ts` 或对应领域协作者 → `handlers/*.ts` 注册 → 客户端领域 Store                                                                                                                                                                                                      |
 | 回合流转/阶段                                  | `apps/server/src/round-machine.ts`                                                                                                                                                                                                                                                                                                                                |
 | 计分规则                                       | `apps/server/src/scoring.ts`                                                                                                                                                                                                                                                                                                                                      |
+| 玩法模式 / 接龙规则字段（三时长档位与默认值）  | `packages/config/src/relay.ts`（默认值与复盘四时长）+ `packages/shared/src/protocol/constants.ts`（档位白名单）+ `packages/shared/src/protocol/room.ts`（房间设置 Schema）                                                                                                                                                                                        |
+| 接龙状态机 / 复盘轮播 / 投票结算 / 视图裁剪    | `apps/server/src/domain/relay/relay-machine.ts` + `apps/server/src/domain/relay/relay-snapshot.ts`（取舍见 `docs/adr/0058-relay-mode-authoritative-flow-and-reuse.md`）                                                                                                                                                                                           |
+| 接龙客户端（Store / 组件 / 协议契约）          | `apps/client/src/stores/relay.ts` + `apps/client/src/components/game/relay/` + `packages/shared/src/protocol/relay.ts`                                                                                                                                                                                                                                            |
 | 成员状态判定（占席/可玩/在线/进榜）            | `apps/server/src/domain/room/member-facts.ts`（ADR-0023）                                                                                                                                                                                                                                                                                                         |
 | 重连/重同步与自愈                              | `apps/client/src/stores/resync.ts`（冷却/在途/世代校验与会话失效重置，ADR-0025）                                                                                                                                                                                                                                                                                  |
 | 快照裁剪/隐私边界                              | `apps/server/src/snapshot.ts`（端口与裁剪）+ `test/unit/snapshot.matrix.spec.ts`（角色×阶段穷举矩阵）                                                                                                                                                                                                                                                             |

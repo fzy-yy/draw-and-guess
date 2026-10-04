@@ -8,8 +8,20 @@ export class LobbyPage {
     await expect(this.page.getByRole('dialog')).toBeVisible()
   }
 
-  async createRoom(options?: { name?: string; visibility?: 'public' | 'private' }) {
+  async createRoom(options?: {
+    name?: string
+    visibility?: 'public' | 'private'
+    /** 玩法模式：建房时选定、房间内不可修改（S27 / S28）；缺省即经典模式。 */
+    gameMode?: 'classic' | 'relay'
+  }) {
     await this.openCreateRoom()
+    if (options?.gameMode === 'relay') {
+      // 单选组的可访问名＝label 全文（标题 + 提示），故用标题片段匹配
+      await this.page
+        .getByRole('dialog')
+        .getByRole('radio', { name: /接龙模式/ })
+        .check()
+    }
     if (options?.visibility === 'private') {
       await this.page.locator('label:has-text("私密") input[type="radio"]').check()
     }

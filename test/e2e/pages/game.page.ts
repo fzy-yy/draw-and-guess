@@ -1,4 +1,5 @@
-import { type Page, expect } from '@playwright/test'
+import { type Locator, type Page, expect } from '@playwright/test'
+import { strings } from '../../../packages/strings/src/index.ts'
 
 export class GamePage {
   constructor(readonly page: Page) {}
@@ -124,5 +125,65 @@ export class GamePage {
     await expect(rematchBtn).toBeVisible({ timeout: 20_000 })
     await rematchBtn.click()
     await expect(this.page.getByRole('button', { name: '已选择再来一局' })).toBeDisabled()
+  }
+
+  // ---------------------------------------------------------------------------
+  // 接龙模式（10-relay-mode.spec.ts 的端到端验收；依据工单 13 / spec 的 Testing Decisions）
+  // ---------------------------------------------------------------------------
+
+  /** 对局顶栏（`GameHud` 的 header）：接龙的阶段 / 棒次 / 链条进度胶囊都在这里。 */
+  get topBar(): Locator {
+    return this.page.locator(`header[aria-label="${strings.a11y.game.topBarAria}"]`)
+  }
+
+  /**
+   * 接龙顶栏的「第 N 棒 / 共 4 棒」胶囊：定位方式是与大号数字同格的 `/ 4 棒` 尾巴，
+   * 再读它前一个兄弟 `b` 的棒次数字——同一阶段（作画 / 猜词）会出现两棒，必须靠它区分。
+   */
+  async expectRelayStep(step: number, total = 4): Promise<void> {
+    const pill = this.topBar
+      .locator(`div:has(> small:text-is("${strings.ui.game.relayStepTotal(total)}"))`)
+      .last()
+    await expect(pill.locator('b')).toHaveText(String(step))
+  }
+
+  /** 接龙作画棒：作答浮层的「完成提交」（S30，交的是画布上已有笔画）。 */
+  async relaySubmitDrawing(): Promise<void> {
+    const submit = this.page.getByRole('button', {
+      name: strings.ui.game.relayDrawingSubmit,
+      exact: true,
+    })
+    await expect(submit).toBeEnabled({ timeout: 20_000 })
+    await submit.click()
+    // 提交后按钮必然消失：要么换成「已提交，等待其他玩家」，要么全员提交即秒切下一棒（S16 / S40）
+    await expect(submit).toBeHidden({ timeout: 15_000 })
+  }
+
+  /** 接龙猜词棒：在作答浮层写答案并提交（空答案前端即禁止提交，S15）。 */
+  async relaySubmitGuess(text: string): Promise<void> {
+    const input = this.page.getByLabel(strings.a11y.game.answerInputAria)
+    await expect(input).toBeEnabled({ timeout: 20_000 })
+    await input.fill(text)
+    const submit = this.page.getByRole('button', {
+      name: strings.ui.game.relayAnswerSubmit,
+      exact: true,
+    })
+    await expect(submit).toBeEnabled()
+    await submit.click()
+    await expect(submit).toBeHidden({ timeout: 15_000 })
+  }
+
+  /**
+   * 接龙投票卡（S78）：赞同 / 不赞同，点下即锁定（本地立刻置灰，重复投票服务端也会拒绝）。
+   * 等待时必须跨得过该链复盘的轮播窗口才轮到投票，故给足超时；点完再断言已锁定，
+   * 逐链循环才能靠「先置灰再等下一次可用」安全推进。
+   */
+  async relayVote(choice: 'agree' | 'disagree', waitTimeoutMs = 30_000): Promise<void> {
+    const label =
+      choice === 'agree' ? strings.ui.game.relayVoteAgree : strings.ui.game.relayVoteDisagree
+    const button = this.page.getByRole('button', { name: label, exact: true })
+    await expect(button).toBeEnabled({ timeout: waitTimeoutMs })
+    await button.click()
+    await expect(button).toBeDisabled({ timeout: 10_000 })
   }
 }

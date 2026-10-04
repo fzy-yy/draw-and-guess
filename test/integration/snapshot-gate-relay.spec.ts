@@ -4,8 +4,9 @@ import { STEP_ID, createRelayRoomFixture, createRoomFixture } from '../client/ro
 
 /**
  * 快照门禁的接龙分支（S60）：接龙房没有经典 `game` 字段，改按
- * 「步骤 id + 画布修订 + 状态版本」三键裁决；经典分支的行为由 `test/unit/client-boundaries.spec.ts` 守护，
- * 这里同时钉一条经典用例，确保加入接龙分支后经典裁决没有被顺带改动。
+ * 「画布身份（步骤 id + 复盘游标）+ 画布修订 + 状态版本」三键裁决；经典分支的行为由
+ * `test/unit/client-boundaries.spec.ts` 守护，这里同时钉一条经典用例，
+ * 确保加入接龙分支后经典裁决没有被顺带改动。
  */
 
 const NEXT_STEP_ID = '00000000-0000-4000-8000-00000000000e'
@@ -107,6 +108,85 @@ describe('acceptRoomSnapshot 接龙分支', () => {
     })
     expect(acceptRoomSnapshot(reveal, revealStale)).toBe('ignore')
     expect(acceptRoomSnapshot(revealStale, reveal)).toBe('accept')
+  })
+
+  it('复盘换半场 / 换链即采纳：换了一幅画布，修订号不具可比性（否则整场复盘会卡死在上一幅画上）', () => {
+    const player = { id: STEP_ID, nickname: '画家', avatarId: '01' as const }
+    const capsule = (text: string | null) => ({ player, text })
+    // 半场 1 展示第一幅画（命令多），半场 2 展示同一条链的第二幅画（很可能画得更少、修订更小）
+    const halfOne = createRelayRoomFixture('relay_showcase', {
+      showcase: {
+        chainIndex: 1,
+        chainCount: 4,
+        half: 1,
+        prompt: capsule('气球'),
+        answer: capsule('气球'),
+        drawing: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 4 },
+      },
+    })
+    const halfTwo = createRelayRoomFixture(
+      'relay_showcase',
+      {
+        showcase: {
+          chainIndex: 1,
+          chainCount: 4,
+          half: 2,
+          prompt: capsule('气球'),
+          answer: capsule(null),
+          drawing: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 1 },
+        },
+      },
+      { stateVersion: halfOne.stateVersion + 1 },
+    )
+    expect(acceptRoomSnapshot(halfOne, halfTwo)).toBe('accept')
+
+    // 下一条链的半场 1 又是另一幅画布：链间切换同样不比较修订
+    const nextChain = createRelayRoomFixture(
+      'relay_showcase',
+      {
+        showcase: {
+          chainIndex: 2,
+          chainCount: 4,
+          half: 1,
+          prompt: capsule('太阳'),
+          answer: capsule('太阳'),
+          drawing: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 0 },
+        },
+      },
+      { stateVersion: halfTwo.stateVersion + 1 },
+    )
+    expect(acceptRoomSnapshot(halfTwo, nextChain)).toBe('accept')
+
+    // 同一幅画布内（同链同半场）仍然禁止修订倒退：这才是「旧包覆盖已落地笔画」的防线
+    const sameCanvasNewer = createRelayRoomFixture(
+      'relay_showcase',
+      {
+        showcase: {
+          chainIndex: 2,
+          chainCount: 4,
+          half: 1,
+          prompt: capsule('太阳'),
+          answer: capsule(null),
+          drawing: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 2 },
+        },
+      },
+      { stateVersion: nextChain.stateVersion + 1 },
+    )
+    const sameCanvasStale = createRelayRoomFixture(
+      'relay_showcase',
+      {
+        showcase: {
+          chainIndex: 2,
+          chainCount: 4,
+          half: 1,
+          prompt: capsule('太阳'),
+          answer: capsule(null),
+          drawing: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 0 },
+        },
+      },
+      { stateVersion: sameCanvasNewer.stateVersion + 1 },
+    )
+    expect(acceptRoomSnapshot(sameCanvasNewer, sameCanvasStale)).toBe('ignore')
   })
 
   it('经典分支不受影响：同回合修订倒退仍丢弃、状态版本倒退仍丢弃', () => {

@@ -1,8 +1,38 @@
 import { type Page, expect } from '@playwright/test'
+import { strings } from '../../../packages/strings/src/index.ts'
 import { selectDropdownOption } from './dropdown'
 
 export class RoomPage {
   constructor(readonly page: Page) {}
+
+  /**
+   * 房间头模式徽标（S80）：经典 / 接龙都显示，文案由建房时选定的 `gameMode` 决定、
+   * 房间内不可修改。传 `strings.ui.room.modeRelay` 或 `strings.ui.room.modeClassic`。
+   */
+  async expectModeBadge(label: string): Promise<void> {
+    await expect(this.page.getByText(label, { exact: true }).first()).toBeVisible({
+      timeout: 10_000,
+    })
+  }
+
+  /**
+   * 接龙开局门禁（S47 / S62）：在线可玩人数不足门槛时「开始游戏」置灰并给出含当前人数的原因。
+   * 经典房不渲染该原因，故本断言只用于接龙房。
+   */
+  async expectRelayStartGated(min: number, current: number): Promise<void> {
+    await expect(
+      this.page.getByText(strings.ui.room.relayGateNeedPlayers(min, current)),
+    ).toBeVisible({ timeout: 10_000 })
+    await expect(this.page.getByRole('button', { name: /开始游戏/ })).toBeDisabled()
+  }
+
+  /** 已凑够人数但尚未全员准备时的置灰原因（接龙与经典共用同一句话）。 */
+  async expectWaitingAllReady(): Promise<void> {
+    await expect(this.page.getByText(strings.ui.room.waitForGuestsReady)).toBeVisible({
+      timeout: 10_000,
+    })
+    await expect(this.page.getByRole('button', { name: /开始游戏/ })).toBeDisabled()
+  }
 
   async getPrivateCode(): Promise<string> {
     const codeBtn = this.page.locator('button[aria-label*="私密房间码"] b')
