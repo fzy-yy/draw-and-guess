@@ -19,6 +19,7 @@ import { GameError } from './errors.ts'
 import type { InviteSecret, PlayerSecret, RoomSecret } from './models.ts'
 import type { Clock } from './runtime.ts'
 import type { VocabularyStore } from './vocabulary/index.ts'
+import { RelaySnapshotBuilder } from './domain/relay/relay-snapshot.ts'
 import { invalidateMemberCanvasSync } from './domain/drawing/canvas-sync.ts'
 import {
   connectionStatus,
@@ -45,7 +46,12 @@ export interface SnapshotViewPort {
 
 /** 按观看者角色裁剪房间/玩家视图的构建器。 */
 export class SnapshotBuilder {
-  constructor(private readonly port: SnapshotViewPort) {}
+  /** 接龙视图构建器：与经典 `GameView` 并列产出 `RoomSnapshot.relay`（S57），经典路径完全不动。 */
+  private readonly relayViews: RelaySnapshotBuilder
+
+  constructor(private readonly port: SnapshotViewPort) {
+    this.relayViews = new RelaySnapshotBuilder({ players: port.players })
+  }
 
   /** 为指定观看者生成裁剪后的房间快照（画家可见答案与候选词，结算阶段全员可见答案）。 */
   snapshot(
@@ -141,6 +147,8 @@ export class SnapshotBuilder {
       : undefined
     // 词库元信息在同一快照里被三个字段引用：取一次端口结果即可（原实现连调 4 次）。
     const vocabulary = this.port.getRoomVocabularyStore(room)
+    // 接龙视图：只在房间挂着接龙局且当前是接龙阶段时产出；经典房间恒为 undefined（S57）
+    const relayView = this.relayViews.build(room, viewerId)
     return {
       id: room.id,
       name: room.name,
@@ -196,6 +204,8 @@ export class SnapshotBuilder {
       vocabularyPackageId: room.vocabularyPackageId || vocabulary.meta.id,
       vocabularyPackageName: vocabulary.meta.name || vocabulary.meta.id,
       ...(gameView ? { game: gameView } : {}),
+      // 接龙视图与经典 game 并列、互斥出现（S56 / S57）
+      ...(relayView ? { relay: relayView } : {}),
     }
   }
 

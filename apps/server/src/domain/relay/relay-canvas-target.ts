@@ -9,7 +9,7 @@
  * 本模块只给领域原因：协议错误码与文案的映射在装配层（GameService），
  * 房间成员守卫、阶段到期与发布策略也都不在这里。
  */
-import type { RoomPhase } from '@draw-guess/shared'
+import type { RelayStep, RoomPhase } from '@draw-guess/shared'
 import type { DrawingCanvasState } from '../drawing/drawing-core.ts'
 import type { RelayChainSecret, RelayGameSecret } from './relay-models.ts'
 import { isDrawingStep, type RelayDrawingStep } from './relay-steps.ts'
@@ -37,6 +37,19 @@ export type RelayCanvasDecision =
     }
   | { accepted: false; reason: RelayCanvasRejection }
 
+/**
+ * 「观看者 + 步骤」→ 该观看者本棒负责的链下标（S9 的环状顺延唯一落点）。
+ * 链 j 的第 s 棒动手者是链 (j + s - 1) 的发起人，因此观看者本棒的链＝以他为发起人的链向前回退 (s - 1) 条。
+ * 视图裁剪（`relay-snapshot`）与绘图目标解析共用本函数，避免同一套环形算式在两处漂移。
+ */
+export function relayChainIndexOf(
+  chainCount: number,
+  viewerIndex: number,
+  step: RelayStep,
+): number {
+  return (viewerIndex - (step - 1) + chainCount) % chainCount
+}
+
 /** 解析「观看者 + 步骤 id」对应的本棒链画布；拒绝时只返回领域原因。 */
 export function resolveRelayCanvasTarget(
   source: RelayCanvasSource,
@@ -52,11 +65,15 @@ export function resolveRelayCanvasTarget(
   const originIndex = relay.chains.findIndex((chain) => chain.originPlayerId === playerId)
   if (originIndex < 0) return { accepted: false, reason: 'not-participant' }
   const chainCount = relay.chains.length
-  const chain = relay.chains[(originIndex - (step - 1) + chainCount) % chainCount]
+  const chain = relay.chains[relayChainIndexOf(chainCount, originIndex, step)]
   if (!chain) return { accepted: false, reason: 'not-participant' }
   // 步 1 写第一幅画布、步 3 写第二幅：两幅各自独立计数（S45）。
   return {
     accepted: true,
-    value: { step, chain, canvas: step === 1 ? chain.step1Canvas : chain.step3Canvas },
+    value: {
+      step,
+      chain,
+      canvas: step === 1 ? chain.step1Canvas : chain.step3Canvas,
+    },
   }
 }

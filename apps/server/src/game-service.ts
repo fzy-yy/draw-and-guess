@@ -13,6 +13,7 @@ import {
   ERROR_CODES,
   EVENTS,
   MIN_SELECTED_VOCABULARY_WORDS,
+  RELAY_MIN_PLAYERS,
   createServerPush,
   isNearMissAnswer,
   normalizeAnswer,
@@ -49,6 +50,8 @@ import {
   type RelayCanvasRejection,
 } from './domain/relay/relay-canvas-target.ts'
 import { createSilentPublisher } from './domain/relay/relay-publisher.ts'
+import { RelayMachine } from './domain/relay/relay-machine.ts'
+import type { RelayGameSecret } from './domain/relay/relay-models.ts'
 import { InviteService } from './domain/invite/invite-service.ts'
 import { RoomVocabularyService } from './domain/vocabulary/room-vocabulary-service.ts'
 import { buildCustomWord } from './domain/vocabulary/custom-word.ts'
@@ -85,6 +88,8 @@ import { OperationalMetrics } from './observability/metrics.ts'
 interface ServicePorts {
   requirePlayer: (playerId: string) => PlayerSecret
   requireGame: (room: RoomSecret) => GameSecret
+  /** 取接龙局秘密；房间没有进行中的接龙局时抛 NO_GAME（与 requireGame 同口径，S56）。 */
+  requireRelay: (room: RoomSecret) => RelayGameSecret
   getRoomVocabularyStore: (room?: RoomSecret) => VocabularyStore
   safeRun: (label: string, fn: () => void) => void
   emitSystemNotice: (roomId: string, text: string) => void
@@ -105,6 +110,17 @@ interface ServicePorts {
     envelope: ServerPushEnvelope<E>,
   ) => void
   isPlaying: (phase: RoomPhase) => boolean
+}
+
+/**
+ * 生命周期公共面（S55）：经典回合机与接龙状态机**都**实现的原语，
+ * 供装配层按房间玩法统一委托（`lifecycle(room)`），跨模式的共享入口不必自己判断模式。
+ * 模式独有的推进（开局、选词、作画、复盘…）不回落到这里，由调用点分派到具体机器。
+ */
+interface RoomLifecycle {
+  transition(room: RoomSecret, next: RoomPhase): void
+  invalidateReady(room: RoomSecret, notice: string, versionMode?: 'increment' | 'preserve'): void
+  addSystemNotice(room: RoomSecret, text: string): void
 }
 
 /**
@@ -134,6 +150,8 @@ export class GameService {
 
   /** 回合流转状态机：开局/选词/作画/结算/暂停等阶段推进逻辑。 */
   readonly round: RoundMachine
+  /** 接龙生命周期状态机：与经典回合机**平级**，按房间玩法经 `lifecycle` 分派（S55）。 */
+  readonly relay: RelayMachine
   /** 视图裁剪（快照组装）构建器。 */
   readonly snapshotter: SnapshotBuilder
   /** 绘图命令用例协作者；GameService 保留兼容委托入口。 */
@@ -177,6 +195,10 @@ export class GameService {
       requireGame: (room) => {
         if (!room.game) throw new GameError('NO_GAME', serverStrings.errors.NO_GAME)
         return room.game
+      },
+      requireRelay: (room) => {
+        if (!room.relay) throw new GameError('NO_GAME', serverStrings.errors.NO_GAME)
+        return room.relay
       },
       // VocabularyRegistry 契约保证 get/getDefault 必存在（必选成员），无需再运行时探活。
       getRoomVocabularyStore: (room) => {
@@ -266,12 +288,25 @@ export class GameService {
       persistGameResult: (room, reason) => this.persistence.persistGameResult(room, reason),
       safeRun: this.ports.safeRun,
     })
+    // 接龙状态机与经典回合机平级（S55）：只吃窄端口，不反向依赖整机服务
+    this.relay = new RelayMachine({
+      logger: this.logger,
+      clock: this.clock,
+      scheduler: this.scheduler,
+      random: this.random,
+      getRoomVocabularyStore: this.ports.getRoomVocabularyStore,
+      requireRelay: this.ports.requireRelay,
+      emitSystemNotice: this.ports.emitSystemNotice,
+      emitRoom: (roomId) => this.publisher.emitRoom(roomId),
+      broadcastPresence: () => this.publisher.broadcastPresence(),
+      safeRun: this.ports.safeRun,
+    })
     this.membership = new RoomMembershipService({
       ...runtimePorts,
       ...roomEventPorts,
       ...playerLookupPorts,
       abandonChoosing: (room, notice) => this.round.abandonChoosing(room, notice),
-      addSystemNotice: (room, text) => this.round.addSystemNotice(room, text),
+      addSystemNotice: (room, text) => this.lifecycle(room).addSystemNotice(room, text),
       clearHintTimers: (game) => this.round.clearHintTimers(game),
       emitToPlayer: this.ports.emitToPlayer,
       evaluateRematch: (room) => this.round.evaluateRematch(room),
@@ -283,9 +318,14 @@ export class GameService {
       players: this.players,
       rooms: this.rooms,
       roomsByPrivateCode: this.roomsByPrivateCode,
-      setWaiting: (room, notice, resetReady) => this.round.setWaiting(room, notice, resetReady),
+      setWaiting: (room, notice, resetReady) => {
+        // 接龙局随经典对局一起清场：经典 setWaiting 只回收 room.game，
+        // 接龙秘密必须由接龙状态机自己回收，否则等待中的房间会留着一份已作废的接龙局。
+        this.relay.discard(room)
+        this.round.setWaiting(room, notice, resetReady)
+      },
       snapshot: (room, playerId) => this.snapshotter.snapshot(room, playerId),
-      transition: (room, next) => this.round.transition(room, next),
+      transition: (room, next) => this.lifecycle(room).transition(room, next),
       vocabulary: this.vocabulary,
     })
     this.session = new SessionService({
@@ -492,7 +532,7 @@ export class GameService {
     // 规则范围由 RoomSettingsSchema（含 partial 更新）在绑定层裁决；容量固定为协议常量，
     // 因此不存在「人数上限低于占席数」这类房间态领域判定。
     room.settings = next
-    this.round.invalidateReady(room, serverStrings.notices.rulesUpdated)
+    this.lifecycle(room).invalidateReady(room, serverStrings.notices.rulesUpdated)
     this.emitRoom(room.id)
     // roundsPerPlayer / drawSeconds 会显示在大厅房间行中，规则变更后需同步广播大厅快照。
     this.broadcastPresence()
@@ -529,17 +569,27 @@ export class GameService {
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_GAME_STARTED)
     if (room.stateVersion !== expectedVersion)
       throw new GameError('VERSION_CONFLICT', serverStrings.errors.VERSION_CONFLICT_START)
-    // 开局硬性门槛：至少 2 名可玩成员且全部在线；只有非房主成员需要显式准备。
+    // 开局硬性门槛：人数下限按模式分流——接龙要求**在线且可玩** ≥ RELAY_MIN_PLAYERS（S62），
+    // 经典沿用 2 名可玩成员；两种模式都要求全员在线，且只有非房主成员需要显式准备。
     const activeMembers = activePlayers(room)
-    if (activeMembers.length < APP_CONFIG.player.minPlayers)
+    if (room.gameMode === 'relay') {
+      const onlineMembers = activeMembers.filter((member) => isOnlinePlayer(member, this.isOnline))
+      if (onlineMembers.length < RELAY_MIN_PLAYERS)
+        throw new GameError(
+          'NOT_ENOUGH_PLAYERS',
+          serverStrings.errors.NOT_ENOUGH_PLAYERS_RELAY(RELAY_MIN_PLAYERS),
+        )
+    } else if (activeMembers.length < APP_CONFIG.player.minPlayers) {
       throw new GameError('NOT_ENOUGH_PLAYERS', serverStrings.errors.NOT_ENOUGH_PLAYERS)
+    }
     const allOnline = activeMembers.every((member) => isOnlinePlayer(member, this.isOnline))
     const guestsReady = activeMembers
       .filter((member) => member.playerId !== room.hostId)
       .every((member) => member.ready)
     if (!allOnline || !guestsReady)
       throw new GameError('NOT_ALL_READY', serverStrings.errors.NOT_ALL_READY)
-    // 本局词条数必须不少于最小词数（MIN_SELECTED_VOCABULARY_WORDS）且覆盖选词候选数
+    // 本局词条数必须不少于最小词数（MIN_SELECTED_VOCABULARY_WORDS）且覆盖选词候选数。
+    // 接龙每条链都从同一词池独立抽候选（S31），因此两种模式共用同一条词库门槛。
     const requiredWords = Math.max(MIN_SELECTED_VOCABULARY_WORDS, room.settings.optionCount)
     if (room.selectedWordIds.size < requiredWords) {
       throw new GameError(
@@ -548,15 +598,23 @@ export class GameService {
       )
     }
 
-    // 校验通过后交给回合状态机：GameSecret 的诞生与倒计时全归 RoundMachine（ADR-0024 时序收口）。
-    // 完整 game 已安装后才广播，避免客户端收到阶段存在但 game 缺失的中间态。
-    this.round.beginStarting(room, activeMembers)
+    // 校验通过后交给**对应模式**的状态机：对局秘密的诞生与倒计时全归状态机所有
+    //（ADR-0024 时序收口；接龙的链数组与步 id 见 RelayMachine.beginStarting）。
+    // 完整现场安装后才广播，避免客户端收到阶段存在但对局缺失的中间态。
+    if (room.gameMode === 'relay') this.relay.beginStarting(room, activeMembers)
+    else this.round.beginStarting(room, activeMembers)
     this.emitRoom(room.id)
     return this.snapshotter.snapshot(room, playerId)
   }
 
   chooseWord(playerId: string, roundId: string, wordId: string): void {
     const { room } = this.membership.requireMembership(playerId)
+    // 选词三步动作复用同一条经典事件，服务端按模式分支（S50）：
+    // 接龙的 `roundId` 字段承载每步的全局步 id，选的是**自己那条链**的候选（S31 / S53）。
+    if (room.gameMode === 'relay') {
+      this.relay.chooseWord(room, playerId, roundId, wordId)
+      return
+    }
     const game = this.requireGame(room)
     // 只有当前画家在同一回合的选词阶段可以选题
     if (room.phase !== 'choosing_word' || game.drawerId !== playerId || game.roundId !== roundId) {
@@ -570,9 +628,13 @@ export class GameService {
     this.round.beginDrawing(room, answer)
   }
 
-  /** 画家在选词阶段更换一组候选词（每回合最多允许一次） */
+  /** 画家在选词阶段更换一组候选词（每回合最多允许一次；接龙按链各一次，S50） */
   rerollWordOptions(playerId: string, roundId: string): void {
     const { room } = this.membership.requireMembership(playerId)
+    if (room.gameMode === 'relay') {
+      this.relay.rerollWordOptions(room, playerId, roundId)
+      return
+    }
     const game = this.requireGame(room)
     if (room.phase !== 'choosing_word' || game.drawerId !== playerId || game.roundId !== roundId) {
       throw new GameError('NOT_DRAWER', serverStrings.errors.NOT_DRAWER_CHOOSE)
@@ -600,6 +662,17 @@ export class GameService {
    */
   chooseCustomWord(playerId: string, roundId: string, rawText: string): void {
     const { room } = this.membership.requireMembership(playerId)
+    if (room.gameMode === 'relay') {
+      // 自定义词条同样复用经典合成器（合法性、长度与字符集口径一致）；
+      // 词条 id 用步 id 派生，避免跨棒撞 id（S50 / S53）。
+      this.relay.chooseCustomWord(
+        room,
+        playerId,
+        roundId,
+        buildCustomWord({ rawText, wordId: `custom:${roundId}` }),
+      )
+      return
+    }
     const game = this.requireGame(room)
     if (room.phase !== 'choosing_word' || game.drawerId !== playerId || game.roundId !== roundId) {
       throw new GameError('NOT_DRAWER', serverStrings.errors.NOT_DRAWER_CHOOSE)
@@ -787,6 +860,26 @@ export class GameService {
     this.relayDrawing.clear(playerId, stepId)
   }
 
+  /**
+   * 提交本棒作画（`relay:submitDrawing`，S30）：只标记完成并锁定，交的是已有笔画。
+   * 全员提交即秒切下一棒；重复提交由状态机以 ALREADY_SUBMITTED 拒绝。
+   */
+  submitRelayDrawing(playerId: string, stepId: string): void {
+    const { room } = this.membership.requireMembership(playerId)
+    this.relay.submitDrawing(room, playerId, stepId)
+  }
+
+  /**
+   * 接龙自由聊天（`chat:say`，S79）：**仅接龙房间**接受（经典保持「猜词未命中即聊天」的现状，S85）。
+   * 聊天是与作答彻底分离的社交频道（S20），限频沿用猜词桶。
+   */
+  sendRelayChat(playerId: string, text: string): void {
+    const { room, player } = this.membership.requireMembership(playerId)
+    this.requireRelay(room)
+    enforceEventRate(player, 'guess', this.clock)
+    this.relay.chat(room, playerId, text.trim())
+  }
+
   pause(playerId: string, reason: string): void {
     const { room, player } = this.membership.requireMembership(playerId)
     if (!room.settings.allowPause)
@@ -965,6 +1058,20 @@ export class GameService {
     if (isPhaseExpired(game, this.clock.now()))
       throw new GameError('PHASE_EXPIRED', serverStrings.errors.PHASE_EXPIRED)
     return game
+  }
+
+  /**
+   * 生命周期状态机选择器（S55）：按房间玩法返回当前生效的状态机。
+   * 两个状态机平级并存、各自拥有自己的阶段写入与准备失效，因此返回类型取二者的公共面；
+   * handlers 只校验、只调用，不自行判断模式。
+   */
+  public lifecycle(room: RoomSecret): RoomLifecycle {
+    return room.gameMode === 'relay' ? this.relay : this.round
+  }
+
+  /** 取接龙局秘密；房间没有进行中的接龙局时抛 NO_GAME（端口实现见装配层 ports）。 */
+  public requireRelay(room: RoomSecret): RelayGameSecret {
+    return this.ports.requireRelay(room)
   }
 
   /**

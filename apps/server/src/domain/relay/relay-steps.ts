@@ -11,8 +11,14 @@ import type { RelayStep } from '@draw-guess/shared'
 /** 作画步骤：步 1 产出第一幅画，步 3 产出第二幅画。 */
 export const RELAY_DRAWING_STEPS = [1, 3] as const satisfies readonly RelayStep[]
 
+/** 猜词步骤：步 2 猜第一幅画、步 4 猜第二幅画（提交内容写回本链产出）。 */
+export const RELAY_GUESSING_STEPS = [2, 4] as const satisfies readonly RelayStep[]
+
 /** 作画步骤号：比 `RelayStep` 更窄，供「步骤 → 画布」的映射做穷尽判定。 */
 export type RelayDrawingStep = (typeof RELAY_DRAWING_STEPS)[number]
+
+/** 猜词步骤号：比 `RelayStep` 更窄，供提交 / 超时推进按步骤类型分流。 */
+export type RelayGuessingStep = (typeof RELAY_GUESSING_STEPS)[number]
 
 /** 该步骤是否由玩家作画（否则为猜词棒）；类型谓词让调用方拿到窄化后的作画步骤号。 */
 export function isDrawingStep(step: RelayStep): step is RelayDrawingStep {

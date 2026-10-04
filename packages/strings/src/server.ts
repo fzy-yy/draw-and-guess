@@ -10,6 +10,10 @@ export const serverStrings = {
     PROTOCOL_MISMATCH: '客户端版本与服务器不兼容，请刷新或更新页面',
     INVALID_AVATAR_ID: '头像无效，请重新选择内置头像',
     PROFILE_LOCKED: '进入房间后不能修改昵称，请先退出房间',
+    /** 接龙：重复提交同一棒（提交即锁定，不可撤回修改）。 */
+    ALREADY_SUBMITTED: '本棒已提交，不能修改',
+    /** 接龙开局门槛：下限取自协议常量 RELAY_MIN_PLAYERS，与经典的 2 人口径分开表述。 */
+    NOT_ENOUGH_PLAYERS_RELAY: (min: number) => `接龙模式至少需要 ${min} 名在线玩家才能开始`,
     INVALID_NICKNAME: (min: number, max: number) => `昵称需为 ${min}～${max} 个可见字符`,
     DUPLICATE_NICKNAME: '昵称已被占用，请换一个昵称',
     INVALID_SETTINGS: '房间规则超出服务器允许范围',
@@ -127,6 +131,11 @@ export const serverStrings = {
     playerDisconnectedLeave: (nickname: string) => `${nickname} 已断线并退出房间`,
     playerReconnectedTimeout: '玩家重连超时离开',
     nearMissHint: '离答案只差一个字了',
+    /* ---- 接龙系统通知（S65：只播关键节点，不逐条播报成员提交）---- */
+    /** 开局：全员进入步 1 的选词阶段。 */
+    relayStarted: '接龙开始，请从候选词中选择你的题目',
+    /** 进入下一棒：第 step 棒开始（含作画与猜词）。 */
+    relayStepStarted: (step: number) => `第 ${step} 棒开始`,
   },
 
   /* ---- 词库加载错误（服务启动校验，展示给运维 / 终端）---- */
@@ -140,6 +149,7 @@ export const serverStrings = {
 export const serverErrorMessages = {
   ALREADY_GUESSED: serverStrings.errors.ALREADY_GUESSED,
   ALREADY_IN_ROOM: serverStrings.errors.ALREADY_IN_ROOM,
+  ALREADY_SUBMITTED: serverStrings.errors.ALREADY_SUBMITTED,
   DRAW_BUDGET_EXCEEDED: serverStrings.errors.DRAW_BUDGET_EXCEEDED,
   DRAW_HISTORY_LIMIT_REACHED: serverStrings.errors.DRAW_HISTORY_LIMIT_REACHED,
   DRAWER_CANNOT_GUESS: serverStrings.errors.DRAWER_CANNOT_GUESS,

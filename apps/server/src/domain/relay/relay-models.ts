@@ -6,10 +6,18 @@
  * 与撤销重做栈无需为接龙另写一套（S45 / S49）；成员状态零新增字段——提交与投票的权威记录
  * 全部挂在这里（S64），左侧面板的「已提交 / 已投票」在快照期派生。
  *
- * 只定义「画布通路 + 步骤推进」自然需要的字段：选词候选与换批归工单 05、代交内容归工单 06、
- * 复盘游标归工单 07、投票结算归工单 08，各自落地时增量补齐（本文件不预置空占位字段）。
+ * 工单 05 起已落地「开局 → 步 1 选词 → 步 1 作画 → 进入步 2」所需的字段：
+ * 按链隔离的候选词与换批状态（`RelayChainSecret.candidates` / `offeredWordIds` / `rerollUsed`）、
+ * 本步已提交集（`RelayGameSecret.stepSubmissions`）与房间自由聊天流（`RelayGameSecret.messages`，S79）。
+ * 代交内容归工单 06、复盘游标归工单 07、投票结算归工单 08，各自落地时增量补齐（本文件不预置空占位字段）。
  */
-import type { RelayStep, RelayStepId, RelayVoteChoice, VocabularyWord } from '@draw-guess/shared'
+import type {
+  ChatMessage,
+  RelayStep,
+  RelayStepId,
+  RelayVoteChoice,
+  VocabularyWord,
+} from '@draw-guess/shared'
 import type { TimerHandle } from '../../runtime.ts'
 import type { DrawingCanvasState } from '../drawing/drawing-core.ts'
 
@@ -19,7 +27,7 @@ export interface RelayChainVote {
   choice: RelayVoteChoice
 }
 
-/** 一条接龙链：发起人、两幅画布、四棒产出与投票（S64）。 */
+/** 一条接龙链：发起人、两幅画布、步 1 候选、四棒产出与投票（S64）。 */
 export interface RelayChainSecret {
   /** 链发起人 = 步 1 的画者；链数组顺序即发起人席位顺序（S11 的复盘轮播序）。 */
   originPlayerId: string
@@ -27,6 +35,16 @@ export interface RelayChainSecret {
   step1Canvas: DrawingCanvasState
   /** 步 3 的画布：第三棒按步 2 猜出的文本作画（看不到上家的画）。 */
   step3Canvas: DrawingCanvasState
+  /**
+   * 步 1 的本链候选词（S31）：候选**按链隔离**存放、不跨链去重——
+   * 链与链之间可以抽到同一个词，玩家只能看到自己那条链的候选（S35）。
+   * 只对本链发起人生效：他选完即成为 `step1Word`。
+   */
+  candidates: VocabularyWord[]
+  /** 本链是否已用过「换一批」：与经典「每回合一次」同口径，按链独立计数。 */
+  rerollUsed: boolean
+  /** 本链已展示过的词条 id：换批抽词的按链去重口径（S31），词池不足时才重置。 */
+  offeredWordIds: Set<string>
   /** 步 1 产出：发起人选定的词（未选定前为空；只对该玩家可见，S35）。 */
   step1Word?: VocabularyWord
   /** 步 2 产出：第二棒猜出的文本（同时是步 3 的题面）。 */
@@ -37,7 +55,7 @@ export interface RelayChainSecret {
   votes: RelayChainVote[]
 }
 
-/** 接龙局秘密状态：阶段时序、当前步骤、链数组与本步已提交集合（S56 / S64）。 */
+/** 接龙局秘密状态：阶段时序、当前步骤、链数组、本步已提交集合与房间聊天流（S56 / S64）。 */
 export interface RelayGameSecret {
   /** 本局 id（推送载荷里对位经典 `gameId`）。 */
   id: string
@@ -53,6 +71,11 @@ export interface RelayGameSecret {
   chains: RelayChainSecret[]
   /** 本步已提交的玩家 ID 集合：快照里的「已提交 / 未提交」由它派生（S64）。 */
   stepSubmissions: Set<string>
+  /**
+   * 房间自由聊天流：接龙的聊天是独立社交频道（S79），与作答彻底分离——
+   * 这里只可能收到 `chat:say` 的自由聊天与系统通知，作答永不进入（S20）。
+   */
+  messages: ChatMessage[]
   /** 主阶段计时器（与经典 `game.timer` 同口径，切阶段前清理）。 */
   timer?: TimerHandle
 }
@@ -78,6 +101,10 @@ export function createRelayChainSecret(originPlayerId: string): RelayChainSecret
     originPlayerId,
     step1Canvas: createRelayCanvasState(),
     step3Canvas: createRelayCanvasState(),
+    // 候选与换批状态在进入步 1 选词时由状态机填充（工单 05）。
+    candidates: [],
+    rerollUsed: false,
+    offeredWordIds: new Set(),
     votes: [],
   }
 }

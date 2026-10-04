@@ -9,6 +9,7 @@ import type {
 } from '../../apps/server/src/models.ts'
 import { GameError } from '../../apps/server/src/errors.ts'
 import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
+import { createRelayChainSecret } from '../../apps/server/src/domain/relay/relay-models.ts'
 import { createMemoryVocabularyRegistry } from './helpers/mini-vocabulary.ts'
 import { testRoomSettings } from './helpers/game-harness.ts'
 
@@ -29,6 +30,8 @@ const HOST_ID = '00000000-0000-4000-8000-0000000000a1'
 const DRAWER_ID = '00000000-0000-4000-8000-0000000000b2'
 const GUESSER_ID = '00000000-0000-4000-8000-0000000000c3'
 const LEFT_GAME_ID = '00000000-0000-4000-8000-0000000000f6'
+/** 在房里但没有分到链的公开房成员（接龙矩阵的越权格）。 */
+const UNSEATED_ID = '00000000-0000-4000-8000-0000000000e5'
 const ROOM_ID = '00000000-0000-4000-8000-000000000101'
 const GAME_ID = '00000000-0000-4000-8000-000000000202'
 const ROUND_ID = '00000000-0000-4000-8000-000000000303'
@@ -67,6 +70,18 @@ const FORBIDDEN_KEYS = [
   'fillCount',
   'correctOrder',
   'correctDetails',
+  // RelayGameSecret / RelayChainSecret 内部（工单 05）：接龙视图只经 relay 字段裁剪下发，
+  // 链数组、两幅画布、四棒产出与本步提交集都不允许按任何键位出现在快照里。
+  'chains',
+  'originPlayerId',
+  'step1Canvas',
+  'step3Canvas',
+  'step1Word',
+  'step2Guess',
+  'step4Guess',
+  'stepSubmissions',
+  // 注：`currentStep` / `stepId` / `phaseStartedAt` / `phaseEndsAt` / `messages` / `votes`(复盘票行)
+  // 是接龙视图的**合法**字段，不能进禁止清单（禁止清单只收「任何观看者都不该看到」的簿记）。
   // 逐字遮罩已揭示字符下标是服务端秘密簿记；公开视图只经 answerMask 表达，
   // 键与值都不得进快照（结构化提示已移除，见 docs/adr/0042-remove-structured-hints.md）。
   'revealedIndices',
@@ -456,6 +471,210 @@ describe('角色裁剪快照穷举矩阵', () => {
       expect(() => builder.snapshot(room, '00000000-0000-4000-8000-000000000999')).toThrow(
         GameError,
       )
+    })
+  })
+
+  /**
+   * 接龙维度（工单 05）：角色 × 接龙阶段 × 步骤 × 链归属。
+   * 与「接龙视图裁剪矩阵」（relay-view.spec.ts）分工：这里走**整份快照**，
+   * 因此额外把关 ① `RoomSnapshotSchema` strict 闸门、② 禁止键清单（含接龙秘密键）、
+   * ③ 成员视角下的 `game` / `relay` 互斥与「不在本局链阵容」的降级路径。
+   */
+  describe('接龙维度（角色 × 阶段 × 步骤 × 链归属）', () => {
+    const RELAY_STEP_ID = '00000000-0000-4000-8000-000000000303'
+    /** 链发起人按席位顺序：4 名成员各占一条链（已离局成员仍占链位，S37）。 */
+    const CHAIN_ORIGINS = [HOST_ID, DRAWER_ID, GUESSER_ID, LEFT_GAME_ID]
+    const relayWordText = (chain: number) => `SENTINEL-接龙题面-${chain}`
+    const relayGuessText = (chain: number) => `SENTINEL-接龙猜词-${chain}`
+    const relayCandidateText = (chain: number) => `SENTINEL-接龙候选-${chain}`
+    const relayStrokeId = (chain: number, half: 1 | 3) => `SENTINEL-接龙笔画-${chain}-${half}`
+    const RELAY_SENTINELS = CHAIN_ORIGINS.flatMap((_origin, chain) => [
+      relayWordText(chain),
+      relayGuessText(chain),
+      relayCandidateText(chain),
+      relayStrokeId(chain, 1),
+      relayStrokeId(chain, 3),
+    ])
+    const RELAY_CELLS: { phase: RoomPhase; step: 1 | 2 | 3 | 4 }[] = [
+      { phase: 'relay_choose', step: 1 },
+      { phase: 'relay_draw', step: 1 },
+      { phase: 'relay_draw', step: 3 },
+      { phase: 'relay_guess', step: 2 },
+      { phase: 'relay_guess', step: 4 },
+      { phase: 'relay_showcase', step: 4 },
+      { phase: 'relay_vote', step: 4 },
+    ]
+
+    /** 链 j 的两幅画布各一笔哨兵笔画 + 题面与步 2 文本都是哨兵值。 */
+    function makeRelayChain(chainIndex: number) {
+      const chain = createRelayChainSecret(CHAIN_ORIGINS[chainIndex] ?? HOST_ID)
+      chain.candidates = [
+        {
+          id: `word-c${chainIndex}`,
+          text: relayCandidateText(chainIndex),
+          aliases: [],
+          collection: '物品',
+        },
+      ]
+      chain.offeredWordIds.add(`word-c${chainIndex}`)
+      chain.step1Word = {
+        id: `word-c${chainIndex}`,
+        text: relayWordText(chainIndex),
+        aliases: [],
+        collection: '物品',
+      }
+      chain.step2Guess = relayGuessText(chainIndex)
+      chain.step1Canvas.strokes = [
+        {
+          kind: 'stroke',
+          id: relayStrokeId(chainIndex, 1),
+          tool: 'pen',
+          color: '#1F2937',
+          width: 5,
+          sequence: 0,
+          startPointIndex: 0,
+          points: [{ x: 0.2, y: 0.2 }],
+        },
+      ]
+      chain.step3Canvas.strokes = [
+        {
+          kind: 'stroke',
+          id: relayStrokeId(chainIndex, 3),
+          tool: 'pen',
+          color: '#1F2937',
+          width: 5,
+          sequence: 0,
+          startPointIndex: 0,
+          points: [{ x: 0.4, y: 0.4 }],
+        },
+      ]
+      return chain
+    }
+
+    /** 组装接龙房：4 条链 + 一个不在链阵容中的残留成员 + 只有第一条链有产出的阶段现场。 */
+    function makeRelayRoom(phase: RoomPhase, step: 1 | 2 | 3 | 4) {
+      const players = new Map<string, PlayerSecret>()
+      const members: MemberState[] = []
+      for (const [index, playerId] of CHAIN_ORIGINS.entries()) {
+        // 已离局成员故意不注册玩家身份：驱动冻结资料兜底分支
+        if (playerId !== LEFT_GAME_ID)
+          players.set(playerId, makePlayer(playerId, `接龙${index + 1}`))
+        members.push(
+          playerId === LEFT_GAME_ID
+            ? {
+                ...makeMember(playerId, index, { leftGame: true }),
+                leftProfile: { nickname: '离局链主', avatarId: '02' },
+              }
+            : makeMember(playerId, index),
+        )
+      }
+      players.set(UNSEATED_ID, makePlayer(UNSEATED_ID, '残留连接'))
+      members.push(makeMember(UNSEATED_ID, 4))
+      const room: RoomSecret = {
+        id: ROOM_ID,
+        name: '接龙矩阵房间',
+        hostId: HOST_ID,
+        visibility: 'public',
+        gameMode: 'relay',
+        phase,
+        stateVersion: 11,
+        settings: testRoomSettings(),
+        members,
+        selectedWordIds: new Set(['word-c0', 'word-c1', 'word-c2', 'word-c3']),
+        relay: {
+          id: GAME_ID,
+          startedAt: NOW - 30_000,
+          currentStep: step,
+          stepId: RELAY_STEP_ID,
+          phaseStartedAt: NOW - 5_000,
+          phaseEndsAt: NOW + 5_000,
+          chains: CHAIN_ORIGINS.map((_origin, chain) => makeRelayChain(chain)),
+          stepSubmissions: new Set([HOST_ID]),
+          messages: [
+            {
+              id: '00000000-0000-4000-8000-000000000404',
+              type: 'system',
+              // 聊天 / 通知是合法公开内容：不含哨兵值，否则 ② 的哨兵扫描会误报
+              text: '接龙开始',
+              createdAt: NOW - 1_000,
+            },
+          ],
+        },
+      }
+      return { room, players }
+    }
+
+    /** 测试侧独立算式：观看者 i 在第 s 棒动手的链 = (i - s + 1) mod N。 */
+    function chainForViewer(viewerIndex: number, step: number): number {
+      return (viewerIndex - (step - 1) + CHAIN_ORIGINS.length) % CHAIN_ORIGINS.length
+    }
+
+    /** 该格允许出现的哨兵值：只有「观看者本棒」的那部分链内容。 */
+    function allowedSentinels(phase: RoomPhase, step: number, viewerIndex: number): string[] {
+      const chain = chainForViewer(viewerIndex, step)
+      if (phase === 'relay_choose') return [relayCandidateText(chain)]
+      if (phase === 'relay_draw')
+        return step === 1
+          ? [relayWordText(chain), relayStrokeId(chain, 1)]
+          : [relayGuessText(chain), relayStrokeId(chain, 3)]
+      if (phase === 'relay_guess') return [relayStrokeId(chain, step === 2 ? 1 : 3)]
+      return []
+    }
+
+    for (const cell of RELAY_CELLS) {
+      for (const [viewerIndex, viewerId] of CHAIN_ORIGINS.entries()) {
+        it(`${cell.phase}（第 ${cell.step} 棒）× 观看者 ${viewerIndex + 1}：三重守卫全部成立`, () => {
+          const { room, players } = makeRelayRoom(cell.phase, cell.step)
+          const builder = new SnapshotBuilder(makePort(players, room))
+
+          const snapshot = builder.snapshot(room, viewerId)
+
+          // ① strict 运行时闸门
+          const parsed = RoomSnapshotSchema.safeParse(snapshot)
+          expect(parsed.success, JSON.stringify(parsed.success ? {} : parsed.error.issues)).toBe(
+            true,
+          )
+          // 接龙房间只下发 relay，不下发经典 game（两字段由 gameMode 保证恰一个非空，S56）
+          expect(snapshot.game).toBeUndefined()
+          expect(snapshot.relay?.phase).toBe(cell.phase)
+          expect(snapshot.relay?.currentStep).toBe(cell.step)
+
+          const serialized = JSON.stringify(snapshot)
+          // ② 禁止键清单（含接龙秘密键）与哨兵值
+          for (const key of FORBIDDEN_KEYS)
+            expect(serialized, `泄漏键 ${key}`).not.toContain(`"${key}"`)
+          const allowed = allowedSentinels(cell.phase, cell.step, viewerIndex)
+          for (const sentinel of RELAY_SENTINELS) {
+            if (allowed.includes(sentinel)) continue
+            expect(serialized, `泄漏 ${sentinel}`).not.toContain(sentinel)
+          }
+          // ③ 授权字段可见性真值表：本棒应有的内容必须真在
+          for (const sentinel of allowed) expect(serialized).toContain(sentinel)
+        })
+      }
+    }
+
+    it('不在本局链阵容中的成员只拿阶段骨架（无任何链内容）', () => {
+      const { room, players } = makeRelayRoom('relay_draw', 1)
+      const builder = new SnapshotBuilder(makePort(players, room))
+
+      const snapshot = builder.snapshot(room, UNSEATED_ID)
+
+      expect(snapshot.relay?.stepId).toBe(RELAY_STEP_ID)
+      expect(snapshot.relay?.submitted).toBe(false)
+      const serialized = JSON.stringify(snapshot)
+      for (const sentinel of RELAY_SENTINELS) expect(serialized).not.toContain(sentinel)
+    })
+
+    it('开局倒计时（starting）不下发接龙视图，经典房间的 game 路径完全不受影响', () => {
+      const { room, players } = makeRelayRoom('starting', 1)
+      const relayBuilder = new SnapshotBuilder(makePort(players, room))
+      expect(relayBuilder.snapshot(room, HOST_ID).relay).toBeUndefined()
+
+      const { room: classicRoom, players: classicPlayers } = makeRoom('drawing', DRAWER_ID)
+      const classicBuilder = new SnapshotBuilder(makePort(classicPlayers, classicRoom))
+      expect(classicBuilder.snapshot(classicRoom, HOST_ID).relay).toBeUndefined()
+      expect(classicBuilder.snapshot(classicRoom, HOST_ID).game).toBeDefined()
     })
   })
 })

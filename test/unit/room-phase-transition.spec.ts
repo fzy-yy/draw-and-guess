@@ -141,7 +141,7 @@ describe('房间阶段转换边界', () => {
 })
 
 describe('房间阶段写入静态约束', () => {
-  it('服务端只有 RoundMachine.transition 可以直接赋值 phase', () => {
+  it('服务端只有两个平级状态机可以直接赋值 phase（经典回合机 + 接龙状态机，S55）', () => {
     const sourceRoot = fileURLToPath(new URL('../../apps/server/src/', import.meta.url))
     const assignments = collectTypeScriptFiles(sourceRoot).flatMap((path) => {
       const source = readFileSync(path, 'utf8')
@@ -155,7 +155,12 @@ describe('房间阶段写入静态约束', () => {
       }))
     })
 
-    expect(assignments).toEqual([{ file: 'round-machine.ts', statement: 'room.phase = next' }])
+    // 阶段写入的唯一归属是「模式状态机」：经典与接龙各一台、平级并存，
+    // 其余模块（快照 / 装配 / 处理器）都不允许直接改房间阶段。
+    expect(assignments).toEqual([
+      { file: 'domain/relay/relay-machine.ts', statement: 'room.phase = next' },
+      { file: 'round-machine.ts', statement: 'room.phase = next' },
+    ])
   })
 })
 

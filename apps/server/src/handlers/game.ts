@@ -25,6 +25,10 @@ export function registerGameHandlers(socket: AppSocket, service: GameService): v
   )
   bindRequest(socket, EVENTS.gameResume, (_input, playerId) => service.resume(playerId))
   bindRequest(socket, EVENTS.gameEndEarly, (_input, playerId) => service.endEarly(playerId))
+  // 接龙提交事件（S30）：只标记本步完成并锁定；猜词提交（relay:submitGuess）归工单 06 的猜词棒。
+  bindRequest(socket, EVENTS.relaySubmitDrawing, (input, playerId) =>
+    service.submitRelayDrawing(playerId, input.stepId),
+  )
   bindRequest(socket, EVENTS.gameLeave, (_input, playerId) => service.leaveGame(playerId))
   bindRequest(socket, EVENTS.gameReturnWaiting, (_input, playerId) =>
     service.returnWaiting(playerId),
