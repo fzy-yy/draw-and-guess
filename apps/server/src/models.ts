@@ -19,6 +19,7 @@ import type {
 } from '@draw-guess/shared'
 import type { AppSocket } from './socket-types.ts'
 import type { TimerHandle } from './runtime.ts'
+import type { RelayGameSecret } from './domain/relay/relay-models.ts'
 
 /** 服务端内部持有的聊天消息记录：包含可选的私密接收人 recipientId。 */
 export interface ServerChatMessage extends ChatMessage {
@@ -151,6 +152,11 @@ export interface RoomSecret {
   vocabularyPackageId?: string // 本局绑定的词库包 ID（缺省为词数最多者）
   selectedWordIds: Set<string> // 本局启用的词条 ID 集合
   game?: GameSecret // 对局进行中才有
+  /**
+   * 接龙局秘密状态：与 `game?` 并列、由 `gameMode` 保证恰好一个非空（S56）。
+   * 接龙的提交与投票记录挂在接龙结构上，成员状态零新增字段（S64）。
+   */
+  relay?: RelayGameSecret
 }
 
 /** 定向邀请秘密状态：过期后由定时器自动回收。 */
