@@ -27,7 +27,6 @@ export const PUBLIC_CONFIG = {
     defaultName: room.defaultName,
     seatColors: room.seatColors,
     allowPlayerInvite: room.allowPlayerInvite,
-    allowPause: room.allowPause,
     privateCodeLength: room.privateCodeLength,
   },
   game,

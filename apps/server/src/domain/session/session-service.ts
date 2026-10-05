@@ -17,8 +17,7 @@ import { invalidateMemberCanvasSync } from '../drawing/canvas-sync.ts'
 import { serverStrings } from '@draw-guess/strings'
 import { GameError, runtimeErrorType, type RuntimeLogger } from '../../errors.ts'
 import type { PlayerSecret, RoomSecret } from '../../models.ts'
-import { phaseEquivalent } from '../room/room-facts.ts'
-import { isRelayMatchPhase } from '../room/phase-facts.ts'
+import { isInMatchPhase } from '../room/phase-facts.ts'
 import type { PlayerRecord, PlayerRepository } from '../../repositories/index.ts'
 import type { AppSocket } from '../../socket-types.ts'
 import { digestRecoveryToken } from '../../security/recovery-token.ts'
@@ -39,8 +38,6 @@ export interface SessionServiceContext extends RuntimePorts, RoomEventPorts, Pla
   persistPlayer(player: PlayerSecret): void
   players: Map<string, PlayerSecret>
   playersByTokenDigest: Map<string, PlayerSecret>
-  /** 成员在场事实变化后重算接龙本步的代交安排（断线按短宽限、离开立即，S7 / S8）。 */
-  refreshRelayAutoSubmit(room: RoomSecret, playerId: string): void
   repositories: {
     players: Pick<
       PlayerRepository,
@@ -369,14 +366,11 @@ export class SessionService {
     const player = this.context.players.get(playerId)
     if (!player || player.socketId !== socket.id) return
     const room = player.roomId ? this.context.rooms.get(player.roomId) : undefined
-    // 席位保留的两条路径（其余阶段断线一律离房）：
-    // ① 经典作画回合（暂停中的作画仍是同一未完成回合）；
-    // ② 接龙局进行中（动手期 + 展示 / 投票期）——动手期宽限内重连可续接当前步、超宽限由本步代交兜底（S8）；
-    //    展示 / 投票期保席是为 US48：断线者宽限内重连仍能看完整轮播、在投票窗口内补投，
-    //    而不是被直接移出房间（开局后不可加入，S36，移出即回不来）。
-    const retainDrawingSeat = phaseEquivalent(room, 'drawing')
-    const retainRelaySeat = room !== undefined && isRelayMatchPhase(room.phase)
-    const retainsSeat = retainDrawingSeat || retainRelaySeat
+    // 席位保留口径（ADR-0059 统一断线挂机化）：
+    // 只要对局正在进行中（经典模式与接龙模式全阶段，含 starting 与 game_result），
+    // 席位全程保留在房间内，断线玩家视作挂机玩家，不执行立即离房，由各阶段倒计时大扫掠统一兜底。
+    const retainsSeat =
+      room !== undefined && (isInMatchPhase(room.phase) || room.phase === 'game_result')
     player.disconnectGeneration += 1
     const generation = player.disconnectGeneration
 
@@ -391,7 +385,7 @@ export class SessionService {
       retainsSeat ? '玩家对局阶段断线并保留席位' : '玩家断线并进入身份恢复宽限',
     )
 
-    if (room && retainsSeat) this.retainDrawingSeat(player, room, generation)
+    if (room && retainsSeat) this.retainMatchSeat(player, room, generation)
     else {
       delete player.drawingDisconnectRoomId
       // 非作画阶段不保留房间席位：统一走标准离房流程，确保准备、房主迁移、选词画家离开
@@ -427,7 +421,7 @@ export class SessionService {
    * 宽限期间房间可能被暂停（保留席位语义仍指向作画），因此暂停中同样认定「本回合未完成」：
    * 否则超时回调因阶段不是 drawing 而静默跳过，恢复后回合将无人作画直至自然超时。
    */
-  private retainDrawingSeat(player: PlayerSecret, room: RoomSecret, generation: number): void {
+  private retainMatchSeat(player: PlayerSecret, room: RoomSecret, generation: number): void {
     const playerId = player.id
     player.drawingDisconnectRoomId = room.id
     // 断线期间可能丢失增量广播，重连后的首份快照必须携带完整画布历史。
@@ -443,30 +437,14 @@ export class SessionService {
       EVENTS.roomMemberConnectionChanged,
       createServerPush(EVENTS.roomMemberConnectionChanged, payload),
     )
-    // 接龙：把「本步代交」按短宽限排上；重连后回调自行让路，超宽限则由服务端代交（S8）
-    this.context.refreshRelayAutoSubmit(room, playerId)
 
-    // 当前画家断线：保留短宽限；超时仍未恢复则由权威状态机废弃本回合。
-    if (room.game?.drawerId === playerId) {
-      this.context.scheduler.set(APP_CONFIG.network.drawerReconnectGraceMs, () =>
-        this.context.safeRun('drawerReconnectTimeout', () => {
-          if (
-            this.isSameDisconnectEpisode(player, generation, room.id) &&
-            room.game?.drawerId === playerId &&
-            phaseEquivalent(room, 'drawing')
-          )
-            this.context.finishRound(room, true)
-        }),
-      )
-    }
-    // 作画期房主掉线时暂留控制权；短宽限后仍未恢复才迁移给在线可玩成员。
+    // 对局中房主掉线时暂留控制权；短宽限后仍未恢复才迁移给在线可玩成员。
     if (room.hostId === playerId) {
       this.context.scheduler.set(APP_CONFIG.network.drawerReconnectGraceMs, () =>
         this.context.safeRun('hostReconnectTimeout', () => {
           if (
             !this.isSameDisconnectEpisode(player, generation, room.id) ||
             room.hostId !== playerId ||
-            // 房主迁移前按原始成员数（含离局占位）判断是否还有其它成员：仅剩占位也保持现状。
             room.members.length <= 1
           )
             return

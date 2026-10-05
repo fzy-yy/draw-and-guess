@@ -9,8 +9,6 @@
  * 边界：只做只读判定，绝不修改成员；连通性一律经显式 `isOnline` 入参注入，
  * 因此模块自身保持纯函数、可脱离房间与 Socket 独立单测。
  */
-import type { RoomPhase, RoomSettings } from '@draw-guess/shared'
-import { APP_CONFIG } from '../../config/index.ts'
 import type { GameSecret, MemberState, PlayerSecret, RoomSecret } from '../../models.ts'
 
 /** 只依赖成员列表的窄入参：房间级选择器与计数只需要这一项。 */
@@ -125,35 +123,6 @@ export function countActivePlayers(room: MemberList): number {
 /** 在线可玩成员数（自动暂停判定用）。 */
 export function countOnlinePlayers(room: MemberList, isOnline: OnlineLookup): number {
   return onlinePlayers(room, isOnline).length
-}
-
-/**
- * 阶段标称总时长（毫秒）：暂停/恢复与暂停快照需按原阶段总时长重建截止时间。
- * 覆盖全部可暂停阶段：drawing（本回合实际作画时长）、choosing_word（房间选词秒数）、
- * round_result（全局结算展示时长）。round_result 若缺标称值，暂停快照会把总时长误算为
- * 冻结剩余量，使客户端进度条被钉死在 100%。其余阶段（starting/game_result 等）不可暂停，
- * 无标称值，返回 undefined。
- * 选词阶段关闭限时（allowChooseTimeLimit=false）时同样返回 undefined——
- * 该阶段本就没有截止时间，调用方据此保持 `phaseEndsAt = 0` 哨兵而不是重建倒计时。
- * 接龙阶段同样返回 undefined：接龙禁用暂停（S19），其阶段窗口由接龙状态机在写入时直接给出
- *（`phaseStartedAt` / `phaseEndsAt`），不存在「暂停后按标称时长重建截止时间」的需求。
- */
-export function nominalPhaseDurationMs(
-  phase: RoomPhase | undefined,
-  game: Pick<GameSecret, 'roundDurationMs'>,
-  settings: Pick<RoomSettings, 'chooseSeconds' | 'allowChooseTimeLimit'> &
-    Partial<Pick<RoomSettings, 'allowRoundReplay'>>,
-): number | undefined {
-  if (phase === 'drawing') return game.roundDurationMs
-  if (phase === 'choosing_word')
-    return settings.allowChooseTimeLimit ? settings.chooseSeconds * 1_000 : undefined
-  if (phase === 'round_result') {
-    const replayMs = settings.allowRoundReplay
-      ? (APP_CONFIG.game.roundReplaySeconds + APP_CONFIG.game.roundReplayPauseSeconds) * 1_000
-      : 0
-    return replayMs + APP_CONFIG.game.roundResultSeconds * 1_000
-  }
-  return undefined
 }
 
 /**

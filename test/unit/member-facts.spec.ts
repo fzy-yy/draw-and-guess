@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
 import {
   activeGuessers,
   activePlayers,
@@ -12,7 +11,6 @@ import {
   isOnlinePlayer,
   isPhaseExpired,
   nicknameOf,
-  nominalPhaseDurationMs,
   occupiesSeat,
   onlineGuessers,
   onlinePlayers,
@@ -102,60 +100,6 @@ describe('member-facts 选择器与计数契约', () => {
     expect(onlineGuessers(drawRoom, 'drawer', online('active')).map((m) => m.playerId)).toEqual([
       'active',
     ])
-  })
-})
-
-describe('nominalPhaseDurationMs 契约', () => {
-  const game = { roundDurationMs: 45_000 }
-  const settings = { chooseSeconds: 12, allowChooseTimeLimit: true, allowRoundReplay: false }
-  it('drawing 返回本回合实际作画时长', () => {
-    expect(nominalPhaseDurationMs('drawing', game, settings)).toBe(45_000)
-  })
-
-  it('choosing_word 返回房间选词秒数换算的毫秒', () => {
-    expect(nominalPhaseDurationMs('choosing_word', game, settings)).toBe(12_000)
-  })
-
-  it('选词阶段关闭限时时没有标称总时长（调用方据此保持无截止时间哨兵）', () => {
-    expect(
-      nominalPhaseDurationMs('choosing_word', game, {
-        chooseSeconds: 12,
-        allowChooseTimeLimit: false,
-      }),
-    ).toBeUndefined()
-  })
-
-  it('round_result 返回全局结算展示时长（包含开启重播时的 3 秒与关闭时的 5 秒）', () => {
-    expect(
-      nominalPhaseDurationMs('round_result', game, { ...settings, allowRoundReplay: false }),
-    ).toBe(APP_CONFIG.game.roundResultSeconds * 1_000)
-    expect(
-      nominalPhaseDurationMs('round_result', game, { ...settings, allowRoundReplay: true }),
-    ).toBe(
-      (APP_CONFIG.game.roundReplaySeconds +
-        APP_CONFIG.game.roundReplayPauseSeconds +
-        APP_CONFIG.game.roundResultSeconds) *
-        1_000,
-    )
-  })
-
-  it('不可暂停阶段与阶段缺失返回 undefined', () => {
-    expect(nominalPhaseDurationMs('game_result', game, settings)).toBeUndefined()
-    expect(nominalPhaseDurationMs('starting', game, settings)).toBeUndefined()
-    // 暂停现场缺失（pauseState 为 undefined）同样返回 undefined
-    expect(nominalPhaseDurationMs(undefined, game, settings)).toBeUndefined()
-  })
-
-  it('接龙阶段没有标称总时长：接龙禁用暂停，阶段窗口由接龙状态机直接写入（S19）', () => {
-    for (const phase of [
-      'relay_choose',
-      'relay_draw',
-      'relay_guess',
-      'relay_showcase',
-      'relay_vote',
-    ] as const) {
-      expect(nominalPhaseDurationMs(phase, game, settings), phase).toBeUndefined()
-    }
   })
 })
 

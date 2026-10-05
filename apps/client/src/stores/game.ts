@@ -151,8 +151,6 @@ export const useGameStore = defineStore('game', () => {
     relaySubmitDrawing: relayStore.submitDrawing,
     relayVote: relayStore.vote,
     relayChat: relayStore.chat,
-    pause: gameplayStore.pause,
-    resume: gameplayStore.resume,
     endEarly: gameplayStore.endEarly,
     leaveGame: gameplayStore.leaveGame,
     returnWaiting: gameplayStore.returnWaiting,

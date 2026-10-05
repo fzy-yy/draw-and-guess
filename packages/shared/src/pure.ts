@@ -102,10 +102,9 @@ const LEGAL_PHASES: Record<RoomPhase, readonly RoomPhase[]> = {
   // starting 之后按房间玩法分流：经典进选词，接龙进接龙选词（S22）
   starting: ['waiting', 'choosing_word', 'relay_choose', 'closed'],
   // choosing_word → round_result 表示“画家弃权，本回合作废”后进入（由 abandonChoosing 使用）
-  choosing_word: ['drawing', 'paused', 'closed', 'game_result', 'round_result'],
-  drawing: ['round_result', 'paused', 'closed', 'game_result'],
-  round_result: ['choosing_word', 'game_result', 'paused', 'closed'],
-  paused: ['choosing_word', 'drawing', 'round_result', 'game_result', 'closed'],
+  choosing_word: ['drawing', 'closed', 'game_result', 'round_result'],
+  drawing: ['round_result', 'closed', 'game_result'],
+  round_result: ['choosing_word', 'game_result', 'closed'],
   /**
    * 接龙四步链（S22 / S23）：
    * `starting → relay_choose → relay_draw(步1) → relay_guess(步2) → relay_draw(步3) → relay_guess(步4)

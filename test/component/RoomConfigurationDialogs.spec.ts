@@ -119,7 +119,6 @@ describe('RulesDialog 完整规则字段', () => {
       strings.ui.room.drawSecondsField,
       strings.ui.room.toggleShowWordLength,
       strings.ui.room.toggleProgressiveHints,
-      strings.ui.room.togglePause,
     ]
     for (const label of expectedLabels)
       expect(screen.getByLabelText(new RegExp(label))).toBeTruthy()
@@ -127,13 +126,13 @@ describe('RulesDialog 完整规则字段', () => {
     // 手写下拉（SelectDropdown）：点 combobox 展开 → 点 option 选中
     await user.click(screen.getByLabelText(strings.ui.common.roundsField))
     await user.click(await screen.findByRole('option', { name: strings.ui.common.roundsUnit(3) }))
-    await user.click(screen.getByLabelText(strings.ui.room.togglePause))
+    await user.click(screen.getByLabelText(strings.ui.room.togglePlayerInvite))
     await user.click(screen.getByRole('button', { name: strings.ui.room.saveRules }))
 
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         roundsPerPlayer: 3,
-        allowPause: !draft.allowPause,
+        allowPlayerInvite: !draft.allowPlayerInvite,
       }),
     )
   })

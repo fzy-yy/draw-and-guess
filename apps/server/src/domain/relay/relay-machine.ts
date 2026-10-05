@@ -40,7 +40,6 @@ import {
   isActivePlayer,
   isPhaseExpired,
 } from '../room/member-facts.ts'
-import { isRelayPlayPhase } from '../room/phase-facts.ts'
 import {
   createRelayChainSecret,
   type RelayChainSecret,
@@ -121,7 +120,6 @@ export class RelayMachine {
         .sort((left, right) => left.seatIndex - right.seatIndex)
         .map((member) => createRelayChainSecret(member.playerId)),
       stepSubmissions: new Set(),
-      autoSubmitTimers: new Map(),
       messages: [],
     }
     room.relay = relay
@@ -170,7 +168,6 @@ export class RelayMachine {
     this.scheduleStepTimeout(room, 'relayChooseTimeout')
     // 关键节点通知：开局（S65）
     this.addSystemNotice(room, serverStrings.notices.relayStarted)
-    this.scheduleStepAutoSubmits(room, relay)
     this.service.emitRoom(room.id)
   }
 
@@ -238,7 +235,6 @@ export class RelayMachine {
     relay.phaseEndsAt = relay.phaseStartedAt + drawMs
     this.scheduleStepTimeout(room, 'relayDrawingTimeout')
     this.addSystemNotice(room, serverStrings.notices.relayStepStarted(step))
-    this.scheduleStepAutoSubmits(room, relay)
     this.service.emitRoom(room.id)
   }
 
@@ -318,7 +314,6 @@ export class RelayMachine {
     relay.phaseEndsAt = relay.phaseStartedAt + guessMs
     this.scheduleStepTimeout(room, 'relayGuessTimeout')
     this.addSystemNotice(room, serverStrings.notices.relayStepStarted(step))
-    this.scheduleStepAutoSubmits(room, relay)
     this.service.emitRoom(room.id)
   }
 
@@ -660,100 +655,6 @@ export class RelayMachine {
     }
   }
 
-  /**
-   * 代交调度（S7 / S8）：给链阵容里每一位「本步还没动手」的成员重算代交安排。三处调用：
-   * 进入新的一棒、成员断线、成员离开/退局。规则只有一条——**代交时刻**：
-   * - 已不在房间（离房 / 退局）→ 立刻（他再也不可能自己动手）；
-   * - 断线中 → 断线时刻 + 短宽限（宽限内重连即由在场事实自动让路）；
-   * - 在线 → 不安排（等他本人，或本步倒计时的大扫掠）。
-   * 「宽限先到」与「倒计时先到」共用同一个提交集去重（`autoSubmitStep` 的幂等守卫），绝不重复代交。
-   */
-  public refreshAutoSubmit(room: RoomSecret, playerId: string): void {
-    const relay = room.relay
-    if (!relay || !isRelayPlayPhase(room.phase)) return
-    if (!this.isParticipant(relay, playerId)) return
-    if (relay.stepSubmissions.has(playerId)) return
-    this.clearAutoSubmitTimer(relay, playerId)
-    const now = this.service.clock.now()
-    const deadlineMs = this.autoSubmitDeadlineMs(room, playerId, now)
-    if (deadlineMs === undefined) return
-    if (deadlineMs <= now) {
-      this.autoSubmitStep(room, playerId, relay.stepId)
-      return
-    }
-    this.scheduleAutoSubmit(room, relay, playerId, relay.stepId, deadlineMs - now)
-  }
-
-  /** 进入新一棒时的统一扫掠：链阵容里每位成员按在场事实决定「立即代交 / 排宽限计时器」。 */
-  private scheduleStepAutoSubmits(room: RoomSecret, relay: RelayGameSecret): void {
-    const stepId = relay.stepId
-    for (const chain of relay.chains) {
-      if (relay.stepSubmissions.has(chain.originPlayerId)) continue
-      this.refreshAutoSubmit(room, chain.originPlayerId)
-      // 立即代交可能让本棒提前满员（换手）：此时本步的扫掠到此为止，剩下的人在新一棒另行安排
-      if (relay.stepId !== stepId) return
-    }
-  }
-
-  /** 某成员本步的代交时刻（ms）；`undefined`＝不代交（在线，交回本人或本步倒计时）。 */
-  private autoSubmitDeadlineMs(
-    room: RoomSecret,
-    playerId: string,
-    now: number,
-  ): number | undefined {
-    // 「仍占链位但已不在房间」＝离房或被移除（退局者仍在 members 里，由 leftGame 标记）
-    const member = room.members.find((candidate) => candidate.playerId === playerId)
-    if (!member || member.leftGame) return now
-    const presence = this.service.getPlayerPresence(playerId)
-    if (presence.connected) return undefined
-    return Math.max(
-      now,
-      (presence.disconnectedAt ?? now) + APP_CONFIG.network.drawerReconnectGraceMs,
-    )
-  }
-
-  /** 排一名成员的代交计时器：到点复核在场事实，宽限已过才代交（重连 / 新代次一律让路）。 */
-  private scheduleAutoSubmit(
-    room: RoomSecret,
-    relay: RelayGameSecret,
-    playerId: string,
-    stepId: string,
-    delayMs: number,
-  ): void {
-    relay.autoSubmitTimers.set(
-      playerId,
-      this.service.scheduler.set(delayMs, () =>
-        this.service.safeRun('relayStepAutoSubmit', () => {
-          // 换手后旧计时器一律让路：新一棒的代交在进入时已另行安排
-          if (relay.stepId !== stepId) return
-          const now = this.service.clock.now()
-          const deadlineMs = this.autoSubmitDeadlineMs(room, playerId, now)
-          // 宽限内重连：本步交回本人（或本步倒计时兜底）
-          if (deadlineMs === undefined) return
-          // 又断了一次（新代次）：按新宽限重排，而不是提前代交
-          if (deadlineMs > now) {
-            this.scheduleAutoSubmit(room, relay, playerId, stepId, deadlineMs - now)
-            return
-          }
-          this.autoSubmitStep(room, playerId, stepId)
-        }),
-      ),
-    )
-  }
-
-  /**
-   * 代交一名成员的本步（幂等）：换手或已提交一律让路，因此宽限与倒计时两条路径不会重复代交；
-   * 代交补齐后若全员到齐，立即换手——少数人的网络问题绝不拖住全房（S8 / S29）。
-   */
-  private autoSubmitStep(room: RoomSecret, playerId: string, stepId: string): void {
-    const relay = this.requireRelay(room)
-    if (relay.stepId !== stepId) return
-    if (relay.stepSubmissions.has(playerId)) return
-    this.writeAutoSubmitProduct(relay, this.chainFor(relay, playerId, relay.currentStep))
-    relay.stepSubmissions.add(playerId)
-    this.advanceIfComplete(room, stepId)
-  }
-
   /** 本步倒计时到点：仍未交的成员一律按代交口径补齐其当前步骤负责的链产出（随后由调用方换手）。 */
   private autoSubmitRemaining(relay: RelayGameSecret): void {
     for (const chain of relay.chains) {
@@ -963,26 +864,11 @@ export class RelayMachine {
     delete room.relay
   }
 
-  /** 清理本步的全部计时器：主阶段计时器 + 代交计时器（换手、开局与作废接龙局共用）。 */
+  /** 清理本步的全部计时器：主阶段计时器（换手、开局与作废接龙局共用）。 */
   private clearStepTimers(relay: RelayGameSecret | undefined): void {
     if (!relay) return
     this.service.scheduler.clear(relay.timer)
     relay.timer = undefined
-    this.clearAutoSubmitTimers(relay)
-  }
-
-  /** 清理单名成员的代交计时器：重算安排前先撤掉旧句柄，避免同一成员挂两个代交。 */
-  private clearAutoSubmitTimer(relay: RelayGameSecret, playerId: string): void {
-    const timer = relay.autoSubmitTimers.get(playerId)
-    if (timer === undefined) return
-    this.service.scheduler.clear(timer)
-    relay.autoSubmitTimers.delete(playerId)
-  }
-
-  /** 清理全部代交计时器（换手时整体失效：回调自身还有步 id 守卫，双重防线）。 */
-  private clearAutoSubmitTimers(relay: RelayGameSecret): void {
-    for (const timer of relay.autoSubmitTimers.values()) this.service.scheduler.clear(timer)
-    relay.autoSubmitTimers.clear()
   }
 
   /** 取接龙局秘密；房间没有进行中的接龙局时抛 NO_GAME（端口实现见装配层）。 */

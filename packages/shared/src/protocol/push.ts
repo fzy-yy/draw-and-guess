@@ -97,13 +97,11 @@ export const GameViewSchema = z
   .object({
     gameId: z.string().uuid(),
     roundId: z.union([z.string().uuid(), z.literal('')]),
-    phaseBeforePause: RoomPhaseSchema.optional(),
     currentRound: z.number().int().nonnegative(),
     totalRounds: z.number().int().nonnegative(),
     drawerId: z.union([z.string().uuid(), z.literal('')]),
     phaseStartedAt: z.number(),
     phaseEndsAt: z.number(),
-    pausedRemainingMs: z.number().nonnegative().optional(),
     answerMask: z.string(),
     answer: z.string().optional(),
     wordOptions: z

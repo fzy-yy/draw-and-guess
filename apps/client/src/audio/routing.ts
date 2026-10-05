@@ -44,8 +44,6 @@ export function phaseToAudio(phase: RoomPhase): SoundName | undefined {
       return 'round_result'
     case 'game_result':
       return 'game_result'
-    case 'paused':
-      return undefined
     case 'closed':
       return undefined
     case 'relay_choose':

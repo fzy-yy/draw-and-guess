@@ -20,10 +20,6 @@ export function registerGameHandlers(socket: AppSocket, service: GameService): v
   bindRequest(socket, EVENTS.gameCustomWord, (input, playerId) =>
     service.chooseCustomWord(playerId, input.roundId, input.text),
   )
-  bindRequest(socket, EVENTS.gamePauseRequest, (input, playerId) =>
-    service.pause(playerId, input.reason),
-  )
-  bindRequest(socket, EVENTS.gameResume, (_input, playerId) => service.resume(playerId))
   bindRequest(socket, EVENTS.gameEndEarly, (_input, playerId) => service.endEarly(playerId))
   // 接龙提交事件（S30）：猜词带文本（S15 禁空提交、提交即锁定、不进聊天流）、作画只标记完成。
   bindRequest(socket, EVENTS.relaySubmitGuess, (input, playerId) =>

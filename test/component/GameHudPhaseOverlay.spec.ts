@@ -50,13 +50,6 @@ describe('useGameHud 角色与计时派生', () => {
     expect(hud.secondsLeft.value).toBeGreaterThanOrEqual(29)
     expect(hud.progress.value).toBeGreaterThan(0.45)
 
-    roomStore.room.phase = 'paused'
-    roomStore.room.game!.pausedRemainingMs = 12_500
-    await nextTick()
-    expect(hud.secondsLeft.value).toBe(13)
-    expect(hud.canGuess.value).toBe(false)
-    expect(hud.phaseLabel.value).toBe(strings.ui.status.phasePaused)
-
     roomStore.room.phase = 'game_result'
     roomStore.room.game!.finalRanking = [
       {
@@ -140,32 +133,20 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
     wrapper.unmount()
   })
 
-  it('暂停操作只向房主显示，选词候选只向画家显示', async () => {
+  it('选词候选只向画家显示', async () => {
     const roomStore = useRoomStore()
     const session = useSessionStore()
-    roomStore.room = createRoomFixture('paused', { pausedRemainingMs: 10_000 })
+    roomStore.room = createRoomFixture('choosing_word')
+    roomStore.room.game!.wordOptions = [
+      { id: 'word-1', text: '苹果' },
+      { id: 'word-2', text: '香蕉' },
+    ]
     session.playerId = HOST_ID
     const wrapper = mountWithPinia(PhaseOverlay, {
       secondsLeft: 10,
       game: roomStore.room.game,
       rankings: [],
     }) as VueWrapper
-
-    expect(wrapper.findAll('[aria-live]').length).toBe(1)
-    expect(wrapper.get('[aria-live]').text()).toBe(strings.ui.status.phasePaused)
-
-    expect(wrapper.text()).toContain(strings.ui.game.resumeGame)
-    expect(wrapper.text()).toContain(strings.ui.game.endEarly)
-    session.playerId = GUEST_ID
-    await nextTick()
-    expect(wrapper.text()).not.toContain(strings.ui.game.resumeGame)
-
-    roomStore.room.phase = 'choosing_word'
-    roomStore.room.game!.wordOptions = [
-      { id: 'word-1', text: '苹果' },
-      { id: 'word-2', text: '香蕉' },
-    ]
-    session.playerId = HOST_ID
     await nextTick()
     expect(wrapper.get('[aria-live]').text()).toBe(strings.ui.status.phaseChoosing)
     expect(wrapper.text()).toContain('苹果')

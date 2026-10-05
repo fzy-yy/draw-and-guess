@@ -61,10 +61,10 @@ describe('GameHud 角色视图', () => {
     expect(screen.queryByText(room.room.game!.answer!)).toBeNull()
   })
 
-  it('暂停时仅房主能继续，普通成员仍可使用设置与全屏动作', async () => {
+  it('成员可使用设置与全屏动作', async () => {
     const room = useRoomStore()
     const session = useSessionStore()
-    room.room = createRoomFixture('paused', { pausedRemainingMs: 12_000 })
+    room.room = createRoomFixture('drawing')
     session.playerId = GUEST_ID
 
     renderWithPinia(GameHud, {
@@ -75,10 +75,6 @@ describe('GameHud 角色视图', () => {
     })
 
     expect(
-      (screen.getByRole('button', { name: strings.a11y.game.resumeAria }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(true)
-    expect(
       (screen.getByRole('button', { name: strings.a11y.game.settingsAria }) as HTMLButtonElement)
         .disabled,
     ).toBe(false)
@@ -88,13 +84,6 @@ describe('GameHud 角色视图', () => {
           name: strings.a11y.game.enterFullscreenAria,
         }) as HTMLButtonElement
       ).disabled,
-    ).toBe(false)
-
-    session.playerId = HOST_ID
-    await nextTick()
-    expect(
-      (screen.getByRole('button', { name: strings.a11y.game.resumeAria }) as HTMLButtonElement)
-        .disabled,
     ).toBe(false)
   })
 })
@@ -209,7 +198,7 @@ describe('ChatPanel 输入与快捷互动', () => {
 })
 
 describe('PhaseOverlay 阶段分支', () => {
-  it('覆盖开局、选词与暂停阶段的角色动作', async () => {
+  it('覆盖开局与选词阶段的角色动作', async () => {
     const user = userEvent.setup()
     const room = useRoomStore()
     const session = useSessionStore()
@@ -244,14 +233,7 @@ describe('PhaseOverlay 阶段分支', () => {
     session.playerId = GUEST_ID
     await nextTick()
     expect(screen.queryByRole('button', { name: /苹果/ })).toBeNull()
-
-    room.room.phase = 'paused'
-    session.playerId = HOST_ID
-    await nextTick()
-    await user.click(screen.getByRole('button', { name: strings.ui.game.resumeGame }))
-    expect(onResume).toHaveBeenCalledOnce()
   })
-
   it('回合结算展示权威计分明细，最终结算提供对应角色动作', async () => {
     const user = userEvent.setup()
     const room = useRoomStore()

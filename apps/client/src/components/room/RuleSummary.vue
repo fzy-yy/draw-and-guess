@@ -106,13 +106,11 @@ const summaryRows = computed(() => {
         value: strings.ui.room.ruleDrawValue(settings.drawSeconds),
       },
     )
-    // 选词阶段是否计时是本局的关键行为（默认为不限时），常驻展示而不是按差异判定。
+    // 选词阶段计时秒数常驻展示。
     rows.push({
       key: 'chooseTime',
       label: strings.ui.room.ruleChooseTimeDt,
-      value: settings.allowChooseTimeLimit
-        ? strings.ui.common.secondsUnit(settings.chooseSeconds)
-        : strings.ui.room.chooseTimeUnlimited,
+      value: strings.ui.common.secondsUnit(settings.chooseSeconds),
     })
   }
   const addDifference = (field: keyof RoomSettings, label: string, value: string): void => {
@@ -148,7 +146,6 @@ const summaryRows = computed(() => {
       strings.ui.room.toggleShowWordLength,
       enabled(settings.showWordLength),
     )
-    addDifference('allowPause', strings.ui.room.togglePause, enabled(settings.allowPause))
     addDifference(
       'allowNearMissHint',
       strings.ui.room.nearMissHintLabel,

@@ -62,16 +62,13 @@ describe('房间规则与高级设置', () => {
     expect(wrapper.text()).toContain(strings.ui.room.toggleAllowCustomWord)
     expect(wrapper.text()).toContain(strings.ui.room.toggleShowWordLength)
     expect(wrapper.text()).toContain(strings.ui.room.toggleProgressiveHints)
-    expect(wrapper.text()).toContain(strings.ui.room.togglePause)
     // 区间字段一律下拉：滑块 0；开关 9（原有 6 项 + 差一字提示 + 画布微表情互动 + 作画精彩重播）
     //（结构化提示、提示出现时机、额外猜词时间与猜词基础分均已移除）
-    expect(wrapper.findAll('input[type="range"]')).toHaveLength(0)
-    expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(9)
+    expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(8)
     // 下拉：每人作画次数 / 单回合时长 / 选词时间 / 候选词数量 = 4
     //（容量与中途加入策略随观战/候场删除，不再是规则字段）
     expect(wrapper.findAll('button[aria-haspopup="listbox"]')).toHaveLength(4)
-    expect(wrapper.text()).toContain(strings.ui.common.secondsUnit(draft.drawSeconds))
-    expect(wrapper.text()).toContain(strings.ui.room.chooseTimeUnlimited)
+    expect(wrapper.text()).toContain(strings.ui.common.secondsUnit(draft.chooseSeconds))
 
     await wrapper.get('button[aria-haspopup="listbox"]').trigger('click')
     await wrapper
@@ -87,7 +84,7 @@ describe('房间规则与高级设置', () => {
     wrapper.unmount()
   })
 
-  it('「选词时间」合并下拉与两个协议字段往返一致，切回不限时保留已选秒数', async () => {
+  it('「选词时间」下拉修改秒数并正确保存到草稿', async () => {
     const draft = defaultRoomSettings()
     const wrapper = mount(RulesDialog, {
       props: { open: true, draft },
@@ -103,10 +100,7 @@ describe('房间规则与高级设置', () => {
         .trigger('click')
     }
 
-    // 默认不限时（allowChooseTimeLimit=false）→ 选具体秒数：开限时并写入 chooseSeconds
     await pick(strings.ui.common.secondsUnit(20))
-    // 再选回不限时：只关开关，上次秒数保留（下次开限时沿用同一值）
-    await pick(strings.ui.room.chooseTimeUnlimited)
 
     await wrapper
       .findAll('button')
@@ -115,7 +109,6 @@ describe('房间规则与高级设置', () => {
     expect(wrapper.emitted('save')?.[0]?.[0]).toEqual({
       ...draft,
       chooseSeconds: 20,
-      allowChooseTimeLimit: false,
     })
     wrapper.unmount()
   })
@@ -153,17 +146,14 @@ describe('房间规则与高级设置', () => {
     })
 
     expect(wrapper.text()).toContain(strings.ui.room.ruleDrawValue(120))
-    // 选词阶段默认不限时：常驻展示，不依赖差异判定
-    expect(wrapper.text()).toContain(strings.ui.room.chooseTimeUnlimited)
+    expect(wrapper.text()).toContain(strings.ui.common.secondsUnit(15))
     expect(wrapper.text()).not.toContain(strings.ui.room.ruleOptionsDt)
 
     roomStore.room.settings.optionCount = 5
-    roomStore.room.settings.allowChooseTimeLimit = true
     roomStore.room.settings.chooseSeconds = 25
     await flushPromises()
     expect(wrapper.text()).toContain(strings.ui.room.ruleOptionsDd(5))
     expect(wrapper.text()).toContain(strings.ui.common.secondsUnit(25))
-    expect(wrapper.text()).not.toContain(strings.ui.room.chooseTimeUnlimited)
     wrapper.unmount()
   })
 

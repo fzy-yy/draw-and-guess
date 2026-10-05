@@ -22,7 +22,6 @@ import { slidingWindowAllow } from '../../rate-limit.ts'
 import type { PlayerLookupPorts, RoomEventPorts, RuntimePorts } from '../shared-ports.ts'
 import type { VocabularyRegistry, VocabularyStore } from '../../vocabulary/index.ts'
 import {
-  countOnlinePlayers,
   createEmptyMemberStats,
   createOnlineLookup,
   isActivePlayer,
@@ -47,12 +46,9 @@ export interface RoomMembershipServiceContext
   ): void
   evaluateRematch(room: RoomSecret): void
   finishRound(room: RoomSecret, drawerAbandoned: boolean): void
-  /** 成员在场事实变化后重算接龙本步的代交安排（离开立即代交、后续每步继续代交，S7）。 */
-  refreshRelayAutoSubmit(room: RoomSecret, playerId: string): void
   getRoomVocabularyStore(room?: RoomSecret): VocabularyStore
   isPlaying(phase: RoomPhase): boolean
   logger: RuntimeLogger
-  pauseRoomInternal(room: RoomSecret, reason: string): void
   players: Map<string, PlayerSecret>
   rooms: Map<string, RoomSecret>
   roomsByPrivateCode: Map<string, string>
@@ -201,8 +197,6 @@ export class RoomMembershipService {
     void player.socket?.leave(room.id)
     room.members = room.members.filter((member) => member.playerId !== playerId)
     if (room.phase === 'waiting') reseatMembers(room)
-    // 接龙：离房者仍占链位（链挂在 relay 上，不受成员数组影响），本步立即代交、后续每步继续代交（S7）
-    this.context.refreshRelayAutoSubmit(room, playerId)
     this.context.logger.info({ roomId: room.id, playerId, reason }, '玩家已离开房间')
     delete player.roomId
     room.stateVersion += 1
@@ -243,8 +237,6 @@ export class RoomMembershipService {
       EVENTS.roomMemberConnectionChanged,
       createServerPush(EVENTS.roomMemberConnectionChanged, payload),
     )
-    // 接龙：退局者保留成绩卡与链位，本步立即代交、后续每步继续代交（S7 / S37）
-    this.context.refreshRelayAutoSubmit(room, playerId)
 
     if (this.reclaimHostOrClose(room, playerId)) return
 
@@ -294,12 +286,6 @@ export class RoomMembershipService {
    * 离场共用③：统一收尾——在线人数不足自动暂停、结算期重赛评估、全房间快照与在线在场广播。
    */
   private finalizeDepartureTail(room: RoomSecret): void {
-    // 在线人数不足 2 人时自动暂停比赛
-    if (
-      countOnlinePlayers(room, this.isOnline) < APP_CONFIG.player.minPlayers &&
-      this.context.isPlaying(room.phase)
-    )
-      this.context.pauseRoomInternal(room, serverStrings.notices.autoPaused)
     if (room.phase === 'game_result') this.context.evaluateRematch(room)
     this.context.emitRoom(room.id)
     this.context.broadcastPresence()

@@ -19,7 +19,6 @@ export const store = {
   sessionTakenOver: '会话已在新的窗口打开；如需在本窗口继续，请重新进入',
   vocabularyUpdated: '本局词库已更新，已准备状态保持不变',
   inviteSent: '邀请已发送',
-  pauseReasonHost: '房主暂停了游戏',
 } as const
 export const request = {
   genericFailure: '请求失败，请检查主机服务与局域网连接',

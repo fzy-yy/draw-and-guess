@@ -188,7 +188,6 @@ function makeRoom(
       ...(cursor ? { showcase: cursor } : {}),
       chains: PLAYER_IDS.map((playerId, index) => makeChain(playerId, index)),
       stepSubmissions: new Set([PLAYER_IDS[0] ?? '']),
-      autoSubmitTimers: new Map(),
       messages: [
         {
           id: '00000000-0000-4000-8000-000000000404',

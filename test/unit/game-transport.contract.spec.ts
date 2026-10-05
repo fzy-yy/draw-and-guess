@@ -101,7 +101,7 @@ describe('GameTransport 请求契约', () => {
     )
     const transport = createGameTransport({ socket, notify })
 
-    await expect(transport.request(EVENTS.gameResume)).resolves.toMatchObject({
+    await expect(transport.request(EVENTS.gameEndEarly)).resolves.toMatchObject({
       ok: false,
       failureKind: 'business',
       code: 'INVALID_PHASE',
@@ -228,18 +228,18 @@ describe('请求响应运行时 Schema 边界', () => {
     })
     const transport = createGameTransport({ socket, notify })
 
-    await expect(transport.request(EVENTS.gameResume)).resolves.toMatchObject({
+    await expect(transport.request(EVENTS.gameEndEarly)).resolves.toMatchObject({
       ok: false,
       failureKind: 'protocol',
     })
-    await expect(transport.request(EVENTS.gameResume)).resolves.toMatchObject({
+    await expect(transport.request(EVENTS.gameEndEarly)).resolves.toMatchObject({
       ok: false,
       failureKind: 'protocol',
     })
 
     const diagnostics = getResponseDiagnostics()
     expect(diagnostics).toHaveLength(2)
-    expect(diagnostics[0]?.event).toBe(EVENTS.gameResume)
+    expect(diagnostics[0]?.event).toBe(EVENTS.gameEndEarly)
     expect(diagnostics[0]?.reason).toContain('error.code')
     expect(diagnostics[1]?.reason).toBe('requestId:mismatch')
     expect(notify).toHaveBeenCalledTimes(2)
@@ -257,7 +257,7 @@ describe('请求响应运行时 Schema 边界', () => {
       Promise.resolve({ ok: true, requestId: payload.requestId }),
     )
     const transport = createGameTransport({ socket, notify: vi.fn() })
-    await expect(transport.request(EVENTS.gameResume)).resolves.toEqual({
+    await expect(transport.request(EVENTS.gameEndEarly)).resolves.toEqual({
       ok: true,
       data: undefined,
     })

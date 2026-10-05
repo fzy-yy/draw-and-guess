@@ -455,7 +455,7 @@ function handleFullscreenToggle(): void {
         </aside>
       </div>
     </div>
-    <!-- 阶段遮罩：开局倒计时 / 选词卡（经典画家 / 接龙第 1 棒全员）/ 暂停 / 回合结算 / 最终结算。
+    <!-- 阶段遮罩：开局倒计时 / 选词卡（经典画家 / 接龙第 1 棒全员）/ 回合结算 / 最终结算。
          接龙复用的是同一份卡片标记与同一组事件（选词三事件由 store 按模式分流，S84）。 -->
     <PhaseOverlay
       :seconds-left="secondsLeft"
@@ -464,7 +464,6 @@ function handleFullscreenToggle(): void {
       :is-replaying="isResultModalSuppressed"
       @choose-word="store.chooseWord"
       @reroll-words="store.rerollWords"
-      @resume="store.resume"
       @open-end-confirm="showEndConfirm = true"
       @return-waiting="store.returnWaiting"
       @leave-room="store.leaveRoom"

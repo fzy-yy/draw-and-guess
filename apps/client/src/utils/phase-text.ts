@@ -13,7 +13,6 @@ const PHASE_TEXT: Record<RoomPhase, string> = {
   choosing_word: strings.ui.status.phaseChoosing,
   drawing: strings.ui.status.phaseDrawing,
   round_result: strings.ui.status.phaseRoundResult,
-  paused: strings.ui.status.phasePaused,
   game_result: strings.ui.status.phaseGameResult,
   waiting: strings.ui.status.phaseWaiting,
   closed: strings.ui.status.phaseClosed,

@@ -16,8 +16,8 @@ describe('最终榜单成员口径', () => {
 
     // 客人中途退出本局：真实路径保留离局占位并冻结其公开资料（leftProfile）
     harness.service.leaveGame(guest.playerId)
-    // 在线可玩不足 2 人会自动暂停，此时房主仍可提前结束并进入最终结算
-    expect(room.phase).toBe('paused')
+    // 移除自动暂停（ADR-0059）：对局继续推进，房主可提前结束并进入最终结算
+    expect(room.phase).toBe('choosing_word')
     expect(room.members.find((member) => member.playerId === guest.playerId)?.leftGame).toBe(true)
 
     harness.service.endEarly(host.playerId)

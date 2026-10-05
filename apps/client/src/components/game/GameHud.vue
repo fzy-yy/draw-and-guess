@@ -10,7 +10,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { CirclePause, CirclePlay, Clock3, Maximize, Minimize, Settings } from 'lucide-vue-next'
+import { Clock3, Maximize, Minimize, Settings } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import type { GameView } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
@@ -110,19 +110,6 @@ const displaySeconds = computed(() => {
   }
   return props.secondsLeft
 })
-
-/** 单按钮处理暂停与恢复切换：暂停时房主点击恢复，运行中点击暂停或请求暂停。 */
-function handlePauseToggle(): void {
-  if (store.room?.phase === 'paused') {
-    if (store.isHost) {
-      void store.resume()
-    }
-  } else {
-    void store.pause(
-      store.isHost ? strings.ui.game.pauseReasonHost : strings.ui.game.pauseReasonGuest,
-    )
-  }
-}
 </script>
 
 <template>
@@ -183,7 +170,7 @@ function handlePauseToggle(): void {
       >
         <Clock3 class="h-[2.5cqh] w-[2.5cqh] shrink-0" />
         <b class="w-[3ch] shrink-0 text-center text-fs-24 tabular-nums leading-none">
-          {{ hasDeadline ? displaySeconds : strings.ui.game.chooseNoLimit }}
+          {{ displaySeconds }}
         </b>
         <i
           v-if="hasDeadline"
@@ -198,28 +185,6 @@ function handlePauseToggle(): void {
         :connection-label="store.connectionLabel"
         :latency-good-ms="store.config.network.latencyGoodMs"
       />
-      <!--
-        暂停/恢复单按钮切换：
-        - 游戏进行中（非 starting/paused）：显示暂停图标，点击暂停或请求暂停；
-        - 暂停中（paused）：图标切换为继续，房主点击恢复，非房主置灰禁用；
-        - 开局倒计时（starting）：不在 pausable 状态，不展示；
-        - 接龙：接龙禁用暂停（`paused` 在接龙不可达），整颗按钮不渲染，避免点出必然被拒的请求。
-      -->
-      <IconButton
-        v-if="store.room.gameMode === 'classic' && store.room.phase !== 'starting'"
-        :disabled="store.room.phase === 'paused' && !store.isHost"
-        :label="
-          store.room.phase === 'paused'
-            ? strings.a11y.game.resumeAria
-            : store.isHost
-              ? strings.a11y.game.pauseAriaHost
-              : strings.a11y.game.pauseAriaGuest
-        "
-        @click="handlePauseToggle"
-      >
-        <CirclePlay v-if="store.room.phase === 'paused'" />
-        <CirclePause v-else />
-      </IconButton>
       <IconButton :label="strings.a11y.game.settingsAria" @click="emit('settings')">
         <Settings />
       </IconButton>

@@ -149,10 +149,8 @@ export const MODE_SETTINGS_KEYS = {
     'roundsPerPlayer',
     'drawSeconds',
     'chooseSeconds',
-    'allowChooseTimeLimit',
     'showWordLength',
     'progressiveHints',
-    'allowPause',
     'allowNearMissHint',
     'allowCanvasReactions',
     'allowRoundReplay',
@@ -370,12 +368,9 @@ export class GameService {
       getRoomVocabularyStore: this.ports.getRoomVocabularyStore,
       isPlaying: this.ports.isPlaying,
       logger: this.logger,
-      pauseRoomInternal: (room, reason) => this.round.pauseRoomInternal(room, reason),
       players: this.players,
       rooms: this.rooms,
       roomsByPrivateCode: this.roomsByPrivateCode,
-      // 成员离开 / 退局后重算接龙本步的代交（离开者仍占链位、后续每步自动代交，S7 / S8）
-      refreshRelayAutoSubmit: (room, playerId) => this.relay.refreshAutoSubmit(room, playerId),
       setWaiting: (room, notice, resetReady) => {
         // 接龙局随经典对局一起清场：经典 setWaiting 只回收 room.game，
         // 接龙秘密必须由接龙状态机自己回收，否则等待中的房间会留着一份已作废的接龙局。
@@ -397,8 +392,6 @@ export class GameService {
       persistPlayer: (player) => this.persistence.persistPlayer(player),
       players: this.players,
       playersByTokenDigest: this.playersByTokenDigest,
-      // 接龙对局阶段断线：按短宽限安排本步代交（宽限内重连即让路，S8）
-      refreshRelayAutoSubmit: (room, playerId) => this.relay.refreshAutoSubmit(room, playerId),
       repositories: this.repositories,
       rooms: this.rooms,
       transferDisconnectedHost: (room, playerId) =>
@@ -969,35 +962,6 @@ export class GameService {
   voteRelay(playerId: string, choice: RelayVoteChoice): void {
     const { room } = this.membership.requireMembership(playerId)
     this.relay.vote(room, playerId, choice)
-  }
-
-  pause(playerId: string, reason: string): void {
-    const { room, player } = this.membership.requireMembership(playerId)
-    if (!room.settings.allowPause)
-      throw new GameError('PAUSE_DISABLED', serverStrings.errors.PAUSE_DISABLED)
-    // 不可暂停的阶段（如开局倒计时）直接拒绝，避免静默无效或破坏计时现场
-    if (!this.round.isPausable(room.phase))
-      throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_PAUSE)
-    const safeReason = reason.trim().slice(0, 40) || serverStrings.notices.pauseFallbackReason
-    // 普通玩家只能发出暂停请求（房主见通知），房主直接执行暂停
-    if (room.hostId !== playerId) {
-      this.round.addSystemNotice(
-        room,
-        serverStrings.notices.pauseRequest(player.profile.nickname, safeReason),
-      )
-      this.emitRoom(room.id)
-      return
-    }
-    this.round.pauseRoomInternal(room, safeReason)
-    this.emitRoom(room.id)
-  }
-
-  resume(playerId: string): void {
-    const room = this.membership.requireHostRoom(playerId)
-    // 恢复时序（重建 phaseStartedAt/phaseEndsAt、清理暂停现场、重排当前阶段计时器）
-    // 归 RoundMachine 所有，与 pause 成对；此处只做房主守卫与广播。
-    this.round.resume(room)
-    this.emitRoom(room.id)
   }
 
   /** 房主提前结束比赛：仅对局进行中（不含开局倒计时，尚未正式开赛）或暂停时可触发，直接进入最终结算。 */

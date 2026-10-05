@@ -208,8 +208,6 @@ describe('请求响应注册表与 ack 边界', () => {
       EVENTS.gameChooseWord,
       EVENTS.gameRerollWords,
       EVENTS.gameCustomWord,
-      EVENTS.gamePauseRequest,
-      EVENTS.gameResume,
       EVENTS.gameEndEarly,
       EVENTS.gameLeave,
       EVENTS.gameReturnWaiting,
@@ -264,7 +262,7 @@ describe('请求响应注册表与 ack 边界', () => {
     for (let index = 0; index < 25; index += 1) {
       expect(
         decodeClientResponse(
-          EVENTS.gameResume,
+          EVENTS.gameEndEarly,
           {
             ok: false,
             requestId: '00000000-0000-4000-8000-000000000001',

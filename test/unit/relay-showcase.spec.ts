@@ -343,7 +343,7 @@ describe('接龙复盘轮播（工单 07）', () => {
     ])
   })
 
-  it('展示期完全不可干预：跳过 / 提前结束 / 提交 / 选词 / 暂停一律拒绝，且现场原样（S12）', () => {
+  it('展示期完全不可干预：跳过 / 提前结束 / 提交 / 选词一律拒绝，且现场原样（S12）', () => {
     const { scenario } = playToShowcaseWithSentinels()
     const host = scenario.host
     const service = scenario.harness.service
@@ -365,10 +365,6 @@ describe('接龙复盘轮播（工单 07）', () => {
     expect(
       errorCodeOf(() => service.chooseWord(host.playerId, scenario.relay.stepId, '抢跑')),
     ).toBe(ERROR_CODES.INVALID_PHASE)
-    // 暂停：接龙禁用暂停（S19），展示期同样不可暂停
-    expect(errorCodeOf(() => service.pause(host.playerId, '想停一下'))).toBe(
-      ERROR_CODES.INVALID_PHASE,
-    )
     // 内部接管入口也守规矩：展示期内调它（＝跳链）在阶段转换白名单上失败
     expect(errorCodeOf(() => service.relay.beginShowcaseForChain(scenario.room, 3))).toBe(
       ERROR_CODES.INVALID_TRANSITION,

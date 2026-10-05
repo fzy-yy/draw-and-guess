@@ -26,9 +26,6 @@ import RuleSelectField, { type RuleSelectOption } from '@/components/common/Rule
 import RuleToggleField from '@/components/common/RuleToggleField.vue'
 import { useGameStore } from '@/stores/game'
 
-/** 「选词时间」合并下拉的值域：不限时，或具体秒数（见下方 chooseTime 代理）。 */
-type ChooseTimeValue = 'unlimited' | number
-
 const open = defineModel<boolean>('open', { default: false })
 const props = withDefaults(
   defineProps<{
@@ -80,14 +77,13 @@ const drawSecondsOptions: RuleSelectOption<RoomSettings['drawSeconds']>[] =
     value: seconds,
     label: strings.ui.common.secondsUnit(seconds),
   }))
-/** 选词时间：把 allowChooseTimeLimit 与 chooseSeconds 合成一个下拉（见下方 chooseTime）。 */
-const chooseTimeOptions: Array<RuleSelectOption<ChooseTimeValue>> = [
-  { value: 'unlimited', label: strings.ui.room.chooseTimeUnlimited },
-  ...rangeValues(store.config.game.chooseSeconds).map((seconds) => ({
-    value: seconds,
-    label: strings.ui.common.secondsUnit(seconds),
-  })),
-]
+/** 选词时间下拉选项（秒数列表）。 */
+const chooseTimeOptions: Array<RuleSelectOption<number>> = rangeValues(
+  store.config.game.chooseSeconds,
+).map((seconds) => ({
+  value: seconds,
+  label: strings.ui.common.secondsUnit(seconds),
+}))
 /**
  * 接龙三时长档位（S39）：合法值同样来自公开配置（唯一来源是协议常量），与单回合时长同手法。
  * 三个字段档位各不相同，因此逐字段声明而不用循环——保留每个下拉与字段的类型关联。
@@ -118,23 +114,6 @@ watch(
   },
   { immediate: true },
 )
-
-/**
- * 「选词时间」的读写代理：协议里它是 allowChooseTimeLimit + chooseSeconds 两个字段，
- * 界面上只是「多久」一个问题——选「不限时」即关闭开关，选具体秒数才打开开关并写入秒数；
- * 切回「不限时」时保留原 chooseSeconds，下次再开限时沿用用户上次的选择（见 ADR-0045）。
- */
-const chooseTime = computed<ChooseTimeValue>({
-  get: () => (localDraft.value.allowChooseTimeLimit ? localDraft.value.chooseSeconds : 'unlimited'),
-  set: (value) => {
-    if (value === 'unlimited') {
-      localDraft.value.allowChooseTimeLimit = false
-      return
-    }
-    localDraft.value.allowChooseTimeLimit = true
-    localDraft.value.chooseSeconds = value
-  },
-})
 </script>
 
 <template>
@@ -230,7 +209,7 @@ const chooseTime = computed<ChooseTimeValue>({
         />
 
         <RuleSelectField
-          v-model="chooseTime"
+          v-model="localDraft.chooseSeconds"
           :label="strings.ui.room.chooseTimeField"
           :options="chooseTimeOptions"
           :disabled="readOnly"
@@ -272,12 +251,6 @@ const chooseTime = computed<ChooseTimeValue>({
           v-model="localDraft.progressiveHints"
           class="self-center"
           :label="strings.ui.room.toggleProgressiveHints"
-          :disabled="readOnly"
-        />
-        <RuleToggleField
-          v-model="localDraft.allowPause"
-          class="self-center"
-          :label="strings.ui.room.togglePause"
           :disabled="readOnly"
         />
         <RuleToggleField

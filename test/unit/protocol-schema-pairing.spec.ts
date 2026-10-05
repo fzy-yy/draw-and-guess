@@ -325,7 +325,7 @@ function relayResultView(): Record<string, unknown> {
 
 describe('接龙协议契约（S10 / S22 / S23 / S28 / S39 / S51 / S57 / S63 / S79）', () => {
   it('协议版本升到不兼容的新版本，接龙常量与三时长档位白名单已登记', () => {
-    expect(PROTOCOL_VERSION).toBe('19')
+    expect(PROTOCOL_VERSION).toBe('20')
     expect(RELAY_MIN_PLAYERS).toBe(4)
     expect([...RELAY_CHOOSE_SECONDS_OPTIONS]).toEqual([10, 15, 20, 30])
     expect([...RELAY_DRAW_SECONDS_OPTIONS]).toEqual([60, 90, 120, 150])

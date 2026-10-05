@@ -379,31 +379,15 @@ describe('接龙步 4 与复盘入口', () => {
 })
 
 describe('接龙掉队代交与离开者占位', () => {
-  it('断线宽限先到：超短宽限后由服务端代交「上家未作答」，代交即锁定，其余人不被拖住', () => {
+  it('断线玩家按挂机对待：倒计时到点由统一大扫掠代交「上家未作答」，代交后切入下一棒', () => {
     const scenario = atGuessStep()
     const players = scenario.players
     const offline = players[0]
     const others = players.slice(1)
     if (!offline) throw new Error('场景缺少玩家')
 
+    const stepTwoId = scenario.stepId
     scenario.disconnect(offline)
-    // 短宽限（20 秒）先于猜词倒计时（45 秒）到点：离线者被代交，本棒随即秒切
-    scenario.harness.runtime.advance(APP_CONFIG.network.drawerReconnectGraceMs)
-
-    expect(scenario.room.phase).toBe('relay_guess')
-    expect(scenario.relay.currentStep).toBe(2)
-    expect(scenario.guessOf(offline.playerId, 2)).toBe(RELAY_AUTO_SUBMIT_GUESS_TEXT)
-
-    // 代交即锁定：离线者重连后不能再改写本棒答案（两条代交路径共用一个提交集去重）
-    scenario.reconnect(offline)
-    expect(
-      errorCodeOf(() =>
-        scenario.harness.service.submitRelayGuess(offline.playerId, scenario.stepId, '我的真答案'),
-      ),
-    ).toBe(ERROR_CODES.ALREADY_SUBMITTED)
-    expect(scenario.guessOf(offline.playerId, 2)).toBe(RELAY_AUTO_SUBMIT_GUESS_TEXT)
-
-    // 其余人交完即秒切步 3：离线者（已被代交）不再拖住全房
     for (const player of others) {
       scenario.harness.service.submitRelayGuess(
         player.playerId,
@@ -411,11 +395,28 @@ describe('接龙掉队代交与离开者占位', () => {
         `答案-${player.nickname}`,
       )
     }
+
+    // 倒计时未结束前：断线玩家按挂机对待，不提前代交，仍等待倒计时
+    scenario.harness.runtime.advance(scenario.room.settings.relayGuessSeconds * 1_000 - 1_000)
+    expect(scenario.room.phase).toBe('relay_guess')
+    expect(scenario.relay.currentStep).toBe(2)
+
+    // 倒计时归零：大扫掠代交未提交者，随后自动推进到下一棒
+    scenario.harness.runtime.advance(1_000)
     expect(scenario.room.phase).toBe('relay_draw')
     expect(scenario.relay.currentStep).toBe(3)
+    expect(scenario.guessOf(offline.playerId, 2)).toBe(RELAY_AUTO_SUBMIT_GUESS_TEXT)
+
+    // 代交即锁定：离线者重连后不能再改写上一棒答案
+    scenario.reconnect(offline)
+    expect(
+      errorCodeOf(() =>
+        scenario.harness.service.submitRelayGuess(offline.playerId, stepTwoId, '我的迟到答案'),
+      ),
+    ).toBe(ERROR_CODES.STALE_DRAW_EVENT)
   })
 
-  it('宽限内重连可续接当前步：本人提交照常生效，宽限到点不二次代交', () => {
+  it('倒计时结束前重连可继续提交当前步：本人提交照常生效', () => {
     const scenario = atGuessStep()
     const players = scenario.players
     const offline = players[0]
@@ -430,26 +431,19 @@ describe('接龙掉队代交与离开者占位', () => {
         `答案-${player.nickname}`,
       )
     }
-    // 宽限内（差 1 秒）仍在当前步：席位与棒次都保留（S8）
-    scenario.harness.runtime.advance(APP_CONFIG.network.drawerReconnectGraceMs - 1_000)
+    // 倒计时结束前重连：仍处于当前步，席位与状态完整保留
+    scenario.harness.runtime.advance(5_000)
     expect(scenario.room.phase).toBe('relay_guess')
     expect(scenario.relay.stepId).toBe(stepTwoId)
 
     scenario.reconnect(offline)
-    scenario.harness.service.submitRelayGuess(offline.playerId, stepTwoId, '我回来了')
+    scenario.harness.service.submitRelayGuess(offline.playerId, stepTwoId, '我连回来了')
 
     expect(scenario.room.phase).toBe('relay_draw')
-    expect(scenario.guessOf(offline.playerId, 2)).toBe('我回来了')
-
-    // 宽限到点后旧计时器再触发：步已换手，代交路径一律让路（不重复代交）
-    const stepThreeId = scenario.stepId
-    scenario.harness.runtime.advance(APP_CONFIG.network.drawerReconnectGraceMs)
-    expect(scenario.room.phase).toBe('relay_draw')
-    expect(scenario.relay.currentStep).toBe(3)
-    expect(scenario.relay.stepId).toBe(stepThreeId)
+    expect(scenario.guessOf(offline.playerId, 2)).toBe('我连回来了')
   })
 
-  it('长期掉线者进入新棒即被代交：其余人交完立即秒切，不必再等一个宽限', () => {
+  it('长期掉线者在各步骤倒计时结束时由大扫掠代交，全流程平稳推进', () => {
     const scenario = startRelayGame()
     const players = scenario.players
     const offline = players[0]
@@ -458,13 +452,16 @@ describe('接龙掉队代交与离开者占位', () => {
 
     scenario.chooseAll()
     scenario.disconnect(offline)
-    // 步 1 作画：宽限到点即代交（作画＝已有笔画），其余人交完即秒切步 2
-    scenario.harness.runtime.advance(APP_CONFIG.network.drawerReconnectGraceMs)
-    scenario.submitAllDrawings()
+
+    // 其余人作画提交
+    for (const player of others) {
+      scenario.harness.service.submitRelayDrawing(player.playerId, scenario.stepId)
+    }
+    // 步 1 作画倒计时走完后大扫掠代交，切入步 2
+    scenario.harness.runtime.advance(scenario.room.settings.relayDrawSeconds * 1_000)
     expect(scenario.relay.currentStep).toBe(2)
 
-    // 进入步 2 的当下（没有再推进时钟）宽限早已用完：离线者被立即代交「上家未作答」，本棒不再有等待
-    expect(scenario.guessOf(offline.playerId, 2)).toBe(RELAY_AUTO_SUBMIT_GUESS_TEXT)
+    // 步 2 猜词：其余人提交后，等到猜词倒计时结束大扫掠代交
     for (const player of others) {
       scenario.harness.service.submitRelayGuess(
         player.playerId,
@@ -472,7 +469,8 @@ describe('接龙掉队代交与离开者占位', () => {
         `答案-${player.nickname}`,
       )
     }
-    expect(scenario.room.phase).toBe('relay_draw')
+    scenario.harness.runtime.advance(scenario.room.settings.relayGuessSeconds * 1_000)
+    expect(scenario.guessOf(offline.playerId, 2)).toBe(RELAY_AUTO_SUBMIT_GUESS_TEXT)
     expect(scenario.relay.currentStep).toBe(3)
   })
 

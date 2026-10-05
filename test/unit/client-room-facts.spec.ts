@@ -17,7 +17,6 @@ function member(overrides: Partial<RoomMember> = {}): RoomMember {
 describe('客户端房间事实单一口径', () => {
   it('phaseTextFor 覆盖阶段并缺省回退 waiting', () => {
     expect(phaseTextFor('drawing')).toBe(strings.ui.status.phaseDrawing)
-    expect(phaseTextFor('paused')).toBe(strings.ui.status.phasePaused)
     expect(phaseTextFor('closed')).toBe(strings.ui.status.phaseClosed)
     expect(phaseTextFor(undefined)).toBe(strings.ui.status.phaseWaiting)
   })

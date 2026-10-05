@@ -154,7 +154,6 @@ export function startRelayDrawing(
     phaseEndsAt: harness.runtime.now() + APP_CONFIG.relay.drawSeconds.default * 1_000,
     chains: players.map((player) => createRelayChainSecret(player.playerId)),
     stepSubmissions: new Set<string>(),
-    autoSubmitTimers: new Map(),
     messages: [],
   }
   room.phase = 'relay_draw'
@@ -346,12 +345,18 @@ export function startRelayGame(
       if (!word) throw new Error('步 1 选词候选为空')
       harness.service.chooseWord(player.playerId, relay.stepId, word.id)
     }
+    if (room.phase === 'relay_choose') {
+      harness.runtime.advance(room.settings.relayChooseSeconds * 1_000)
+    }
   }
 
   const submitAllDrawings = (): void => {
     for (const player of players) {
       if (!stillCanAct(player)) continue
       harness.service.submitRelayDrawing(player.playerId, relay.stepId)
+    }
+    if (room.phase === 'relay_draw') {
+      harness.runtime.advance(room.settings.relayDrawSeconds * 1_000)
     }
   }
 
@@ -366,9 +371,11 @@ export function startRelayGame(
       harness.service.submitRelayGuess(player.playerId, relay.stepId, text)
       submitted.set(player.playerId, text)
     }
+    if (room.phase === 'relay_guess') {
+      harness.runtime.advance(room.settings.relayGuessSeconds * 1_000)
+    }
     return submitted
   }
-
   /** 四个步骤各全员动手一次走完，停在复盘入口（步 4 结算后的 `relay_showcase` 第 1 条链重播页）。 */
   const playToShowcase = (): void => {
     chooseAll()

@@ -88,11 +88,6 @@ export interface GameSecret {
   roundId: string // 当前回合 ID（每回合重新生成）
   phaseStartedAt: number // 当前阶段开始时间
   phaseEndsAt: number // 当前阶段权威结束时间
-  /**
-   * 暂停现场：暂停前阶段与冻结的剩余毫秒成对存在（半状态由类型消除，恢复时无需兜底）。
-   * 恢复/结算/清场时整体删除；只有可暂停阶段（choosing_word/drawing/round_result）会写入。
-   */
-  pauseState?: { phase: RoomPhase; remainingMs: number }
   currentRound: number // 当前回合序号（从 1 开始）
   totalRounds: number // 总回合数 = 人数 × 每人轮数
   /** 当前回合实际作画时长（毫秒）：只取房间单回合时长，计分与逐步提示调度统一用它 */

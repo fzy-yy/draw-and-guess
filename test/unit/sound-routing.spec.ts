@@ -13,7 +13,6 @@ const PHASES: RoomPhase[] = [
   'choosing_word',
   'drawing',
   'round_result',
-  'paused',
   'game_result',
   'closed',
 ]
@@ -32,7 +31,6 @@ describe('音效路由映射完整性', () => {
     expect(phaseToAudio('game_result')).toBe('game_result')
     expect(phaseToAudio('waiting')).toBeUndefined()
     expect(phaseToAudio('choosing_word')).toBeUndefined()
-    expect(phaseToAudio('paused')).toBeUndefined()
     expect(phaseToAudio('closed')).toBeUndefined()
   })
 })

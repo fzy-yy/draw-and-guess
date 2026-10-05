@@ -101,7 +101,6 @@ describe('规则弹窗按模式裁剪字段（S39 / S52 / S83）', () => {
       strings.ui.room.chooseTimeField,
       strings.ui.room.toggleShowWordLength,
       strings.ui.room.toggleProgressiveHints,
-      strings.ui.room.togglePause,
       strings.ui.room.nearMissHintLabel,
       strings.ui.room.canvasReactionsLabel,
       strings.ui.room.roundReplayLabel,
@@ -139,7 +138,6 @@ describe('规则弹窗按模式裁剪字段（S39 / S52 / S83）', () => {
     })
 
     expect(screen.getByLabelText(new RegExp(strings.ui.room.drawSecondsField))).toBeTruthy()
-    expect(screen.getByLabelText(new RegExp(strings.ui.room.togglePause))).toBeTruthy()
     for (const label of [
       strings.ui.room.relayChooseSecondsField,
       strings.ui.room.relayDrawSecondsField,
@@ -147,7 +145,7 @@ describe('规则弹窗按模式裁剪字段（S39 / S52 / S83）', () => {
     ])
       expect(screen.queryByLabelText(new RegExp(label))).toBeNull()
     expect(dropdowns()).toHaveLength(4)
-    expect(checkboxes()).toHaveLength(9)
+    expect(checkboxes()).toHaveLength(8)
   })
 
   it('接龙房保存规则时只上送接龙生效字段（完整草稿按模式裁剪，服务端才接受）', async () => {

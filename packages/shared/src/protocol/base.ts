@@ -40,7 +40,6 @@ export const RoomPhaseSchema = z.enum([
   'choosing_word',
   'drawing',
   'round_result',
-  'paused',
   'game_result',
   'closed',
   /**

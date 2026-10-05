@@ -25,11 +25,9 @@ import {
   isActivePlayer,
   isOnlinePlayer,
   nicknameOf,
-  nominalPhaseDurationMs,
-  onlineGuessers,
   type OnlineLookup,
 } from './domain/room/member-facts.ts'
-import { isPausablePhase, isRoundSettlePhase } from './domain/room/phase-facts.ts'
+import { isRoundSettlePhase } from './domain/room/phase-facts.ts'
 import { reseatMembers } from './domain/room/room-facts.ts'
 import { invalidateCanvasSync } from './domain/drawing/canvas-sync.ts'
 import { GameError, runtimeErrorType } from './errors.ts'
@@ -52,8 +50,6 @@ export class RoundMachine {
   public abandonChoosing(room: RoomSecret, notice: string): void {
     const game = this.service.requireGame(room)
     this.service.scheduler.clear(game.timer)
-    // 清掉暂停现场（若之前在暂停态），保证后续状态干净
-    delete game.pauseState
     this.transition(room, 'round_result')
     this.addSystemNotice(room, notice)
     this.beginChoosing(room)
@@ -134,29 +130,18 @@ export class RoundMachine {
     game.candidates = this.pickCandidates(room, game)
     game.rerollUsed = false
     game.phaseStartedAt = this.service.clock.now()
-    // 选词阶段是否计时由房间规则决定；关闭时 phaseEndsAt = 0 是本项目「本阶段无截止时间」
-    // 的哨兵（与暂停期同义），不排计时器、不自动代选——画家可以一直想，
-    // 唯一的自动兜底是画家离开/掉线（见 abandonChoosing 的调用方）。
+    // 选词阶段恒定倒计时驱动（chooseSeconds，默认 15s），超时随机挑选候选词直接开画（见 ADR-0059）。
     this.service.scheduler.clear(game.timer)
-    if (room.settings.allowChooseTimeLimit) {
-      const chooseMs = room.settings.chooseSeconds * 1_000
-      game.phaseEndsAt = game.phaseStartedAt + chooseMs
-      // 选词超时：服务端随机选择一个候选词并直接开画。
-      // 候选池按规则在开局前已校验充足（resetWhenExhausted 保障轮转），正常不会为空；
-      // 此处仍作防御：极端情况下（词库被掏空）走弃权流程作废本回合，避免房间滞留 choosing_word。
-      // abandonChoosing 会递归 beginChoosing 并推进回合序号，最终回合耗尽即进入最终结算，递归有界。
-      game.timer = this.service.scheduler.set(chooseMs, () =>
-        this.service.safeRun('choosingTimeout', () => {
-          if (room.phase !== 'choosing_word') return
-          const candidate = this.autoPickCandidate(game)
-          if (candidate) this.beginDrawing(room, candidate)
-          else this.abandonChoosing(room, serverStrings.notices.candidatesExhausted)
-        }),
-      )
-    } else {
-      game.phaseEndsAt = 0
-      game.timer = undefined
-    }
+    const chooseMs = room.settings.chooseSeconds * 1_000
+    game.phaseEndsAt = game.phaseStartedAt + chooseMs
+    game.timer = this.service.scheduler.set(chooseMs, () =>
+      this.service.safeRun('choosingTimeout', () => {
+        if (room.phase !== 'choosing_word') return
+        const candidate = this.autoPickCandidate(game)
+        if (candidate) this.beginDrawing(room, candidate)
+        else this.abandonChoosing(room, serverStrings.notices.candidatesExhausted)
+      }),
+    )
     this.service.emitRoom(room.id)
   }
   /**
@@ -229,8 +214,8 @@ export class RoundMachine {
       ),
       playerId: member.playerId,
     })
-    // 检查所有在线猜词者是否均已答对：若全部猜中（guessedCount === totalGuessers），立即取消倒计时定时器并切入 round_result 阶段
-    const eligible = onlineGuessers(room, game.drawerId, this.isOnline)
+    // 检查所有活跃猜词者是否均已答对（ADR-0059）：断线猜词者视同未猜中，只要有人断线未答对即不提前结束，跑完倒计时
+    const eligible = activePlayers(room).filter((candidate) => candidate.playerId !== game.drawerId)
     const allGuessed = eligible.length > 0 && eligible.every((candidate) => candidate.guessedAt)
     if (allGuessed) {
       this.finishRound(room, false)
@@ -243,17 +228,11 @@ export class RoundMachine {
     // 只有未结算的回合进行中（含暂停且暂停前确为 drawing）且答案已定时才结算；
     // roundResult 是「已结算」的唯一事实（roundSettled 双标志已合并，见 ADR-0024 的时序收口）。
     if (!game || !game.answer || game.roundResult) return
-    if (room.phase === 'paused' && game.pauseState?.phase !== 'drawing') return
     if (!isRoundSettlePhase(room.phase)) return
 
-    // 先转换阶段（非法转换在此抛出且现场未动），再清理计时器与暂停现场：
-    // 顺序反了会留下「计时器已清但阶段未推进」的无计时器僵死回合。
-    // paused → round_result 是领域允许的真实转换；无需伪造一次未记录的 drawing 中间阶段。
-    const wasPaused = room.phase === 'paused'
     this.transition(room, 'round_result')
     this.clearHintTimers(game)
     this.service.scheduler.clear(game.timer)
-    if (wasPaused) delete game.pauseState
     // 直接取用猜中当时入账的明细，不事后重算，保证结算展示的分数与实际入账一致。
     const details = [...game.correctDetails]
     // 画家得分：每个猜中者 20 分、单回合上限 100（scoring 模块统一）
@@ -283,8 +262,6 @@ export class RoundMachine {
     this.service.scheduler.clear(game.timer)
     // 排行必须在首次进入最终结算时一次性冻结；冻结规则见 scoring.freezeFinalRanking。
     if (!game.finalRanking) game.finalRanking = freezeFinalRanking(room, this.service.players)
-    // paused → game_result 是领域允许的真实转换；直接结算并清理暂停现场。
-    if (room.phase === 'paused') delete game.pauseState
     if (room.phase !== 'game_result') this.transition(room, 'game_result')
     const now = this.service.clock.now()
     const minimumResultMs = APP_CONFIG.game.gameResultMinSeconds * 1_000
@@ -328,80 +305,6 @@ export class RoundMachine {
     )
     this.service.emitRoom(room.id)
     this.service.broadcastPresence()
-  }
-  public pauseRoomInternal(room: RoomSecret, reason: string): void {
-    // 只有选词/作画/回合结算可暂停；开局倒计时（starting）不在 paused 白名单内
-    if (!this.isPausable(room.phase)) return
-    const game = this.service.requireGame(room)
-    // 先确认状态机允许，再动现场：否则清除倒计时后转换失败，会留下无计时器的僵死阶段
-    if (!canTransition(room.phase, 'paused')) return
-    this.clearHintTimers(game)
-    this.service.scheduler.clear(game.timer)
-    // 冻结当前阶段与剩余毫秒（成对写入 pauseState，半状态由类型消除），暂停期间所有计时停止
-    game.pauseState = {
-      phase: room.phase,
-      remainingMs: Math.max(0, game.phaseEndsAt - this.service.clock.now()),
-    }
-    this.transition(room, 'paused')
-    game.phaseEndsAt = 0
-    this.addSystemNotice(room, reason)
-  }
-  /**
-   * 恢复暂停：用暂停时冻结的剩余毫秒重建截止时间并继续原阶段。
-   * 与 pauseRoomInternal 成对归本状态机所有（此前 resume 在 GameService，时序字段跨模块读写）；
-   * 暂停现场由类型保证成对存在，无需对「半状态」兜底。
-   */
-  public resume(room: RoomSecret): void {
-    const game = this.service.requireGame(room)
-    const pauseState = room.phase === 'paused' ? game.pauseState : undefined
-    if (!pauseState) throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_RESUME)
-    const next = pauseState.phase
-    // 先校验目标阶段合法，再清理暂停现场：否则转换失败会丢失 pauseState，房间无法再次恢复
-    if (!canTransition(room.phase, next))
-      throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_RESUME)
-    // 标称总时长由 member-facts 单一口径给出（覆盖全部可暂停阶段）；重建后的已用时间
-    // 保持暂停时刻的进度，客户端倒计时与进度条从冻结值继续（而非从 0 重走）。
-    const totalDurationMs = nominalPhaseDurationMs(next, game, room.settings)
-    if (totalDurationMs === undefined) {
-      // 该阶段本就无截止时间（选词阶段关闭限时）：恢复后继续无限等待，
-      // phaseEndsAt 保持哨兵 0，不重建倒计时。
-      game.phaseStartedAt = this.service.clock.now()
-      game.phaseEndsAt = 0
-    } else {
-      const effectiveElapsedMs = Math.max(0, totalDurationMs - pauseState.remainingMs)
-      game.phaseStartedAt = this.service.clock.now() - effectiveElapsedMs
-      game.phaseEndsAt = this.service.clock.now() + pauseState.remainingMs
-    }
-    delete game.pauseState
-    this.transition(room, next)
-    this.scheduleCurrentPhase(room)
-  }
-  public scheduleCurrentPhase(room: RoomSecret): void {
-    const game = this.service.requireGame(room)
-    // 暂停恢复后按冻结的剩余毫秒重新调度当前阶段计时器
-    const delay = Math.max(0, game.phaseEndsAt - this.service.clock.now())
-    this.service.scheduler.clear(game.timer)
-    // 无截止时间的阶段（选词阶段关闭限时）不排计时器：恢复后仍无限等待
-    if (game.phaseEndsAt === 0) return
-    if (room.phase === 'choosing_word') {
-      // 恢复选词阶段：超时后随机取一个候选词自动开画——与首轮超时同构，暂停恢复不改变自动选词行为；
-      // 候选池为空时同样作废本回合
-      game.timer = this.service.scheduler.set(delay, () =>
-        this.service.safeRun('resumeChoosing', () => {
-          const candidate = this.autoPickCandidate(game)
-          if (candidate) this.beginDrawing(room, candidate)
-          else this.abandonChoosing(room, serverStrings.notices.candidatesExhausted)
-        }),
-      )
-    } else if (room.phase === 'drawing') {
-      game.timer = this.service.scheduler.set(delay, () =>
-        this.service.safeRun('resumeDrawing', () => this.finishRound(room, false)),
-      )
-      this.scheduleHints(room) // 同时重建逐步提示计时器
-    } else if (room.phase === 'round_result')
-      game.timer = this.service.scheduler.set(delay, () =>
-        this.service.safeRun('resumeRoundResult', () => this.beginChoosing(room)),
-      )
   }
   public setWaiting(room: RoomSecret, notice: string, resetReady = true): void {
     // 把房间状态重置回等待：清理对局秘密、提示计时器与全员准备
@@ -503,15 +406,6 @@ export class RoundMachine {
     const target = candidates[this.service.random.integer(candidates.length)]
     if (target) game.revealedIndices.add(target.index)
     this.service.emitRoom(room.id)
-  }
-
-  /**
-   * 是否允许暂停。开局倒计时（starting）不在 `LEGAL_PHASES` 的 `paused` 白名单内：
-   * 若允许暂停会先清除倒计时再转换失败，使房间永久停在无人推进的 starting。
-   * 阶段白名单的唯一来源是 phase-facts（game-service / snapshot 共用同一口径）。
-   */
-  public isPausable(phase: RoomPhase): boolean {
-    return isPausablePhase(phase)
   }
 
   /** Fisher-Yates 洗牌：随机打乱数组并返回新数组（不改原数组）。 */

@@ -8,7 +8,6 @@ import type {
   RoomSecret,
 } from '../../apps/server/src/models.ts'
 import { GameError } from '../../apps/server/src/errors.ts'
-import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
 import { createRelayChainSecret } from '../../apps/server/src/domain/relay/relay-models.ts'
 import type { RelayShowcaseCursor } from '../../apps/server/src/domain/relay/relay-showcase.ts'
 import { createMemoryVocabularyRegistry } from './helpers/mini-vocabulary.ts'
@@ -141,7 +140,6 @@ const PHASES: RoomPhase[] = [
   'choosing_word',
   'drawing',
   'round_result',
-  'paused',
   'game_result',
 ]
 
@@ -193,9 +191,6 @@ function makeGame(phase: RoomPhase, drawerId: string): GameSecret {
           roundResult: { answer: answer?.text ?? '', details: [], drawerScore: 80 },
           correctDetails: [{ playerId: GUESSER_ID, order: 1, total: 100 }],
         }
-      : {}),
-    ...(phase === 'paused'
-      ? { pauseState: { phase: 'drawing' as const, remainingMs: 20_000 } }
       : {}),
     ...(phase === 'game_result'
       ? {
@@ -286,8 +281,7 @@ function makePort(
     rooms: new Map([[room.id, room]]),
     clock: { now: () => now },
     // 与生产实现（phase-facts 的 isInMatchPhase）一致：暂停也是对局进行中
-    isPlaying: (phase) =>
-      ['starting', 'choosing_word', 'drawing', 'round_result', 'paused'].includes(phase),
+    isPlaying: (phase) => ['starting', 'choosing_word', 'drawing', 'round_result'].includes(phase),
     getRoomVocabularyStore: () => createMemoryVocabularyRegistry().getDefault(),
     requirePlayer: (playerId) => {
       const player = players.get(playerId)
@@ -375,27 +369,6 @@ describe('角色裁剪快照穷举矩阵', () => {
   }
 
   describe('私密房与时间轴专项', () => {
-    it('暂停中的 round_result 快照按标称总时长换算 phaseEndsAt，进度条不钉死', () => {
-      const { room, players } = makeRoom('paused', DRAWER_ID)
-      const game = room.game!
-      // 覆盖 fixture 的默认暂停现场：暂停发生在回合结算期，冻结剩余 3 秒。
-      // 修复前 round_result 无标称时长，phaseEndsAt 会退化为「阶段开始时间 + 冻结剩余量」，
-      // 使客户端进度条分母等于剩余量、被钉死在 100%。
-      game.pauseState = { phase: 'round_result', remainingMs: 3_000 }
-      const builder = new SnapshotBuilder(makePort(players, room))
-
-      const view = builder.snapshot(room, HOST_ID).game
-      expect(view?.phaseBeforePause).toBe('round_result')
-      expect(view?.pausedRemainingMs).toBe(3_000)
-      const expectedNominalMs =
-        (room.settings.allowRoundReplay
-          ? APP_CONFIG.game.roundReplaySeconds +
-            APP_CONFIG.game.roundReplayPauseSeconds +
-            APP_CONFIG.game.roundResultSeconds
-          : APP_CONFIG.game.roundResultSeconds) * 1_000
-      expect((view?.phaseEndsAt ?? 0) - (view?.phaseStartedAt ?? 0)).toBe(expectedNominalMs)
-    })
-
     it('私密房码只进当前房主的快照，普通成员拿不到', () => {
       const { room, players } = makeRoom('drawing', DRAWER_ID, { visibility: 'private' })
       const builder = new SnapshotBuilder(makePort(players, room))
@@ -610,7 +583,6 @@ describe('角色裁剪快照穷举矩阵', () => {
           ...(cursor ? { showcase: cursor } : {}),
           chains: CHAIN_ORIGINS.map((_origin, chain) => makeRelayChain(chain)),
           stepSubmissions: new Set([HOST_ID]),
-          autoSubmitTimers: new Map(),
           messages: [
             {
               id: '00000000-0000-4000-8000-000000000404',

@@ -20,7 +20,6 @@ const IN_MATCH_PHASES = [
   'choosing_word',
   'drawing',
   'round_result',
-  'paused',
   'relay_choose',
   'relay_draw',
   'relay_guess',
@@ -29,21 +28,10 @@ const IN_MATCH_PHASES = [
 ] as const satisfies readonly RoomPhase[]
 
 /**
- * 可暂停阶段：starting 不可暂停——若允许会先清除倒计时再转换失败，
- * 留下无人推进的僵死阶段（见 round-machine 的暂停实现注释）。
- * 接龙阶段一律不可暂停（接龙禁用暂停，S19）：`LEGAL_PHASES` 里也没有任何指向 paused 的边。
- */
-const PAUSABLE_PHASES = [
-  'choosing_word',
-  'drawing',
-  'round_result',
-] as const satisfies readonly RoomPhase[]
-
-/**
  * 允许进入回合结算的阶段：作画中，或「作画中进入的暂停」。
  * 暂停前阶段是否为 drawing 由调用方另行守卫（暂停也可能发生在选词/结算期）。
  */
-const ROUND_SETTLE_PHASES = ['drawing', 'paused'] as const satisfies readonly RoomPhase[]
+const ROUND_SETTLE_PHASES = ['drawing'] as const satisfies readonly RoomPhase[]
 
 /**
  * 接龙动手期（步 1–4 的个人棒次）：选词、作画、猜词。
@@ -82,11 +70,6 @@ export function isRelayPlayPhase(phase: RoomPhase): boolean {
 /** 阶段是否属于「接龙局进行中」（保席口径，含展示 / 投票期）。 */
 export function isRelayMatchPhase(phase: RoomPhase): boolean {
   return RELAY_MATCH_PHASES.some((candidate) => candidate === phase)
-}
-
-/** 阶段是否允许暂停。 */
-export function isPausablePhase(phase: RoomPhase): boolean {
-  return PAUSABLE_PHASES.some((candidate) => candidate === phase)
 }
 
 /** 阶段是否允许进入回合结算。 */

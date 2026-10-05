@@ -140,7 +140,7 @@ describe('GameHud 顶栏插槽', () => {
     wrapper.unmount()
   })
 
-  it('接龙禁用暂停：接龙房不渲染暂停按钮，经典房照旧渲染', () => {
+  it('全模式移除暂停：接龙房与经典房均不渲染暂停按钮', () => {
     const roomStore = useRoomStore()
     useSessionStore().playerId = HOST_ID
     roomStore.room = createRelayRoomFixture('relay_draw')
@@ -151,9 +151,6 @@ describe('GameHud 顶栏插槽', () => {
       progress: 0.5,
       phaseEndsAt: 61_000,
     })
-    expect(relayHud.find(`[aria-label="${strings.a11y.game.pauseAriaHost}"]`).exists()).toBe(false)
-    expect(relayHud.find(`[aria-label="${strings.a11y.game.pauseAriaGuest}"]`).exists()).toBe(false)
-    // 接龙的截止时间来自接龙视图：倒计时照常渲染，而不是「不限时」占位
     expect(relayHud.text()).toContain('30')
     relayHud.unmount()
 
@@ -164,7 +161,7 @@ describe('GameHud 顶栏插槽', () => {
       secondsLeft: 30,
       progress: 0.5,
     })
-    expect(classicHud.find(`[aria-label="${strings.a11y.game.pauseAriaHost}"]`).exists()).toBe(true)
+    expect(classicHud.text()).toContain('30')
     classicHud.unmount()
   })
 })

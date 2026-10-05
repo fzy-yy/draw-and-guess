@@ -9,13 +9,12 @@ import type { RoomPhase } from '@draw-guess/shared'
 import type { RoomSecret } from '../../models.ts'
 
 /**
- * 房间是否处于目标名义阶段：paused 展开为「暂停前阶段等价」。
- * 画家离开作废、断线保席、超时判定等都要求穿透暂停看到真实回合阶段；
+ * 房间是否处于目标名义阶段。
  * 房间未定义（可选链场景）一律 false。
  */
 export function phaseEquivalent(room: RoomSecret | undefined, phase: RoomPhase): boolean {
   if (!room) return false
-  return room.phase === phase || (room.phase === 'paused' && room.game?.pauseState?.phase === phase)
+  return room.phase === phase
 }
 
 /**

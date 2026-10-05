@@ -208,14 +208,6 @@ export const useGameplayStore = defineStore('gameplay', () => {
     )
   }
 
-  async function pause(reason: string = strings.ui.store.pauseReasonHost): Promise<void> {
-    await request(EVENTS.gamePauseRequest, { reason })
-  }
-
-  async function resume(): Promise<void> {
-    await request(EVENTS.gameResume)
-  }
-
   async function endEarly(): Promise<void> {
     await request(EVENTS.gameEndEarly)
   }
@@ -277,8 +269,6 @@ export const useGameplayStore = defineStore('gameplay', () => {
     sendStroke,
     sendFill,
     drawAction,
-    pause,
-    resume,
     endEarly,
     leaveGame,
     returnWaiting,

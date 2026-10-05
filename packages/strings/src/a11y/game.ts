@@ -5,9 +5,6 @@
  */
 
 export const game = {
-  pauseAriaHost: '暂停游戏',
-  pauseAriaGuest: '请求房主暂停',
-  resumeAria: '继续游戏',
   settingsAria: '打开对局设置',
   enterFullscreenAria: '进入全屏',
   exitFullscreenAria: '退出全屏',

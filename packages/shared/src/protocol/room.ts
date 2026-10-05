@@ -68,12 +68,6 @@ const RoomSettingsShape = {
     .int()
     .min(ROOM_RULE_LIMITS.chooseSeconds.min)
     .max(ROOM_RULE_LIMITS.chooseSeconds.max),
-  /**
-   * 选词阶段是否计时。关闭时服务端不写截止时间（phaseEndsAt = 0）、不排超时计时器，
-   * 画家可以一直想；只有画家离开/掉线才由兜底路径代选
-   * （见 docs/adr/0045-custom-word-and-untimed-choosing.md）。
-   */
-  allowChooseTimeLimit: z.boolean(),
   optionCount: z
     .number()
     .int()
@@ -82,7 +76,6 @@ const RoomSettingsShape = {
   showWordLength: z.boolean(),
   progressiveHints: z.boolean(),
   allowPlayerInvite: z.boolean(),
-  allowPause: z.boolean(),
   allowWordReroll: z.boolean(),
   /** 是否允许画家在选词阶段自定义题目（默认关闭，见 ADR-0045）。 */
   allowCustomWord: z.boolean(),

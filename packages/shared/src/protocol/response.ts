@@ -139,8 +139,6 @@ export const CLIENT_RESPONSE_SCHEMAS = {
   [EVENTS.gameChooseWord]: emptyAckSchema,
   [EVENTS.gameRerollWords]: emptyAckSchema,
   [EVENTS.gameCustomWord]: emptyAckSchema,
-  [EVENTS.gamePauseRequest]: emptyAckSchema,
-  [EVENTS.gameResume]: emptyAckSchema,
   [EVENTS.gameEndEarly]: emptyAckSchema,
   [EVENTS.gameLeave]: emptyAckSchema,
   [EVENTS.gameReturnWaiting]: emptyAckSchema,

@@ -42,7 +42,6 @@ export const status = {
   phaseChoosing: '画家选词',
   phaseDrawing: '作画与猜词',
   phaseRoundResult: '回合结算',
-  phasePaused: '游戏暂停',
   phaseGameResult: '最终结算',
   /** 接龙阶段名（S10）：与经典阶段共用同一份 HUD/遮罩文案映射（`utils/phase-text.ts`）。 */
   phaseRelayChoose: '接龙选词',

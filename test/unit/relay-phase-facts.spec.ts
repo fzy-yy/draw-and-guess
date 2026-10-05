@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { RoomPhase } from '@draw-guess/shared'
 import {
   isInMatchPhase,
-  isPausablePhase,
   isRelayMatchPhase,
   isRelayPlayPhase,
   isRoundSettlePhase,
@@ -36,9 +35,8 @@ describe('接龙阶段事实', () => {
     }
   })
 
-  it('接龙阶段不可暂停，也不参与经典回合结算口径', () => {
+  it('接龙阶段不参与经典回合结算口径', () => {
     for (const phase of RELAY_PHASES) {
-      expect(isPausablePhase(phase), phase).toBe(false)
       expect(isRoundSettlePhase(phase), phase).toBe(false)
     }
   })
@@ -57,7 +55,6 @@ describe('接龙阶段事实', () => {
       'choosing_word',
       'drawing',
       'round_result',
-      'paused',
       'game_result',
       'closed',
     ] as const) {
@@ -76,7 +73,6 @@ describe('接龙阶段事实', () => {
       'choosing_word',
       'drawing',
       'round_result',
-      'paused',
       'game_result',
       'closed',
     ] as const) {
@@ -88,23 +84,12 @@ describe('接龙阶段事实', () => {
   })
 
   it('经典阶段的既有口径不被接龙改动（回归）', () => {
-    for (const phase of [
-      'starting',
-      'choosing_word',
-      'drawing',
-      'round_result',
-      'paused',
-    ] as const) {
+    for (const phase of ['starting', 'choosing_word', 'drawing', 'round_result'] as const) {
       expect(isInMatchPhase(phase), phase).toBe(true)
     }
     expect(isInMatchPhase('waiting')).toBe(false)
     expect(isInMatchPhase('game_result')).toBe(false)
     expect(isInMatchPhase('closed')).toBe(false)
-    for (const phase of ['choosing_word', 'drawing', 'round_result'] as const) {
-      expect(isPausablePhase(phase), phase).toBe(true)
-    }
-    expect(isPausablePhase('starting')).toBe(false)
     expect(isRoundSettlePhase('drawing')).toBe(true)
-    expect(isRoundSettlePhase('paused')).toBe(true)
   })
 })

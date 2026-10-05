@@ -45,13 +45,19 @@ describe('会话恢复与断线时序', () => {
     expect(player.socketId).toBe('new-socket')
   })
 
-  it('画家兼房主断线超过短宽限后结算回合并迁移房主', () => {
+  it('画家兼房主断线：房主控制权按短宽限迁移，回合不提前废弃、走完作画倒计时自然结算', () => {
     const { harness, host, guest, room, game } = enterDrawing()
     expect(game.drawerId).toBe(host.playerId)
     harness.service.handleDisconnect(host.socket as never)
+
+    // 短宽限后房主控制权迁移给在线客人，但不提前结算回合（ADR-0059 断线挂机化）
     harness.runtime.advance(APP_CONFIG.network.drawerReconnectGraceMs)
-    expect(room.phase).toBe('round_result')
     expect(room.hostId).toBe(guest.playerId)
+    expect(room.phase).toBe('drawing')
+
+    // 作画倒计时走完，自然结算进入 round_result
+    harness.runtime.advance(game.roundDurationMs - APP_CONFIG.network.drawerReconnectGraceMs)
+    expect(room.phase).toBe('round_result')
   })
 })
 

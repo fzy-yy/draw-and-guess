@@ -31,7 +31,6 @@ function relayGame(playerCount: number, currentStep: RelayStep): RelayGameSecret
     phaseEndsAt: 0,
     chains: Array.from({ length: playerCount }, (_, index) => createRelayChainSecret(`p${index}`)),
     stepSubmissions: new Set<string>(),
-    autoSubmitTimers: new Map(),
     messages: [],
   }
 }

@@ -74,22 +74,14 @@ export function useGameHud(store: GameStore) {
       game.value?.phaseStartedAt ??
       relayStartingWindow.value?.startedAt,
   )
-  // 剩余秒数：按服务端权威截止时间向上取整；暂停状态下固定使用服务端下发的冻结剩余时间，避免随本地时钟持续扣减到 0
+  // 剩余秒数：按服务端权威截止时间向上取整
   const secondsLeft = computed(() => {
-    if (store.room?.phase === 'paused') {
-      return Math.max(0, Math.ceil((game.value?.pausedRemainingMs ?? 0) / 1_000))
-    }
     return phaseEndsAt.value
       ? Math.max(0, Math.ceil((phaseEndsAt.value - correctedNow.value) / 1_000))
       : 0
   })
-  // 阶段进度：剩余毫秒 / 阶段总时长，用于进度条 scaleX；暂停状态下固定使用冻结的剩余进度
+  // 阶段进度：剩余毫秒 / 阶段总时长，用于进度条 scaleX
   const progress = computed(() => {
-    if (store.room?.phase === 'paused') {
-      const total = (game.value?.phaseEndsAt ?? 0) - (game.value?.phaseStartedAt ?? 0)
-      if (total <= 0) return 0
-      return Math.max(0, Math.min(1, (game.value?.pausedRemainingMs ?? 0) / total))
-    }
     const phaseStart = phaseStartedAt.value
     if (!phaseEndsAt.value || !phaseStart || phaseEndsAt.value <= phaseStart) return 0
     return Math.max(

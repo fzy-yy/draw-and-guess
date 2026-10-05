@@ -24,16 +24,14 @@ function collectTypeScriptFiles(directory: string): string[] {
 }
 
 describe('房间阶段转换边界', () => {
-  it('暂停中的作画回合可直接结算，并只保留新的结算倒计时', () => {
-    const { harness, host, room, game } = enterDrawing()
-    harness.service.pause(host.playerId, '暂停后结算')
-    const pausedVersion = room.stateVersion
+  it('作画回合可直接结算，并只保留新的结算倒计时', () => {
+    const { harness, room } = enterDrawing()
+    const version = room.stateVersion
 
     harness.service.round.finishRound(room, false)
 
     expect(room.phase).toBe('round_result')
-    expect(room.stateVersion).toBe(pausedVersion + 1)
-    expect(game.pauseState).toBeUndefined()
+    expect(room.stateVersion).toBe(version + 1)
     expect(harness.runtime.pendingTimerCount()).toBe(1)
     const resultDurationMs =
       (room.settings.allowRoundReplay
@@ -45,16 +43,14 @@ describe('房间阶段转换边界', () => {
     expect(room.phase).toBe('choosing_word')
   })
 
-  it('暂停中提前结束可直接进入最终结算并只保留结算退出计时器', () => {
-    const { harness, host, room, game } = enterDrawing()
-    harness.service.pause(host.playerId, '暂停后提前结束')
-    const pausedVersion = room.stateVersion
+  it('作画中提前结束可直接进入最终结算并只保留结算退出计时器', () => {
+    const { harness, host, room } = enterDrawing()
+    const version = room.stateVersion
 
     harness.service.endEarly(host.playerId)
 
     expect(room.phase).toBe('game_result')
-    expect(room.stateVersion).toBe(pausedVersion + 1)
-    expect(game.pauseState).toBeUndefined()
+    expect(room.stateVersion).toBe(version + 1)
     expect(harness.runtime.pendingTimerCount()).toBe(2)
     expect(harness.repositories.archive.games).toHaveLength(1)
   })
@@ -123,8 +119,6 @@ describe('房间阶段转换边界', () => {
   })
 
   it('合法表允许所有活跃阶段关闭，并保留目标转换边', () => {
-    expect(canTransition('paused', 'round_result')).toBe(true)
-    expect(canTransition('paused', 'game_result')).toBe(true)
     expect(canTransition('starting', 'waiting')).toBe(true)
     expect(canTransition('game_result', 'waiting')).toBe(true)
     const phases: RoomPhase[] = [
@@ -133,7 +127,6 @@ describe('房间阶段转换边界', () => {
       'choosing_word',
       'drawing',
       'round_result',
-      'paused',
       'game_result',
     ]
     expect(phases.every((phase) => canTransition(phase, 'closed'))).toBe(true)
@@ -191,9 +184,8 @@ describe('接龙阶段转换白名单（S10 / S22 / S23 / S34）', () => {
     }
   })
 
-  it('接龙不可暂停，也不允许跳步或越级进入复盘', () => {
+  it('接龙不允许跳步或越级进入复盘，且活跃阶段均可关闭', () => {
     for (const phase of RELAY_PHASES) {
-      expect(canTransition(phase, 'paused'), `${phase} → paused`).toBe(false)
       // 任何活跃阶段都必须能关闭房间（成员清空 / 房主解散）
       expect(canTransition(phase, 'closed'), `${phase} → closed`).toBe(true)
     }

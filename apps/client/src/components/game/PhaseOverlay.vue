@@ -8,7 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Brush, CirclePause, CirclePlay, PenLine, RefreshCw, Trophy } from 'lucide-vue-next'
+import { Brush, PenLine, RefreshCw, Trophy } from 'lucide-vue-next'
 import {
   CUSTOM_WORD_MAX_LENGTH,
   type GameView,
@@ -43,7 +43,6 @@ const props = withDefaults(
 const emit = defineEmits<{
   'choose-word': [wordId: string]
   'reroll-words': []
-  resume: []
   'open-end-confirm': []
   'return-waiting': []
   'leave-room': []
@@ -176,12 +175,10 @@ const canReroll = computed(() =>
 const chooseTitle = computed(() =>
   isRelayChoose.value ? strings.ui.game.relayChooseTitle : strings.ui.game.yourTurn,
 )
-/** 卡片底部提示：接龙选词恒有截止时间（无「不限时」档位），经典按规则在限时与不限时之间切换。 */
+/** 卡片底部提示：接龙与经典选词恒有倒计时，超时自动选择。 */
 const chooseHint = computed(() => {
   if (chooseLocked.value) return strings.ui.game.relayWaitingOthers
-  if (isRelayChoose.value || store.room?.settings.allowChooseTimeLimit)
-    return strings.ui.game.autoChoose(props.secondsLeft)
-  return strings.ui.game.chooseNoLimitHint
+  return strings.ui.game.autoChoose(props.secondsLeft)
 })
 </script>
 
@@ -251,22 +248,6 @@ const chooseHint = computed(() => {
         :submitting="customWordSubmitting"
         @confirm="submitCustomWord"
       />
-    </OverlayCard>
-    <!-- 阶段遮罩：游戏暂停（房主可继续或提前结束） -->
-    <OverlayCard v-else-if="store.room.phase === 'paused'">
-      <div class="grid place-items-center h-[7.5cqh] w-[7.5cqh] bg-blue rounded-full">
-        <CirclePause class="h-[3.8cqh] w-[3.8cqh] text-white" />
-      </div>
-      <p>{{ strings.ui.game.pausedTitle }}</p>
-      <h2>{{ strings.ui.game.pausedSubtitle }}</h2>
-      <span>{{ strings.ui.game.pausedHint }}</span>
-      <div v-if="store.isHost" class="flex gap-[0.8em] mt-[1.5cqh]">
-        <AppButton variant="primary" @click="emit('resume')">
-          <CirclePlay />{{ strings.ui.game.resumeGame }}</AppButton
-        ><AppButton variant="danger" :audio-feedback="null" @click="emit('open-end-confirm')">
-          {{ strings.ui.game.endEarly }}
-        </AppButton>
-      </div>
     </OverlayCard>
     <!-- 阶段遮罩：回合结算（答案、得分明细） -->
     <!-- 阶段遮罩：回合结算（答案、得分明细）——重播期间隐藏，重播结束后或未开启重播时展示；玩家点击关闭后本地隐藏，便于欣赏画作 -->

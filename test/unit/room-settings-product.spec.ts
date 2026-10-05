@@ -26,7 +26,6 @@ describe('房间规则产品闭环', () => {
     // 单回合时长默认 120 秒且必须落在合法档位内；选词阶段默认不限时
     expect(settings.drawSeconds).toBe(APP_CONFIG.game.drawSeconds.default)
     expect(DRAW_SECONDS_OPTIONS).toContain(settings.drawSeconds)
-    expect(settings.allowChooseTimeLimit).toBe(false)
     // 差一字私密提示、画布微表情互动与作画精彩重播默认开启
     expect(settings.allowNearMissHint).toBe(true)
     expect(settings.allowCanvasReactions).toBe(true)
@@ -48,12 +47,10 @@ describe('房间规则产品闭环', () => {
       { roundsPerPlayer: 1.5 },
       { drawSeconds: 105 },
       { chooseSeconds: 31 },
-      { allowChooseTimeLimit: 'yes' },
       { optionCount: 2.5 },
       { showWordLength: 'yes' },
       { progressiveHints: 1 },
       { allowPlayerInvite: 'yes' },
-      { allowPause: 1 },
       { allowWordReroll: null },
       { allowNearMissHint: 'yes' },
       { allowCanvasReactions: 123 },
@@ -99,28 +96,15 @@ describe('房间规则产品闭环', () => {
     expect(game.roundDurationMs).toBe(150 * 1_000)
   })
 
-  it('选词阶段关闭限时时没有截止时间，也不会自动代选', () => {
+  it('选词阶段恒定倒计时并在超时后随机选词开画', () => {
     const harness = createGameHarness()
     const { room, game } = startTwoPlayerGame(harness, testRoomSettings())
     expect(room.phase).toBe('choosing_word')
-    // 0 是本项目「本阶段无截止时间」的哨兵
-    expect(game.phaseEndsAt).toBe(0)
-    // 推远超任何合理选词时限：没有计时器，阶段停在选词等待画家
-    harness.runtime.advance(10 * 60 * 1_000)
-    expect(room.phase).toBe('choosing_word')
-  })
-
-  it('无限时选词阶段暂停恢复后仍无限时', () => {
-    const harness = createGameHarness()
-    const { host, room, game } = startTwoPlayerGame(harness, testRoomSettings())
-    harness.service.pause(host.playerId, '测试暂停')
-    expect(room.phase).toBe('paused')
-    harness.runtime.advance(30_000)
-    harness.service.resume(host.playerId)
-    expect(room.phase).toBe('choosing_word')
-    expect(game.phaseEndsAt).toBe(0)
-    harness.runtime.advance(60_000)
-    expect(room.phase).toBe('choosing_word')
+    expect(game.phaseEndsAt).toBeGreaterThan(0)
+    // 推进选词倒计时后自动选词开画
+    harness.runtime.advance(room.settings.chooseSeconds * 1_000)
+    expect(room.phase).toBe('drawing')
+    expect(game.answer).toBeDefined()
   })
 
   it('房主可成功开启/关闭差一字私密提示与画布微表情并广播生效', () => {

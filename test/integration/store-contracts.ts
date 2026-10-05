@@ -76,8 +76,6 @@ expectTypeOf<BusinessKeys<ReturnType<typeof useGameStore>>>().toEqualTypeOf<
   | 'sendStroke'
   | 'sendFill'
   | 'drawAction'
-  | 'pause'
-  | 'resume'
   | 'endEarly'
   | 'leaveGame'
   | 'returnWaiting'
