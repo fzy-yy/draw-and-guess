@@ -28,7 +28,8 @@ export type RelayCanvasRejection =
   | 'stale-step'
   /** 观看者不在本局链阵容中（非本局成员的残留连接）。 */
   | 'not-participant'
-
+  /** 当前玩家在本棒已经完成提交锁定（S30：提交即锁定不可撤回，禁止继续修改画布）。 */
+  | 'already-submitted'
 /** 解析结果：本棒的作画步骤、链与要写入的画布。 */
 export type RelayCanvasDecision =
   | {
@@ -64,6 +65,7 @@ export function resolveRelayCanvasTarget(
     return { accepted: false, reason: 'not-drawing-step' }
   const originIndex = relay.chains.findIndex((chain) => chain.originPlayerId === playerId)
   if (originIndex < 0) return { accepted: false, reason: 'not-participant' }
+  if (relay.stepSubmissions.has(playerId)) return { accepted: false, reason: 'already-submitted' }
   const chainCount = relay.chains.length
   const chain = relay.chains[relayChainIndexOf(chainCount, originIndex, step)]
   if (!chain) return { accepted: false, reason: 'not-participant' }

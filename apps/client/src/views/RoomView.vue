@@ -194,19 +194,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
 
       <!-- 房主只显示开始按钮；其他玩家保留准备按钮。 -->
       <div class="mt-auto pt-[1.3cqh] border-t-[0.2cqh] border-t-line text-center">
-        <!-- 准备按钮：复用 AppButton secondary（白底描边），已准备时经外部类切换为绿色高亮。 -->
-        <AppButton
-          v-if="!store.isHost"
-          variant="secondary"
-          type="button"
-          class="w-full"
-          :class="{ 'text-success-fg bg-green/10 border-green': store.me?.ready }"
-          :audio-feedback="store.me?.ready ? 'activate' : null"
-          @click="store.setReady(!store.me?.ready)"
-        >
-          {{ store.me?.ready ? strings.ui.room.cancelReady : strings.ui.room.readyGo }}
-        </AppButton>
-        <!-- 接龙门禁原因（S47 / S62）：只在接龙房且门禁未满足时出现，经典房不渲染（保持现状） -->
+        <!-- 接龙门禁原因（S47 / S62）：置于操作按钮上方，避免文案显隐造成按钮位置上下跳动 -->
         <p
           v-if="startGateReason"
           :id="startGateReasonId"
@@ -214,6 +202,19 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
         >
           {{ startGateReason }}
         </p>
+        <!-- 准备按钮：复用 AppButton secondary（白底描边），已准备时经外部类切换为绿色高亮。 -->
+        <AppButton
+          v-if="!store.isHost"
+          variant="secondary"
+          type="button"
+          class="w-full"
+          :class="{ 'text-success-fg bg-green/10 border-green': store.me?.ready }"
+          :aria-describedby="startGateReason ? startGateReasonId : undefined"
+          :audio-feedback="store.me?.ready ? 'activate' : null"
+          @click="store.setReady(!store.me?.ready)"
+        >
+          {{ store.me?.ready ? strings.ui.room.cancelReady : strings.ui.room.readyGo }}
+        </AppButton>
         <AppButton
           v-if="store.isHost"
           variant="primary"

@@ -132,6 +132,7 @@ const RELAY_CANVAS_ERROR_CODES: Record<RelayCanvasRejection, ErrorCode> = {
   'stale-step': ERROR_CODES.STALE_DRAW_EVENT,
   'not-drawing-step': ERROR_CODES.NOT_DRAWER,
   'not-participant': ERROR_CODES.NOT_DRAWER,
+  'already-submitted': ERROR_CODES.ALREADY_SUBMITTED,
 }
 
 /**

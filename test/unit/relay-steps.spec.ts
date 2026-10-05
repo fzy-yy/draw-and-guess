@@ -540,6 +540,31 @@ describe('接龙掉队代交与离开者占位', () => {
     for (const chain of scenario.relay.chains)
       expect(chain.step4Guess).toBe(RELAY_AUTO_SUBMIT_GUESS_TEXT)
   })
+  it('步 2 部分玩家超时代交：保留已提交者的答案，且未提交者代交到其本步真正负责的链（S8 / S9）', () => {
+    const scenario = atGuessStep()
+    const [p0, p1, p2, p3] = scenario.players
+    if (!p0 || !p1 || !p2 || !p3) throw new Error('场景缺少玩家')
+
+    // P1 负责猜 Chain 0（发起人是 P0），P1 提交有效猜词
+    scenario.harness.service.submitRelayGuess(p1.playerId, scenario.stepId, 'P1提交的猫咪')
+    // P2 负责猜 Chain 1，P2 提交有效猜词
+    scenario.harness.service.submitRelayGuess(p2.playerId, scenario.stepId, 'P2提交的小狗')
+    // P3 负责猜 Chain 2，P3 提交有效猜词
+    scenario.harness.service.submitRelayGuess(p3.playerId, scenario.stepId, 'P3提交的兔子')
+
+    // P0 负责猜 Chain 3（发起人是 P3）。P0 超时未交
+    scenario.harness.runtime.advance(scenario.room.settings.relayGuessSeconds * 1_000)
+
+    expect(scenario.room.phase).toBe('relay_draw')
+    expect(scenario.relay.currentStep).toBe(3)
+
+    // Chain 0 必须保留 P1 的有效提交，不得被超时未交的 P0 覆盖冲刷
+    expect(scenario.chainOf(p0.playerId, 1).step2Guess).toBe('P1提交的猫咪')
+    expect(scenario.chainOf(p1.playerId, 1).step2Guess).toBe('P2提交的小狗')
+    expect(scenario.chainOf(p2.playerId, 1).step2Guess).toBe('P3提交的兔子')
+    // Chain 3 由超时的 P0 代交为「上家未作答」
+    expect(scenario.chainOf(p3.playerId, 1).step2Guess).toBe(RELAY_AUTO_SUBMIT_GUESS_TEXT)
+  })
 
   it('四步顺序：每一步换手都推进一棒，步号单调走到复盘', () => {
     const scenario = startRelayGame()

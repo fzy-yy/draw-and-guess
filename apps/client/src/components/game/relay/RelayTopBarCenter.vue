@@ -118,6 +118,15 @@ watch(
   { immediate: true },
 )
 
+/** 投票阶段题面切换为初始词时，同步更新已落定文本（确保下一条链起跑时旧答案残留层渐隐正确的题面） */
+watch(
+  () => props.showcase?.prompt.text,
+  (nextText) => {
+    if (!shifting.value && nextText) {
+      settledLeftText.value = nextText
+    }
+  },
+)
 onBeforeUnmount(() => {
   if (settleTimer !== undefined) clearTimeout(settleTimer)
 })

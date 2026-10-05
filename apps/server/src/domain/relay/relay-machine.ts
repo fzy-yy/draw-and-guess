@@ -754,12 +754,13 @@ export class RelayMachine {
     this.advanceIfComplete(room, stepId)
   }
 
-  /** 本步倒计时到点：仍未交的成员一律按代交口径补齐（随后由调用方换手）。 */
+  /** 本步倒计时到点：仍未交的成员一律按代交口径补齐其当前步骤负责的链产出（随后由调用方换手）。 */
   private autoSubmitRemaining(relay: RelayGameSecret): void {
     for (const chain of relay.chains) {
-      if (relay.stepSubmissions.has(chain.originPlayerId)) continue
-      this.writeAutoSubmitProduct(relay, chain)
-      relay.stepSubmissions.add(chain.originPlayerId)
+      const playerId = chain.originPlayerId
+      if (relay.stepSubmissions.has(playerId)) continue
+      this.writeAutoSubmitProduct(relay, this.chainFor(relay, playerId, relay.currentStep))
+      relay.stepSubmissions.add(playerId)
     }
   }
 

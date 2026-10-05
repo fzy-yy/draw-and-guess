@@ -151,12 +151,14 @@ watch(
 )
 
 /**
- * 当前是否可绘制：经典＝画家在作画阶段；接龙＝作画棒（本棒人人只画自己那条链，
- * 且要有自己的画布——不在链阵容内的残留连接没有画布，不可画）。
+ * 当前是否可绘制：经典＝画家在作画阶段；接龙＝作画棒且未提交（本棒人人只画自己那条链，
+ * 且要有自己的画布、提交后即锁定不可继续修改，S30 / S179）。
  */
 const canDraw = computed(() =>
   isRelay.value
-    ? relay.value?.phase === 'relay_draw' && relay.value.ownCanvas !== undefined
+    ? relay.value?.phase === 'relay_draw' &&
+      relay.value.ownCanvas !== undefined &&
+      !relay.value.submitted
     : store.isDrawer && store.room?.phase === 'drawing',
 )
 

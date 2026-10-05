@@ -59,8 +59,13 @@ const stepEnded = computed(() => {
 const canSubmit = computed(
   () => props.enabled && !isSubmitted.value && !pending.value && !stepEnded.value,
 )
-/** 猜词禁止空提交（S15 客户端侧）：全空白同样不可提交。 */
-const canSubmitGuess = computed(() => canSubmit.value && draft.value.trim().length > 0)
+/** 猜词禁止空提交与超长提交（S15 客户端侧）：全空白或超出字符上限不可提交。 */
+const canSubmitGuess = computed(
+  () =>
+    canSubmit.value &&
+    draft.value.trim().length > 0 &&
+    Array.from(draft.value.trim()).length <= store.config.player.chatMaxLength,
+)
 
 /** 本棒已过期且我还没交：显示「本棒已结束」，而不是让玩家对着可点的按钮撞一次误导性报错。 */
 const hint = computed(() => {

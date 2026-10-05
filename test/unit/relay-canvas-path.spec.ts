@@ -21,7 +21,11 @@ import {
 } from '@draw-guess/shared'
 import { serverErrorMessages } from '@draw-guess/strings'
 import type { DrawingCanvasState } from '../../apps/server/src/domain/drawing/drawing-core.ts'
-import { startRelayDrawing, type RelayDrawingScenario } from './helpers/relay-game-fixture.ts'
+import {
+  errorCodeOf,
+  startRelayDrawing,
+  type RelayDrawingScenario,
+} from './helpers/relay-game-fixture.ts'
 
 /** 每条命令之间推进 25ms 假时钟（40 命令/秒 < 45 的绘图限频），与经典绘图用例同口径。 */
 const COMMAND_STEP_MS = 25
@@ -336,5 +340,21 @@ describe('接龙画布写入通路', () => {
     const revisionAfterClear = canvas.drawingRevision
     scenario.harness.service.relayClear(drawer.playerId, scenario.stepId)
     expect(canvas.drawingRevision).toBe(revisionAfterClear)
+  })
+  it('玩家完成提交后作画被拒（ALREADY_SUBMITTED）：提交即锁定不可继续修改画布（S30）', () => {
+    const scenario = startRelayDrawing()
+    const drawer = scenario.players[0]
+    if (!drawer) throw new Error('场景缺少玩家')
+
+    addStroke(scenario, drawer.playerId, dotStroke(0, 1))
+
+    scenario.harness.service.submitRelayDrawing(drawer.playerId, scenario.stepId)
+
+    expect(errorCodeOf(() => addStroke(scenario, drawer.playerId, dotStroke(1, 2)))).toBe(
+      ERROR_CODES.ALREADY_SUBMITTED,
+    )
+    expect(errorCodeOf(() => addFill(scenario, drawer.playerId, fillCommand(1)))).toBe(
+      ERROR_CODES.ALREADY_SUBMITTED,
+    )
   })
 })

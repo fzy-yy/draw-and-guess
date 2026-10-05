@@ -15,7 +15,7 @@ import {
   Eraser,
   GripVertical,
   PaintBucket,
-  Pipette,
+  Palette,
   Redo2,
   Trash2,
   Undo2,
@@ -168,7 +168,7 @@ function runHistory(key: HistoryKey): void {
             @select="selectCustomColorPreview"
             @commit="selectCustomColorCommit"
           >
-            <Pipette class="pointer-events-none h-[62%] w-[62%] text-navy" aria-hidden="true" />
+            <Palette class="pointer-events-none h-[62%] w-[62%] text-navy" aria-hidden="true" />
           </ColorSwatchButton>
 
           <GroupDivider />

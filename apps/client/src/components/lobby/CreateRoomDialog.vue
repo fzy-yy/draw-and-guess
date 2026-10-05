@@ -56,6 +56,16 @@ async function submitCreate(): Promise<void> {
     <div
       class="grid min-h-0 grid-cols-2 gap-[1.8cqh_1.4em] overflow-y-auto px-[2em] py-[2.8cqh] overscroll-contain"
     >
+      <!-- 房间名称输入项：置于首项，便于房主直接命名画室 -->
+      <label class="col-span-full flex flex-col gap-[0.55cqh] font-bold text-fs-14">
+        {{ strings.ui.lobby.roomNameField }}
+        <AppInput
+          v-model="createForm.name"
+          :maxlength="store.config.player.roomNameMaxLength"
+          input-class="font-bold"
+        />
+      </label>
+
       <!-- 玩法模式单选组：建房时选定、房间内不可修改（S27 / S28） -->
       <fieldset class="col-span-full m-0 grid grid-cols-2 gap-[0.8em] border-0 p-0">
         <legend class="mb-[0.7cqh] font-bold">{{ strings.ui.lobby.gameModeField }}</legend>
@@ -119,16 +129,6 @@ async function submitCreate(): Promise<void> {
           </span>
         </label>
       </fieldset>
-
-      <label class="flex flex-col gap-[0.55cqh] font-bold text-fs-14">
-        {{ strings.ui.lobby.roomNameField }}
-        <AppInput
-          v-model="createForm.name"
-          :maxlength="store.config.player.roomNameMaxLength"
-          input-class="font-bold"
-        />
-      </label>
-
       <p class="col-span-full m-0 text-muted text-fs-12 leading-[1.6]">
         {{
           createForm.visibility === 'public'

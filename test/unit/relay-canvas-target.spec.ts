@@ -134,4 +134,12 @@ describe('接龙绘图目标解析', () => {
       reason: 'not-participant',
     })
   })
+  it('当前玩家已提交作画被拒（already-submitted）：提交即锁定不可继续修改画布（S30）', () => {
+    const relay = relayGame(4, 1)
+    relay.stepSubmissions.add('p0')
+    expect(resolveRelayCanvasTarget(drawingSource(relay), 'p0', CURRENT_STEP_ID)).toEqual({
+      accepted: false,
+      reason: 'already-submitted',
+    })
+  })
 })
