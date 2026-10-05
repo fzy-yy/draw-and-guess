@@ -1,19 +1,18 @@
 <!--
-  接龙作答浮层（工单 10；依据 S41 / S72 / S79 / S86）：
-  轮到猜词时浮在画布上，玩家写下答案并提交，提交后立刻锁定为「等待其他玩家」；
-  作画棒则在同一浮层用「完成提交」把已有笔画交给下一位（S30：只标记完成，不改画布）。
+  接龙猜词作答浮层（依据 S41 / S72 / S79 / S86）：
+  仅在猜词棒浮于画布上，玩家写下答案并提交，提交后锁定为「等待其他玩家」。
+  作画棒的完成提交按钮位于 CanvasToolbar 末尾，避免浮层遮挡画作（S30，见 GameView）。
 
   为什么复用共享外壳：拖动定位、百分比记账与工作区夹取只在 `DraggablePanelShell` 维护一处（S86），
-  本组件只负责视觉与提交语义，绝不重复实现拖动。
+  本组件只负责猜词输入与提交语义，绝不重复实现拖动。
 
-  锁定态的铁律是「跟随服务端快照」：`submitted` 为真（含超时 / 掉线时服务端代交）即锁定，
-  本地提交成功只做即时反馈（乐观锁定，ack 回来前先锁住）；他人是否已交只由快照的
-  `submittedPlayerIds` 表达，客户端不自行推断（S64 / 工单 10 第 3 条）。
+  锁定态跟随服务端快照：`submitted` 为真（含超时 / 掉线时服务端代交）即锁定；本地提交成功
+  只做即时反馈；他人是否已交只由快照 `submittedPlayerIds` 表达（S64）。
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useTimestamp } from '@vueuse/core'
-import { Check, GripVertical, Send } from 'lucide-vue-next'
+import { GripVertical, Send } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { AppButton, AppInput } from '@/components/common'
 import DraggablePanelShell from '@/components/game/DraggablePanelShell.vue'
@@ -22,36 +21,23 @@ import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
 
 const props = defineProps<{
-  /** 本步 id：换棒即复位浮层（锁定态、草稿与拖动位置都不跨棒残留）。 */
+  /** 当前步骤 id：换棒即复位草稿与浮层拖动位置。 */
   stepId: string
-  /** 本浮层收集的动作：guess＝提交猜词文本；draw＝完成本棒作画。 */
-  mode: 'guess' | 'draw'
   /** 本步是否已提交（服务端快照口径，含服务端代交）。 */
   submitted: boolean
-  /** 当前观看者是否可提交（沿用 HUD 的「在线可玩成员」口径）。 */
+  /** 当前观看者是否可提交（沿用 HUD 的在线可玩成员口径）。 */
   enabled: boolean
 }>()
 
 const store = useGameStore()
-
-/** 本地 tick 时钟：与本棒截止时间比较，用于在服务端换手前就锁住提交（口径与 HUD 一致，含时钟偏移）。 */
-const now = useTimestamp({ interval: store.config.ui.tickIntervalMs })
-
-/** 拖动位置（null＝按 defaultClass 停靠）；随 stepId 复位。 */
+const defaultClass = 'bottom-[1.2cqh] left-1/2 -translate-x-1/2'
 const position = ref<PanelPosition | null>(null)
-/** 猜词草稿：提交成功、快照判定已交或换棒时清空。 */
+const now = useTimestamp({ interval: store.config.ui.tickIntervalMs })
 const draft = ref('')
-/** 请求在途：防止重复提交。 */
 const pending = ref(false)
-/** 本地提交成功的即时锁定；服务端快照仍是权威（`submitted` 一到即等价）。 */
 const locallySubmitted = ref(false)
 
 const isSubmitted = computed(() => props.submitted || locallySubmitted.value)
-/**
- * 本棒是否已在本地校正时钟上过期。服务端在截止时刻就代交并换手（步骤 id 随之轮换），
- * 此刻再提交必然被拒（STALE_DRAW_EVENT / PHASE_EXPIRED），玩家读到的却是「绘图包已过期或重复」，
- * 与真实原因不符；因此在客户端本地把提交入口锁住（见 .scratch/relay-mode/bug-report.md B2）。
- */
 const stepEnded = computed(() => {
   const endsAt = store.room?.relay?.phaseEndsAt ?? 0
   return endsAt > 0 && now.value + store.clockOffset >= endsAt
@@ -66,21 +52,10 @@ const canSubmitGuess = computed(
     draft.value.trim().length > 0 &&
     Array.from(draft.value.trim()).length <= store.config.player.chatMaxLength,
 )
-
-/** 本棒已过期且我还没交：显示「本棒已结束」，而不是让玩家对着可点的按钮撞一次误导性报错。 */
-const hint = computed(() => {
-  if (stepEnded.value && !isSubmitted.value) return strings.ui.game.relayStepEnded
-  return props.mode === 'guess' ? strings.ui.game.relayAnswerHint : strings.ui.game.relayDrawingHint
-})
-
-/**
- * 默认停靠：猜词棒没有底部工具条，贴底居中最好按；作画棒底部被工具条占用，
- * 改停顶部居中——两处都避开画布中心，拖动后由玩家自行安排。
- */
-const defaultClass = computed(() =>
-  props.mode === 'guess'
-    ? 'bottom-[1.2cqh] left-1/2 -translate-x-1/2'
-    : 'top-[1.2cqh] left-1/2 -translate-x-1/2',
+const hint = computed(() =>
+  stepEnded.value && !isSubmitted.value
+    ? strings.ui.game.relayStepEnded
+    : strings.ui.game.relayAnswerHint,
 )
 
 watch(
@@ -93,7 +68,7 @@ watch(
   },
 )
 
-/** 快照已判定提交（含服务端代交）时丢弃草稿：内容已无意义，留着只会在下一棒误发。 */
+/** 服务端代交或正常提交到达后，丢弃已经无效的本地草稿。 */
 watch(
   () => props.submitted,
   (submittedNow) => {
@@ -101,10 +76,6 @@ watch(
   },
 )
 
-/**
- * 提交本棒猜词：走 `relay:submitGuess`（S20 的作答专用通道，绝不经过聊天事件）。
- * 只有 ack 成功才即时锁定；失败时保留草稿与可重试状态（失败提示由传输层统一 Toast）。
- */
 async function submitGuess(): Promise<void> {
   const text = draft.value.trim()
   if (!text || !canSubmitGuess.value) return
@@ -112,26 +83,9 @@ async function submitGuess(): Promise<void> {
   pending.value = true
   try {
     const delivered = await store.relaySubmitGuess(text)
-    // 换棒后才回来的旧 ack 不得锁住新一棒。
     if (delivered && props.stepId === stepId) {
       locallySubmitted.value = true
       draft.value = ''
-      playInteractionSound('activate')
-    }
-  } finally {
-    if (props.stepId === stepId) pending.value = false
-  }
-}
-
-/** 提交本棒作画（`relay:submitDrawing`）：只标记完成，交的是画布上已有笔画（S30）。 */
-async function submitDrawing(): Promise<void> {
-  if (!canSubmit.value) return
-  const stepId = props.stepId
-  pending.value = true
-  try {
-    const delivered = await store.relaySubmitDrawing()
-    if (delivered && props.stepId === stepId) {
-      locallySubmitted.value = true
       playInteractionSound('activate')
     }
   } finally {
@@ -161,7 +115,7 @@ async function submitDrawing(): Promise<void> {
 
         <!-- 猜词棒：输入 + 确定提交；提交后（含服务端代交）整块换成等待态 -->
         <form
-          v-if="mode === 'guess' && !isSubmitted"
+          v-if="!isSubmitted"
           class="flex items-center gap-[0.5em]"
           @submit.prevent="submitGuess"
         >
@@ -183,25 +137,12 @@ async function submitDrawing(): Promise<void> {
             <Send class="h-[2.4cqh] w-[2.4cqh]" />{{ strings.ui.game.relayAnswerSubmit }}
           </AppButton>
         </form>
-
-        <!-- 作画棒：只标记完成，交的是画布上已有笔画（S30） -->
-        <AppButton
-          v-else-if="mode === 'draw' && !isSubmitted"
-          type="button"
-          class="gap-[0.35em] text-fs-14"
-          :disabled="!canSubmit"
-          :audio-feedback="null"
-          @click="submitDrawing"
-        >
-          <Check class="h-[2.4cqh] w-[2.4cqh]" />{{ strings.ui.game.relayDrawingSubmit }}
-        </AppButton>
-
         <!-- 已提交（本地即时锁定或服务端快照，含超时 / 掉线代交）：锁定等待其他玩家 -->
         <div
           v-else
           class="flex min-h-[5.2cqh] items-center justify-center gap-[0.4em] rounded-[0.45em] bg-green/10 text-fs-14 font-bold text-success-fg"
         >
-          <Check class="h-[2.4cqh] w-[2.4cqh]" />{{ strings.ui.game.relayWaitingOthers }}
+          {{ strings.ui.game.relayWaitingOthers }}
         </div>
       </div>
     </template>

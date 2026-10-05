@@ -147,7 +147,7 @@ export class GamePage {
     await expect(pill.locator('b')).toHaveText(String(step))
   }
 
-  /** 接龙作画棒：作答浮层的「完成提交」（S30，交的是画布上已有笔画）。 */
+  /** 接龙作画棒：工具条末尾的「完成提交」（S30 / Image 1，交的是画布上已有笔画）。 */
   async relaySubmitDrawing(): Promise<void> {
     const submit = this.page.getByRole('button', {
       name: strings.ui.game.relayDrawingSubmit,
@@ -155,7 +155,7 @@ export class GamePage {
     })
     await expect(submit).toBeEnabled({ timeout: 20_000 })
     await submit.click()
-    // 提交后按钮必然消失：要么换成「已提交，等待其他玩家」，要么全员提交即秒切下一棒（S16 / S40）
+    // 提交后按钮改为等待态；全员提交时则秒切离开作画阶段。
     await expect(submit).toBeHidden({ timeout: 15_000 })
   }
 

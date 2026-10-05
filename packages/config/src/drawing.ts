@@ -40,10 +40,8 @@ export const drawing = {
   batchIntervalMs: 24,
   maxPointsPerBatch: DRAWING_PROTOCOL_LIMITS.maxPointsPerBatch,
   maxHistoryCommands: 1_500,
-  // maxPointsPerStroke：单次按下可累计的点数上限。同一笔画多批次共用 ID，因此
-  //   maxHistoryCommands（只数命令条数）对其完全不生效，需单独限额防止无限追加。
-  // maxPointsPerRound：整回合的总点数预算，直接限定内存与“全量快照/断线重放”的序列化成本。
-  maxPointsPerStroke: 1_200,
+  // maxPointsPerStroke：单次按下可累计的点数上限，作为线上笔画 Schema 与服务端预算的共享边界。
+  maxPointsPerStroke: DRAWING_PROTOCOL_LIMITS.maxPointsPerStroke,
   maxPointsPerRound: 40_000,
   // maxFillsPerRound：单回合区域填充次数上限。每次填充在重连/撤销重绘时都必须完整重放
   //   （720p 单次约 10~30ms），该上限防止极端刷填充让重放成本与内存失控；正常回合远低于此值。

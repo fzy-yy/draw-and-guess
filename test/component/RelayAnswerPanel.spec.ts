@@ -12,10 +12,9 @@ import { HOST_ID, STEP_ID, createLiveRelayRoomFixture } from '../client/room-fix
 import { createPiniaWithFakeTransport, type FakeGameTransport } from '../client/fake-game-transport'
 
 /**
- * 接龙作答浮层的组件面（工单 10；依据 S15 / S30 / S41 / S72 / S86）：
- * 提交通道（作答走 `relay:submitGuess`、作画走 `relay:submitDrawing`，都不碰聊天事件）、
- * 空提交禁用、输入上限与聊天一致、锁定 / 等待态跟随快照（含服务端代交）、换棒复位与默认停靠。
- * 拖动定位本身由共享外壳 `DraggablePanelShell` 的既有用例守护，这里只断言它的默认停靠类。
+ * 接龙猜词作答浮层的组件面（依据 S15 / S41 / S72 / S79 / S86）：
+ * 猜词提交通道、空/超长提交禁用、锁定态跟随快照、换棒复位与无障碍语义。
+ * 作画提交已迁入 CanvasToolbar，在 GameView 集成测试中守护。
  */
 
 let pinia: Pinia
@@ -38,17 +37,16 @@ afterEach(() => {
   fakeTransport.transport.destroy()
 })
 
-/** 挂载作答浮层（真实 Pinia + 假传输），props 由用例按场景覆盖。 */
+/** 挂载猜词作答浮层（真实 Pinia + 假传输）。 */
 function mountPanel(
   overrides: Partial<{
     stepId: string
-    mode: 'guess' | 'draw'
     submitted: boolean
     enabled: boolean
   }> = {},
 ): VueWrapper {
   return mount(RelayAnswerPanel, {
-    props: { stepId: STEP_ID, mode: 'guess', submitted: false, enabled: true, ...overrides },
+    props: { stepId: STEP_ID, submitted: false, enabled: true, ...overrides },
     global: { plugins: [pinia] },
   })
 }
@@ -145,45 +143,6 @@ describe('RelayAnswerPanel 锁定态跟随快照', () => {
   })
 })
 
-describe('RelayAnswerPanel 作画提交', () => {
-  it('作画棒只提供完成提交，走 relay:submitDrawing 并锁定为等待', async () => {
-    useRoomStore().room = createLiveRelayRoomFixture('relay_draw', {
-      ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: -1, drawingRevision: 0 },
-    })
-    const wrapper = mountPanel({ mode: 'draw' })
-
-    expect(wrapper.text()).toContain(strings.ui.game.relayDrawingSubmit)
-    expect(wrapper.find('input').exists()).toBe(false)
-    await wrapper.find('button').trigger('click')
-    await flushPromises()
-
-    expect(fakeTransport.requests.at(-1)).toMatchObject({
-      event: EVENTS.relaySubmitDrawing,
-      payload: { stepId: STEP_ID },
-    })
-    expect(wrapper.text()).toContain(strings.ui.game.relayWaitingOthers)
-    wrapper.unmount()
-  })
-
-  it('作画棒提交失败时不解锁等待态、按钮保持可重试', async () => {
-    useRoomStore().room = createLiveRelayRoomFixture('relay_draw', {
-      ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: -1, drawingRevision: 0 },
-    })
-    fakeTransport.setResponder((_event, payload) => ({
-      ok: false,
-      requestId: String(payload.requestId),
-      error: { code: ERROR_CODES.ALREADY_SUBMITTED, message: '本步已提交' },
-    }))
-    const wrapper = mountPanel({ mode: 'draw' })
-    await wrapper.find('button').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain(strings.ui.game.relayDrawingSubmit)
-    expect((wrapper.find('button').element as HTMLButtonElement).disabled).toBe(false)
-    wrapper.unmount()
-  })
-})
-
 describe('RelayAnswerPanel 外壳与无障碍', () => {
   it('拖动手柄的无障碍名与悬浮提示来自 strings.a11y，输入框同样有无障碍名', () => {
     const wrapper = mountPanel()
@@ -194,15 +153,10 @@ describe('RelayAnswerPanel 外壳与无障碍', () => {
     wrapper.unmount()
   })
 
-  it('默认停靠：猜词贴底居中、作画贴顶居中（避开底部工具条）', () => {
-    const guessPanel = mountPanel()
-    const guessShell = guessPanel.findComponent(DraggablePanelShell)
-    expect(guessShell.classes()).toContain('bottom-[1.2cqh]')
-    guessPanel.unmount()
-
-    const drawPanel = mountPanel({ mode: 'draw' })
-    const drawShell = drawPanel.findComponent(DraggablePanelShell)
-    expect(drawShell.classes()).toContain('top-[1.2cqh]')
-    drawPanel.unmount()
+  it('默认停靠于画布底部居中', () => {
+    const wrapper = mountPanel()
+    const shell = wrapper.findComponent(DraggablePanelShell)
+    expect(shell.classes()).toContain('bottom-[1.2cqh]')
+    wrapper.unmount()
   })
 })

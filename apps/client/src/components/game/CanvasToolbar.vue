@@ -3,7 +3,7 @@
   最左侧提供六点拖动手柄，支持在画布可视区内自由拖拽移动（拖动与定位由共用外壳
   `DraggablePanelShell` 单点维护，接龙作答浮层复用同一实现，见 S86）；
   仅「画笔大小」显示数值，其余全 icon + title / aria；工具与色板复用共享原语，激活态由原语统一。
-  可见性由父组件控制（仅对画家自动显示，猜词者隐藏且不可被隐藏）；
+  可见性由父组件控制：经典模式只对画家显示；接龙作画期持有本棒画布者显示，已提交后仍保留锁定状态。
   定位在自身外层完成，内层做缩放，避免 WAAPI 的 transform 覆盖造成跳动。
   tool / color / width / position 由父组件持有；
   清空需二次确认，故抛 clear 事件交父组件处理（撤销 / 重做直接调 store）。
@@ -12,6 +12,7 @@
 import { computed, type Component } from 'vue'
 import {
   Brush,
+  Check,
   Eraser,
   GripVertical,
   PaintBucket,
@@ -24,19 +25,29 @@ import { strings } from '@draw-guess/strings'
 import { EVENTS, type ToolKind } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
-import { ColorSwatchButton, GroupDivider, SquareIconButton } from '@/components/common'
+import { AppButton, ColorSwatchButton, GroupDivider, SquareIconButton } from '@/components/common'
 import { scaleFadeEnter, scaleFadeLeave } from '@/components/game/scale-fade.ts'
 import BrushSizeField from '@/components/game/BrushSizeField.vue'
 import DraggablePanelShell from '@/components/game/DraggablePanelShell.vue'
 import { focusToolbar, toolbarZIndex } from '@/components/game/floating-panel-z'
 import type { PanelPosition } from '@/components/game'
 
-const props = defineProps<{
-  canDraw: boolean
-  /** 是否展示（顶栏「工具」开关；隐藏时执行退出动画）。 */
-  visible: boolean
-}>()
-const emit = defineEmits<{ clear: [] }>()
+const props = withDefaults(
+  defineProps<{
+    canDraw: boolean
+    /** 是否展示（顶栏「工具」开关；隐藏时执行退出动画）。 */
+    visible: boolean
+    /** 是否展示接龙模式作画完成提交按钮（仅接龙作画阶段为 true，S30 / Image 1）。 */
+    showRelaySubmit?: boolean
+    /** 接龙当前是否已提交（提交后按钮置灰并显示已提交文案）。 */
+    relaySubmitted?: boolean
+  }>(),
+  {
+    showRelaySubmit: false,
+    relaySubmitted: false,
+  },
+)
+const emit = defineEmits<{ clear: []; 'relay-submit': [] }>()
 
 const tool = defineModel<ToolKind>('tool', { required: true })
 const color = defineModel<string>('color', { required: true })
@@ -190,6 +201,25 @@ function runHistory(key: HistoryKey): void {
           >
             <component :is="item.icon" />
           </SquareIconButton>
+
+          <!-- 接龙模式作画完成提交按钮（对应 Image #1：直接置于工具栏末尾，不再使用画布浮层遮挡画板） -->
+          <template v-if="props.showRelaySubmit">
+            <GroupDivider />
+            <AppButton
+              variant="primary"
+              class="h-[3.8cqh] px-[0.8em] text-fs-12 font-bold shrink-0 gap-[0.3em]"
+              :disabled="props.relaySubmitted || !props.canDraw"
+              :audio-feedback="props.relaySubmitted ? null : 'activate'"
+              @click="emit('relay-submit')"
+            >
+              <Check class="h-[2cqh] w-[2cqh]" />
+              <span>{{
+                props.relaySubmitted
+                  ? strings.ui.game.relayWaitingOthers
+                  : strings.ui.game.relayDrawingSubmit
+              }}</span>
+            </AppButton>
+          </template>
         </div>
       </Transition>
     </template>

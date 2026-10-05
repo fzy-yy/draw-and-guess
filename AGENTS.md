@@ -17,7 +17,7 @@
 - **日志文件化**：服务端日志**不输出到控制台**（规避 Windows 控制台 GBK 解码 UTF-8 中文乱码），通过 Pino 异步缓冲写入 `apps/server/log/app-<秒级时间戳>.log`（每次启动新建一个、最多保留 `LOG_MAX_FILES` 条），优雅关闭时 flush/close；可通过 `.env` 的 `LOG_ENABLED` 完全关闭（零内存开销）。
 - **画板**：高 DPI 实时画布，支持自由画笔、橡皮擦（`destination-out`）与封闭区域洪泛填充；画笔/橡皮擦共用连续粗细，可滚轮调整；支持预设或任意 HEX 颜色，工具可自定义单键切换。**渲染模型为「归一化点列 + 直线段描边」增量同步**（不引入轮廓填充型平滑库，曾因此导致白边/闪烁/空心缺陷）。
 - **头像**：仅允许从 40 个内置 SVG 白名单编号中选择，协议只传编号；禁止上传图片、任意 URL、data URI、SVG 正文、粘贴或拖放头像。
-- **应用标识**：名称「你画我猜」、版本 `2.7.0`、协议版本 `protocolVersion: '18'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
+- **应用标识**：名称「你画我猜」、版本 `2.7.0`、协议版本 `protocolVersion: '19'`（见 `packages/shared/src/protocol/constants.ts`）、本地存储键 `draw-and-guess-profile-v1` / `draw-and-guess-settings-v1`。**应用版本的唯一权威源是 `packages/config/src/app.ts` 的 `app.version`**；各 `package.json` 均为 `private: true` 的 workspace 包、不发布到 npm，其 `version` 只是占位，**不要**当作产品版本依据（一致性由单测守护）。
 - **Windows 分发包**：`pnpm package:dist` 把服务端打成 **ESM 单文件 `server.mjs`**（依赖内联、`better-sqlite3` 外置），产出**单一自带 Node 的包**——附 `client/`、`vocabulary/`（含空白词库样板 `vocabulary/templates/example.db`）、`better-sqlite3` Node-API 预编译、`runtime/node.exe`（内置 **Node 24 LTS** 运行时 + 其 LICENSE）与 `start.cmd`（直用内置运行时，不检测系统 Node）。数据（`game.db`/`logs/`/`vocabulary/custom/`/可选 `.env`）写在产物旁 `data/`；内置 Node 默认从国内镜像下载（`NODE_DIST_MIRROR` 可切官网、`NODE_VERSION` 可钉版本），**下载经同源 SHASUMS256 sha256 校验、缓存损坏自动重下一次**。产物模式自动顺延端口并打开默认浏览器（`DRAW_GUESS_OPEN_BROWSER=false` 关闭后者）。仅 Windows x64，详见 `docs/adr/0034-node-single-file-distribution.md` 与 `docs/adr/0050-single-dist-package.md`。
 
 ### 技术栈与运行环境

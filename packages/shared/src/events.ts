@@ -4,7 +4,7 @@
  */
 import { z } from 'zod'
 import { ProfileSchema, RequestSchema } from './protocol/base.ts'
-import { FillCommandSchema, StrokeSchema } from './protocol/drawing.ts'
+import { FillCommandSchema, StrokeBatchSchema } from './protocol/drawing.ts'
 import {
   ChooseWordSchema,
   GuessWordSchema,
@@ -145,9 +145,8 @@ export const CLIENT_REQUEST_SCHEMAS = {
   [EVENTS.gameReturnWaiting]: RequestSchema,
   [EVENTS.guessSubmit]: GuessWordSchema,
   [EVENTS.chatPreset]: SendPresetSchema,
-  /* 接龙请求：绘图族共用一个「带 stepId」的载荷 Schema，两条提交与独立聊天各自登记。 */
   [EVENTS.relayDrawStrokeBatch]: RelayDrawingRoundSchema.extend({
-    stroke: StrokeSchema,
+    stroke: StrokeBatchSchema,
   }),
   [EVENTS.relayDrawFillCommit]: RelayDrawingRoundSchema.extend({ fill: FillCommandSchema }),
   [EVENTS.relayDrawUndo]: RelayDrawingRoundSchema,
@@ -158,7 +157,7 @@ export const CLIENT_REQUEST_SCHEMAS = {
   [EVENTS.relayVote]: RelayVoteSchema,
   [EVENTS.chatSay]: SendChatSchema,
   [EVENTS.gameCanvasPing]: CanvasPingPayloadSchema,
-  [EVENTS.drawStrokeBatch]: DrawingRoundSchema.extend({ stroke: StrokeSchema }),
+  [EVENTS.drawStrokeBatch]: DrawingRoundSchema.extend({ stroke: StrokeBatchSchema }),
   [EVENTS.drawFillCommit]: DrawingRoundSchema.extend({ fill: FillCommandSchema }),
   [EVENTS.drawUndo]: DrawingRoundSchema,
   [EVENTS.drawRedo]: DrawingRoundSchema,

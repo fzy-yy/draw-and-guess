@@ -20,13 +20,27 @@ function isEditableTarget(target: EventTarget | null): boolean {
   )
 }
 
-/** 画家画板快捷键状态：当前工具选择与快捷键监听生命周期。 */
+/** 经典画家与接龙当前棒作画者共用的画板快捷键状态。 */
 export function useShortcuts(store: GameStore) {
   const tool = ref<ToolKind>('pen')
 
-  /** 画家可用自定义单键切换工具；撤销与重做继续使用通用组合键。 */
+  /** 接龙仅在拥有本棒画布且尚未提交时响应快捷键，保持与画板写入权限一致。 */
+  function canUseDrawingShortcuts(): boolean {
+    const room = store.room
+    if (!room) return false
+    if (room.gameMode === 'relay') {
+      return (
+        room.relay?.phase === 'relay_draw' &&
+        room.relay.ownCanvas !== undefined &&
+        !room.relay.submitted
+      )
+    }
+    return store.isDrawer && room.phase === 'drawing'
+  }
+
+  /** 画板快捷键仅在当前玩家实际有作画权限时处理。 */
   function keyHandler(event: KeyboardEvent): void {
-    if (!store.isDrawer || store.room?.phase !== 'drawing' || isEditableTarget(event.target)) return
+    if (!canUseDrawingShortcuts() || isEditableTarget(event.target)) return
     const key = event.key.toLocaleLowerCase()
     if ((event.ctrlKey || event.metaKey) && key === 'z') {
       event.preventDefault()

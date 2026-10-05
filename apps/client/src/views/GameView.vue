@@ -162,25 +162,16 @@ const canDraw = computed(() =>
     : store.isDrawer && store.room?.phase === 'drawing',
 )
 
-/**
- * 接龙作答浮层的动作形态（工单 10 / S72）：猜词棒＝提交答案文本；作画棒＝完成提交（S30）。
- * 只有「有自己的画布」才可提交作画——不在本棒链阵容内的残留连接没有画布，不该看到完成按钮；
- * 其余阶段（选词 / 复盘 / 投票 / 终局）一律不挂载作答浮层。
- */
-const relayAnswerMode = computed<'guess' | 'draw' | 'none'>(() => {
-  if (!isRelay.value) return 'none'
-  const view = relay.value
-  if (view?.phase === 'relay_guess') return 'guess'
-  if (view?.phase === 'relay_draw' && view.ownCanvas) return 'draw'
-  return 'none'
-})
+/** 接龙作答浮层仅用于猜词；作画提交操作集成在底部工具条末尾（Image #1）。 */
 
 /**
- * 底部绘图工具条可见性：仅可绘制且未主动隐藏时显示（接龙作画棒同样适用）；
- * 经典侧保持改造前的口径（画家在选词等阶段仍看到工具条，只是整组置灰）。
+ * 接龙作画阶段的工具条在提交后仍显示锁定状态；经典模式维持仅画家可见的既有行为。
  */
 const showToolbar = computed(
-  () => (isRelay.value ? canDraw.value : store.isDrawer) && isToolbarVisible.value,
+  () =>
+    (isRelay.value
+      ? relay.value?.phase === 'relay_draw' && relay.value.ownCanvas !== undefined
+      : store.isDrawer) && isToolbarVisible.value,
 )
 
 /**
@@ -293,6 +284,11 @@ function submitFill(
 async function clearDrawing(): Promise<void> {
   await store.drawAction(EVENTS.drawClear)
   showClearConfirm.value = false
+}
+
+/** 提交接龙本棒作画：标记完成并将已有笔画交至下一棒（S30 / Image #1）。 */
+async function submitRelayDrawing(): Promise<void> {
+  await store.relaySubmitDrawing()
 }
 
 /** 先收起确认框再提交，避免进入最终结算后弹窗仍遮住页面。 */
@@ -423,15 +419,17 @@ function handleFullscreenToggle(): void {
             v-model:position="toolbarPosition"
             :visible="showToolbar"
             :can-draw="canDraw"
+            :show-relay-submit="
+              isRelay && relay?.phase === 'relay_draw' && Boolean(relay?.ownCanvas)
+            "
+            :relay-submitted="Boolean(relay?.submitted)"
             @clear="showClearConfirm = true"
+            @relay-submit="submitRelayDrawing"
           />
-
-          <!-- 接龙作答浮层（S41 / S72）：猜词棒写答案、作画棒完成提交；外壳共用 DraggablePanelShell（S86）。
-               位置与工具条同层（画布容器内、工具条之后），经典房 relayAnswerMode 恒为 none，不渲染。 -->
+          <!-- 接龙猜词浮层：作画提交位于底部工具条末尾，只有猜词棒需要浮层输入答案。 -->
           <RelayAnswerPanel
-            v-if="isRelay && relay && relayAnswerMode !== 'none'"
+            v-if="isRelay && relay?.phase === 'relay_guess'"
             :step-id="relay.stepId"
-            :mode="relayAnswerMode"
             :submitted="relay.submitted"
             :enabled="canGuess"
           />

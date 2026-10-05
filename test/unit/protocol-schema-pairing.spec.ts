@@ -17,10 +17,14 @@ import {
   RelayStepSchema,
   RoomPhaseSchema,
   RoomSettingsSchema,
+  RoomSnapshotSchema,
   SERVER_PUSH_SCHEMAS,
+  StrokeBatchSchema,
+  StrokeSchema,
   type RoomMember,
   type RoomSnapshot,
 } from '@draw-guess/shared'
+import { createRelayRoomFixture } from '../client/room-fixture'
 
 /**
  * 协议 Schema 正/负向配对（与 test/type/schema-first.ts 同源）：
@@ -321,7 +325,7 @@ function relayResultView(): Record<string, unknown> {
 
 describe('接龙协议契约（S10 / S22 / S23 / S28 / S39 / S51 / S57 / S63 / S79）', () => {
   it('协议版本升到不兼容的新版本，接龙常量与三时长档位白名单已登记', () => {
-    expect(PROTOCOL_VERSION).toBe('18')
+    expect(PROTOCOL_VERSION).toBe('19')
     expect(RELAY_MIN_PLAYERS).toBe(4)
     expect([...RELAY_CHOOSE_SECONDS_OPTIONS]).toEqual([10, 15, 20, 30])
     expect([...RELAY_DRAW_SECONDS_OPTIONS]).toEqual([60, 90, 120, 150])
@@ -614,5 +618,78 @@ describe('接龙视图 Schema（按观看者的最小集，S57 / S63）', () => 
     expect(RelayGameViewSchema.safeParse({ ...view, submittedPlayerIds: ['agree'] }).success).toBe(
       false,
     )
+  })
+})
+
+describe('笔画批次载荷与累积历史快照点数边界', () => {
+  const points = (count: number) => Array.from({ length: count }, () => ({ x: 0.5, y: 0.5 }))
+  const stroke = (count: number) => ({
+    id: '00000000-0000-4000-8000-000000000010',
+    kind: 'stroke' as const,
+    tool: 'pen' as const,
+    color: '#000000',
+    width: 4,
+    sequence: 0,
+    points: points(count),
+  })
+
+  it('单批次仍限制 120 点，但允许完整快照和会话恢复包含 150 点累积笔画', () => {
+    expect(StrokeBatchSchema.safeParse(stroke(120)).success).toBe(true)
+    expect(StrokeBatchSchema.safeParse(stroke(121)).success).toBe(false)
+
+    const snapshot = validSnapshot()
+    if (!snapshot.game) throw new Error('经典快照样例缺少 game 视图')
+    snapshot.game.strokes = [stroke(150)]
+    snapshot.game.lastSequence = 0
+    snapshot.game.drawingRevision = 1
+
+    expect(RoomSnapshotSchema.safeParse(snapshot).success).toBe(true)
+    expect(
+      CLIENT_RESPONSE_SCHEMAS[EVENTS.sessionRegister].safeParse({
+        ok: true,
+        data: {
+          player: {
+            id: HOST_ID,
+            nickname: '房主',
+            avatarId: '01',
+            status: 'playing',
+            roomId: ROOM_ID,
+          },
+          recoveryToken: 'a'.repeat(43),
+          restored: true,
+          room: snapshot,
+        },
+        requestId: '00000000-0000-4000-8000-000000000011',
+      }).success,
+    ).toBe(true)
+    const relaySnapshot = createRelayRoomFixture('relay_draw', {
+      ownCanvas: {
+        strokes: [stroke(150)],
+        undoneStrokeIds: [],
+        lastSequence: 0,
+        drawingRevision: 1,
+      },
+    })
+    expect(RoomSnapshotSchema.safeParse(relaySnapshot).success).toBe(true)
+    expect(
+      CLIENT_RESPONSE_SCHEMAS[EVENTS.sessionRegister].safeParse({
+        ok: true,
+        data: {
+          player: {
+            id: HOST_ID,
+            nickname: '房主',
+            avatarId: '01',
+            status: 'playing',
+            roomId: ROOM_ID,
+          },
+          recoveryToken: 'a'.repeat(43),
+          restored: true,
+          room: relaySnapshot,
+        },
+        requestId: '00000000-0000-4000-8000-000000000012',
+      }).success,
+    ).toBe(true)
+    expect(StrokeSchema.safeParse(stroke(1_200)).success).toBe(true)
+    expect(StrokeSchema.safeParse(stroke(1_201)).success).toBe(false)
   })
 })

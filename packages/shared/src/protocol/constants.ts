@@ -2,7 +2,7 @@
  * 线上协议的公开约束。前后端配置与 Zod Schema 都必须引用这里，避免边界两侧各维护一份。
  * 这里只放会影响协议兼容性或客户端可提交载荷的值；限频、持久化与清理策略属于服务端私有配置。
  */
-export const PROTOCOL_VERSION = '18' as const
+export const PROTOCOL_VERSION = '19' as const
 
 /**
  * room:closed 推送的稳定关闭码：客户端按码分支（例如被踢弹窗），展示文案只用于提示。
@@ -133,7 +133,10 @@ export const PRIVATE_ROOM_CODE = {
 export const DRAWING_PROTOCOL_LIMITS = {
   colorPattern: '^#[0-9A-Fa-f]{6}$',
   width: { min: 1, max: 30, step: 1 },
+  /** 单个绘图请求最多上传的点数；长笔画通过同 ID 多次续接。 */
   maxPointsPerBatch: 120,
+  /** 完整历史中的单笔最大累计点数；快照与回放会包含续接后的整笔。 */
+  maxPointsPerStroke: 1_200,
 } as const
 
 export const MAX_VOCABULARY_SELECTION_IDS = 10_000

@@ -28,6 +28,8 @@ function mountToolbar(
     width: number
     canDraw: boolean
     visible: boolean
+    showRelaySubmit: boolean
+    relaySubmitted: boolean
   }> = {},
 ): VueWrapper {
   return mount(CanvasToolbar, {
@@ -104,6 +106,24 @@ describe('CanvasToolbar 交互', () => {
 
     await wrapper.get(`[aria-label="${strings.a11y.game.clearAria}"]`).trigger('click')
     expect(wrapper.emitted('clear')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('接龙作画时在工具条末尾提交，已提交后按钮锁定并显示等待状态', async () => {
+    const wrapper = mountToolbar({ showRelaySubmit: true })
+    const submit = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes(strings.ui.game.relayDrawingSubmit))
+    if (!submit) throw new Error('接龙作画提交按钮未渲染')
+
+    await submit.trigger('click')
+    expect(wrapper.emitted('relay-submit')).toHaveLength(1)
+
+    await wrapper.setProps({ relaySubmitted: true })
+    const waiting = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes(strings.ui.game.relayWaitingOthers))
+    expect(waiting?.element.disabled).toBe(true)
     wrapper.unmount()
   })
 

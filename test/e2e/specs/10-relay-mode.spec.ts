@@ -79,13 +79,12 @@ test.describe('10 - 接龙模式全流程', () => {
         await player.game.chooseWord()
       }
 
-      // ---- 步 1 · 作画：各画自己选的题，画完提交（S30）；全员提交即秒切下一棒（S16 / S40）----
+      // ---- 步 1 · 作画：各画自己选的题，工具条末尾完成提交（S30）；全员提交即秒切下一棒（S16 / S40）----
       for (const player of players) {
         await expect(
           player.game.topBar.getByText(strings.ui.game.relayPhaseDraw, { exact: true }),
         ).toBeVisible({ timeout: 20_000 })
         await player.game.expectRelayStep(1)
-        await expect(player.page.getByText(strings.ui.game.relayDrawingHint)).toBeVisible()
         await player.game.drawStroke(FIRST_STROKE)
         await player.game.relaySubmitDrawing()
       }
@@ -100,7 +99,7 @@ test.describe('10 - 接龙模式全流程', () => {
         await player.game.relaySubmitGuess(`第2棒答案-${index + 1}`)
       }
 
-      // ---- 步 3 · 再作画：按上家猜出的文本画第二幅（S9 / S74）----
+      // ---- 步 3 · 再作画：按上家猜出的文本画第二幅，再由工具条提交（S9 / S74）----
       for (const player of players) {
         await expect(
           player.game.topBar.getByText(strings.ui.game.relayPhaseDraw, { exact: true }),

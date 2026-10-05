@@ -210,25 +210,6 @@ describe('接龙作答与聊天互不串（S20 / S79）', () => {
 
     wrapper.unmount()
   })
-
-  it('作画棒的完成提交走 relay:submitDrawing（只标记完成，不带文本）', async () => {
-    useRoomStore().room = createLiveRelayRoomFixture('relay_draw', { ownCanvas: EMPTY_CANVAS })
-    const wrapper = mountGameView()
-    const panel = wrapper.findComponent(RelayAnswerPanel)
-
-    expect(panel.text()).toContain(strings.ui.game.relayDrawingSubmit)
-    await panel.find('button').trigger('click')
-    await flushPromises()
-
-    expect(fakeTransport.requests.at(-1)).toMatchObject({
-      event: EVENTS.relaySubmitDrawing,
-      payload: { stepId: STEP_ID },
-    })
-    expect(fakeTransport.requests.some((request) => request.event === EVENTS.chatSay)).toBe(false)
-    expect(panel.text()).toContain(strings.ui.game.relayWaitingOthers)
-
-    wrapper.unmount()
-  })
 })
 
 describe('左栏提交状态跟随服务端快照（S41 / S64）', () => {

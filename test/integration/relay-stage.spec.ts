@@ -150,6 +150,30 @@ describe('接龙舞台三栏骨架', () => {
 
     wrapper.unmount()
   })
+  it('接龙作画提交按钮位于工具条末尾且点击发送本棒提交请求，不显示画布浮层', async () => {
+    useRoomStore().room = createRelayRoomFixture('relay_draw', {
+      ownCanvas: {
+        strokes: [],
+        undoneStrokeIds: [],
+        lastSequence: -1,
+        drawingRevision: 0,
+      },
+    })
+
+    const wrapper = mountGameView()
+    const submit = wrapper
+      .findAll('[role="toolbar"] button')
+      .find((button) => button.text().includes(strings.ui.game.relayDrawingSubmit))
+    expect(submit).toBeDefined()
+    expect(wrapper.text()).not.toContain(strings.ui.game.relayDrawingHint)
+    expect(wrapper.find('[aria-label="接龙作答输入框"]').exists()).toBe(false)
+
+    await submit!.trigger('click')
+    await flushPromises()
+    expect(fakeTransport.requests.at(-1)).toMatchObject({ event: EVENTS.relaySubmitDrawing })
+
+    wrapper.unmount()
+  })
 
   it('猜词棒只读渲染上家画作，上一家 chip 带画笔角标且不显示工具条', () => {
     const previous = strokeFixture('00000000-0000-4000-8000-000000000008', 0)
