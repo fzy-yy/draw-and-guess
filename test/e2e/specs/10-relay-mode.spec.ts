@@ -95,7 +95,9 @@ test.describe('10 - 接龙模式全流程', () => {
           player.game.topBar.getByText(strings.ui.game.relayPhaseGuess, { exact: true }),
         ).toBeVisible({ timeout: 20_000 })
         await player.game.expectRelayStep(2)
-        await expect(player.page.getByText(strings.ui.game.relayAnswerHint)).toBeVisible()
+        await expect(
+          player.page.getByPlaceholder(strings.ui.game.relayAnswerPlaceholder),
+        ).toBeVisible()
         await player.game.relaySubmitGuess(`第2棒答案-${index + 1}`)
       }
 

@@ -14,7 +14,7 @@
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { ArrowRight, Eye } from 'lucide-vue-next'
+import { ArrowRight, Eye, HelpCircle } from 'lucide-vue-next'
 import {
   createAnswerMask,
   type RelayPlayerRef,
@@ -47,6 +47,15 @@ const props = defineProps<{
 
 const isQuestion = computed(() => props.promptKind === 'question')
 
+const UNANSWERED = strings.ui.game.relayUnanswered
+/** 动手期本棒题目是否为兜底的「上家未作答」（Image 4 灰字 + 问号图标弱化展示）。 */
+const isPromptUnanswered = computed(() => !isQuestion.value && props.prompt === UNANSWERED)
+/** 复盘左侧题面是否为「上家未作答」。 */
+const isLeftUnanswered = computed(() => props.showcase?.prompt.text === UNANSWERED)
+/** 复盘过渡旧题面残留层是否为「上家未作答」。 */
+const isGhostUnanswered = computed(() => ghostText.value === UNANSWERED)
+/** 复盘右侧揭晓答案是否为「上家未作答」。 */
+const isRightUnanswered = computed(() => answerText.value === UNANSWERED)
 // ── 复盘形态（S75 / S76 / S81）────────────────────────────────────────────────
 /**
  * 复盘胶囊过渡时长：参数来自公开配置包，两端（服务端节奏 / 客户端动画）同源。
@@ -144,9 +153,17 @@ onBeforeUnmount(() => {
         :class="leftCapsuleClass"
         :style="transitionStyle"
       >
-        <b class="truncate text-yellow text-fs-20 tracking-[0.12em]">{{
-          props.showcase.prompt.text ?? ''
-        }}</b>
+        <b
+          class="flex items-center gap-[0.3em] truncate text-fs-20 tracking-[0.12em]"
+          :class="isLeftUnanswered ? 'text-muted' : 'text-yellow'"
+        >
+          <HelpCircle
+            v-if="isLeftUnanswered"
+            class="h-[2.4cqh] w-[2.4cqh] shrink-0"
+            aria-hidden="true"
+          />
+          <span class="truncate">{{ props.showcase.prompt.text ?? '' }}</span>
+        </b>
       </HudPill>
       <!-- 旧答案 A 的残留层：与左胶囊同尺寸叠放，过渡期间淡出，绝不影响行内布局 -->
       <HudPill
@@ -156,7 +173,17 @@ onBeforeUnmount(() => {
         :style="transitionStyle"
         aria-hidden="true"
       >
-        <b class="truncate text-yellow text-fs-20 tracking-[0.12em]">{{ ghostText }}</b>
+        <b
+          class="flex items-center gap-[0.3em] truncate text-fs-20 tracking-[0.12em]"
+          :class="isGhostUnanswered ? 'text-muted' : 'text-yellow'"
+        >
+          <HelpCircle
+            v-if="isGhostUnanswered"
+            class="h-[2.4cqh] w-[2.4cqh] shrink-0"
+            aria-hidden="true"
+          />
+          <span class="truncate">{{ ghostText }}</span>
+        </b>
       </HudPill>
     </div>
     <ArrowRight class="h-[3cqh] w-[3cqh] shrink-0 text-sky" aria-hidden="true" />
@@ -166,9 +193,18 @@ onBeforeUnmount(() => {
       :class="rightCapsuleClass"
       :style="transitionStyle"
     >
-      <b v-if="revealed" class="truncate text-white text-fs-20 tracking-[0.12em]">{{
-        answerText
-      }}</b>
+      <b
+        v-if="revealed"
+        class="flex items-center gap-[0.3em] truncate text-fs-20 tracking-[0.12em]"
+        :class="isRightUnanswered ? 'text-muted' : 'text-white'"
+      >
+        <HelpCircle
+          v-if="isRightUnanswered"
+          class="h-[2.4cqh] w-[2.4cqh] shrink-0"
+          aria-hidden="true"
+        />
+        <span class="truncate">{{ answerText }}</span>
+      </b>
       <!-- 未揭晓：可见的下划线只是占位图形，读屏改听「答案尚未揭晓」（a11y 与 ui 分列） -->
       <template v-else>
         <span class="sr-only">{{ strings.a11y.game.relayHiddenAnswerAria }}</span>
@@ -186,13 +222,14 @@ onBeforeUnmount(() => {
     <RelayPlayerChip v-if="props.artist" :player="props.artist" :brush-badge="props.artistPaints" />
     <HudPill
       class="min-w-[16cqw] max-w-[34cqw] justify-center px-[1.2em]"
-      :class="isQuestion ? 'bg-white/10' : ''"
+      :class="isQuestion || isPromptUnanswered ? 'bg-white/10' : ''"
     >
       <b
         class="flex items-center gap-[0.4em] text-fs-24 tracking-[0.16em]"
-        :class="isQuestion ? 'text-sky' : 'text-yellow'"
+        :class="isQuestion ? 'text-sky' : isPromptUnanswered ? 'text-muted' : 'text-yellow'"
       >
         <Eye v-if="isQuestion" class="h-[3cqh] w-[3cqh]" aria-hidden="true" />
+        <HelpCircle v-else-if="isPromptUnanswered" class="h-[3cqh] w-[3cqh]" aria-hidden="true" />
         {{ props.prompt }}
       </b>
     </HudPill>

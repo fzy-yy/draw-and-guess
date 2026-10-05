@@ -195,6 +195,39 @@ describe('RelayTopBarCenter 复盘形态', () => {
     expect(wrapper.text()).toContain('气球')
     wrapper.unmount()
   })
+
+  it('上家未作答在动手期与复盘期以灰色文字配问号图标弱化展示（Image 4）', () => {
+    // 动手期：prompt 为上家未作答
+    const playWrapper = mountWithPinia(RelayTopBarCenter, {
+      prompt: strings.ui.game.relayUnanswered,
+      promptKind: 'text',
+      artistPaints: false,
+    })
+    expect(playWrapper.text()).toContain(strings.ui.game.relayUnanswered)
+    const promptEl = playWrapper.find('b')
+    expect(promptEl.classes()).toContain('text-muted')
+    expect(promptEl.classes()).not.toContain('text-yellow')
+    expect(playWrapper.find('svg').exists()).toBe(true)
+    playWrapper.unmount()
+
+    // 复盘期：题面与揭晓答案均为上家未作答
+    const showcaseWrapper = mountWithPinia(RelayTopBarCenter, {
+      ...PLAY_PROPS,
+      showcase: halfOneShowcase({
+        prompt: {
+          player: { id: HOST_ID, nickname: '发起人', avatarId: '01' },
+          text: strings.ui.game.relayUnanswered,
+        },
+        answer: {
+          player: { id: GUEST_ID, nickname: '猜词者', avatarId: '02' },
+          text: strings.ui.game.relayUnanswered,
+        },
+      }),
+    })
+    expect(showcaseWrapper.text()).toContain(strings.ui.game.relayUnanswered)
+    expect(showcaseWrapper.findAll('svg').length).toBeGreaterThanOrEqual(2)
+    showcaseWrapper.unmount()
+  })
 })
 
 describe('RelayTopBarLeading 链条进度', () => {
@@ -342,6 +375,23 @@ describe('RelayVoteOverlay 投票卡', () => {
   it('快照显示本人已投票时，入口一开始就置灰', () => {
     const wrapper = mountVoteOverlay({ submitted: true })
     for (const button of wrapper.findAll('button')) expect(button.element.disabled).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('投票卡中若最终答案为上家未作答，同样以灰色文字配问号图标展示（Image 4）', () => {
+    const wrapper = mountVoteOverlay({
+      showcase: halfOneShowcase({
+        prompt: { player: { id: HOST_ID, nickname: '发起人', avatarId: '01' }, text: '气球' },
+        answer: {
+          player: { id: GUEST_ID, nickname: '猜词者', avatarId: '02' },
+          text: strings.ui.game.relayUnanswered,
+        },
+      }),
+    })
+
+    expect(wrapper.text()).toContain(strings.ui.game.relayUnanswered)
+    // 顶部问号图标 + 答案区域问号图标 svg
+    expect(wrapper.findAll('svg').length).toBeGreaterThanOrEqual(2)
     wrapper.unmount()
   })
 })

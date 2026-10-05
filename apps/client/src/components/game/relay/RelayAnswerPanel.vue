@@ -12,7 +12,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useTimestamp } from '@vueuse/core'
-import { GripVertical, Send } from 'lucide-vue-next'
+import { GripVertical } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { AppButton, AppInput } from '@/components/common'
 import DraggablePanelShell from '@/components/game/DraggablePanelShell.vue'
@@ -51,11 +51,6 @@ const canSubmitGuess = computed(
     canSubmit.value &&
     draft.value.trim().length > 0 &&
     Array.from(draft.value.trim()).length <= store.config.player.chatMaxLength,
-)
-const hint = computed(() =>
-  stepEnded.value && !isSubmitted.value
-    ? strings.ui.game.relayStepEnded
-    : strings.ui.game.relayAnswerHint,
 )
 
 watch(
@@ -102,21 +97,22 @@ async function submitGuess(): Promise<void> {
     :drag-aria="strings.a11y.game.dragAnswerPanelAria"
   >
     <template #default="{ drag }">
+      <!-- 单行悬浮栏：边框与圆角完全对齐底部工具条（border-[0.25cqh] border-navy bg-paper/95，Image 2 示意图） -->
       <div
-        class="flex w-[30cqw] flex-col gap-[0.5cqh] rounded-[0.6em] border-[0.35cqh] border-line bg-white/95 px-[0.7em] py-[0.6cqh] shadow-float"
+        class="flex w-[28cqw] max-w-[90cqw] items-center gap-[0.55em] rounded-[0.5em] border-[0.25cqh] border-navy bg-paper/95 px-[0.7em] py-[0.45cqh] shadow-float"
       >
-        <!-- 顶行：拖动手柄（绑定与定位来自共用外壳）+ 当前动作提示 -->
-        <div class="flex min-w-0 items-center gap-[0.4em]">
-          <div v-bind="drag" class="rounded-[0.35em] px-[0.15em] py-[0.2cqh] hover:bg-line/40">
-            <GripVertical class="h-[2.4cqh] w-[2.4cqh]" />
-          </div>
-          <span class="truncate text-fs-12 font-bold text-muted">{{ hint }}</span>
+        <!-- 左侧拖动手柄：按住可拖动作答框在画布内移动（绑定与定位来自共用外壳） -->
+        <div
+          v-bind="drag"
+          class="grid cursor-grab place-items-center px-[0.1em] py-[0.2em] text-muted hover:text-navy active:cursor-grabbing"
+        >
+          <GripVertical class="h-[2.4cqh] w-[2.4cqh]" />
         </div>
 
-        <!-- 猜词棒：输入 + 确定提交；提交后（含服务端代交）整块换成等待态 -->
+        <!-- 猜词棒作答表单：输入框 + 提交按钮（单行紧凑布局） -->
         <form
           v-if="!isSubmitted"
-          class="flex items-center gap-[0.5em]"
+          class="flex min-w-0 flex-1 items-center gap-[0.5em]"
           @submit.prevent="submitGuess"
         >
           <AppInput
@@ -128,19 +124,23 @@ async function submitGuess(): Promise<void> {
             :placeholder="strings.ui.game.relayAnswerPlaceholder"
             :aria-label="strings.a11y.game.answerInputAria"
           />
+          <span v-if="stepEnded" class="shrink-0 text-fs-12 font-bold text-warning-fg">
+            {{ strings.ui.game.relayStepEnded }}
+          </span>
           <AppButton
             type="submit"
-            class="shrink-0 gap-[0.35em] px-[1em] text-fs-14"
+            variant="primary"
+            class="shrink-0 min-h-0 h-[4.4cqh] rounded-[0.45em] px-[1em] text-fs-14 font-bold"
             :disabled="!canSubmitGuess"
             :audio-feedback="null"
           >
-            <Send class="h-[2.4cqh] w-[2.4cqh]" />{{ strings.ui.game.relayAnswerSubmit }}
+            {{ strings.ui.game.relayAnswerSubmit }}
           </AppButton>
         </form>
         <!-- 已提交（本地即时锁定或服务端快照，含超时 / 掉线代交）：锁定等待其他玩家 -->
         <div
           v-else
-          class="flex min-h-[5.2cqh] items-center justify-center gap-[0.4em] rounded-[0.45em] bg-green/10 text-fs-14 font-bold text-success-fg"
+          class="flex flex-1 min-h-[4.4cqh] items-center justify-center gap-[0.4em] rounded-[0.45em] bg-green/10 text-fs-14 font-bold text-success-fg"
         >
           {{ strings.ui.game.relayWaitingOthers }}
         </div>

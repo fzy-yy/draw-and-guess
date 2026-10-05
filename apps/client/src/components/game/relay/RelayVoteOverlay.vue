@@ -66,13 +66,33 @@ async function vote(choice: RelayVoteChoice): Promise<void> {
       <span
         class="inline-flex items-center justify-center rounded-[0.7em] bg-yellow/25 px-[1.2em] py-[0.5cqh] shadow-xs"
       >
-        <b class="text-navy text-fs-24 tracking-[0.16em]">{{ promptText }}</b>
+        <b
+          class="flex items-center gap-[0.3em] text-fs-24 tracking-[0.16em]"
+          :class="promptText === strings.ui.game.relayUnanswered ? 'text-muted' : 'text-navy'"
+        >
+          <HelpCircle
+            v-if="promptText === strings.ui.game.relayUnanswered"
+            class="h-[2.8cqh] w-[2.8cqh]"
+            aria-hidden="true"
+          />
+          {{ promptText }}
+        </b>
       </span>
       <ArrowRight class="h-[3cqh] w-[3cqh] shrink-0 text-muted" aria-hidden="true" />
       <span
         class="inline-flex items-center justify-center rounded-[0.7em] bg-yellow/25 px-[1.2em] py-[0.5cqh] shadow-xs"
       >
-        <b class="text-navy text-fs-24 tracking-[0.16em]">{{ answerText }}</b>
+        <b
+          class="flex items-center gap-[0.3em] text-fs-24 tracking-[0.16em]"
+          :class="answerText === strings.ui.game.relayUnanswered ? 'text-muted' : 'text-navy'"
+        >
+          <HelpCircle
+            v-if="answerText === strings.ui.game.relayUnanswered"
+            class="h-[2.8cqh] w-[2.8cqh]"
+            aria-hidden="true"
+          />
+          {{ answerText }}
+        </b>
       </span>
     </div>
 

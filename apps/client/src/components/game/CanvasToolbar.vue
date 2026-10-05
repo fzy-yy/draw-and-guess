@@ -124,7 +124,7 @@ function runHistory(key: HistoryKey): void {
 <template>
   <DraggablePanelShell
     v-model:position="position"
-    :default-class="'bottom-[1.2cqh] left-1/2 -translate-x-1/2'"
+    :default-class="'bottom-[1.2cqh] left-1/2 -translate-x-1/2 w-max max-w-full'"
     :drag-title="strings.a11y.game.dragToolbarTitle"
     :drag-aria="strings.a11y.game.dragToolbarAria"
     :style="{ zIndex: String(toolbarZIndex) }"
@@ -136,7 +136,7 @@ function runHistory(key: HistoryKey): void {
           v-if="visible"
           role="toolbar"
           :aria-label="strings.a11y.game.toolbarAria"
-          class="flex items-center gap-[0.55em] rounded-[0.5em] border-[0.25cqh] border-navy bg-paper/95 px-[0.7em] py-[0.45cqh]"
+          class="flex w-max max-w-full items-center gap-[0.55em] rounded-[0.5em] border-[0.25cqh] border-navy bg-paper/95 px-[0.7em] py-[0.45cqh]"
         >
           <!-- 拖动手柄：按住可拖动工具条在画布内移动（绑定与定位来自共用外壳） -->
           <div v-bind="drag" class="px-[0.1em] py-[0.2em] hover:text-navy">
@@ -202,12 +202,12 @@ function runHistory(key: HistoryKey): void {
             <component :is="item.icon" />
           </SquareIconButton>
 
-          <!-- 接龙模式作画完成提交按钮（对应 Image #1：直接置于工具栏末尾，不再使用画布浮层遮挡画板） -->
+          <!-- 接龙模式作画完成提交按钮（S30 / Image 1 修正：置于工具栏末尾，同高同圆角完全包进工具栏内，不发生溢出） -->
           <template v-if="props.showRelaySubmit">
             <GroupDivider />
             <AppButton
               variant="primary"
-              class="h-[3.8cqh] px-[0.8em] text-fs-12 font-bold shrink-0 gap-[0.3em]"
+              class="min-h-0 h-[4.4cqh] rounded-[0.45em] px-[0.8em] text-fs-12 font-bold shrink-0 gap-[0.3em]"
               :disabled="props.relaySubmitted || !props.canDraw"
               :audio-feedback="props.relaySubmitted ? null : 'activate'"
               @click="emit('relay-submit')"

@@ -98,7 +98,7 @@ export const game = {
    */
   relayChooseTitle: '接龙 · 第 1 棒',
   /** 选词后等待他人：与本步的候选词卡片同卡呈现（S16 全员提交即秒切）。 */
-  relayWaitingOthers: '已提交，等待其他玩家',
+  relayWaitingOthers: '已提交',
   relayChatTitle: '接龙聊天',
   relaySubmitted: '已提交',
   relayNotSubmitted: '未提交',
@@ -109,10 +109,12 @@ export const game = {
    * 提交后的等待态复用上面的 `relayWaitingOthers`（与选词卡同一句「已提交，等待其他玩家」）。
    */
   relayAnswerHint: '看完上图，写下你猜的词',
-  relayAnswerPlaceholder: '输入答案（提交后锁定）',
-  relayAnswerSubmit: '确定提交',
+  relayAnswerPlaceholder: '输入答案',
+  relayAnswerSubmit: '提交',
   relayDrawingHint: '画完了就提交，交给下一位',
   relayDrawingSubmit: '完成提交',
+  /** 接龙猜词超时或离线兜底文本（Image 4）：上家未作答时展示为灰色弱化并带前置图标。 */
+  relayUnanswered: '上家未作答',
   /**
    * 本棒已在本地（校正后）时钟上过期：服务端在截止时刻即代交并换手，此刻提交必然被拒，
    * 因此直接锁住提交入口并显示这句状态（见 .scratch/relay-mode/bug-report.md B2）。
