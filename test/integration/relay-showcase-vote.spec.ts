@@ -288,4 +288,24 @@ describe('投票期舞台接线', () => {
 
     wrapper.unmount()
   })
+
+  it('展示期与终局不表达左栏角色状态，终局顶栏中央也不出现「等待选词…」占位（S41 / S33）', async () => {
+    const roomStore = useRoomStore()
+    roomStore.room = createRelayRoomFixture('relay_showcase', { showcase: halfOneShowcase() })
+    const wrapper = mountGameView()
+    await flushPromises()
+    // 展示期不表达状态：既不显示接龙提交态，也**不**回落到经典角色文案（「猜词中」）
+    expect(wrapper.text()).not.toContain(strings.ui.game.relayNotSubmitted)
+    expect(wrapper.text()).not.toContain(strings.ui.status.roleGuessing)
+
+    roomStore.room = createRelayRoomFixture('game_result')
+    await flushPromises()
+    // 终局同理，且顶栏中央不再回落到「等待选词…」（排名由结算卡表达）
+    expect(wrapper.text()).not.toContain(strings.ui.status.roleGuessing)
+    expect(
+      wrapper.find(`header[aria-label="${strings.a11y.game.topBarAria}"]`).text(),
+    ).not.toContain(strings.ui.game.awaitingWord)
+
+    wrapper.unmount()
+  })
 })

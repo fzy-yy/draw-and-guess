@@ -11,7 +11,7 @@ import {
   Wifi,
 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
-import { PLAYER_PROTOCOL_LIMITS } from '@draw-guess/shared'
+import { PLAYER_PROTOCOL_LIMITS, RELAY_STEP_COUNT } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
 import {
   AppButton,
@@ -154,11 +154,13 @@ function openSettings(): void {
               }}</span>
             </span>
             <span class="text-muted text-fs-12">{{
-              strings.ui.lobby.roomMeta(
-                publicRoom.hostName,
-                publicRoom.roundsPerPlayer,
-                publicRoom.drawSeconds,
-              )
+              publicRoom.gameMode === 'relay'
+                ? strings.ui.lobby.roomMetaRelay(publicRoom.hostName, RELAY_STEP_COUNT)
+                : strings.ui.lobby.roomMeta(
+                    publicRoom.hostName,
+                    publicRoom.roundsPerPlayer,
+                    publicRoom.drawSeconds,
+                  )
             }}</span>
           </div>
           <span class="text-muted text-fs-12">{{

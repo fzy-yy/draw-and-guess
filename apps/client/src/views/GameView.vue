@@ -328,7 +328,9 @@ function handleFullscreenToggle(): void {
         />
       </template>
       <template v-if="isRelay && relay" #center>
+        <!-- 阶段判断放在组件内部：插槽必须始终有内容，否则会回落到经典中央占位（终局尤其明显） -->
         <RelayTopBarCenter
+          :phase="relay.phase"
           :prompt="relayPrompt"
           :prompt-kind="relayPromptKind"
           :artist="relayArtist"
@@ -349,7 +351,9 @@ function handleFullscreenToggle(): void {
           class="w-[16cqw] shrink-0 overflow-hidden rounded-[0.6em] border-[0.35cqh] border-line bg-paper"
         >
           <PlayerPanel>
-            <template v-if="isRelay && relayStatusMode !== 'none'" #status="{ member }">
+            <!-- 接龙房始终接管状态位：展示期与终局不表达状态时渲染空插槽，
+                 以免 PlayerPanel 回落到经典角色文案（如「猜词中」）。 -->
+            <template v-if="isRelay" #status="{ member }">
               <RelayPlayerStatus
                 :submitted="relaySubmittedIds.has(member.id)"
                 :mode="relayStatusMode"

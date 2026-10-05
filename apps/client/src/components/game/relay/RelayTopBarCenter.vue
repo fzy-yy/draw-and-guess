@@ -15,13 +15,20 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { ArrowRight, Eye } from 'lucide-vue-next'
-import { createAnswerMask, type RelayPlayerRef, type RelayShowcase } from '@draw-guess/shared'
+import {
+  createAnswerMask,
+  type RelayPlayerRef,
+  type RelayShowcase,
+  type RelayViewPhase,
+} from '@draw-guess/shared'
 import { APP_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import HudPill from '@/components/game/HudPill.vue'
 import RelayPlayerChip from '@/components/game/RelayPlayerChip.vue'
 
 const props = defineProps<{
+  /** 当前接龙阶段：终局（game_result）没有中央内容，按阶段收敛形态。 */
+  phase: RelayViewPhase
   /** 本棒题面文本（动手期）。 */
   prompt: string
   /** 题面形态：question＝看图猜词的提示语；text＝真正要画的词。 */
@@ -161,8 +168,8 @@ onBeforeUnmount(() => {
     <RelayPlayerChip :player="props.showcase.answer.player" />
   </div>
 
-  <!-- 动手期形态（S74）：只有一个答案 UI -->
-  <div v-else class="flex min-w-0 items-center gap-[0.6cqw]">
+  <!-- 动手期形态（S74）：只有一个答案 UI；终局没有中央内容，故此处不渲染（留空节点占住插槽） -->
+  <div v-else-if="props.phase !== 'game_result'" class="flex min-w-0 items-center gap-[0.6cqw]">
     <RelayPlayerChip v-if="props.artist" :player="props.artist" :brush-badge="props.artistPaints" />
     <HudPill
       class="min-w-[16cqw] max-w-[34cqw] justify-center px-[1.2em]"

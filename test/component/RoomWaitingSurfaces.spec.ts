@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { strings } from '@draw-guess/strings'
 import {
   RELAY_MIN_PLAYERS,
+  RELAY_STEP_COUNT,
   type GameMode,
   type PublicRoom,
   type RoomMember,
@@ -173,5 +174,16 @@ describe('大厅房间行的模式徽标与开局后加入入口（S36 / S47）'
     expect(screen.getByText(strings.ui.room.modeRelay)).toBeTruthy()
     // 容量固定为协议常量：两行都按 6 席位展示（不再读房间字段）
     expect(screen.getAllByText('2/6')).toHaveLength(2)
+  })
+
+  it('接龙房间行只显示固定棒数，不显示经典专属的轮数与单回合时长（S39 / S52）', () => {
+    useLobbyStore().presence.rooms = [publicRoom({ name: '接龙画室', gameMode: 'relay' })]
+    render(LobbyView, { global: { plugins: [pinia] } })
+
+    expect(
+      screen.getByText(strings.ui.lobby.roomMetaRelay('房主甲', RELAY_STEP_COUNT)),
+    ).toBeTruthy()
+    // 轮数与单回合时长是经典专属字段：接龙房不再渲染经典口径的「轮 · 秒」行
+    expect(screen.queryByText(strings.ui.lobby.roomMeta('房主甲', 2, 120))).toBeNull()
   })
 })

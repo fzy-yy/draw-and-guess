@@ -20,6 +20,11 @@ export const lobby = {
   joinPrivateHint: '使用房主分享的房间码加入',
   roomMeta: (host: string, rounds: number, seconds: number) =>
     `房主 ${host} · ${rounds} 轮 · ${seconds} 秒`,
+  /**
+   * 接龙房卡片：棒数固定 4 棒（S9），轮数与单回合时长是经典专属字段、接龙下不生效，
+   * 故不与经典共用同一行（S39 / S52）。
+   */
+  roomMetaRelay: (host: string, steps: number) => `房主 ${host} · ${steps} 棒`,
   joinButton: '加入',
   /** 开局后加入入口置灰时的按钮文案（容量固定、开局后不可加入）。 */
   joinInProgress: '游戏中',
