@@ -43,7 +43,7 @@ export interface PlayerSecret {
   disconnectedAt?: number // 最近断线时间戳（用于宽限期判断）
   /** 对局阶段断线时保留的房间 ID（经典作画回合与接龙对局阶段共用）；用于重连后只向同局成员广播恢复提示。 */
   drawingDisconnectRoomId?: string
-  /** 每次有效断线递增；画家/房主短宽限回调只处理创建它的断线代次。 */
+  /** 每次有效断线递增；房主短宽限回调只处理创建它的断线代次。 */
   disconnectGeneration: number
   disconnectTimer?: TimerHandle // 断线清理定时器
   requestCache: Map<string, Ack<unknown>> // event + requestId → 完整 ack 的幂等缓存
@@ -126,7 +126,7 @@ export interface GameSecret {
   timer?: TimerHandle // 主阶段计时器
   /** 最短展示期计时器；与最终结算自动返回主计时器分离。 */
   rematchTimer?: TimerHandle
-  /** 绘图阶段的逐步提示计时器，与主阶段计时器一起在暂停/切换时清理。 */
+  /** 绘图阶段的逐步提示计时器，与主阶段计时器一起在阶段切换时清理。 */
   hintTimers?: TimerHandle[]
 }
 

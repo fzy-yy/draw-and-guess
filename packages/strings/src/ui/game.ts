@@ -15,13 +15,10 @@ export const game = {
   liveChatLabel: 'LIVE CHAT',
   chatTitle: '猜词消息',
   noMessages: '回合消息会显示在这里',
-  messageNameSeparator: '：',
   guessLabel: '输入你的答案',
   guessPlaceholder: '按 Enter 发送猜词',
   drawerChatPlaceholder: '按 Enter 发送消息',
   drawerCannotSendAnswer: '无法发送答案',
-  countdownTitle: '游戏即将开始',
-  countdownHint: '画家顺序和首个回合由服务器统一确定',
   yourTurn: '轮到你作画了',
   chooseWordTitle: '选择一个词',
   rerollWords: '换一组',
@@ -29,7 +26,6 @@ export const game = {
   customWordTitle: '画点别的',
   customWordHint: (max: number) => `输入你想画的词（最多 ${max} 个字），确认后立即开始作画`,
   customWordPlaceholder: '例如：一只在屋顶的猫',
-  customWordLength: (current: number, max: number) => `${current} / ${max}`,
   customWordTooLong: (max: number) => `最多 ${max} 个字`,
   customWordConfirm: '开始作画',
   customWordCancel: '取消',
@@ -39,8 +35,6 @@ export const game = {
   scoreOrderLabel: (order: number) => `第 ${order} 个猜中`,
   scoreTotal: (total: number) => `+${total}`,
   noGuesses: '本回合无人猜中，再接再厉！',
-  drawerScoreLine: (score: number, seconds: number) =>
-    `画家本回合获得 ${score} 分 · ${seconds} 秒后继续`,
   drawerScoreLabel: '作画得分',
   drawerNameTag: (name: string) => `${name} (画家)`,
   enterNextRound: (seconds: number) => `进入下一轮( ${seconds} )`,
@@ -49,12 +43,9 @@ export const game = {
   finalRanking: '最终排行',
   playerStats: (correct: number, avgSeconds: number, drawing: number) =>
     `猜中 ${correct} 次 · 平均 ${avgSeconds} 秒 · 作画带猜中 ${drawing} 人次`,
-  rematch: '再来一局',
   rematchReady: '已选择再来一局',
   rematchWithSeconds: (seconds: number) => `再来一局( ${seconds} )`,
   rematchReadyWithSeconds: (seconds: number) => `已选择再来一局( ${seconds} )`,
-  hostReturnWaiting: '全员返回房间',
-  hostReturnQueued: '展示结束后返回',
   hostReturnWaitingWithSeconds: (seconds: number) => `全员返回房间( ${seconds} )`,
   hostReturnQueuedWithSeconds: (seconds: number) => `展示结束后返回( ${seconds} )`,
   gameResultAutoReturn: (seconds: number) => `${seconds} 秒后自动返回房间`,
@@ -100,7 +91,6 @@ export const game = {
    * 接龙作答浮层（S41 / S72，工单 10）：猜词棒＝写答案，作画棒＝完成提交；
    * 提交后的等待态复用上面的 `relayWaitingOthers`（与选词卡同一句「已提交，等待其他玩家」）。
    */
-  relayAnswerHint: '看完上图，写下你猜的词',
   relayAnswerPlaceholder: '输入答案',
   relayAnswerSubmit: '提交',
   relayDrawingHint: '画完了就提交，交给下一位',
@@ -146,9 +136,7 @@ export const game = {
   canvasMenuReactionThumbsUp: '点赞 👍',
   canvasMenuReactionConfused: '满头问号 ❓',
   canvasMenuReactionFire: '神仙画画 🔥',
-  canvasCopiedToClipboard: '画作已复制到剪贴板',
   canvasSavedAsImage: '已保存画作图片',
-  canvasCopyFallbackDownload: '剪贴板不可用，已自动保存图片文件',
   // 终局战报荣誉称号文案
   accolades: {
     masterDrawer: '神笔马良',

@@ -1,5 +1,5 @@
 /**
- * 回合流转状态机：开局、选词、作画、结算、暂停/恢复、弃权与逐步提示。
+ * 回合流转状态机：开局、选词、作画、结算、弃权与逐步提示。
  * 与实现 RoundContext 的应用服务组合使用（只注入房间/成员所需的窄接口），
  * 便于把“回合规则”与“会话/成员/传输”职责分离、独立单测。
  */
@@ -19,6 +19,7 @@ import type { TimerHandle } from './runtime.ts'
 import type { RoundContext } from './domain/game/round-context.ts'
 import { selectDiverseCandidates } from './domain/vocabulary/candidate-selector.ts'
 import {
+  activeGuessers,
   activePlayers,
   createEmptyMemberStats,
   createOnlineLookup,
@@ -43,9 +44,9 @@ export class RoundMachine {
 
   /**
    * 画家在选词阶段离开/掉线时废弃当前回合，立即进入下一回合选词。
-   * 先把阶段切到 round_result（从 choosing_word 或 paused 出发的合法转换，见 LEGAL_PHASES），
-   * 并清除暂停残留字段后再走统一开局流程，避免选词计时器空转导致整轮挂起。
-   * 调用方：leaveRoom/leaveGame（含「暂停中选词」场景）与选词超时兜底。
+   * 先把阶段切到 round_result（从 choosing_word 出发的合法转换，见 LEGAL_PHASES）再走统一开局流程，
+   * 避免选词计时器空转导致整轮挂起。
+   * 调用方：leaveRoom/leaveGame 与选词超时兜底。
    */
   public abandonChoosing(room: RoomSecret, notice: string): void {
     const game = this.service.requireGame(room)
@@ -172,7 +173,7 @@ export class RoundMachine {
     this.service.scheduler.clear(game.timer)
     this.transition(room, 'drawing')
     // 富答案直接取自候选池：「answer 必在 candidates 内」由三条调用路径保证
-    // （chooseWord 的 find、选词超时与暂停恢复的 candidates 取值）；
+    // （chooseWord 的候选查找、自定义题目把候选池替换为合成词条、选词超时的候选取值）；
     // 若不变式被破坏则显式失败，绝不伪造字段——那会静默失真别称与分类。
     const richAnswer = game.candidates.find((candidate) => candidate.id === answer.id)
     if (!richAnswer) throw new GameError('INTERNAL_ERROR')
@@ -214,8 +215,8 @@ export class RoundMachine {
       ),
       playerId: member.playerId,
     })
-    // 检查所有活跃猜词者是否均已答对（ADR-0059）：断线猜词者视同未猜中，只要有人断线未答对即不提前结束，跑完倒计时
-    const eligible = activePlayers(room).filter((candidate) => candidate.playerId !== game.drawerId)
+    // 检查全部猜词者是否均已答对（ADR-0059）：断线猜词者视同未猜中，只要有人断线未答对即不提前结束，跑完倒计时
+    const eligible = activeGuessers(room, game.drawerId)
     const allGuessed = eligible.length > 0 && eligible.every((candidate) => candidate.guessedAt)
     if (allGuessed) {
       this.finishRound(room, false)
@@ -225,7 +226,7 @@ export class RoundMachine {
   }
   public finishRound(room: RoomSecret, drawerAbandoned: boolean): void {
     const game = room.game
-    // 只有未结算的回合进行中（含暂停且暂停前确为 drawing）且答案已定时才结算；
+    // 只有未结算的回合进行中（阶段允许进入结算）且答案已定时才结算；
     // roundResult 是「已结算」的唯一事实（roundSettled 双标志已合并，见 ADR-0024 的时序收口）。
     if (!game || !game.answer || game.roundResult) return
     if (!isRoundSettlePhase(room.phase)) return
@@ -449,7 +450,6 @@ export class RoundMachine {
 
   /**
    * 选词超时自动开画：从当前候选池随机取一个。
-   * 首轮超时与暂停恢复后的超时共用本方法（暂停恢复不改变自动选词行为）；
    * 空池返回 undefined，由调用方走 abandonChoosing 作废本回合（正常不会发生，见 beginChoosing）。
    */
   private autoPickCandidate(game: GameSecret): VocabularyWord | undefined {
@@ -515,7 +515,7 @@ export class RoundMachine {
     this.service.emitSystemNotice(room.id, text)
   }
 
-  /** 清理全部逐步提示计时器，防止暂停/切换阶段后旧回调误触发。 */
+  /** 清理全部逐步提示计时器，防止阶段切换后旧回调误触发。 */
   public clearHintTimers(game: GameSecret): void {
     for (const timer of game.hintTimers ?? []) this.service.scheduler.clear(timer)
     game.hintTimers = []

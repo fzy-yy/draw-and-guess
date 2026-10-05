@@ -57,11 +57,14 @@ export class RoomPage {
     await expect(this.page.getByRole('dialog')).toBeVisible({ timeout: 10_000 })
   }
 
-  async updateChooseSeconds(seconds: number) {
+  /**
+   * 改一个「秒数下拉」规则字段并保存（选词时间 / 单回合时长等）：
+   * 字段按可见 label 定位，档位文案与规则弹窗一致（见 ADR-0051）。
+   */
+  async updateSecondsRule(label: string, seconds: number): Promise<void> {
     await this.openRules()
     const dialog = this.page.getByRole('dialog')
-    // 选词时间已合并成单个下拉（默认「不限时」）：选具体秒数即同时开启限时（见 ADR-0045、ADR-0051）
-    await selectDropdownOption(dialog, '选词时间', `${seconds} 秒`)
+    await selectDropdownOption(dialog, label, `${seconds} 秒`)
     await dialog.getByRole('button', { name: /保存规则/ }).click()
     await expect(dialog).toBeHidden({ timeout: 10_000 })
   }

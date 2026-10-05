@@ -196,7 +196,7 @@ export class SnapshotBuilder {
 
   /**
    * 公开玩家视图：根据连接状态与所在房间计算在场状态。
-   * isPlaying 含暂停（phase-facts 单一口径）：暂停中的房间成员在大厅显示为「游戏中」。
+   * isPlaying 即 phase-facts 的 isInMatchPhase 单一口径：对局进行中的房间成员在大厅显示为「游戏中」。
    */
   toPublicPlayer(player: PlayerSecret): PublicPlayer {
     const room = player.roomId ? this.port.rooms.get(player.roomId) : undefined

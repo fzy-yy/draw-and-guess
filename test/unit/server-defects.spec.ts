@@ -51,12 +51,12 @@ describe('会话恢复与断线时序', () => {
     harness.service.handleDisconnect(host.socket as never)
 
     // 短宽限后房主控制权迁移给在线客人，但不提前结算回合（ADR-0059 断线挂机化）
-    harness.runtime.advance(APP_CONFIG.network.drawerReconnectGraceMs)
+    harness.runtime.advance(APP_CONFIG.network.hostReconnectGraceMs)
     expect(room.hostId).toBe(guest.playerId)
     expect(room.phase).toBe('drawing')
 
     // 作画倒计时走完，自然结算进入 round_result
-    harness.runtime.advance(game.roundDurationMs - APP_CONFIG.network.drawerReconnectGraceMs)
+    harness.runtime.advance(game.roundDurationMs - APP_CONFIG.network.hostReconnectGraceMs)
     expect(room.phase).toBe('round_result')
   })
 })

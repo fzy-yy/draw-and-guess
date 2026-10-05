@@ -10,7 +10,7 @@
  * 按链隔离的候选词与换批状态（`RelayChainSecret.candidates` / `offeredWordIds` / `rerollUsed`）、
  * 本步已提交集（`RelayGameSecret.stepSubmissions`）与房间自由聊天流（`RelayGameSecret.messages`，S79）。
  * 工单 06 补齐步 2–4 的换手与掉队容错：四棒产出的写入口（`step2Guess` / `step4Guess` / 第二幅画布）
- * 与本步代交计时器（`autoSubmitTimers`，S8 / S16）。工单 07 补上复盘游标（`showcase`，链 / 半场 / 页）。
+ * 与各棒倒计时到点的代交兜底（S8 / S16）。工单 07 补上复盘游标（`showcase`，链 / 半场 / 页）。
  * 工单 08 补上投票与终局：链上的票行（`votes`）与冻结的结算明细（`result`）、
  * 局上的终局榜（`finalRanking`）与结算退出时限（`gameResultMinEndsAt` / `hostReturnRequested` / `rematchTimer`）。
  * 成员状态始终零新增字段：投票与提交的权威记录全挂在这里，快照期派生（S64）。

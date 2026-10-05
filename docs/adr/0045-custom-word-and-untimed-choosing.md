@@ -1,6 +1,7 @@
 # 0045 · 画家自定义题目与选词阶段不限时
 
-**状态**：已采纳
+**状态**：已采纳（「选词阶段不限时」部分被
+[0059](0059-remove-game-pause-and-unified-offline-handling.md) 取代；画家自定义题目、撞词拒绝与词面规则仍然有效）
 
 - 来源：2026-10-01「选词界面可自定义题目」需求（规格见 `.scratch/custom-word-and-simplification/spec.md`）。
 

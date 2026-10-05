@@ -224,7 +224,7 @@ export interface RelayGameScenario {
    * 默认文本为 `答案-<昵称>`；用例可传入自定义文本（如断言链上写着谁的那句）。
    */
   submitAllGuesses(textOf?: (player: RelayTestPlayer) => string): Map<string, string>
-  /** 断线（真实断线编排）：接龙对局阶段保留席位，并按短宽限安排本步代交（S8）。 */
+  /** 断线（真实断线编排）：接龙对局阶段保留席位，代交由本棒倒计时到点统一兜底（S8 / ADR-0059）。 */
   disconnect(player: RelayTestPlayer): void
   /** 断线重连（真实身份恢复路径）：宽限内重连可续接当前步，返回接管后的新连接。 */
   reconnect(player: RelayTestPlayer): RelayTestPlayer
@@ -464,7 +464,7 @@ export function startRelayGame(
     },
     finishShowcaseChain,
     disconnect: (player) => {
-      // 走真实断线编排：接龙对局阶段保席 + 短宽限代交，与「掉线者不入链」的经典口径分开
+      // 走真实断线编排：接龙对局阶段保席（不提前代交，等本棒倒计时到点），与「掉线者不入链」的经典口径分开
       harness.service.handleDisconnect(player.socket as never)
     },
     reconnect: (player) => {

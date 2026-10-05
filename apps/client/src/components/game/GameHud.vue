@@ -1,6 +1,6 @@
 <!--
   对局顶栏 HUD（黄金三栏布局版）：
-  回合数、题目（画家明文 / 猜词者遮罩）、倒计时、网络状态与暂停/设置/全屏操作。
+  回合数、题目（画家明文 / 猜词者遮罩）、倒计时、网络状态与提前结束/设置/全屏操作。
   已删除「当前画家」信息块与结构化提示区：前者由左栏玩家面板回答，后者随结构化提示一并移除（见 ADR-0042）。
   高度取 11cqh，与大厅 / 房间 / 设置页顶栏保持统一节奏与高度基线。
   组件只读 store 的公开状态；HUD 派生值（计时/进度/答案）由父组件经 props 传入，整局 ticker 只在 GameView。
@@ -10,7 +10,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Clock3, Maximize, Minimize, Settings } from 'lucide-vue-next'
+import { CircleStop, Clock3, Maximize, Minimize, Settings } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import type { GameView } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
@@ -26,19 +26,26 @@ const props = withDefaults(
     progress: number
     isReplaying?: boolean
     /**
+     * 房主此时能否提前结束本局（阶段守卫在父组件，与服务端 `endEarly` 同口径）。
+     * 为真才渲染提前结束按钮：非房主、开局倒计时与接龙复盘期都不出现。
+     */
+    canEndEarly?: boolean
+    /**
      * 本阶段截止时间（可选的模式无关口径）：经典由父组件传 `game.phaseEndsAt`；
      * 接龙的截止时间在接龙视图里，父组件改传接龙视图的 `phaseEndsAt`，倒计时与进度条因此两模式共用。
      * 不传时回落到对局视图的原字段，经典路径逐条不变。
      */
     phaseEndsAt?: number
   }>(),
-  { isReplaying: false, phaseEndsAt: undefined },
+  { isReplaying: false, canEndEarly: false, phaseEndsAt: undefined },
 )
 const emit = defineEmits<{
   /** 打开对局内设置弹窗（父组件维护弹窗开关）。 */
   settings: []
   /** 切换全屏（父组件操作全屏 API）。 */
   'toggle-fullscreen': []
+  /** 请求提前结束本局（父组件弹确认框，真正的结算仍归服务端）。 */
+  'end-early': []
 }>()
 
 const store = useGameStore()
@@ -56,7 +63,7 @@ const roundDisplay = computed(() => {
 
 /**
  * 当前阶段是否有截止时间：`phaseEndsAt = 0` 是本项目「本阶段无截止时间」的哨兵
- * （选词阶段关闭限时，或该阶段处于暂停），此时不渲染倒计时与进度条，改显示「不限时」。
+ * （等待 / 终局等阶段不排计时），此时不渲染进度条。
  * 截止时间优先取父组件传入的模式无关字段（接龙视图与对局视图各有一份），缺省回落到对局视图。
  */
 const phaseEndsAt = computed(() => props.phaseEndsAt ?? props.game?.phaseEndsAt ?? 0)
@@ -158,11 +165,11 @@ const displaySeconds = computed(() => {
       </slot>
     </div>
 
-    <!-- 右：倒计时 + 网络状态 + 暂停 / 设置 / 全屏 -->
+    <!-- 右：倒计时 + 网络状态 + 提前结束（房主）/ 设置 / 全屏 -->
     <div class="flex items-center gap-[0.5cqw]">
       <!--
         倒计时胶囊：固定 3 位数字等宽容器（w-[3ch] text-center tabular-nums），
-        位数减少（120 至 99 至 8）时数字居中且组件长度恒定；不显示“秒”单位；不限时状态居中展示「---」大字号短横线。
+        位数减少（120 至 99 至 8）时数字居中且组件长度恒定；不显示“秒”单位。
       -->
       <HudPill
         class="relative box-border justify-center gap-[0.35em] overflow-hidden px-[0.65em]"
@@ -185,6 +192,15 @@ const displaySeconds = computed(() => {
         :connection-label="store.connectionLabel"
         :latency-good-ms="store.config.network.latencyGoodMs"
       />
+      <!-- 提前结束：仅房主且处于可结算的对局阶段时出现（服务端 endEarly 守卫同口径），
+           点击只弹确认框，真正的结算与入账仍由服务端裁决。 -->
+      <IconButton
+        v-if="canEndEarly"
+        :label="strings.a11y.game.endEarlyAria"
+        @click="emit('end-early')"
+      >
+        <CircleStop />
+      </IconButton>
       <IconButton :label="strings.a11y.game.settingsAria" @click="emit('settings')">
         <Settings />
       </IconButton>

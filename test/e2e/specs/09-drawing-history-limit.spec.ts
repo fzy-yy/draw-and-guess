@@ -10,15 +10,17 @@ import { readAuthoritativeCommandCount, readLogicalRaster } from '../fixtures/ca
  * 期望：超限提交被**确定性拒绝**（服务端错误码 + 中文提示），权威历史里早期边界与后续填充完好无损，
  * 且压力之后画布不再发生任何静默变化（逻辑栅格指纹与采样语义保持不变）。
  *
- * 为什么这条用例很慢：上限是 1500 条命令，只能逐次真实点击生成（每次点击 = 一条单点命令）；
- * e2e 词库 fixture 的时限特意放宽到 600s（见 apps/server/src/vocabulary/test-fixture.ts），
- * 以便慢 runner 也能在**同一回合内**推满——用默认 90s 时限会在推满前到期，是 main 间歇失败的主因。
- * 数据源：packages/config 的 drawing.maxHistoryCommands、packages/strings 的默认安全文案（勿在用例内硬编码）。
+ * 为什么这条用例很慢：上限是 1500 条命令，只能逐次真实点击生成（每次点击 = 一条单点命令），
+ * 因此本用例开局前把「单回合时长」拉到最大档（150s），让慢 runner 也能在**同一回合内**推满
+ * ——回合到期会换阶段并清空画布，压力过程无法跨回合延续。
+ * 数据源：packages/config 的 drawing.maxHistoryCommands 与 game.drawSeconds、packages/strings 的默认安全文案（勿在用例内硬编码）。
  */
 /** 单次点击之间的等待（毫秒）：与 Playwright 点击自身开销合计约 25ms，即约 40 条/秒。 */
 const CLICK_INTERVAL_MS = 15
-/** 推送到上限的墙钟上限：需覆盖慢 runner 的真实点击吞吐（e2e 回合窗口为 600s）。 */
-const PUSH_DEADLINE_MS = 540_000
+/** 压力用例使用的单回合时长（秒）：取合法档位里的最大值，保证压力过程留在同一回合内。 */
+const DRAW_SECONDS_FOR_CAP = Math.max(...APP_CONFIG.game.drawSeconds.options)
+/** 推送到上限的墙钟上限：必须短于回合窗口，否则失败信息会退化成「回合已换」而非「吞吐不足」。 */
+const PUSH_DEADLINE_MS = 130_000
 /** 到达上限后额外提交的点击次数：用于确认新增被确定性拒绝（权威历史不再增长）。 */
 const REJECT_PROBE_CLICKS = 30
 /** 构造历史用的填充色（与工具栏色板一致）。 */
@@ -32,7 +34,10 @@ test.describe('09 - 绘图历史上限', () => {
 
     try {
       const roomName = `容量测试-${Date.now()}`
-      const { drawer } = await startTwoPlayerGame(host, guest, roomName)
+      // 单回合时长拉到最大档：压力过程必须留在同一回合内（见文件头说明）
+      const { drawer } = await startTwoPlayerGame(host, guest, roomName, async (owner) => {
+        await owner.room.updateSecondsRule('单回合时长', DRAW_SECONDS_FOR_CAP)
+      })
       const drawerCanvas = drawer.page.locator('canvas.bg-white')
       await drawer.game.chooseWord(0)
       await expect(drawerCanvas).toBeVisible()
@@ -95,9 +100,7 @@ test.describe('09 - 绘图历史上限', () => {
         `[绘图容量] ${clicks} 次点击（${((Date.now() - startedAt) / 1000).toFixed(1)}s）后权威命令达上限 ` +
           `maxHistoryCommands=${cap}；拒绝后计数保持 ${countAfterReject}`,
       )
-      await host.game.pauseGame()
-
-      // 4. 暂停后权威历史冻结：再次读取画布，早期边界与后续填充的指纹必须完好（无静默丢弃）。
+      // 4. 达到上限后权威历史冻结：再次读取画布，早期边界与后续填充的指纹必须完好（无静默丢弃）。
       await drawer.page.waitForTimeout(600)
       const stabilised = await readLogicalRaster(drawerCanvas)
       expect(stabilised.stableSampleHash).toBe('ef4444ff-1f2937ff-00000000')

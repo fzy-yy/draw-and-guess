@@ -15,7 +15,7 @@ import { PLAYER_PROTOCOL_LIMITS } from './constants.ts'
 
 /**
  * 接龙阶段：`RoomPhaseSchema` 的接龙子集。
- * `paused` 不在其中——接龙禁用暂停（S19）；复盘只有 `relay_showcase`（轮播）与 `relay_vote`（投票）两态。
+ * 复盘只有 `relay_showcase`（轮播）与 `relay_vote`（投票）两态。
  */
 export const RelayPhaseSchema = z.enum([
   'relay_choose',

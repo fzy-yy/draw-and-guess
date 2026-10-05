@@ -4,7 +4,6 @@ import type {
   RelayFinalRankingEntrySchema,
   RelayGameViewSchema,
   RelayPlayerRefSchema,
-  RelayShowcaseCapsuleSchema,
   RelayShowcaseSchema,
   RelayViewPhaseSchema,
 } from '../protocol/push.ts'
@@ -29,7 +28,6 @@ export type RelayHalf = z.infer<typeof RelayHalfSchema>
 export type RelayPlayerRef = z.infer<typeof RelayPlayerRefSchema>
 export type RelayCanvas = z.infer<typeof RelayCanvasSchema>
 export type RelayVoteChoice = z.infer<typeof RelayVoteChoiceSchema>
-export type RelayShowcaseCapsule = z.infer<typeof RelayShowcaseCapsuleSchema>
 export type RelayShowcase = z.infer<typeof RelayShowcaseSchema>
 /** 终局榜的一行：只有名次、分数与接龙口径统计（无称号、无链明细，S33）。 */
 export type RelayFinalRankingEntry = z.infer<typeof RelayFinalRankingEntrySchema>

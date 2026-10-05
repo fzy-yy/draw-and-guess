@@ -43,8 +43,9 @@ export const test = base
 export { expect }
 
 /**
- * 建立两人对局并识别首位画家：建房 → 加入 → 准备 → 开局 → 竞速等待「轮到你作画了」。
+ * 建立两人对局并识别首位画家：建房 →（可选房主规则配置）→ 加入 → 准备 → 开局 → 竞速等待「轮到你作画了」。
  * 房间容量固定为协议上限，建房时不再（也不能）调整人数或中途加入策略；开局后房间一律拒绝新成员。
+ * `configureHost` 在客人入座前执行：规则变更会取消全员准备，故必须早于客人准备。
  * 返回画家与猜词者客户端，供各 spec 复用同一开局样板。
  * 07 响应式用例使用带 `.catch` 的宽松竞速，语义不同，仍由该用例自定义。
  */
@@ -52,8 +53,10 @@ export async function startTwoPlayerGame(
   host: PlayerClient,
   guest: PlayerClient,
   roomName: string,
+  configureHost?: (host: PlayerClient) => Promise<void>,
 ): Promise<{ drawer: PlayerClient; guesser: PlayerClient }> {
   await host.lobby.createRoom({ name: roomName })
+  if (configureHost) await configureHost(host)
   await guest.lobby.joinPublicRoom(roomName)
   await guest.room.toggleReady()
   await host.room.startGame()

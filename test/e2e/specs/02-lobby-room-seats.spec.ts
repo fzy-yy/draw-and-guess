@@ -41,7 +41,7 @@ test.describe('02 - 大厅房间与席位网格 (Lobby, Room & Seats)', () => {
       await guest.room.toggleReady()
       await expect(host.page.getByRole('button', { name: /开始游戏/ })).toBeEnabled()
 
-      await host.room.updateChooseSeconds(20)
+      await host.room.updateSecondsRule('选词时间', 20)
 
       await expect(host.page.getByRole('button', { name: /开始游戏/ })).toBeDisabled()
       await expect(guest.page.getByRole('button', { name: /我准备好了/ })).toBeVisible()
@@ -108,9 +108,10 @@ test.describe('02 - 大厅房间与席位网格 (Lobby, Room & Seats)', () => {
       await search.clear()
 
       // 三个工具入口保持统一的圆形图标按钮交互；分类弹层不应再为外层滚动槽预留空白条
-      const categoryFilter = dialog.getByRole('button', { name: '按分类筛选' })
+      // （筛选字段的语义标签是「合集」，无障碍名为 `按${label}筛选`，见 ADR-0053 的用词收敛）
+      const categoryFilter = dialog.getByRole('button', { name: '按合集筛选' })
       await categoryFilter.click()
-      const categoryPopover = dialog.getByRole('dialog', { name: '分类' })
+      const categoryPopover = dialog.getByRole('dialog', { name: '合集' })
       await expect(categoryPopover).toBeVisible()
       await expect(categoryPopover).toHaveCSS('scrollbar-gutter', 'auto')
       await host.page.keyboard.press('Escape')
@@ -128,14 +129,15 @@ test.describe('02 - 大厅房间与席位网格 (Lobby, Room & Seats)', () => {
       await expect(dialog.getByText('版本号')).toBeVisible()
       await expect(dialog.getByText('更新日期')).toBeVisible()
 
-      // 行首单选按钮同时负责选择与当前状态提示，不再显示额外状态徽标或操作按钮
+      // 行首单选按钮同时负责选择与当前状态提示：行内不再有额外状态徽标或逐行操作按钮
       await expect(dialog.getByText('draw_guess_words')).toBeVisible()
+      const defaultPackageRow = dialog.locator('tr:has-text("draw_guess_words")')
       const defaultPackageRadio = dialog.getByRole('radio', {
         name: '选择词库 draw_guess_words',
       })
       await expect(defaultPackageRadio).toBeChecked()
-      await expect(dialog.getByText('当前使用中')).toHaveCount(0)
-      await expect(dialog.getByRole('button', { name: '使用此词库' })).toHaveCount(0)
+      await expect(defaultPackageRow.getByRole('radio')).toHaveCount(1)
+      await expect(defaultPackageRow.getByRole('button')).toHaveCount(0)
 
       // 4. 使用第二行单选按钮切换词库，选中状态应成为唯一的当前状态提示
       const testWordsRow = dialog.locator('tr:has-text("test_words")')

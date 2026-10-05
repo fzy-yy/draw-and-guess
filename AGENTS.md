@@ -114,7 +114,7 @@ draw-and-guess/
 │       └── handlers/              # 按领域分组的事件注册（全部走 binder）
 │           ├── session.ts         # 注册/资料/偏好/大厅/状态重同步/ping/断线
 │           ├── room.ts            # 公开/私密建房与加入、离房、准备、规则、词库、踢人/移交、邀请
-│           ├── game.ts            # 开始/选词/暂停/恢复/提前结束/返回房间
+│           ├── game.ts            # 开始/选词/提前结束/返回房间
 │           ├── chat.ts            # 猜词、预设安全短语
 │           └── draw.ts            # 笔画批次/填充/撤销/重做/清空（跳过通用限频）
 │
@@ -525,7 +525,7 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 3. **词库与内容**
    - `vocabulary/` 目录下的 SQLite 词库包是仓库的权威词库来源（当前仅 `base_words.db`，可并存多个 `.db`，服务启动时全部加载并从中选默认包；分发产物模式另有产物 `data/vocabulary/custom/` 自定义目录与内置目录合并加载，同名包 ID 追加序号唯一化，见 `docs/adr/0034-node-single-file-distribution.md` 决策四）：`metadata` 表只存 name/description/version/updated_at（`version`/`updated_at` 是词库包自身的版本与更新日期，仍由词库包列表展示）；`words` 表词条只含 id/text/**collection**（单词条归属一个合集）/aliases（JSON）。**分类白名单（category_enum）与难度、可绘制性、提示、难度级配置与「是否启用」位已退出领域模型并从库表删列**（见 `docs/adr/0046-vocabulary-slimming-and-unified-round-time.md`、`docs/adr/0048-vocabulary-schema-slimming.md`、`docs/adr/0053-vocabulary-collection-and-toolbar-redesign.md`）；所有词条一律进入候选池，合集由服务端自动检测聚合供前端筛选。**玩家自定义词库的空白样板**是 `vocabulary/templates/example.db`（与基础词库同字段、0 词条；说明见 `vocabulary/templates/README.md`）——它放在子目录而不是 `vocabulary/` 根，因为扫描只认根目录下的 `*.db`，0 词库若被扫描会触发词数门槛让服务启动失败。校验为 fail-fast：合集非空、词面长度 ≤ `maxWordLength`、别称数量与长度、主键与词面不重复、词条数 ≥ `minWords`；目录内没有任何 `.db` 时按 `apps/server/src/config/private.ts` 的 `dbPath` 兜底探测（默认文件名 `base_words.db`）。修改后需重启服务，异常数据以中文错误阻止启动。
    - **猜词提示只靠逐字遮罩**：结构化提示已从对局链路移除（见 `docs/adr/0042-remove-structured-hints.md`），猜词者只根据题目遮罩按节奏逐格揭示字符推理（保留末尾非标点字符，调度归 `apps/server/src/hint-scheduler.ts`）；选词卡对画家只显示候选词面（`wordOptions` 只带 `id/text`）与自定义入口。
-   - **画家自定义题目**：房主开关 `allowCustomWord`（默认关闭）；开启时画家可在选词阶段输入去空白后 1~12 个 grapheme 的词直接开画，服务端把它合成为一条无元数据词条并拒绝与本局已用词或当前候选重复（见 `docs/adr/0045-custom-word-and-untimed-choosing.md`）。选词阶段是否计时由 `allowChooseTimeLimit` 决定（默认关闭 = 不限时，`phaseEndsAt` 保持 `0` 哨兵）。
+   - **画家自定义题目**：房主开关 `allowCustomWord`（默认关闭）；开启时画家可在选词阶段输入去空白后 1~12 个 grapheme 的词直接开画，服务端把它合成为一条无元数据词条并拒绝与本局已用词或当前候选重复（见 `docs/adr/0045-custom-word-and-untimed-choosing.md`）。选词阶段恒有倒计时：由 `chooseSeconds` 驱动（默认 15 秒），超时由服务端随机挑一个候选词直接开画（见 `docs/adr/0059-remove-game-pause-and-unified-offline-handling.md`）。
    - 猜词判定固定用 `normalizeAnswer`（NFKC + 去空白 + 折叠空白 + 忽略拉丁大小写），不要在别处另写一套比较。
 4. **配置治理**
    - 协议公开约束**只允许**写在 shared protocol constants；公开默认值与服务端私有策略按包边界分别维护，禁止复制同一协议常量。

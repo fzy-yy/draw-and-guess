@@ -49,7 +49,7 @@ export const MODE_SETTINGS_KEYS: Record<GameMode, readonly (keyof RoomSettings)[
 }
 
 /** 取某模式生效的规则键名（缺省按协议默认模式，用于尚未装配房间快照的调用点）。 */
-export function modeSettingsKeys(gameMode: GameMode | undefined): readonly (keyof RoomSettings)[] {
+function modeSettingsKeys(gameMode: GameMode | undefined): readonly (keyof RoomSettings)[] {
   return MODE_SETTINGS_KEYS[gameMode ?? DEFAULT_GAME_MODE]
 }
 

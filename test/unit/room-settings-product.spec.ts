@@ -23,7 +23,7 @@ describe('房间规则产品闭环', () => {
     // 容量与中途加入策略已删除：默认组的键集合应与规则默认基线完全一致
     expect(Object.keys(settings).sort()).toEqual(Object.keys(roomSettingsDefaults).sort())
     expect(RoomSettingsSchema.safeParse(settings).success).toBe(true)
-    // 单回合时长默认 120 秒且必须落在合法档位内；选词阶段默认不限时
+    // 单回合时长默认 120 秒且必须落在合法档位内；选词阶段恒有倒计时（chooseSeconds）
     expect(settings.drawSeconds).toBe(APP_CONFIG.game.drawSeconds.default)
     expect(DRAW_SECONDS_OPTIONS).toContain(settings.drawSeconds)
     // 差一字私密提示、画布微表情互动与作画精彩重播默认开启

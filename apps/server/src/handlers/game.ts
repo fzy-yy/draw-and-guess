@@ -1,5 +1,5 @@
 /**
- * 对局控制事件处理器：开始、选词、暂停/恢复、提前结束、返回房间。
+ * 对局控制事件处理器：开始、选词、提前结束、返回房间。
  */
 import { EVENTS } from '@draw-guess/shared'
 import { bindRequest } from '../protocol/binder.ts'

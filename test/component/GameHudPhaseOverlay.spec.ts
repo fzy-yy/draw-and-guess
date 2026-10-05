@@ -34,7 +34,7 @@ function mountWithPinia(component: Parameters<typeof mount>[0], props: Record<st
 }
 
 describe('useGameHud 角色与计时派生', () => {
-  it('猜词者可猜、暂停冻结计时，并按服务端榜单展示最终排名', async () => {
+  it('猜词者可猜、计时随阶段推进，并按服务端榜单展示最终排名', async () => {
     const now = Date.now()
     const roomStore = useRoomStore()
     const session = useSessionStore()

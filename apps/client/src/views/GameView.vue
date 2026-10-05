@@ -131,6 +131,23 @@ const showEndConfirm = ref(false) // 提前结束确认弹窗
 const showLeaveGameConfirm = ref(false) // 设置页退出对局确认弹窗
 const showGameSettings = ref(false) // 对局内设置弹窗
 
+/**
+ * 房主当下能否提前结束本局：与服务端 `GameService.endEarly` 的守卫同口径——
+ * 对局进行中且非开局倒计时；接龙复盘期（展示 / 投票）完全不可干预，故排除在外。
+ */
+const canEndEarly = computed(() => {
+  if (!store.isHost) return false
+  const phase = store.room?.phase
+  return (
+    phase === 'choosing_word' ||
+    phase === 'drawing' ||
+    phase === 'round_result' ||
+    phase === 'relay_choose' ||
+    phase === 'relay_draw' ||
+    phase === 'relay_guess'
+  )
+})
+
 // 底部工具条本地位置（仅画家拖拽微调避让，刷新即重置；位置为相对画布容器的百分比）
 const toolbarPosition = ref<PanelPosition | null>(null)
 // 画家是否主动展示工具条（支持右键菜单显隐）
@@ -315,7 +332,7 @@ function handleFullscreenToggle(): void {
   <!-- 对局主骨架：仅在房间存在、且本模式已有可渲染的舞台来源时挂载；画框以外区域统一使用 paper（近白）语义色。
        经典房＝存在 `game`；接龙房＝非等待阶段（含开局倒计时期，该期还没有 relay 视图，S84 / S22）。 -->
   <main v-if="store.room && hasStageSource" class="relative flex h-full flex-col bg-paper">
-    <!-- 固定顶栏：回合 / 题目 / 倒计时 / 网络 / 暂停·设置·全屏（高度统一）。
+    <!-- 固定顶栏：回合 / 题目 / 倒计时 / 网络 / 设置·全屏（高度统一）。
          接龙经 leading / center 插槽换成「模式 + 阶段 + 棒次」与「上一家 chip + 单个答案 UI」，
          不传插槽时渲染经典胶囊，两条路径互不影响。
          门禁只看**玩法**而不看 relay 视图：开局倒计时期还没有接龙视图（S22），
@@ -327,8 +344,10 @@ function handleFullscreenToggle(): void {
       :progress="progress"
       :phase-ends-at="phaseEndsAt"
       :is-replaying="isReplayingRound"
+      :can-end-early="canEndEarly"
       @settings="showGameSettings = true"
       @toggle-fullscreen="handleFullscreenToggle"
+      @end-early="showEndConfirm = true"
     >
       <template v-if="isRelay" #leading>
         <RelayTopBarLeading
@@ -396,7 +415,7 @@ function handleFullscreenToggle(): void {
             @fill-failure="recoverAuthoritativeDrawing"
           />
 
-          <!-- 画布状态遮罩：经典在选词/暂停等阶段覆盖在画布上；回合结算（round_result）期间不遮挡，
+          <!-- 画布状态遮罩：经典在选词阶段覆盖在画布上；回合结算（round_result）期间不遮挡，
                以便玩家欣赏画作与快速重播。接龙各阶段的画布本身就是内容，故不渲染（见 showCanvasMask）。 -->
           <div
             v-if="showCanvasMask"
@@ -464,7 +483,6 @@ function handleFullscreenToggle(): void {
       :is-replaying="isResultModalSuppressed"
       @choose-word="store.chooseWord"
       @reroll-words="store.rerollWords"
-      @open-end-confirm="showEndConfirm = true"
       @return-waiting="store.returnWaiting"
       @leave-room="store.leaveRoom"
     />

@@ -72,7 +72,7 @@ describe('最终结算再来一局', () => {
 
     harness.service.handleDisconnect(host.socket as never)
     // 最终结算中短宽限后房主迁移给在线成员，断线原房主席位保留在房间中（ADR-0059）
-    harness.runtime.advance(APP_CONFIG.network.drawerReconnectGraceMs)
+    harness.runtime.advance(APP_CONFIG.network.hostReconnectGraceMs)
     expect(room.hostId).toBe(guest.playerId)
     expect(room.members.some((member) => member.playerId === host.playerId)).toBe(true)
 

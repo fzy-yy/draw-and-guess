@@ -280,7 +280,7 @@ function makePort(
     players,
     rooms: new Map([[room.id, room]]),
     clock: { now: () => now },
-    // 与生产实现（phase-facts 的 isInMatchPhase）一致：暂停也是对局进行中
+    // 与生产实现（phase-facts 的 isInMatchPhase）一致：经典四个阶段都算对局进行中
     isPlaying: (phase) => ['starting', 'choosing_word', 'drawing', 'round_result'].includes(phase),
     getRoomVocabularyStore: () => createMemoryVocabularyRegistry().getDefault(),
     requirePlayer: (playerId) => {

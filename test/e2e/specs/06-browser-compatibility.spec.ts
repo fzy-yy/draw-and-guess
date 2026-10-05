@@ -116,7 +116,9 @@ test.describe('06 - 跨浏览器、DPR 与后台标签页', () => {
       expect(inkSample!.b).toBeLessThan(110)
       expect(outsideSample!.a).toBe(0)
 
-      const timer = drawer.page.locator('span:has-text("秒")').first().locator('..').locator('b')
+      // 顶栏倒计时胶囊：数字是全站唯一的 `w-[3ch]` 元素（固定三位等宽，见 ADR-0052）。
+      // 旧定位 `span:has-text("秒")` 依赖已移除的「秒」单位后缀，早就取不到元素。
+      const timer = drawer.page.locator('header b.w-\\[3ch\\]')
       const before = Number(await timer.textContent())
       const background = await drawer.page.context().newPage()
       await background.goto('about:blank')

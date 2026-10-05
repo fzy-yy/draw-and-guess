@@ -1,35 +1,6 @@
 import { test, expect, createPlayer, startTwoPlayerGame } from '../fixtures/test-base'
 
-test.describe('05 - 对局控制、暂停与完整生命周期 (Game Lifecycle & Pause)', () => {
-  test('房主暂停对局、冻结倒计时与恢复作画', async ({ browser }) => {
-    const host = await createPlayer(browser, '控制房主')
-    const guest = await createPlayer(browser, '被控客人')
-
-    try {
-      const roomName = `暂停生命周期-${Date.now()}`
-      // 动态识别画家并选词
-      const { drawer } = await startTwoPlayerGame(host, guest, roomName)
-      await drawer.game.chooseWord(0)
-
-      // 1. 房主暂停对局
-      await host.game.pauseGame()
-
-      // 双方都展示暂停遮罩
-      await expect(host.page.locator('text=游戏已安全暂停')).toBeVisible({ timeout: 10_000 })
-      await expect(guest.page.locator('text=游戏已安全暂停')).toBeVisible({ timeout: 10_000 })
-
-      // 2. 房主恢复对局
-      await host.game.resumeGame()
-
-      // 暂停遮罩消失，恢复正常作画
-      await expect(host.page.locator('text=游戏已安全暂停')).toBeHidden({ timeout: 10_000 })
-      await expect(guest.page.locator('text=游戏已安全暂停')).toBeHidden({ timeout: 10_000 })
-    } finally {
-      await host.close()
-      await guest.close()
-    }
-  })
-
+test.describe('05 - 对局控制与完整生命周期 (Game Lifecycle)', () => {
   test('F08 · 回合结算与结束对局返回房间等待', async ({ browser }) => {
     const host = await createPlayer(browser, '终局房主')
     const guest = await createPlayer(browser, '终局客人')
@@ -40,8 +11,7 @@ test.describe('05 - 对局控制、暂停与完整生命周期 (Game Lifecycle &
       const { drawer } = await startTwoPlayerGame(host, guest, roomName)
       await drawer.game.chooseWord(0)
 
-      // 房主暂停并提前结束本局
-      await host.game.pauseGame()
+      // 房主提前结束本局
       await host.page.getByRole('button', { name: /提前结束/ }).click()
       // 确认弹窗
       const dialog = host.page.getByRole('dialog')
@@ -84,7 +54,9 @@ test.describe('05 - 对局控制、暂停与完整生命周期 (Game Lifecycle &
     }
   })
 
-  test('最终结算中房主断线后迁移，新房主可全局返回等待', async ({ browser }) => {
+  test('最终结算中房主断线后控制权迁移给在线成员，房间回到等待', async ({ browser }) => {
+    // 本条要等两个 20 秒窗口（结算自动返回 + 房主迁移宽限），默认 60 秒不够。
+    test.setTimeout(120_000)
     const host = await createPlayer(browser, '断线结算房主')
     const guest = await createPlayer(browser, '接任结算房主')
 
@@ -93,7 +65,6 @@ test.describe('05 - 对局控制、暂停与完整生命周期 (Game Lifecycle &
       const { drawer } = await startTwoPlayerGame(host, guest, roomName)
 
       await drawer.game.chooseWord(0)
-      await host.game.pauseGame()
       await host.page.getByRole('button', { name: /提前结束/ }).click()
       await host.page
         .getByRole('dialog')
@@ -102,11 +73,12 @@ test.describe('05 - 对局控制、暂停与完整生命周期 (Game Lifecycle &
       await expect(guest.page.getByText('最终排行')).toBeVisible({ timeout: 10_000 })
 
       await host.close()
-      await expect(guest.page.getByRole('button', { name: '全员返回房间' })).toBeVisible({
-        timeout: 10_000,
+      // 最终结算中房主断线：席位保留，控制权要等过「房主宽限」（服务端 hostReconnectGraceMs = 20 秒）
+      // 才迁移给在线成员；房间本身也在结算上限后自动收敛回等待。
+      // `开始游戏` 只对房主渲染（访客渲染的是「我准备好了」），因此它就是迁移已发生的用户可见证据。
+      await expect(guest.page.getByRole('button', { name: /开始游戏/ })).toBeVisible({
+        timeout: 45_000,
       })
-      await guest.game.returnToWaiting()
-      await expect(guest.page.getByText('玩家席位')).toBeVisible({ timeout: 10_000 })
     } finally {
       await host.close()
       await guest.close()

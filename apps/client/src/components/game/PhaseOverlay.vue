@@ -1,9 +1,9 @@
 <!--
   各阶段全屏遮罩（从 GameView.vue 拆出的子组件）：
-  覆盖开局倒计时 / 画家选词 / 暂停 / 回合结算 / 最终结算。
+  覆盖开局倒计时 / 画家选词 / 回合结算 / 最终结算。
   该组件读 store 的公开状态；HUD 派生值（剩余秒数/对局数据/排行）由父组件经 props 传入；
   需要交由父组件裁决或弹窗的动作一律用事件抛出
-  （choose-word / resume / open-end-confirm / return-waiting / leave-room）。
+  （choose-word / reroll-words / return-waiting / leave-room）。
   注：外层的 display:contents 只是为了让多个定位遮罩不参与父级 grid 布局，同时保留 TS 窄化。
 -->
 <script setup lang="ts">
@@ -43,7 +43,6 @@ const props = withDefaults(
 const emit = defineEmits<{
   'choose-word': [wordId: string]
   'reroll-words': []
-  'open-end-confirm': []
   'return-waiting': []
   'leave-room': []
 }>()
@@ -241,7 +240,7 @@ const chooseHint = computed(() => {
           <span class="leading-[1.2]">{{ option.text }}</span>
         </button>
       </div>
-      <!-- 提示行：经典选词阶段关限时时提示「不限时」；接龙选完词后变成等待他人（S16 全员提交即秒切） -->
+      <!-- 提示行：选词恒有倒计时并提示超时自动选择；接龙已提交后变成等待他人（S16 全员提交即秒切） -->
       <span>{{ chooseHint }}</span>
       <CustomWordDialog
         v-model:open="customWordOpen"
@@ -249,7 +248,6 @@ const chooseHint = computed(() => {
         @confirm="submitCustomWord"
       />
     </OverlayCard>
-    <!-- 阶段遮罩：回合结算（答案、得分明细） -->
     <!-- 阶段遮罩：回合结算（答案、得分明细）——重播期间隐藏，重播结束后或未开启重播时展示；玩家点击关闭后本地隐藏，便于欣赏画作 -->
     <OverlayCard
       v-else-if="

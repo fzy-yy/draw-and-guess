@@ -3,8 +3,6 @@ import {
   activeGuessers,
   activePlayers,
   connectionStatus,
-  countActivePlayers,
-  countOnlinePlayers,
   createEmptyMemberStats,
   createOnlineLookup,
   isActivePlayer,
@@ -12,8 +10,6 @@ import {
   isPhaseExpired,
   nicknameOf,
   occupiesSeat,
-  onlineGuessers,
-  onlinePlayers,
 } from '../../apps/server/src/domain/room/member-facts.ts'
 import type { MemberState, PlayerSecret } from '../../apps/server/src/models.ts'
 
@@ -75,15 +71,8 @@ describe('member-facts 选择器与计数契约', () => {
   const departed = member({ playerId: 'departed', leftGame: true })
   const parties = [active, away, departed]
 
-  it('activePlayers / countActivePlayers 只取可玩成员', () => {
+  it('activePlayers 只取可玩成员', () => {
     expect(activePlayers(room(...parties)).map((m) => m.playerId)).toEqual(['active', 'away'])
-    expect(countActivePlayers(room(...parties))).toBe(2)
-  })
-
-  it('onlinePlayers / countOnlinePlayers 在可玩基础上过滤在线', () => {
-    const isOnline = online('active', 'departed')
-    expect(onlinePlayers(room(...parties), isOnline).map((m) => m.playerId)).toEqual(['active'])
-    expect(countOnlinePlayers(room(...parties), isOnline)).toBe(1)
   })
 
   it('activeGuessers 排除画家与离局者，保留掉线者', () => {
@@ -92,13 +81,6 @@ describe('member-facts 选择器与计数契约', () => {
     expect(activeGuessers(room(...parties), 'drawer').map((m) => m.playerId)).toEqual([
       'active',
       'away',
-    ])
-  })
-
-  it('onlineGuessers 在 activeGuessers 基础上只留在线的', () => {
-    const drawRoom = room(active, away, departed, member({ playerId: 'last' }))
-    expect(onlineGuessers(drawRoom, 'drawer', online('active')).map((m) => m.playerId)).toEqual([
-      'active',
     ])
   })
 })
@@ -118,11 +100,7 @@ describe('member-facts 纯函数契约', () => {
     const input = room(...memberList)
     const before = structuredClone(input)
     activePlayers(input)
-    onlinePlayers(input, online('a'))
     activeGuessers(input, 'a')
-    onlineGuessers(input, 'a', online('a'))
-    countActivePlayers(input)
-    countOnlinePlayers(input, online('a'))
     expect(input).toEqual(before)
   })
 })
@@ -139,7 +117,7 @@ describe('member-facts 同构判定单一口径', () => {
     expect(isOnline('missing')).toBe(false)
   })
 
-  it('isPhaseExpired 把 phaseEndsAt=0 视为未到期（暂停期哨兵）', () => {
+  it('isPhaseExpired 把 phaseEndsAt=0 视为未到期（无截止时间哨兵）', () => {
     expect(isPhaseExpired({ phaseEndsAt: 0 }, 1_000)).toBe(false)
     expect(isPhaseExpired({ phaseEndsAt: 999 }, 1_000)).toBe(true)
     expect(isPhaseExpired({ phaseEndsAt: 1_000 }, 1_000)).toBe(true)

@@ -9,7 +9,7 @@
  * - 步 1/3 作画：在某条链的第一幅 / 第二幅画布上动手（命令写入见工单 04 的通路），
  *   全员提交（`relay:submitDrawing`）或倒计时到即结算；步 1 进步 2、步 3 进步 4；
  * - 步 2/4 猜词：只提交文本、提交即锁定、**不进聊天流**（S3 / S20 / S23），步 2 进步 3、步 4 进复盘；
- * - 换手一律「全员提交即秒切」（S40）；掉队容错见下方 `refreshAutoSubmit` 与 `writeAutoSubmitProduct`；
+ * - 换手一律「全员提交即秒切」（S40）；掉队容错见下方 `scheduleStepTimeout` 与 `writeAutoSubmitProduct`；
  * - 步 4 结算后进入 `relay_showcase`：停止对局计时，按链发起人**席位顺序**（S11）逐条轮播——
  *   每条链两个半场，每半场「重播 → 停顿 → 揭晓」（S43），半场 2 揭晓后切入该链投票（`relay_vote`）；
  *   轮播完全自动、**不可干预**（S12），工单 08 在投票结束后调用 `beginShowcaseForChain` 继续下一条链。
@@ -78,12 +78,8 @@ export interface RelayContext {
   getRoomVocabularyStore(room?: RoomSecret): VocabularyStore
   requireRelay(room: RoomSecret): RelayGameSecret
   /**
-   * 玩家在场事实：`connected=false` 时给出最近一次断线时间。
-   * 代交宽限以「断线时刻 + 短宽限」起算，不按进入本步的时刻起算（S8）：
-   * 因此上一棒末尾掉线的人在下一棒仍享有完整的 20 秒窗口，而长期掉线者一进新步就被代交。
+   * 推送 systemNotice 事件（系统通知的唯一传输出口）。
    */
-  getPlayerPresence(playerId: string): { connected: boolean; disconnectedAt?: number }
-  /** 推送 systemNotice 事件（系统通知的唯一传输出口）。 */
   emitSystemNotice(roomId: string, text: string): void
   emitRoom(roomId: string): void
   broadcastPresence(): void
@@ -670,7 +666,7 @@ export class RelayMachine {
    * - 猜词步（步 2/4）：S16 要求交「当前输入框内容」，未输入才填「？」——但线上没有任何承载
    *   未提交草稿的通道（`game:canvas_ping` 只是画布微表情广播，`relay:submitGuess` 提交即锁定），
    *   服务端观测不到草稿，因此收敛为固定兜底 `RELAY_AUTO_SUBMIT_GUESS_TEXT`（「上家未作答」）；
-   *   将来若接入草稿镜像，只改本函数 + 协议层，换手 / 宽限 / 离开者占位逻辑都不受影响；
+   *   将来若接入草稿镜像，只改本函数 + 协议层，换手 / 代交 / 离开者占位逻辑都不受影响；
    * - 作画步（步 1/3）：交**已有笔画**——画布本身就是权威历史，空画布即空白画布，无需写入；
    * - 选词步（步 1 的 `relay_choose`）：随机代选本链候选之一，绝不把空白画布交给下一棒（S40）。
    */

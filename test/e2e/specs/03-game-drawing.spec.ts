@@ -16,12 +16,10 @@ test.describe('03 - 对局画板与绘图工具 (Game Drawing & Canvas)', () => 
       await expect(drawer.page.locator('canvas.bg-white')).toBeVisible()
       await expect(guesser.page.locator('canvas.bg-white')).toBeVisible()
 
-      // 3. 新浮层布局：底部工具条与浮层面板均可由顶栏开关收起 / 重新打开
+      // 3. 浮层布局：底部工具条是画家常驻元素，顶栏不再提供「绘图工具」开关
+      //（工具条改为不可隐藏 + 手柄拖拽，见 ADR-0054），因此只断言存在性与旧开关缺席。
       await expect(drawer.game.toolbar).toBeVisible()
-      await drawer.game.toggleToolbar()
-      await expect(drawer.game.toolbar).toBeHidden()
-      await drawer.game.toggleToolbar()
-      await expect(drawer.game.toolbar).toBeVisible()
+      await expect(drawer.page.getByRole('button', { name: '绘图工具' })).toHaveCount(0)
 
       // 玩家面板是常驻左栏：没有顶栏开关，始终可见
       await expect(drawer.game.playersPanel).toBeVisible()

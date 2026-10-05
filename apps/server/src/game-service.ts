@@ -185,7 +185,7 @@ export class GameService {
   readonly roomsByPrivateCode = this.domain.roomsByPrivateCode
   readonly invites = this.domain.invites
 
-  /** 回合流转状态机：开局/选词/作画/结算/暂停等阶段推进逻辑。 */
+  /** 回合流转状态机：开局/选词/作画/结算等阶段推进逻辑。 */
   readonly round: RoundMachine
   /** 接龙生命周期状态机：与经典回合机**平级**，按房间玩法经 `lifecycle` 分派（S55）。 */
   readonly relay: RelayMachine
@@ -333,11 +333,6 @@ export class GameService {
       random: this.random,
       getRoomVocabularyStore: this.ports.getRoomVocabularyStore,
       requireRelay: this.ports.requireRelay,
-      // 掉队代交的在场事实：断线时刻取自玩家身份（宽限 = 断线时刻 + 短宽限，S8）
-      getPlayerPresence: (playerId) => {
-        const player = this.players.get(playerId)
-        return { connected: player?.connected === true, disconnectedAt: player?.disconnectedAt }
-      },
       emitSystemNotice: this.ports.emitSystemNotice,
       emitRoom: (roomId) => this.publisher.emitRoom(roomId),
       broadcastPresence: () => this.publisher.broadcastPresence(),
@@ -964,7 +959,7 @@ export class GameService {
     this.relay.vote(room, playerId, choice)
   }
 
-  /** 房主提前结束比赛：仅对局进行中（不含开局倒计时，尚未正式开赛）或暂停时可触发，直接进入最终结算。 */
+  /** 房主提前结束比赛：仅对局进行中（不含开局倒计时，尚未正式开赛）可触发，直接进入最终结算。 */
   endEarly(playerId: string): void {
     const room = this.membership.requireHostRoom(playerId)
     // 复盘期（展示 + 投票）完全不可干预（S12）：没有「跳过」也没有「提前结束」——
@@ -972,7 +967,7 @@ export class GameService {
     if (room.phase === 'relay_showcase' || room.phase === 'relay_vote')
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_END_EARLY)
     // starting（3 秒开局倒计时）不算可提前结束的比赛：此时 game 已预建但没有进行中的回合，
-    // 若放行会试图执行领域不允许的 starting → game_result 转换。isPlaying 已含 paused。
+    // 若放行会试图执行领域不允许的 starting → game_result 转换。
     const inProgress = this.isPlaying(room.phase) && room.phase !== 'starting'
     if (!inProgress)
       throw new GameError('INVALID_PHASE', serverStrings.errors.INVALID_PHASE_END_EARLY)
@@ -1138,9 +1133,8 @@ export class GameService {
   }
 
   /**
-   * 是否为对局进行中的阶段（含暂停）：用于「是否已开赛」与大厅玩家状态展示。
-   * 阶段白名单唯一来源是 phase-facts；此前不含 paused，使暂停房间成员在大厅被显示为
-   * 「房间中」而非「游戏中」。
+   * 是否为对局进行中的阶段：用于「是否已开赛」与大厅玩家状态展示。
+   * 阶段白名单唯一来源是 phase-facts 的 isInMatchPhase（含接龙的五个阶段）。
    * @internal 内部协作接口（RoundMachine / 模块间调用）
    */
   public isPlaying(phase: RoomPhase): boolean {

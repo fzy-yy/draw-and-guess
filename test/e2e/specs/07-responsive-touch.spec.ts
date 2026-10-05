@@ -66,6 +66,14 @@ async function openClient(browser: Browser, baseline: Baseline) {
   }
 }
 
+/**
+ * 用例昵称（房主 / 客人各一），刻意取短名并**只锚定前缀**：
+ * 昵称输入框按 `nicknameMaxLength`（10 grapheme）截断超长输入，服务端还会给重名追加数字后缀
+ * （重试会复用同一服务进程），因此全名不是稳定标识；而同一 run 内一个房间只有一名房主与一名客人，
+ * 前缀足以唯一定位席位卡。
+ */
+const NICKNAMES = { host: '响应房主', guest: '响应客人' } as const
+
 for (const baseline of BASELINES) {
   test.describe(`${baseline.label} ${baseline.width}×${baseline.height}`, () => {
     test.describe.configure({ mode: 'serial' })
@@ -131,7 +139,7 @@ for (const baseline of BASELINES) {
       const page = host.page
 
       // ---------- 3. 大厅 ----------
-      await host.profile.setNickname(`响应式房主-${baseline.key}`)
+      await host.profile.setNickname(NICKNAMES.host)
       await host.profile.enterLobby()
       const lobbyLeft = page.locator('main > section').first()
       const lobbyAside = page.locator('main > aside').first()
@@ -239,7 +247,7 @@ for (const baseline of BASELINES) {
       await assertNoOverflow(vocabDialog, '词库弹窗')
       await expect(vocabDialog.locator('header button')).toBeVisible()
       await expect(vocabDialog.getByRole('button', { name: /切换词库选择/ })).toBeVisible()
-      await expect(vocabDialog.getByRole('button', { name: /按分类筛选/ })).toBeVisible()
+      await expect(vocabDialog.getByRole('button', { name: /按合集筛选/ })).toBeVisible()
       await expect(vocabDialog.getByRole('button', { name: /确认选择/ })).toBeVisible()
       await assertDenseTarget(
         vocabDialog.locator('tbody input[type="checkbox"]').first(),
@@ -272,15 +280,12 @@ for (const baseline of BASELINES) {
 
       // ---------- 9. 对局工具栏（需要第二名玩家开局） ----------
       await guest.profile.goto()
-      await guest.profile.setNickname(`响应式客人-${baseline.key}`)
+      await guest.profile.setNickname(NICKNAMES.guest)
       await guest.profile.enterLobby()
       await guest.lobby.joinPublicRoom(roomName)
       // 功能回归守卫：右键他人席位卡弹出席位操作菜单（角标按钮已移除），
       // 「移除该玩家」仍可经确认弹窗流程打开并取消
-      const guestSeat = page
-        .locator('article')
-        .filter({ hasText: `响应式客人-${baseline.key}` })
-        .first()
+      const guestSeat = page.locator('article').filter({ hasText: NICKNAMES.guest }).first()
       await guestSeat.click({ button: 'right' })
       const seatMenu = page.getByRole('menu', { name: /席位操作/ })
       await expect(seatMenu).toBeVisible()
@@ -325,7 +330,12 @@ for (const baseline of BASELINES) {
       // 浮层布局：工具条是 role=toolbar，聊天面板是浮层内的 aside，玩家面板是常驻左栏
       await assertNoOverflow(gamePage.getByRole('toolbar', { name: '绘图工具栏' }), '对局工具栏')
       await assertNoOverflow(gamePage.getByLabel('玩家', { exact: true }), '对局玩家面板')
-      await assertNoOverflow(gamePage.locator('aside:has(form:has(#guess-input))'), '对局聊天面板')
+      // 聊天列（GameView 的 20cqw 常驻区）与 ChatPanel 自身根节点都是 aside，且后者是前者的后代，
+      // 因此 `aside:has(...)` 会同时命中两层；取文档序第一个即外层聊天列。
+      await assertNoOverflow(
+        gamePage.locator('aside:has(form:has(#guess-input))').first(),
+        '对局聊天面板',
+      )
       await assertWithinStage(gamePage, gamePage.locator('form:has(#guess-input)'), '猜词输入区')
       await expect(gamePage.getByRole('button', { name: /画笔/ })).toBeVisible()
       await expect(gamePage.getByRole('button', { name: /橡皮擦/ })).toBeVisible()
@@ -333,7 +343,6 @@ for (const baseline of BASELINES) {
       await expect(gamePage.getByRole('button', { name: /撤销/ })).toBeVisible()
       await expect(gamePage.getByRole('button', { name: /重做/ })).toBeVisible()
       await expect(gamePage.getByRole('button', { name: /清空/ })).toBeVisible()
-      await expect(gamePage.getByRole('button', { name: /暂停/ })).toBeVisible()
       await expect(gamePage.getByRole('button', { name: /设置/ })).toBeVisible()
       await expect(gamePage.getByRole('button', { name: /全屏/ })).toBeVisible()
       await expect(gamePage.locator('form:has(#guess-input) button')).toBeVisible()

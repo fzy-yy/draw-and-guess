@@ -245,7 +245,17 @@ export const projectConventions = {
 
 export default tseslint.config([
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/release/**'],
+    // 忽略产物与依赖（与 .gitignore / .prettierignore 同口径）：
+    // Playwright 的报告与 trace 里是压缩过的第三方 JS bundle，纳入 lint 会让本地跑完 e2e 后 pnpm lint 恒失败。
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/release/**',
+      '**/test-results/**',
+      '**/playwright-report/**',
+      '**/blob-report/**',
+      '.pi/**',
+    ],
   },
   {
     // 过期豁免守护：被禁用却不再命中任何问题的 eslint-disable 直接报错（AGENTS 要求生产源码零 eslint-disable 记录）。

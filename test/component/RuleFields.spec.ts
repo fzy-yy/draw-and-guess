@@ -34,7 +34,7 @@ describe('规则字段原语', () => {
     const onUpdate = vi.fn()
     render(RuleToggleField, {
       props: {
-        label: '允许暂停',
+        label: '允许画布气泡互动',
         modelValue: false,
         'onUpdate:modelValue': onUpdate,
       },

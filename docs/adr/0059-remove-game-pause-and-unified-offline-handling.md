@@ -46,3 +46,19 @@
 - **大幅降低维护负担**：移除了跨模块的 `pauseState` 冻结与恢复逻辑，消除了 `autoSubmitTimers` 等易竞态短定时器，断线与挂机收敛为同一套超时兜底；
 - **消除死锁隐患**：所有对局阶段均有明确的时间上限与超时默认操作，杜绝了无限挂起；
 - **协议向前不兼容**：`RoomPhase` 枚举精简与请求事件移除使通信协议版本从 `'19'` 升级为 `'20'`，客户端与服务端需同步更新。
+
+## 关联
+
+- 代码：`packages/shared/src/protocol/{base,room,gameplay,response}.ts`（阶段枚举 / 房间设置 / 视图字段 / ack 边界）、
+  `packages/shared/src/pure.ts`（`LEGAL_PHASES`）、`apps/server/src/round-machine.ts`、
+  `apps/server/src/domain/relay/relay-machine.ts`、`apps/server/src/domain/room/{phase-facts,member-facts}.ts`、
+  `apps/server/src/domain/session/session-service.ts`、`apps/server/src/domain/room/room-membership-service.ts`、
+  `apps/server/src/config/private.ts`（宽限配置 `hostReconnectGraceMs`）、
+  `apps/client/src/components/game/{GameHud,PhaseOverlay}.vue`
+- 测试：`test/unit/{relay-steps,relay-phase-facts,server-defects,runtime-lifecycle,game-rematch}.spec.ts`、
+  `test/component/ClientRelaySurfaces.spec.ts`、
+  `test/e2e/specs/{05-game-lifecycle,09-drawing-history-limit}.spec.ts`
+- 取代：[ADR-0040](0040-round-timing-and-phase-facts.md) 的暂停现场 / `isPausable` / 阶段时长冻结部分、
+  [ADR-0045](0045-custom-word-and-untimed-choosing.md) 的「选词阶段不限时」部分
+- 相关：ADR-0010（绘图历史上限）、ADR-0023（成员事实单一口径）、ADR-0024（回合所有权）、
+  ADR-0058（接龙权威流程）

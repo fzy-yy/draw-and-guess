@@ -1,6 +1,7 @@
 # 0040 · 回合时序与阶段事实收口
 
-**状态**：已采纳
+**状态**：已采纳（暂停现场 / `isPausable` / 阶段时长冻结相关部分被
+[0059](0059-remove-game-pause-and-unified-offline-handling.md) 取代；阶段事实单一口径与 RoundMachine 独占时序仍然有效）
 
 - 来源：2026-09-30 服务端架构审查候选 1/2（回合时序所有权 + 装配与 seam 收口）
 

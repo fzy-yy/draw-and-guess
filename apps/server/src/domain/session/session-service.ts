@@ -240,7 +240,7 @@ export class SessionService {
     }
     this.joinSocketRoom(player) // 重新加入 Socket 房间，恢复广播接收
     if (player.roomId) this.context.emitRoom(player.roomId) // 重新推送房间快照，恢复对局视图
-    // 只有「作画阶段断线且席位被保留」才通知同局其他在线成员；本人由连接恢复模态框反馈。
+    // 只有「对局进行中断线且席位被保留」才通知同局其他在线成员；本人由连接恢复模态框反馈。
     if (room && player.drawingDisconnectRoomId === room.id) {
       const payload: MemberConnectionChange = {
         playerId: player.id,
@@ -414,12 +414,11 @@ export class SessionService {
   }
 
   /**
-   * 对局阶段断线保席：作废画布游标、广播重连提示，并为画家/房主安排短宽限计时器。
+   * 对局阶段断线保席：作废画布游标、广播重连提示，并为房主安排短宽限计时器。
    * 接龙局进行中（动手期 + 展示 / 投票期）走同一保席路径：席位于断线期间保留在房间里（链位不受影响）。
-   * 动手期的本步代交由接龙状态机按「断线时刻 + 短宽限」调度（S8），宽限内重连可续接当前步；
-   * 展示 / 投票期不安排代交（没有个人棒次），保席只为让宽限内重连者继续看轮播、在投票窗口内补投（US48）。
-   * 宽限期间房间可能被暂停（保留席位语义仍指向作画），因此暂停中同样认定「本回合未完成」：
-   * 否则超时回调因阶段不是 drawing 而静默跳过，恢复后回合将无人作画直至自然超时。
+   * 断线者一律按挂机对待：不安排任何提前代交或提前废弃，全部由各阶段倒计时到点的大扫掠兜底
+   *（见 docs/adr/0059-remove-game-pause-and-unified-offline-handling.md）；
+   * 只有房主控制权会在短宽限后迁移给在线可玩成员，其余现场一律不动。
    */
   private retainMatchSeat(player: PlayerSecret, room: RoomSecret, generation: number): void {
     const playerId = player.id
@@ -440,7 +439,7 @@ export class SessionService {
 
     // 对局中房主掉线时暂留控制权；短宽限后仍未恢复才迁移给在线可玩成员。
     if (room.hostId === playerId) {
-      this.context.scheduler.set(APP_CONFIG.network.drawerReconnectGraceMs, () =>
+      this.context.scheduler.set(APP_CONFIG.network.hostReconnectGraceMs, () =>
         this.context.safeRun('hostReconnectTimeout', () => {
           if (
             !this.isSameDisconnectEpisode(player, generation, room.id) ||
@@ -455,7 +454,7 @@ export class SessionService {
     this.context.emitRoom(room.id)
   }
 
-  /** 身份级宽限与房间席位分离：非作画阶段虽已离房，仍可凭令牌恢复同一 UUID 后进入大厅。 */
+  /** 身份级宽限与房间席位分离：非对局阶段虽已离房，仍可凭令牌恢复同一 UUID 后进入大厅。 */
   private scheduleIdentityGrace(playerId: string): void {
     const player = this.context.players.get(playerId)
     if (!player) return

@@ -270,10 +270,9 @@ export class RoomMembershipService {
 
   /**
    * 离场共用②：画家缺席的阶段收敛。
-   * 选词阶段（含该阶段处于暂停时）离开：本回合作废并直接进入下一回合选词——
-   * 否则会落到 finishRound，而它因 answer 尚未确定会静默 return，
-   * 使房间卡在 paused 且 drawerId 指向已离开的玩家（恢复后进入无人能作画的空回合）。
-   * 作画阶段（含暂停前为作画）离开：本回合立即结算作废。
+   * 选词阶段离开：本回合作废并直接进入下一回合选词——否则会落到 finishRound，
+   * 而它因 answer 尚未确定会静默 return，使房间卡在选词阶段且 drawerId 指向已离开的玩家。
+   * 作画阶段离开：本回合立即结算作废。
    */
   private settleDrawerDeparture(room: RoomSecret, playerId: string, nickname: string): void {
     if (room.game?.drawerId !== playerId) return
@@ -283,7 +282,7 @@ export class RoomMembershipService {
   }
 
   /**
-   * 离场共用③：统一收尾——在线人数不足自动暂停、结算期重赛评估、全房间快照与在线在场广播。
+   * 离场共用③：统一收尾——结算期重赛评估、全房间快照与在线在场广播。
    */
   private finalizeDepartureTail(room: RoomSecret): void {
     if (room.phase === 'game_result') this.context.evaluateRematch(room)

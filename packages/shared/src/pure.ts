@@ -112,7 +112,6 @@ const LEGAL_PHASES: Record<RoomPhase, readonly RoomPhase[]> = {
    * 接龙的 `relay_draw` 与 `relay_guess` 各出现两次，步骤号属接龙局状态（不在这里表达）。
    * 对局期（choose/draw/guess）房主可提前结束进 `game_result`（S34 / S38）；
    * 展示期（showcase/vote）禁止提前结束，故没有 `relay_showcase → game_result` 这条边（S12）。
-   * `paused` 在接龙全链不可达（接龙禁用暂停，S19）。
    */
   relay_choose: ['relay_draw', 'game_result', 'closed'],
   // 步 1 与步 3 共用 `relay_draw` 这个阶段名（步骤号属接龙局状态），四步链严格递进

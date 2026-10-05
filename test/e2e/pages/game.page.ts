@@ -13,7 +13,7 @@ export class GamePage {
     return text
   }
 
-  /** 底部绘图工具条（浮层布局版）与顶栏「绘图工具」开关。 */
+  /** 底部绘图工具条（浮层布局版）；对画家常驻不可隐藏，无顶栏开关（见 ADR-0054）。 */
   get toolbar() {
     return this.page.getByRole('toolbar', { name: '绘图工具栏' })
   }
@@ -30,10 +30,6 @@ export class GamePage {
 
   async toggleChatPanel() {
     await this.page.getByRole('button', { name: '聊天面板' }).click()
-  }
-
-  async toggleToolbar() {
-    await this.page.getByRole('button', { name: '绘图工具' }).click()
   }
 
   async selectTool(tool: 'pen' | 'eraser' | 'fill') {
@@ -98,19 +94,6 @@ export class GamePage {
     const canvas = this.page.locator('canvas').first()
     await canvas.click({ button: 'right' })
     await this.page.locator(`button:has-text("${phrase}")`).click()
-  }
-
-  async pauseGame() {
-    await this.page.getByRole('button', { name: /暂停游戏/ }).click()
-    await expect(this.page.locator('text=游戏已安全暂停')).toBeVisible({ timeout: 10_000 })
-  }
-
-  async resumeGame() {
-    await this.page
-      .getByRole('button', { name: /继续游戏/ })
-      .last()
-      .click()
-    await expect(this.page.locator('text=游戏已安全暂停')).toBeHidden({ timeout: 10_000 })
   }
 
   async returnToWaiting() {
