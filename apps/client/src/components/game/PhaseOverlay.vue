@@ -50,8 +50,14 @@ const emit = defineEmits<{
 }>()
 
 const store = useGameStore()
-/** 遮罩的数据源：经典对局视图或接龙视图（两者必居其一），决定本组件是否渲染任何遮罩。 */
-const hasOverlaySource = computed(() => Boolean(props.game || store.room?.relay))
+/**
+ * 遮罩的数据源：经典对局视图、接龙视图，或**开局倒计时**——
+ * 接龙房在 `starting` 期还没有接龙视图（服务端接龙阶段白名单，S22），若仍以「存在视图」为门禁，
+ * 这 3 秒会一片空白（开局遮罩、阶段播报都不渲染），因此这里按阶段一并认下。
+ */
+const hasOverlaySource = computed(() =>
+  Boolean(props.game || store.room?.relay || store.room?.phase === 'starting'),
+)
 /** 计算终局荣誉称号列表映射（按成员 ID 索引） */
 const playerAccolades = computed(() => {
   return deriveAccolades(props.game, store.room?.members ?? [])
@@ -163,6 +169,13 @@ const chooseOptions = computed(() =>
 const canReroll = computed(() =>
   isRelayChoose.value ? relayChoose.value?.canReroll === true : props.game?.canReroll === true,
 )
+/**
+ * 选词卡标题：经典＝「轮到你作画了」；接龙＝「接龙 · 第 1 棒」（S83）——
+ * 接龙选词卡复用经典同一张卡，只有这一句文案与数据来源不同（S84）。
+ */
+const chooseTitle = computed(() =>
+  isRelayChoose.value ? strings.ui.game.relayChooseTitle : strings.ui.game.yourTurn,
+)
 /** 卡片底部提示：接龙选词恒有截止时间（无「不限时」档位），经典按规则在限时与不限时之间切换。 */
 const chooseHint = computed(() => {
   if (chooseLocked.value) return strings.ui.game.relayWaitingOthers
@@ -192,7 +205,7 @@ const chooseHint = computed(() => {
       <div class="grid place-items-center h-[7.5cqh] w-[7.5cqh] bg-blue rounded-full">
         <Brush class="h-[3.8cqh] w-[3.8cqh] text-white" />
       </div>
-      <p>{{ strings.ui.game.yourTurn }}</p>
+      <p>{{ chooseTitle }}</p>
       <div class="relative flex w-full items-center justify-center min-h-[4.5cqh]">
         <h2>{{ strings.ui.game.chooseWordTitle }}</h2>
         <!-- 右侧动作组：换一组与自定义并排（关闭对应规则时整颗按钮不渲染；已选完词时整组收起） -->

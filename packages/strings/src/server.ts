@@ -28,6 +28,8 @@ export const serverStrings = {
     NOT_IN_ROOM_KICK: '目标玩家已不在房间',
     NOT_IN_ROOM_TRANSFER: '目标玩家不在房间',
     FORBIDDEN: '只有房主可以执行此操作',
+    /** 接龙房整体禁用画布微表情（S19）：模式级拒绝，与经典房「房主专属」语义区分开。 */
+    FORBIDDEN_RELAY_CANVAS_PING: '接龙模式不支持画布微表情',
     FORBIDDEN_INVITE: '本房间仅房主可以邀请',
     NO_GAME: '当前房间没有进行中的游戏',
     NOT_DRAWER: '只有当前画家可以修改画板',

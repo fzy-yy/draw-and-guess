@@ -11,13 +11,14 @@
  * | `relay_guess`（步 2） | 向前回退 1 条 | 上家的第一幅画作（只读）+ **画这幅画的人**（链发起人）chip（带画笔角标） |
  * | `relay_guess`（步 4） | 向前回退 3 条 | 上家的第二幅画作（只读）+ **画这幅画的人**（第三棒）chip（带画笔角标） |
  * | `relay_showcase`（游标所在链） | 全员同一份 | 当前链本半场的题面 / 画作（全量 strokes）/ 猜词者 chip；答案仅揭晓页给文本 |
- * | `relay_vote`（游标所在链） | 全员同一份 | 同上，且答案已揭晓（投票卡要用两个答案）；匿名票行归工单 08 |
+ * | `relay_vote`（游标所在链） | 全员同一份 | **初始词 → 第四棒答案**（投票判定「初始词与最终答案是否匹配」，S44）＋已揭晓的画作；匿名票行归工单 08 |
  *
  * 任何一格都**绝不下发**：其余链的画作与答案、未揭晓的答案（连长度也不给，S81 的占位由客户端按固定位数渲染）、
  * 他人的候选词池（S31）、以及全部提交 / 投票的归属记录（S35 / S63）。
  * `messages` 是房间级自由聊天流，与作答彻底分离（S79 / S20）。
  *
  * 本模块只读快照：不修改任何权威状态，因此可以在快照矩阵里脱离整机服务独立穷举。
+ * 整体取舍（服务端权威推进、策略分流与插槽式复用）见 docs/adr/0058-relay-mode-authoritative-flow-and-reuse.md。
  */
 import { APP_CONFIG } from '../../config/index.ts'
 import { serverStrings } from '@draw-guess/strings'
@@ -150,22 +151,38 @@ export class RelaySnapshotBuilder {
     const guesserId = actorAt(cursor.half === 1 ? 1 : 3)
     // 残缺现场（游标越界 / 链数组不全）：只给阶段骨架，绝不猜一条链出来（fail-safe 不泄漏）
     if (!currentChain || !artistId || !guesserId) return view
-    // 题面：半场 1＝发起人选的词；半场 2＝第二棒猜出的文本（它同时是第三棒的题面）。
-    // 两个值在轮播到本半场时都已公开（半场 2 的题面正是半场 1 揭晓的那个答案）。
-    const prompt = cursor.half === 1 ? currentChain.step1Word?.text : currentChain.step2Guess
-    // 答案：未揭晓（重播 / 停顿页）时 text 为 null——不下发文本、也不下发长度（S81），
-    // 客户端用经典遮罩同款的固定位数下划线占位。
-    const answer = cursor.half === 1 ? currentChain.step2Guess : currentChain.step4Guess
+    // 双胶囊的两种口径（S32 / S44 / S63）：
+    // - 展示期（relay_showcase）：左＝本半场题面（半场 1＝发起人选的词；半场 2＝第二棒猜出的文本，
+    //   它同时是第三棒的题面），右＝本半场答案。两个值在轮播到本半场时都已公开
+    //  （半场 2 的题面正是半场 1 揭晓的那个答案）。
+    // - 投票期（relay_vote）：投票判定的是「**初始词**与最终答案是否匹配」（S44 / ADR-0058），
+    //   因此左恒取该链的 `step1Word` 与其作者（链发起人），右恒取第四棒的 `step4Guess`；
+    //   不可再沿用半场 2 的 `step2Guess`——否则投票卡上根本看不到初始词。
+    const isVote = room.phase === 'relay_vote'
+    const promptText = isVote
+      ? currentChain.step1Word?.text
+      : cursor.half === 1
+        ? currentChain.step1Word?.text
+        : currentChain.step2Guess
+    const promptPlayerId = isVote ? currentChain.originPlayerId : artistId
+    const answerText = isVote
+      ? currentChain.step4Guess
+      : cursor.half === 1
+        ? currentChain.step2Guess
+        : currentChain.step4Guess
     return {
       ...view,
       showcase: {
         chainIndex: cursor.chainIndex,
         chainCount,
         half: cursor.half,
-        prompt: { player: this.showcaseChip(room, artistId), text: prompt ?? null },
+        // 未揭晓的题面（理论上只在链残缺时）同样只表达为 null，不下发占位文本
+        prompt: { player: this.showcaseChip(room, promptPlayerId), text: promptText ?? null },
+        // 答案：未揭晓（重播 / 停顿页）时 text 为 null——不下发文本、也不下发长度（S81），
+        // 客户端用经典遮罩同款的固定位数下划线占位。投票期必在揭晓页之后，两个答案都已公开。
         answer: {
           player: this.showcaseChip(room, guesserId),
-          text: cursor.page === 'reveal' ? (answer ?? null) : null,
+          text: isVote || cursor.page === 'reveal' ? (answerText ?? null) : null,
         },
         // 重播的画作：半场 1＝第一幅、半场 2＝第二幅，**全量 strokes** 供客户端只读重放（S32）；
         // 空白画布保持空白、不加任何标注（S66）。

@@ -189,9 +189,9 @@ describe('接龙复盘轮播（工单 07）', () => {
     scenario.advanceShowcasePage()
     expect(scenario.room.phase).toBe('relay_vote')
     expect(scenario.showcaseCursor()).toEqual({ chainIndex: 1, half: 2, page: 'reveal' })
-    // 投票期的快照仍是这条链，且两个答案都已揭晓（投票卡要并排展示两个答案，S78）
+    // 投票期的快照仍是这条链，且两个答案都已揭晓（投票卡并排展示**初始词**与最终答案，S44 / S78）
     const voteView = showcaseOf(scenario, viewer.playerId)
-    expect(voteView?.prompt.text).toBe(content.step2Of(0))
+    expect(voteView?.prompt.text).toBe(content.promptOf(0))
     expect(voteView?.answer.text).toBe(content.step4Of(0))
     // 投票窗口由工单 08 的收票状态机写入：固定 relay.voteSeconds，到点才结算（S21）
     expect(scenario.relay.phaseEndsAt - scenario.relay.phaseStartedAt).toBe(
@@ -409,6 +409,25 @@ describe('接龙复盘轮播（工单 07）', () => {
     expect(showcase?.prompt.player.id).toBe(secondOrigin.playerId)
     expect(scenario.finishShowcaseChain()).toHaveLength(6)
     expect(scenario.room.phase).toBe('relay_vote')
+  })
+
+  it('复盘期断线保席：成员不被移出房间，宽限内重连回到同一链位并照常进入投票（S12 / US48）', () => {
+    const { scenario } = playToShowcaseWithSentinels()
+    const dropped = scenario.players[1]
+    if (!dropped) throw new Error('场景缺少玩家')
+
+    scenario.disconnect(dropped)
+
+    // 保席：展示期掉线不再走 leaveRoom 分支，断线者仍在成员表与房间里（开局后不可加入，S36）
+    expect(scenario.room.members.some((member) => member.playerId === dropped.playerId)).toBe(true)
+    expect(scenario.harness.service.players.get(dropped.playerId)?.roomId).toBe(scenario.room.id)
+
+    // 轮播不因成员变动而中止（S12）：本链照常走完进入投票；断线者宽限内重连后仍能补投
+    scenario.finishShowcaseChain()
+    expect(scenario.room.phase).toBe('relay_vote')
+    scenario.reconnect(dropped)
+    scenario.vote(dropped, 'agree')
+    expect(showcaseOf(scenario, scenario.host.playerId)?.votes).toEqual(['agree'])
   })
 
   it('掉线成员身份被回收不中止轮播：本局照常走完并落盘（S7 / S12）', () => {

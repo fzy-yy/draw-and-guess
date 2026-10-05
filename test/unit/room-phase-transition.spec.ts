@@ -202,6 +202,10 @@ describe('接龙阶段转换白名单（S10 / S22 / S23 / S34）', () => {
     expect(canTransition('relay_draw', 'relay_showcase')).toBe(false)
     expect(canTransition('relay_guess', 'relay_vote')).toBe(false)
     expect(canTransition('relay_vote', 'waiting')).toBe(false)
+    // 任何接龙阶段都没有自环边：四步链严格递进（步 1 与步 3 共用 relay_draw 这个阶段名，
+    // 但状态机从不把 relay_draw 写回 relay_draw）
+    for (const phase of RELAY_PHASES)
+      expect(canTransition(phase, phase), `${phase} → ${phase}`).toBe(false)
   })
 
   it('对局期（选词 / 作画 / 猜词）可提前结束；展示轮播期没有进终局的边（S34 / S12）', () => {

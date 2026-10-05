@@ -46,9 +46,10 @@ const PAUSABLE_PHASES = [
 const ROUND_SETTLE_PHASES = ['drawing', 'paused'] as const satisfies readonly RoomPhase[]
 
 /**
- * 接龙对局阶段（步 1–4 的动手期）：选词、作画、猜词。
- * 展示期（`relay_showcase` / `relay_vote`）不在其中——复盘没有个人棒次，掉线既不保席也不代交。
- * 用途：断线保席（session）与「本步代交」的准入（relay 状态机），两处必须同一口径。
+ * 接龙动手期（步 1–4 的个人棒次）：选词、作画、猜词。
+ * 用途：**本步代交**的准入（relay 状态机）——展示期没有个人棒次，不安排代交
+ *（轮播完全自动、不因成员变动而中止，S12）。
+ * 断线保席另用 `isRelayMatchPhase`：展示 / 投票期掉线同样保留席位（US48）。
  */
 const RELAY_PLAY_PHASES = [
   'relay_choose',
@@ -56,14 +57,31 @@ const RELAY_PLAY_PHASES = [
   'relay_guess',
 ] as const satisfies readonly RoomPhase[]
 
+/**
+ * 接龙局进行中的**全部**阶段＝动手期 + 展示期（复盘轮播 / 投票）。
+ * 用途：断线保席（session）——展示期掉线同样保留席位与链位，让宽限内重连的人仍能看完整
+ * 轮播、并在投票期补投（US48）。它与代交准入 `isRelayPlayPhase` 不同：展示期没有个人棒次，
+ * 掉线既不代交、也不影响轮播（S12）。
+ */
+const RELAY_MATCH_PHASES = [
+  ...RELAY_PLAY_PHASES,
+  'relay_showcase',
+  'relay_vote',
+] as const satisfies readonly RoomPhase[]
+
 /** 阶段是否属于进行中的对局（含暂停态）。 */
 export function isInMatchPhase(phase: RoomPhase): boolean {
   return IN_MATCH_PHASES.some((candidate) => candidate === phase)
 }
 
-/** 阶段是否属于接龙对局期（动手期）。 */
+/** 阶段是否属于接龙动手期（代交准入）。 */
 export function isRelayPlayPhase(phase: RoomPhase): boolean {
   return RELAY_PLAY_PHASES.some((candidate) => candidate === phase)
+}
+
+/** 阶段是否属于「接龙局进行中」（保席口径，含展示 / 投票期）。 */
+export function isRelayMatchPhase(phase: RoomPhase): boolean {
+  return RELAY_MATCH_PHASES.some((candidate) => candidate === phase)
 }
 
 /** 阶段是否允许暂停。 */

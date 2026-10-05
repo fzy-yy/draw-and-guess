@@ -42,9 +42,10 @@ let dragOrigin:
 /**
  * 手柄的基础交互类：抓取光标、禁用触摸滚动与拖动中的选中态由外壳统一负责，
  * 尺寸 / 圆角 / 悬停底色等排版差异留给宿主自行附加。
+ * 手柄只包一个图标，绝对居中按仓库布局规范用 `grid place-items-center`（不用 flex 居中）。
  */
 const gripClass =
-  'flex cursor-grab touch-none items-center justify-center text-muted transition-colors active:cursor-grabbing'
+  'grid cursor-grab touch-none place-items-center text-muted transition-colors active:cursor-grabbing'
 
 /** 交给宿主 `v-bind` 的手柄绑定：事件 + 无障碍名 + 基础交互类。 */
 const dragProps = computed(() => ({

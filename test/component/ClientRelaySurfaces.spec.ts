@@ -1,8 +1,9 @@
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, nextTick } from 'vue'
 import { setActivePinia, type Pinia } from 'pinia'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { EVENTS, type RoomMember } from '@draw-guess/shared'
+import { EVENTS, type RoomMember, type RoomSnapshot } from '@draw-guess/shared'
+import { PUBLIC_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import ChatPanel from '@/components/game/ChatPanel.vue'
 import GameHud from '@/components/game/GameHud.vue'
@@ -48,6 +49,9 @@ beforeEach(() => {
   fakeTransport = installed.fakeTransport
   setActivePinia(pinia)
   fakeTransport.setConnected(true)
+  // 假传输的 setConnected 只改 socket 标志；会话快照的 connected 由 bootstrap 的 connect 回调推进，
+  // 这里直接置真以贴近线上（HUD 的展示用开局倒计时窗口据此判定「连接中不留锚点」）。
+  useSessionStore().connected = true
 })
 
 /** 挂载单个组件（真实 Pinia + 假传输），返回包装器由用例断言并卸载。 */
@@ -56,6 +60,17 @@ function mountWithPinia(
   props: Record<string, unknown> = {},
 ): VueWrapper {
   return mount(component, { props, global: { plugins: [pinia] } })
+}
+
+/**
+ * 接龙开局倒计时夹具：接龙房已进 `starting`，但该期服务端不下发 relay 视图（接龙阶段白名单，S22），
+ * 快照形状＝「接龙房 + starting + 无 relay 视图」。
+ */
+function createRelayStartingFixture(): RoomSnapshot {
+  const snapshot = createRelayRoomFixture()
+  snapshot.phase = 'starting'
+  delete snapshot.relay
+  return snapshot
 }
 
 describe('RelayPlayerChip 画笔角标', () => {
@@ -240,6 +255,39 @@ describe('ChatPanel 聊天语义 props', () => {
     expect(wrapper.find<HTMLInputElement>('#guess-input').element.value).toBe('')
     wrapper.unmount()
   })
+
+  it('无障碍名按语义分流：接龙聊天用聊天口径，经典侧仍是猜词口径', () => {
+    const roomStore = useRoomStore()
+    useSessionStore().playerId = HOST_ID
+
+    roomStore.room = createRelayRoomFixture('relay_draw')
+    const relayPanel = mountWithPinia(ChatPanel, {
+      canGuess: true,
+      submitTarget: 'chat',
+      title: strings.ui.game.relayChatTitle,
+      placeholder: strings.ui.game.drawerChatPlaceholder,
+    })
+    // 输入区与发送钮的读屏文案都不是猜词语义（S79：这条输入框只发聊天消息）
+    expect(relayPanel.find('label[for="guess-input"]').text()).toBe(
+      strings.a11y.game.relayChatInputAria,
+    )
+    expect(relayPanel.find('button[type="submit"]').attributes('aria-label')).toBe(
+      strings.a11y.game.relayChatSendAria,
+    )
+    expect(relayPanel.text()).not.toContain(strings.ui.game.guessLabel)
+    expect(relayPanel.find('button[type="submit"]').attributes('aria-label')).not.toBe(
+      strings.a11y.game.sendGuessAria,
+    )
+    relayPanel.unmount()
+
+    roomStore.room = createRoomFixture('drawing')
+    const classicPanel = mountWithPinia(ChatPanel, { canGuess: true })
+    expect(classicPanel.find('label[for="guess-input"]').text()).toBe(strings.ui.game.guessLabel)
+    expect(classicPanel.find('button[type="submit"]').attributes('aria-label')).toBe(
+      strings.a11y.game.sendGuessAria,
+    )
+    classicPanel.unmount()
+  })
 })
 
 describe('PhaseOverlay 接龙选词卡', () => {
@@ -253,16 +301,36 @@ describe('PhaseOverlay 接龙选词卡', () => {
     })
   }
 
-  it('复用同一张选词卡：圆底图标 + 标题 + 候选词大按钮都来自接龙视图', () => {
+  it('复用同一张选词卡：圆底图标 + 候选词大按钮都来自接龙视图，标题只写「接龙 · 第 1 棒」（S83）', () => {
     useRoomStore().room = createRelayRoomFixture('relay_choose', {
       wordOptions: [{ id: WORD_ID, text: '长颈鹿' }],
       canReroll: true,
     })
     const wrapper = mountChooseOverlay()
     expect(wrapper.text()).toContain(strings.ui.game.chooseWordTitle)
-    expect(wrapper.text()).toContain(strings.ui.game.yourTurn)
+    expect(wrapper.text()).toContain(strings.ui.game.relayChooseTitle)
+    // 接龙下不带括号说明、也不再写经典的「轮到你作画了」（S83）
+    expect(wrapper.text()).not.toContain(strings.ui.game.yourTurn)
     expect(wrapper.text()).toContain('长颈鹿')
     expect(wrapper.text()).toContain(strings.ui.game.autoChoose(12))
+    wrapper.unmount()
+  })
+
+  it('经典选词卡的标题仍是「轮到你作画了」：接龙文案只作用于接龙卡', () => {
+    const roomStore = useRoomStore()
+    roomStore.room = createRoomFixture('choosing_word', {
+      wordOptions: [{ id: WORD_ID, text: '长颈鹿' }],
+      canReroll: true,
+    })
+    useSessionStore().playerId = HOST_ID
+    const wrapper = mountWithPinia(PhaseOverlay, {
+      secondsLeft: 12,
+      game: roomStore.room.game,
+      rankings: [],
+    })
+    expect(wrapper.text()).toContain(strings.ui.game.yourTurn)
+    expect(wrapper.text()).toContain(strings.ui.game.chooseWordTitle)
+    expect(wrapper.text()).not.toContain(strings.ui.game.relayChooseTitle)
     wrapper.unmount()
   })
 
@@ -394,6 +462,28 @@ describe('useGameHud 接龙派生', () => {
     expect(mountedHud.relayStatusMode.value).toBe('none')
     expect(mountedHud.relayChainProgress.value).toEqual({ index: 2, total: 4 })
     showcaseWrapper.unmount()
+  })
+
+  it('开局倒计时期：还没有 relay 视图也有一份展示用倒计时窗口（时长取自公开配置）', async () => {
+    const roomStore = useRoomStore()
+    roomStore.room = createRelayStartingFixture()
+    const wrapper = mountHudHarness()
+
+    // 纯展示：本地窗口不推进阶段，房间仍在 starting（换阶段只由服务端快照驱动）
+    expect(roomStore.room?.phase).toBe('starting')
+    const windowMs = PUBLIC_CONFIG.game.startingCountdownSeconds * 1_000
+    const localNow = Date.now() + useGameStore().clockOffset
+    expect(mountedHud.phaseEndsAt.value).toBeGreaterThan(localNow)
+    expect(mountedHud.phaseEndsAt.value).toBeLessThanOrEqual(localNow + windowMs)
+    // 初始读数就是配置档位数，进度条同样由这个窗口驱动（不是「不限时」）
+    expect(mountedHud.secondsLeft.value).toBe(PUBLIC_CONFIG.game.startingCountdownSeconds)
+    expect(mountedHud.progress.value).toBeGreaterThan(0)
+
+    // 接龙视图一到（权威 phaseEndsAt 就位），本地窗口即让位
+    roomStore.room = createRelayRoomFixture('relay_choose', { phaseEndsAt: 61_000 })
+    await nextTick()
+    expect(mountedHud.phaseEndsAt.value).toBe(61_000)
+    wrapper.unmount()
   })
 
   it('经典房间的接龙派生保持缺省：题面占位、棒次 0、无状态与链进度', () => {

@@ -10,6 +10,8 @@
  * 已提交簿记时，机器会判定「权威历史比本地短」而整帧重建，把刚画出的笔画抹掉。
  * 自补规则与服务端 `domain/drawing/drawing-core.ts` 完全同口径（续接批次并回同一条命令、
  * 撤销栈、清空、修订单调），只做镜像记账、不做任何业务裁决（裁决权仍只在服务端）。
+ *
+ * 取舍与全景见 docs/adr/0058-relay-mode-authoritative-flow-and-reuse.md。
  */
 import { computed } from 'vue'
 import { defineStore } from 'pinia'

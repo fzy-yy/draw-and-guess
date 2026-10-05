@@ -673,11 +673,17 @@ describe('角色裁剪快照穷举矩阵', () => {
       // 复盘期：只公开游标指向的那条链的本半场；未揭晓的答案（重播 / 停顿页）不在允许清单里
       if (!cursor) return []
       const showcaseChain = cursor.chainIndex - 1
-      const revealed = phase === 'relay_vote' || cursor.page === 'reveal'
+      // 投票期：左胶囊是该链**初始词**（S44），右胶囊恒为第四棒答案——step2Guess 不再下发。
+      if (phase === 'relay_vote')
+        return [
+          relayWordText(showcaseChain),
+          relayStrokeId(showcaseChain, cursor.half === 1 ? 1 : 3),
+          relayLastGuessText(showcaseChain),
+        ]
       return [
         cursor.half === 1 ? relayWordText(showcaseChain) : relayGuessText(showcaseChain),
         relayStrokeId(showcaseChain, cursor.half === 1 ? 1 : 3),
-        ...(revealed
+        ...(cursor.page === 'reveal'
           ? [cursor.half === 1 ? relayGuessText(showcaseChain) : relayLastGuessText(showcaseChain)]
           : []),
       ]

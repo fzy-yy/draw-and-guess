@@ -844,13 +844,21 @@ export class GameService {
   }
 
   /**
-   * 处理玩家发送的画板微表情（👍 / ❓ / 🔥）：
+   * 处理玩家发送的画板微表情（👍 / ❓ / 🔥）。
+   * 接龙房整体禁用微表情（S19）：模式级绝对拒绝，不依赖任何房间规则开关，
+   * 否则被改客户端或旧客户端可绕过展示层、向全房广播。
+   * 经典房流程：
    * 1. 校验房间配置是否开启微表情交互（allowCanvasReactions === true）；
    * 2. 执行单人 1.5 秒滑动窗口限频（防刷屏）；
    * 3. 广播全员可见的轻量级推送（不入持久化、不入笔画历史）。
    */
   sendCanvasPing(playerId: string, x: number, y: number, type: CanvasPingType): void {
     const { room, player } = this.membership.requireMembership(playerId)
+    // 模式守卫先于规则开关：接龙内微表情在任何阶段（含复盘 / 投票）都不可用。
+    // 复用既有 FORBIDDEN 码（沿用 allowCanvasReactions 关闭时的同码口径），只给接龙专属文案。
+    if (room.gameMode === 'relay') {
+      throw new GameError('FORBIDDEN', serverStrings.errors.FORBIDDEN_RELAY_CANVAS_PING)
+    }
     if (!room.settings.allowCanvasReactions) {
       throw new GameError('FORBIDDEN', serverStrings.errors.FORBIDDEN)
     }

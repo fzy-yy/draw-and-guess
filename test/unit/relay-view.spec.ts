@@ -271,11 +271,15 @@ function allowedSentinels(
   // 未揭晓的答案（重播 / 停顿页）不在允许清单里：它的文本与遮罩都不得出现。
   if (!cursor) return []
   const chain = cursor.chainIndex - 1
-  const revealed = phase === 'relay_vote' || cursor.page === 'reveal'
+  // 投票期：左胶囊是该链**初始词**（S44），右胶囊恒为第四棒答案——步 2 的猜词文本不再下发。
+  if (phase === 'relay_vote')
+    return [wordTextOf(chain), strokeIdOf(chain, cursor.half === 1 ? 1 : 3), lastGuessTextOf(chain)]
   return [
     cursor.half === 1 ? wordTextOf(chain) : guessTextOf(chain),
     strokeIdOf(chain, cursor.half === 1 ? 1 : 3),
-    ...(revealed ? [cursor.half === 1 ? guessTextOf(chain) : lastGuessTextOf(chain)] : []),
+    ...(cursor.page === 'reveal'
+      ? [cursor.half === 1 ? guessTextOf(chain) : lastGuessTextOf(chain)]
+      : []),
   ]
 }
 
@@ -335,8 +339,11 @@ describe('接龙视图裁剪矩阵', () => {
           expect(showcase?.chainIndex, label).toBe(cell.cursor.chainIndex)
           expect(showcase?.chainCount, label).toBe(CHAIN_COUNT)
           expect(showcase?.half, label).toBe(cell.cursor.half)
+          // 投票期左胶囊＝该链**初始词**（S44）；展示期才按半场取题面（半场 2 是 step2Guess）
           expect(showcase?.prompt.text, label).toBe(
-            cell.cursor.half === 1 ? wordTextOf(chain) : guessTextOf(chain),
+            cell.phase === 'relay_vote' || cell.cursor.half === 1
+              ? wordTextOf(chain)
+              : guessTextOf(chain),
           )
           expect(
             showcase?.drawing.strokes.map((command) => command.id),
@@ -350,9 +357,11 @@ describe('接龙视图裁剪矩阵', () => {
                 : lastGuessTextOf(chain)
               : null,
           )
-          // 两个 chip 恰好是本半场的画家与猜词者（带画笔角标与否由位置派生，不在载荷里）
+          // 左 chip＝左胶囊文本的作者（投票期＝初始词作者即链发起人；展示期＝本半场画家），
+          // 右 chip＝猜词者（本半场答案的作者，投票期恒为第四棒）——角标由位置派生，不在载荷里
+          const promptOffset = cell.phase === 'relay_vote' || cell.cursor.half === 1 ? 0 : 2
           expect(showcase?.prompt.player.id, label).toBe(
-            PLAYER_IDS[(chain + (cell.cursor.half === 1 ? 0 : 2)) % CHAIN_COUNT],
+            PLAYER_IDS[(chain + promptOffset) % CHAIN_COUNT],
           )
           expect(showcase?.answer.player.id, label).toBe(
             PLAYER_IDS[(chain + (cell.cursor.half === 1 ? 1 : 3)) % CHAIN_COUNT],

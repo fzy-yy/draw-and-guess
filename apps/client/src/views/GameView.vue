@@ -74,6 +74,16 @@ const {
 const isRelay = computed(() => store.room?.gameMode === 'relay')
 
 /**
+ * 舞台门禁：经典房＝存在对局视图（逐条不变）；接龙房＝**非等待阶段**即可渲染。
+ * 接龙房在开局倒计时期还没有 `relay` 视图（服务端的接龙阶段白名单，S22），
+ * 若仍以「存在 relay 视图」为门禁，这 3 秒会整屏空白、随后舞台整块重挂；
+ * 接龙侧因此放宽到阶段口径，插槽里的部件各自按「拿不到 relay 字段就渲染安全缺省」处理。
+ */
+const hasStageSource = computed(() =>
+  Boolean(game.value || relay.value || (isRelay.value && store.room?.phase !== 'waiting')),
+)
+
+/**
  * 接龙画布会话键：动手期＝步骤 id（每步一画布）；复盘期再叠加「链序号 + 半场」，
  * 让重放机器在每个半场都当作新画面重新起步（否则机器会把两条不同的历史当成同一条续接）。
  */
@@ -304,12 +314,14 @@ function handleFullscreenToggle(): void {
 </script>
 
 <template>
-  <!-- 对局主骨架：仅在房间存在且对局未结束时渲染；画框以外区域统一使用 paper（近白）语义色。
-       接龙房没有经典 `game`（数据在 `relay` 视图里），故两者任一存在即挂载同一套三栏骨架（S84）。 -->
-  <main v-if="store.room && (game || relay)" class="relative flex h-full flex-col bg-paper">
+  <!-- 对局主骨架：仅在房间存在、且本模式已有可渲染的舞台来源时挂载；画框以外区域统一使用 paper（近白）语义色。
+       经典房＝存在 `game`；接龙房＝非等待阶段（含开局倒计时期，该期还没有 relay 视图，S84 / S22）。 -->
+  <main v-if="store.room && hasStageSource" class="relative flex h-full flex-col bg-paper">
     <!-- 固定顶栏：回合 / 题目 / 倒计时 / 网络 / 暂停·设置·全屏（高度统一）。
          接龙经 leading / center 插槽换成「模式 + 阶段 + 棒次」与「上一家 chip + 单个答案 UI」，
-         不传插槽时渲染经典胶囊，两条路径互不影响。 -->
+         不传插槽时渲染经典胶囊，两条路径互不影响。
+         门禁只看**玩法**而不看 relay 视图：开局倒计时期还没有接龙视图（S22），
+         但顶栏必须已经在，且不得回落到经典 ROUND 胶囊（relay 侧各 prop 都有安全缺省）。 -->
     <GameHud
       :is-fullscreen="isFullscreen"
       :game="game"
@@ -320,22 +332,22 @@ function handleFullscreenToggle(): void {
       @settings="showGameSettings = true"
       @toggle-fullscreen="handleFullscreenToggle"
     >
-      <template v-if="isRelay && relay" #leading>
+      <template v-if="isRelay" #leading>
         <RelayTopBarLeading
-          :phase="relay.phase"
+          :phase="relay?.phase"
           :step="relayStep"
           :chain-progress="relayChainProgress"
         />
       </template>
-      <template v-if="isRelay && relay" #center>
+      <template v-if="isRelay" #center>
         <!-- 阶段判断放在组件内部：插槽必须始终有内容，否则会回落到经典中央占位（终局尤其明显） -->
         <RelayTopBarCenter
-          :phase="relay.phase"
+          :phase="relay?.phase"
           :prompt="relayPrompt"
           :prompt-kind="relayPromptKind"
           :artist="relayArtist"
           :artist-paints="relayArtistPaints"
-          :showcase="relay.showcase"
+          :showcase="relay?.showcase"
         />
       </template>
     </GameHud>

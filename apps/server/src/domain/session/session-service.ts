@@ -18,7 +18,7 @@ import { serverStrings } from '@draw-guess/strings'
 import { GameError, runtimeErrorType, type RuntimeLogger } from '../../errors.ts'
 import type { PlayerSecret, RoomSecret } from '../../models.ts'
 import { phaseEquivalent } from '../room/room-facts.ts'
-import { isRelayPlayPhase } from '../room/phase-facts.ts'
+import { isRelayMatchPhase } from '../room/phase-facts.ts'
 import type { PlayerRecord, PlayerRepository } from '../../repositories/index.ts'
 import type { AppSocket } from '../../socket-types.ts'
 import { digestRecoveryToken } from '../../security/recovery-token.ts'
@@ -371,9 +371,11 @@ export class SessionService {
     const room = player.roomId ? this.context.rooms.get(player.roomId) : undefined
     // 席位保留的两条路径（其余阶段断线一律离房）：
     // ① 经典作画回合（暂停中的作画仍是同一未完成回合）；
-    // ② 接龙对局阶段（选词/作画/猜词）——宽限内重连可续接当前步，超宽限由本步代交兜底（S8）。
+    // ② 接龙局进行中（动手期 + 展示 / 投票期）——动手期宽限内重连可续接当前步、超宽限由本步代交兜底（S8）；
+    //    展示 / 投票期保席是为 US48：断线者宽限内重连仍能看完整轮播、在投票窗口内补投，
+    //    而不是被直接移出房间（开局后不可加入，S36，移出即回不来）。
     const retainDrawingSeat = phaseEquivalent(room, 'drawing')
-    const retainRelaySeat = room !== undefined && isRelayPlayPhase(room.phase)
+    const retainRelaySeat = room !== undefined && isRelayMatchPhase(room.phase)
     const retainsSeat = retainDrawingSeat || retainRelaySeat
     player.disconnectGeneration += 1
     const generation = player.disconnectGeneration
@@ -386,7 +388,7 @@ export class SessionService {
     this.persistDisconnectState(player, disconnectedAt)
     this.context.logger.info(
       { playerId, roomId: player.roomId, retainedSeat: retainsSeat },
-      retainsSeat ? '玩家作画阶段断线并保留席位' : '玩家断线并进入身份恢复宽限',
+      retainsSeat ? '玩家对局阶段断线并保留席位' : '玩家断线并进入身份恢复宽限',
     )
 
     if (room && retainsSeat) this.retainDrawingSeat(player, room, generation)
@@ -419,8 +421,9 @@ export class SessionService {
 
   /**
    * 对局阶段断线保席：作废画布游标、广播重连提示，并为画家/房主安排短宽限计时器。
-   * 接龙对局阶段（选词/作画/猜词）走同一保席路径：席位于断线期间保留在房间里（链位不受影响），
-   * 本步代交由接龙状态机按「断线时刻 + 短宽限」调度（S8）——宽限内重连可续接当前步。
+   * 接龙局进行中（动手期 + 展示 / 投票期）走同一保席路径：席位于断线期间保留在房间里（链位不受影响）。
+   * 动手期的本步代交由接龙状态机按「断线时刻 + 短宽限」调度（S8），宽限内重连可续接当前步；
+   * 展示 / 投票期不安排代交（没有个人棒次），保席只为让宽限内重连者继续看轮播、在投票窗口内补投（US48）。
    * 宽限期间房间可能被暂停（保留席位语义仍指向作画），因此暂停中同样认定「本回合未完成」：
    * 否则超时回调因阶段不是 drawing 而静默跳过，恢复后回合将无人作画直至自然超时。
    */

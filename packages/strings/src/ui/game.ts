@@ -92,6 +92,11 @@ export const game = {
   relayStepTotal: (total: number) => `/ ${total} 棒`,
   /** 猜词棒的答案 UI 文案：这一段我拿到的是上家的画，要猜的正是它的词。 */
   relayGuessPrompt: '看图猜词',
+  /**
+   * 接龙选词遮罩的标题（S83）：接龙选词只发生在第 1 棒、且人人各选自己那条链的词，
+   * 一句「接龙 · 第 1 棒」就够；**不带**任何括号说明。经典侧仍是 `yourTurn`。
+   */
+  relayChooseTitle: '接龙 · 第 1 棒',
   /** 选词后等待他人：与本步的候选词卡片同卡呈现（S16 全员提交即秒切）。 */
   relayWaitingOthers: '已提交，等待其他玩家',
   relayChatTitle: '接龙聊天',

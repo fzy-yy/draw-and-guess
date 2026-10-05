@@ -116,7 +116,9 @@ const LEGAL_PHASES: Record<RoomPhase, readonly RoomPhase[]> = {
    * `paused` 在接龙全链不可达（接龙禁用暂停，S19）。
    */
   relay_choose: ['relay_draw', 'game_result', 'closed'],
-  relay_draw: ['relay_guess', 'relay_draw', 'game_result', 'closed'],
+  // 步 1 与步 3 共用 `relay_draw` 这个阶段名（步骤号属接龙局状态），四步链严格递进
+  //（draw → guess → draw → guess）：任何阶段都不会写回自己，因此这里没有任何自环边。
+  relay_draw: ['relay_guess', 'game_result', 'closed'],
   relay_guess: ['relay_draw', 'relay_showcase', 'game_result', 'closed'],
   relay_showcase: ['relay_vote', 'closed'],
   relay_vote: ['relay_showcase', 'game_result', 'closed'],

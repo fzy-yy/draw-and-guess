@@ -27,8 +27,12 @@ import HudPill from '@/components/game/HudPill.vue'
 import RelayPlayerChip from '@/components/game/RelayPlayerChip.vue'
 
 const props = defineProps<{
-  /** 当前接龙阶段：终局（game_result）没有中央内容，按阶段收敛形态。 */
-  phase: RelayViewPhase
+  /**
+   * 当前接龙阶段：终局（game_result）没有中央内容，按阶段收敛形态。
+   * 可选＝接龙房**还没进入接龙阶段**的开局倒计时期（服务端该期不下发 relay 视图，S22）——
+   * 那时按动手期形态渲染占位题面，既不空挂插槽、也不回落成经典题目遮罩。
+   */
+  phase?: RelayViewPhase
   /** 本棒题面文本（动手期）。 */
   prompt: string
   /** 题面形态：question＝看图猜词的提示语；text＝真正要画的词。 */

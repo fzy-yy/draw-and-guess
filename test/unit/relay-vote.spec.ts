@@ -60,6 +60,37 @@ describe('接龙链投票（工单 08）', () => {
     expect(view.submittedPlayerIds).toEqual([])
   })
 
+  it('投票期左胶囊＝该链**初始词**、右胶囊＝第四棒答案（S44 / ADR-0058）', () => {
+    const scenario = toVotePhase()
+    const chain = scenario.relay.chains[0]
+    if (!chain) throw new Error('场景缺少链')
+    if (!chain.step1Word) throw new Error('链缺少初始词')
+
+    const view = relayViewOf(scenario, scenario.host.playerId)
+    // 左：发起人选的初始词（不是切投票前那一刻半场 2 的 step2Guess）＋其作者 chip
+    expect(view.showcase?.prompt.text).toBe(chain.step1Word.text)
+    expect(view.showcase?.prompt.text).not.toBe(chain.step2Guess)
+    expect(view.showcase?.prompt.player.id).toBe(chain.originPlayerId)
+    // 右：最终答案（第四棒猜出的文本），投票期已揭晓
+    expect(view.showcase?.answer.text).toBe(chain.step4Guess)
+  })
+
+  it('投票期断线不直接离房：宽限内重连可补投自己那一票（US48）', () => {
+    const scenario = toVotePhase()
+    const dropped = scenario.players[2]
+    if (!dropped) throw new Error('场景缺少玩家')
+
+    scenario.disconnect(dropped)
+    // 保席：断线者没有被 leaveRoom 移出成员表，仍指向房间（开局后不可加入，S36）
+    expect(scenario.room.members.some((member) => member.playerId === dropped.playerId)).toBe(true)
+    expect(scenario.harness.service.players.get(dropped.playerId)?.roomId).toBe(scenario.room.id)
+
+    // 宽限内重连：回到同一席位并投出自己的票（若已被移出房间，这里会以 NOT_IN_ROOM 失败）
+    scenario.reconnect(dropped)
+    scenario.vote(dropped, 'disagree')
+    expect(relayViewOf(scenario, scenario.host.playerId).showcase?.votes).toEqual(['disagree'])
+  })
+
   it('票行匿名且按到达顺序实时公开：只出现选择、不含投票者身份（S42）', () => {
     const scenario = toVotePhase()
     const [first, second, third] = scenario.players

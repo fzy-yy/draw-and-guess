@@ -5,8 +5,9 @@
   - 两个答案底色**统一浅黄**（`bg-yellow/25`，S82，不再一白一黄），箭头只做方向提示；
   - 匿名票行**不带底色**，只按到达顺序居中排列 ✔（绿）/ ✘（红）图标，不含归属（S42 / S82）；
   - **不显示倒计时文案**：剩余时间只看顶栏（S78）；
-  - 点下即锁定：本地立刻置灰给出即时反馈，权威状态由快照的 `submitted` 收口
-    （重复投票服务端也会以 `ALREADY_SUBMITTED` 拒绝，S13 / S14）。
+  - **ack 成功后才锁定**：点下先防连点，只有服务端 ack 返回成功才本地置灰；
+    失败（限频 / 阶段过期 / 断线）回滚为可重试，权威状态始终由快照的 `submitted` 收口
+    （与作答浮层同一口径；重复投票服务端也会以 `ALREADY_SUBMITTED` 拒绝，S13 / S14）。
 
   数据源＝当前链的 `showcase`：词 A（初始词）与词 B（最终答案）在投票期都已揭晓，票行也只在投票期下发。
 -->
@@ -29,17 +30,26 @@ const answerText = computed(() => showcase.value?.answer.text ?? '')
 const votes = computed<RelayVoteChoice[]>(() => showcase.value?.votes ?? [])
 
 /**
- * 已锁定：本地点击后立刻置灰（即时反馈），权威状态再由快照 `submitted` 收口——
- * 断线重连回到投票期时，即使本地没有点击记录也会正确置灰。
+ * 已锁定：**只有 ack 成功才本地置灰**（与作答浮层同一口径），失败（限频 / 阶段过期 / 断线）
+ * 回滚为可重试——否则一旦请求失败，两个按钮会永久置灰，而权威快照里我仍是「未投票」，
+ * 10 秒投票窗内再也无法补救。服务端快照的 `submitted` 仍是权威（断线重连回到投票期也正确置灰）。
+ * 本卡只在 `relay_vote` 期挂载，链与链之间会整块卸载重建，故不需要额外的「链切换复位」分支。
  */
 const locallyLocked = ref(false)
+/** 请求在途：只用于防连点（重复投票服务端也会以 ALREADY_SUBMITTED 拒绝）。 */
+const pending = ref(false)
 const locked = computed(() => locallyLocked.value || store.relay?.submitted === true)
 
-/** 投票：点下即锁定，动作走 façade 的 `relayVote`（目标链由服务端游标决定，客户端指定不了）。 */
-function vote(choice: RelayVoteChoice): void {
-  if (locked.value) return
-  locallyLocked.value = true
-  void store.relayVote(choice)
+/** 投票：动作走 façade 的 `relayVote`（目标链由服务端游标决定，客户端指定不了）。 */
+async function vote(choice: RelayVoteChoice): Promise<void> {
+  if (locked.value || pending.value) return
+  pending.value = true
+  try {
+    const delivered = await store.relayVote(choice)
+    if (delivered) locallyLocked.value = true
+  } finally {
+    pending.value = false
+  }
 }
 </script>
 
@@ -92,10 +102,10 @@ function vote(choice: RelayVoteChoice): void {
     </div>
 
     <div class="mt-[1.5cqh] flex justify-center gap-[0.8em]">
-      <AppButton variant="primary" :disabled="locked" @click="vote('agree')">
+      <AppButton variant="primary" :disabled="locked || pending" @click="vote('agree')">
         <ThumbsUp />{{ strings.ui.game.relayVoteAgree }}
       </AppButton>
-      <AppButton variant="danger" :disabled="locked" @click="vote('disagree')">
+      <AppButton variant="danger" :disabled="locked || pending" @click="vote('disagree')">
         <ThumbsDown />{{ strings.ui.game.relayVoteDisagree }}
       </AppButton>
     </div>

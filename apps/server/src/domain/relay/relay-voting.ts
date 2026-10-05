@@ -8,9 +8,12 @@
  *
  * 计分口径（S13 / S24）：赞同票**严格多于**反对票才算匹配成功，成功后该链的
  * 4 名参与者每人得「赞同票数 × `relay.scorePerAgreeVote`」；否则本链 0 分，且不做归一化。
+ * 名次口径取 `scoring.rankMembers`（与经典榜单一来源，ADR-0002）；
+ * 接龙整体的权威推进与插槽式复用见 docs/adr/0058-relay-mode-authoritative-flow-and-reuse.md。
  */
 import { RELAY_STEP_COUNT, type RelayFinalRankingEntry } from '@draw-guess/shared'
 import { APP_CONFIG } from '../../config/index.ts'
+import { rankMembers } from '../../scoring.ts'
 import type { PlayerSecret, RoomSecret } from '../../models.ts'
 import type { RelayChainVote, RelayGameSecret } from './relay-models.ts'
 
@@ -51,10 +54,10 @@ export function relayParticipantIndices(chainCount: number, chainIndex: number):
 
 /**
  * 冻结接龙终局榜（S33 / S77）：只有名次、分数与接龙口径统计。
- * 排序与并列规则与经典 `freezeFinalRanking` 同口径（分数降序、同分并列同名次、同分按入房先后），
- * 榜单口径为 `room.members` 全员：主动退出本局者以冻结资料保留在榜（S37），
- * 资料取 `leftProfile` 优先、玩家身份兜底，两者皆无的成员不产出条目（名次不跳号）。
- * `chainCount` / `agreeVotes` 从链数组与冻结的链明细读取——与入账同源，不事后重算票数。
+ * 名次、并列与「无资料不产出」全部取自 `scoring.rankMembers`——与经典终局榜**同一处算式**
+ *（ADR-0002 的单一来源；本模块不再复制一遍排序与并列逻辑），本函数只把名次行映射成
+ * 接龙口径的条目形状：`chainCount` / `agreeVotes` 从链数组与冻结的链明细读取——
+ * 与入账同源，不事后重算票数。
  */
 export function freezeRelayFinalRanking(
   room: Pick<RoomSecret, 'members'>,
@@ -72,33 +75,20 @@ export function freezeRelayFinalRanking(
       .filter((chainIndex) => relayParticipantIndices(chainCount, chainIndex).includes(playerIndex))
   }
 
-  const ranked = [...room.members].sort(
-    (left, right) => right.score - left.score || left.joinedAt - right.joinedAt,
-  )
-  let previousScore: number | undefined
-  let emittedCount = 0
-  let rank = 0
-  return ranked.flatMap<RelayFinalRankingEntry>((member) => {
-    const profile = member.leftProfile ?? players.get(member.playerId)?.profile
-    if (!profile) return []
-    emittedCount += 1
-    if (member.score !== previousScore) rank = emittedCount
-    previousScore = member.score
+  return rankMembers(room, players).map(({ member, profile, rank }) => {
     const chains = participatedChainIndices(member.playerId)
-    return [
-      {
-        id: member.playerId,
-        nickname: profile.nickname,
-        avatarId: profile.avatarId,
-        rank,
-        score: member.score,
-        chainCount: chains.length,
-        // 未结算的链（房主提前结束）没有明细 → 计 0 张赞同票，与「按当前分数结算」一致（S38）
-        agreeVotes: chains.reduce(
-          (total, chainIndex) => total + (relay.chains[chainIndex - 1]?.result?.agreeCount ?? 0),
-          0,
-        ),
-      },
-    ]
+    return {
+      id: member.playerId,
+      nickname: profile.nickname,
+      avatarId: profile.avatarId,
+      rank,
+      score: member.score,
+      chainCount: chains.length,
+      // 未结算的链（房主提前结束）没有明细 → 计 0 张赞同票，与「按当前分数结算」一致（S38）
+      agreeVotes: chains.reduce(
+        (total, chainIndex) => total + (relay.chains[chainIndex - 1]?.result?.agreeCount ?? 0),
+        0,
+      ),
+    }
   })
 }

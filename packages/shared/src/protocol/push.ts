@@ -201,7 +201,11 @@ export const RelayShowcaseSchema = z
     /** 本局链总数（= 开局人数）。 */
     chainCount: z.number().int().positive(),
     half: RelayHalfSchema,
-    /** 左胶囊：画家 chip + 题面（本半场要展示的题面）。 */
+    /**
+     * 左胶囊：画家 chip + 题面。
+     * 展示期＝本半场的题面（半场 1 为第 1 棒初始词、半场 2 为第 2 棒猜词）；
+     * **投票期＝该链的初始词与其作者**——投票判定的是「初始词与最终答案是否匹配」（S13 / US44）。
+     */
     prompt: RelayShowcaseCapsuleSchema,
     /** 右胶囊：猜词者 chip + 答案（未揭晓时 text 为 null）。 */
     answer: RelayShowcaseCapsuleSchema,

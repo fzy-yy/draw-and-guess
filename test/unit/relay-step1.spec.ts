@@ -201,6 +201,30 @@ describe('接龙步 1 作画', () => {
     expect(chatMessages[0]).toMatchObject({ text: '大家好呀', playerId: first.playerId })
   })
 
+  it('纯空白聊天被拒（INVALID_MESSAGE）：不广播空气泡，正常聊天照旧（S79）', () => {
+    const scenario = atDrawingStep()
+    const [first, second] = scenario.players
+    if (!first || !second) throw new Error('场景缺少玩家')
+
+    // 空串 / 空格 / 制表符：trim 后为空，与经典猜词同口径拒绝
+    for (const blank of ['', '   ', '\t']) {
+      expect(
+        errorCodeOf(() => scenario.harness.service.sendRelayChat(first.playerId, blank)),
+        JSON.stringify(blank),
+      ).toBe(ERROR_CODES.INVALID_MESSAGE)
+    }
+    // 拒绝不落流：聊天流里没有任何玩家发言
+    const chatOf = (viewerId: string) =>
+      (scenario.snapshotOf(viewerId).relay?.messages ?? []).filter(
+        (message) => message.type !== 'system',
+      )
+    expect(chatOf(second.playerId)).toHaveLength(0)
+
+    // 正常聊天照旧：前后空白被裁掉后入流
+    scenario.harness.service.sendRelayChat(first.playerId, ' 大家好呀 ')
+    expect(chatOf(second.playerId)).toMatchObject([{ text: '大家好呀', playerId: first.playerId }])
+  })
+
   it('经典房与等待中的接龙房都不接受 chat:say（保持经典「猜词未命中即聊天」现状，S85）', () => {
     const classic = createGameHarness()
     const classicHost = classic.register('经典房主')

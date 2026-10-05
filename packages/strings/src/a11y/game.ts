@@ -52,6 +52,13 @@ export const game = {
   // 复盘双胶囊与投票卡（S75 / S78 / S82，工单 11）：未揭晓答案与匿名票行的无障碍名。
   relayHiddenAnswerAria: '答案尚未揭晓',
   relayVoteRowAria: '匿名票行',
+  /**
+   * 接龙聊天输入区（S79）：这条输入框只发社交消息、永不携带作答，
+   * 故读屏文案用聊天语义，不复用猜词的「输入你的答案 / 发送猜词」。
+   * 可见文案（占位）与无障碍名是**两个 key**：占位在 `strings.ui`，无障碍名只在本层。
+   */
+  relayChatInputAria: '接龙聊天输入框',
+  relayChatSendAria: '发送聊天消息',
   playersPanelTitle: '玩家',
   closePanelAria: '关闭面板',
   toolbarAria: '绘图工具栏',

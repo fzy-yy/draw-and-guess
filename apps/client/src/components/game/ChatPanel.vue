@@ -9,6 +9,8 @@
   聊天语义 props（S84 / S85）：标题 / 占位 / 提交目标由调用方给出——
   经典不传即现状（标题＝猜词消息、占位按角色派生、提交走 `guess:submit`）；
   接龙传入接龙标题与「发送消息」占位、提交目标为 chat（走独立事件 `chat:say`，与作答彻底分离）。
+  输入区与发送钮的无障碍名同样按提交目标分流：接龙用 `strings.a11y` 的聊天语义键，
+  经典保持 `ui.game.guessLabel` / `a11y.game.sendGuessAria` 逐条不变。
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
@@ -44,6 +46,19 @@ const inputPlaceholder = computed(
   () =>
     props.placeholder ??
     (store.isDrawer ? strings.ui.game.drawerChatPlaceholder : strings.ui.game.guessPlaceholder),
+)
+/** 是否接龙聊天语义（社交频道，与作答彻底分离，S79）：无障碍名与提交目标都据此分流。 */
+const isChatTarget = computed(() => props.submitTarget === 'chat')
+/**
+ * 输入区无障碍名：接龙聊天用聊天语义（a11y 层自带文案，不复用猜词的「输入你的答案」）；
+ * 经典侧保持改造前的 `ui.game.guessLabel`，逐条不变。
+ */
+const inputAriaLabel = computed(() =>
+  isChatTarget.value ? strings.a11y.game.relayChatInputAria : strings.ui.game.guessLabel,
+)
+/** 发送钮无障碍名：接龙＝「发送聊天消息」，经典＝「发送猜词」。 */
+const sendButtonAria = computed(() =>
+  isChatTarget.value ? strings.a11y.game.relayChatSendAria : strings.a11y.game.sendGuessAria,
 )
 
 // 猜词输入本地状态（输入框内容随 submit 清空）。
@@ -258,7 +273,7 @@ defineExpose({ focusInput })
       class="flex gap-[0.5em] border-t-[0.18cqh] border-line pt-[0.8cqh]"
       @submit.prevent="sendGuess"
     >
-      <label for="guess-input" class="sr-only">{{ strings.ui.game.guessLabel }}</label>
+      <label for="guess-input" class="sr-only">{{ inputAriaLabel }}</label>
       <AppInput
         id="guess-input"
         ref="guessInput"
@@ -273,7 +288,7 @@ defineExpose({ focusInput })
         type="submit"
         class="grid h-[5.2cqh] w-[5.2cqh] shrink-0 place-items-center rounded-[0.65em] bg-blue text-white disabled:cursor-not-allowed disabled:bg-line"
         :disabled="!canGuess || !guess.trim()"
-        :aria-label="strings.a11y.game.sendGuessAria"
+        :aria-label="sendButtonAria"
       >
         <Send class="h-[2.5cqh] w-[2.5cqh]" />
       </button>

@@ -6,7 +6,7 @@
  * 接龙派生（S73 / S74 / S84）：题面、棒次、上一家 chip、提交/投票状态与复盘链进度都收在这里，
  * 舞台与顶栏组件只消费派生结果（模式分流集中在 HUD 层，组件保持按 props 渲染）。
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useTimestamp } from '@vueuse/core'
 import { strings } from '@draw-guess/strings'
 import type { FinalRankingEntry, RelayPlayerRef } from '@draw-guess/shared'
@@ -27,13 +27,53 @@ export function useGameHud(store: GameStore) {
   const game = computed(() => store.room?.game)
   /** 接龙视图：接龙房（含终局）恒有；经典房恒为 undefined。 */
   const relay = computed(() => store.room?.relay)
-  /**
-   * 本阶段截止时间（模式无关口径）：接龙视图与经典对局视图各有一份、互斥。
-   * 倒计时、进度条与顶栏的「不限时」判定共用这一个来源。
-   */
-  const phaseEndsAt = computed(() => relay.value?.phaseEndsAt ?? game.value?.phaseEndsAt ?? 0)
   // 校正后的本地时钟：叠加了与服务端的时钟偏移，避免设备时钟偏差导致倒计时不准
   const correctedNow = computed(() => now.value + store.clockOffset)
+  /**
+   * 接龙开局倒计时的**展示用**本地窗口（起止毫秒）：接龙房在 `starting` 期还没有接龙视图
+   * （服务端的接龙阶段白名单，S22），因此拿不到权威的 `phaseEndsAt`；若任由它缺省为 0，
+   * 顶栏会读成「不限时」、开局遮罩的大数字会停在 0。
+   *
+   * 它只喂给**数字与进度条**：阶段推进、遮罩显隐、任何逻辑分支都不依赖本窗口，
+   * 一切门禁仍由服务端快照驱动（窗口走完而快照未换阶段时，数字停在 0，界面不动）。
+   * 时长取与服务端 `beginStarting` 同源的公开配置（同一个字段，不写死数字）；
+   * 锚点＝首次观察到进入 `starting` 时的**校正时钟**读数（与倒计时的读数同源，避免刻度误差
+   * 让 3 秒读成 4 秒）；离开该阶段或断线即清空，重连后按新锚点重算，同一次 starting 内不漂移。
+   */
+  const relayStartingWindow = ref<{ startedAt: number; endsAt: number }>()
+  watch(
+    [() => store.room?.phase, () => store.room?.gameMode, () => store.connected],
+    ([phase, gameMode, connected]) => {
+      // 断线期间不留锚点：连接恢复后重新起算（本地窗口只服务这一小段观感）
+      if (phase !== 'starting' || gameMode !== 'relay' || !connected) {
+        relayStartingWindow.value = undefined
+        return
+      }
+      // 同一次 starting 内只立一次锚点：同一阶段的后续快照重发不把倒计时拉回起点。
+      if (relayStartingWindow.value) return
+      const anchorMs = correctedNow.value
+      relayStartingWindow.value = {
+        startedAt: anchorMs,
+        endsAt: anchorMs + store.config.game.startingCountdownSeconds * 1_000,
+      }
+    },
+    { immediate: true },
+  )
+  /**
+   * 本阶段截止时间（模式无关口径）：接龙视图与经典对局视图各有一份、互斥；
+   * 接龙开局倒计时期两者都没有，才回落到上面的展示用本地窗口。
+   */
+  const phaseEndsAt = computed(
+    () =>
+      relay.value?.phaseEndsAt ?? game.value?.phaseEndsAt ?? relayStartingWindow.value?.endsAt ?? 0,
+  )
+  /** 本阶段起始时间（进度条分母）：口径与 `phaseEndsAt` 完全对称。 */
+  const phaseStartedAt = computed(
+    () =>
+      relay.value?.phaseStartedAt ??
+      game.value?.phaseStartedAt ??
+      relayStartingWindow.value?.startedAt,
+  )
   // 剩余秒数：按服务端权威截止时间向上取整；暂停状态下固定使用服务端下发的冻结剩余时间，避免随本地时钟持续扣减到 0
   const secondsLeft = computed(() => {
     if (store.room?.phase === 'paused') {
@@ -50,11 +90,11 @@ export function useGameHud(store: GameStore) {
       if (total <= 0) return 0
       return Math.max(0, Math.min(1, (game.value?.pausedRemainingMs ?? 0) / total))
     }
-    const phaseStartedAt = relay.value?.phaseStartedAt ?? game.value?.phaseStartedAt
-    if (!phaseEndsAt.value || !phaseStartedAt || phaseEndsAt.value <= phaseStartedAt) return 0
+    const phaseStart = phaseStartedAt.value
+    if (!phaseEndsAt.value || !phaseStart || phaseEndsAt.value <= phaseStart) return 0
     return Math.max(
       0,
-      Math.min(1, (phaseEndsAt.value - correctedNow.value) / (phaseEndsAt.value - phaseStartedAt)),
+      Math.min(1, (phaseEndsAt.value - correctedNow.value) / (phaseEndsAt.value - phaseStart)),
     )
   })
   /**
@@ -136,7 +176,8 @@ export function useGameHud(store: GameStore) {
     })
   })
 
-  // correctedNow 仅在内部被 secondsLeft/progress 使用，不作为对外返回值暴露（GameView 不消费它）。
+  // correctedNow / phaseStartedAt / relayStartingWindow 只在内部被 secondsLeft 与 progress 使用，
+  // 不作为对外返回值暴露（GameView 不消费它们）。
   return {
     game,
     relay,

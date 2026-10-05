@@ -1,7 +1,15 @@
+import { nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { setActivePinia, type Pinia } from 'pinia'
-import { EVENTS, type RelayViewPhase, type Stroke } from '@draw-guess/shared'
+import {
+  EVENTS,
+  RELAY_STEP_COUNT,
+  type RelayViewPhase,
+  type RoomSnapshot,
+  type Stroke,
+} from '@draw-guess/shared'
+import { PUBLIC_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import GameView from '@/views/GameView.vue'
 import GameCanvas from '@/components/game/GameCanvas.vue'
@@ -21,6 +29,7 @@ import { createPiniaWithFakeTransport, type FakeGameTransport } from '../client/
  * 接龙舞台骨架的集成级保障（S84）：同一个 `GameView` 三栏骨架按 `room.gameMode` 分流数据源——
  * 接龙房渲染接龙顶栏（模式 + 阶段 + 棒次、上一家 chip + 单个答案 UI）、左栏状态位与右栏聊天，
  * 中央画布取本棒画布；经典房的一切与改造前一致（对比断言 + 既有 game-view-shell 用例）。
+ * 另覆盖开局倒计时（`starting`）：该期服务端还没有接龙视图（S22），舞台与顶栏也必须先立起来。
  */
 
 /** 最小 Canvas 2D 上下文替身：记录绘制调用即可，重放决策由画布组件自身保障。 */
@@ -74,6 +83,9 @@ beforeEach(() => {
   setActivePinia(pinia)
   fakeTransport.setConnected(true)
   useSessionStore().playerId = HOST_ID
+  // 假传输的 setConnected 只改 socket 标志；会话快照的 connected 由 bootstrap 的 connect 回调推进，
+  // 这里直接置真以贴近线上（HUD 的展示用开局倒计时窗口据此判定「连接中不留锚点」）。
+  useSessionStore().connected = true
 })
 
 afterEach(() => {
@@ -309,5 +321,70 @@ describe('接龙阶段夹具自检', () => {
       expect(wrapper.text()).toContain(strings.ui.room.modeRelay)
       wrapper.unmount()
     }
+  })
+})
+
+/**
+ * 接龙开局倒计时夹具：房间已进 `starting`，但服务端的接龙阶段白名单（S22）决定该期**没有** relay 视图，
+ * 快照形状因此是「接龙房 + starting + 无 relay 视图 + 无经典 game」——改造前正是这一形状让舞台整屏空白。
+ */
+function createRelayStartingFixture(): RoomSnapshot {
+  const snapshot = createRelayRoomFixture()
+  snapshot.phase = 'starting'
+  delete snapshot.relay
+  return snapshot
+}
+
+describe('接龙开局倒计时（starting）', () => {
+  const NEXT_WORD_ID = '00000000-0000-4000-8000-00000000000e'
+
+  it('倒计时期就渲染三栏骨架与接龙顶栏：不回落经典 ROUND 胶囊、不报空引用', () => {
+    useRoomStore().room = createRelayStartingFixture()
+
+    const wrapper = mountGameView()
+
+    // 三栏骨架先立起来（改造前这 3 秒整屏空白）
+    expect(wrapper.find('main').exists()).toBe(true)
+    expect(wrapper.find('canvas').exists()).toBe(true)
+    // 左栏玩家面板与右栏接龙聊天都在
+    expect(wrapper.text()).toContain('房主')
+    expect(wrapper.text()).toContain(strings.ui.game.relayChatTitle)
+    // 顶栏在，且按「接龙房 + 房间阶段」渲染：模式标签 + 准备开始；回落成经典 ROUND 胶囊即失败
+    expect(wrapper.find(`header[aria-label="${strings.a11y.game.topBarAria}"]`).exists()).toBe(true)
+    expect(wrapper.text()).toContain(strings.ui.room.modeRelay)
+    expect(wrapper.text()).toContain(strings.ui.status.phaseStarting)
+    expect(wrapper.text()).not.toContain(strings.ui.game.roundLabel)
+    // 还没有 relay 视图，故不出现棒次胶囊与接龙题面
+    expect(wrapper.text()).not.toContain(strings.ui.game.relayStepTotal(RELAY_STEP_COUNT))
+    expect(wrapper.text()).toContain(strings.ui.game.awaitingWord)
+    // 开局遮罩照常出现，大数字按公开配置的开局时长倒数（该期没有权威截止时间，见 useGameHud 注释）
+    expect(wrapper.text()).toContain(String(PUBLIC_CONFIG.game.startingCountdownSeconds))
+
+    wrapper.unmount()
+  })
+
+  it('relay_choose 快照到达后舞台不重挂：同一个 main 与画布 DOM 实例延续', async () => {
+    const roomStore = useRoomStore()
+    roomStore.room = createRelayStartingFixture()
+    const wrapper = mountGameView()
+
+    const stage = wrapper.find('main').element
+    const canvas = wrapper.find('canvas').element
+
+    // 服务端推进到第 1 棒选词：同一套骨架就地续上，选词卡直接盖在已立起的舞台上
+    roomStore.room = createRelayRoomFixture('relay_choose', {
+      wordOptions: [{ id: NEXT_WORD_ID, text: '长颈鹿' }],
+      canReroll: true,
+    })
+    await nextTick()
+
+    expect(wrapper.find('main').element).toBe(stage)
+    expect(wrapper.find('canvas').element).toBe(canvas)
+    // 选词卡是接龙文案（S83），不是经典标题
+    expect(wrapper.text()).toContain(strings.ui.game.relayChooseTitle)
+    expect(wrapper.text()).not.toContain(strings.ui.game.yourTurn)
+    expect(wrapper.text()).toContain('长颈鹿')
+
+    wrapper.unmount()
   })
 })

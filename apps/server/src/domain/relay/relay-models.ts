@@ -52,7 +52,7 @@ export interface RelayChainSecret {
   rerollUsed: boolean
   /** 本链已展示过的词条 id：换批抽词的按链去重口径（S31），词池不足时才重置。 */
   offeredWordIds: Set<string>
-  /** 步 1 产出：发起人选定的词（未选定前为空；只对该玩家可见，S35）。 */
+  /** 步 1 产出：发起人选定的词（未选定前为空；选词 / 作画期只对该玩家可见，S35；投票期作为左胶囊向全房公开，S44）。 */
   step1Word?: VocabularyWord
   /** 步 2 产出：第二棒猜出的文本（同时是步 3 的题面）。 */
   step2Guess?: string
@@ -102,7 +102,9 @@ export interface RelayGameSecret {
   timer?: TimerHandle
   /**
    * 复盘游标（工单 07）：当前链序号（1 起，席位顺序 S11）、半场与页（重播 / 停顿 / 揭晓，S43）。
-   * 只在四步走完进入复盘后存在；切入该链投票时**保留**——投票期的快照仍要展示这条链的两个答案与画作，
+   * 只在四步走完进入复盘后存在；切入该链投票时**保留**——投票期的快照仍要展示这条链的画作，
+   * 且左胶囊固定为该链**初始词**（`step1Word`）、右胶囊固定为第四棒答案（`step4Guess`，S44），
+   * 而不是继续沿半场口径（见 relay-snapshot 的双胶囊说明）；
    * 工单 08 在投票结束后凭它调用 `beginShowcaseForChain(chainIndex + 1)` 继续轮播。
    */
   showcase?: RelayShowcaseCursor

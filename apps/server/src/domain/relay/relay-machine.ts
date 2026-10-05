@@ -15,7 +15,8 @@
  *   轮播完全自动、**不可干预**（S12），工单 08 在投票结束后调用 `beginShowcaseForChain` 继续下一条链。
  *
  * 阶段写入、准备失效、对局消息与全部计时器归本状态机所有，与经典的职责分工一致
- *（见 docs/adr/0024-round-machine-ownership.md）。
+ *（见 docs/adr/0024-round-machine-ownership.md）；
+ * 接龙整体的服务端权威推进、策略分流与插槽式复用见 docs/adr/0058-relay-mode-authoritative-flow-and-reuse.md。
  */
 import { APP_CONFIG } from '../../config/index.ts'
 import { serverStrings } from '@draw-guess/strings'
@@ -288,9 +289,15 @@ export class RelayMachine {
     this.advanceIfComplete(room, relay.stepId)
   }
 
-  /** 玩家自由聊天（`chat:say`，S79）：聊天与作答彻底分离，永远不把作答带出去（S20）。 */
-  public chat(room: RoomSecret, playerId: string, text: string): void {
+  /**
+   * 玩家自由聊天（`chat:say`，S79）：聊天与作答彻底分离，永远不把作答带出去（S20）。
+   * 纯空白（trim 后为空）与经典猜词同口径拒绝（`INVALID_MESSAGE_EMPTY`），不广播空气泡；
+   * 长度上限已由协议 `SendChatSchema` 收窄，这里不再重复校验。
+   */
+  public chat(room: RoomSecret, playerId: string, rawText: string): void {
     this.requireRelay(room)
+    const text = rawText.trim()
+    if (!text) throw new GameError('INVALID_MESSAGE', serverStrings.errors.INVALID_MESSAGE_EMPTY)
     this.addMessage(room, { type: 'guess', text, playerId })
     this.service.emitRoom(room.id)
   }

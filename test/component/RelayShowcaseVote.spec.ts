@@ -2,7 +2,7 @@ import { nextTick } from 'vue'
 import { setActivePinia, type Pinia } from 'pinia'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { EVENTS, type RelayShowcase } from '@draw-guess/shared'
+import { ERROR_CODES, EVENTS, RELAY_STEP_COUNT, type RelayShowcase } from '@draw-guess/shared'
 import { APP_CONFIG } from '@draw-guess/config'
 import { strings } from '@draw-guess/strings'
 import HudPill from '@/components/game/HudPill.vue'
@@ -26,7 +26,8 @@ import { createPiniaWithFakeTransport, type FakeGameTransport } from '../client/
  * - 未揭晓答案＝经典遮罩同款下划线占位（不是问号），位数取配置的固定值（S81）；
  * - 半场切换时「chip 原地不动、只有两个答案 UI 动」与过渡时长取自配置包（S70 / S76）；
  * - 链条进度紧跟最左标签之后（S75）；
- * - 投票卡两个答案底色一致、匿名票行无底色且按到达顺序（S42 / S82），点下即锁定走 façade；
+ * - 投票卡两个答案底色一致、匿名票行无底色且按到达顺序（S42 / S82），ack 成功后才锁定并走 façade；
+ * - 开局倒计时（还没有接龙视图）时顶栏按房间阶段渲染（不回落经典 ROUND 胶囊）；
  * - 接龙终局复用经典版式但第二行换接龙口径统计、不显示称号（S33 / S77）。
  */
 
@@ -87,6 +88,16 @@ const PLAY_PROPS = {
   prompt: '气球',
   promptKind: 'text' as const,
   artistPaints: false,
+}
+
+/**
+ * 接龙开局倒计时夹具：接龙房已进 `starting`，但该期服务端不下发 relay 视图（接龙阶段白名单，S22）。
+ */
+function useRelayStartingRoom(): void {
+  const snapshot = createRelayRoomFixture()
+  snapshot.phase = 'starting'
+  delete snapshot.relay
+  useRoomStore().room = snapshot
 }
 
 describe('RelayTopBarCenter 复盘形态', () => {
@@ -204,6 +215,18 @@ describe('RelayTopBarLeading 链条进度', () => {
     expect(playLeading.text()).toContain(strings.ui.game.relayStepTotal(4))
     playLeading.unmount()
   })
+
+  it('开局倒计时（还没有接龙视图）按房间阶段展示：不回落经典 ROUND 胶囊、不出现棒次胶囊', () => {
+    useRelayStartingRoom()
+    const wrapper = mountWithPinia(RelayTopBarLeading, { step: 0 })
+
+    expect(wrapper.text()).toContain(strings.ui.room.modeRelay)
+    expect(wrapper.text()).toContain(strings.ui.status.phaseStarting)
+    expect(wrapper.text()).not.toContain(strings.ui.game.roundLabel)
+    // 还没进接龙阶段，棒次无从谈起
+    expect(wrapper.text()).not.toContain(strings.ui.game.relayStepTotal(RELAY_STEP_COUNT))
+    wrapper.unmount()
+  })
 })
 
 describe('RelayVoteOverlay 投票卡', () => {
@@ -252,7 +275,7 @@ describe('RelayVoteOverlay 投票卡', () => {
     wrapper.unmount()
   })
 
-  it('点下即锁定并置灰，投票动作走 façade 的 relayVote（S13 / S14）', async () => {
+  it('ack 成功后才本地置灰，投票动作走 façade 的 relayVote（S13 / S14）', async () => {
     const wrapper = mountVoteOverlay()
 
     const agree = wrapper
@@ -272,7 +295,44 @@ describe('RelayVoteOverlay 投票卡', () => {
       event: EVENTS.relayVote,
       payload: { choice: 'agree' },
     })
-    // 点下即锁定：两个入口都置灰，不能再改票
+    // ack 成功后锁定：两个入口都置灰，不能再改票
+    expect(agree!.element.disabled).toBe(true)
+    expect(disagree!.element.disabled).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('投票失败（限频 / 阶段过期 / 断线）不本地锁死：保持可重试，重试成功后才锁定', async () => {
+    fakeTransport.setResponder((_event, payload) => ({
+      ok: false,
+      requestId: String(payload.requestId),
+      error: { code: ERROR_CODES.RATE_LIMITED, message: '请求过于频繁' },
+    }))
+    const wrapper = mountVoteOverlay()
+    const agree = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes(strings.ui.game.relayVoteAgree))
+    const disagree = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes(strings.ui.game.relayVoteDisagree))
+
+    await agree!.trigger('click')
+    await flushPromises()
+
+    // 权威快照里我仍是「未投票」（左栏同口径），因此两个入口必须还能点，10 秒窗内可补救
+    expect(useRoomStore().room?.relay?.submitted).toBe(false)
+    expect(agree!.element.disabled).toBe(false)
+    expect(disagree!.element.disabled).toBe(false)
+
+    // 重试（换一票也行）ack 成功后，才由本地锁定收口
+    fakeTransport.setResponder((_event, payload) => ({
+      ok: true,
+      requestId: String(payload.requestId),
+      data: undefined,
+    }))
+    await disagree!.trigger('click')
+    await flushPromises()
+
     expect(agree!.element.disabled).toBe(true)
     expect(disagree!.element.disabled).toBe(true)
 
