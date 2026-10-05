@@ -114,6 +114,11 @@ export const game = {
   relayDrawingHint: '画完了就提交，交给下一位',
   relayDrawingSubmit: '完成提交',
   /**
+   * 本棒已在本地（校正后）时钟上过期：服务端在截止时刻即代交并换手，此刻提交必然被拒，
+   * 因此直接锁住提交入口并显示这句状态（见 .scratch/relay-mode/bug-report.md B2）。
+   */
+  relayStepEnded: '本棒已结束，等待其他玩家',
+  /**
    * 复盘展示与投票（S75 / S78 / S82，工单 11）：链条进度紧跟在顶栏最左标签之后，
    * 投票卡只留标题与两个动作（倒计时只看顶栏，卡内不重复）。
    */

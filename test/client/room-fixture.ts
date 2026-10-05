@@ -119,3 +119,22 @@ export function createRelayRoomFixture(
   delete snapshot.game
   return snapshot
 }
+
+/**
+ * 接龙快照夹具（**带真实未来截止窗口**）：`phaseEndsAt` 换算成「现在 + 61 秒」。
+ *
+ * 基础夹具刻意用逻辑时间戳（`1_000` / `61_000`）供只看数值的用例断言；但作答浮层按本地校正时钟
+ * 判断「本棒是否已结束」，若沿用 1970 年的截止时间，提交入口在测试里会永远置灰
+ * （排查见 `.scratch/relay-mode/bug-report.md` B2）。
+ */
+export function createLiveRelayRoomFixture(
+  phase: RelayViewPhase = 'relay_draw',
+  relayPatch: Partial<RelayGameView> = {},
+  roomPatch: Partial<RoomSnapshot> = {},
+): RoomSnapshot {
+  return createRelayRoomFixture(
+    phase,
+    { phaseEndsAt: Date.now() + 61_000, ...relayPatch },
+    roomPatch,
+  )
+}

@@ -12,6 +12,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useTimestamp } from '@vueuse/core'
 import { Check, GripVertical, Send } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { AppButton, AppInput } from '@/components/common'
@@ -33,6 +34,9 @@ const props = defineProps<{
 
 const store = useGameStore()
 
+/** 本地 tick 时钟：与本棒截止时间比较，用于在服务端换手前就锁住提交（口径与 HUD 一致，含时钟偏移）。 */
+const now = useTimestamp({ interval: store.config.ui.tickIntervalMs })
+
 /** 拖动位置（null＝按 defaultClass 停靠）；随 stepId 复位。 */
 const position = ref<PanelPosition | null>(null)
 /** 猜词草稿：提交成功、快照判定已交或换棒时清空。 */
@@ -43,13 +47,26 @@ const pending = ref(false)
 const locallySubmitted = ref(false)
 
 const isSubmitted = computed(() => props.submitted || locallySubmitted.value)
-const canSubmit = computed(() => props.enabled && !isSubmitted.value && !pending.value)
+/**
+ * 本棒是否已在本地校正时钟上过期。服务端在截止时刻就代交并换手（步骤 id 随之轮换），
+ * 此刻再提交必然被拒（STALE_DRAW_EVENT / PHASE_EXPIRED），玩家读到的却是「绘图包已过期或重复」，
+ * 与真实原因不符；因此在客户端本地把提交入口锁住（见 .scratch/relay-mode/bug-report.md B2）。
+ */
+const stepEnded = computed(() => {
+  const endsAt = store.room?.relay?.phaseEndsAt ?? 0
+  return endsAt > 0 && now.value + store.clockOffset >= endsAt
+})
+const canSubmit = computed(
+  () => props.enabled && !isSubmitted.value && !pending.value && !stepEnded.value,
+)
 /** 猜词禁止空提交（S15 客户端侧）：全空白同样不可提交。 */
 const canSubmitGuess = computed(() => canSubmit.value && draft.value.trim().length > 0)
 
-const hint = computed(() =>
-  props.mode === 'guess' ? strings.ui.game.relayAnswerHint : strings.ui.game.relayDrawingHint,
-)
+/** 本棒已过期且我还没交：显示「本棒已结束」，而不是让玩家对着可点的按钮撞一次误导性报错。 */
+const hint = computed(() => {
+  if (stepEnded.value && !isSubmitted.value) return strings.ui.game.relayStepEnded
+  return props.mode === 'guess' ? strings.ui.game.relayAnswerHint : strings.ui.game.relayDrawingHint
+})
 
 /**
  * 默认停靠：猜词棒没有底部工具条，贴底居中最好按；作画棒底部被工具条占用，

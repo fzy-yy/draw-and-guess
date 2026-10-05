@@ -13,7 +13,7 @@ import {
   GUEST_ID,
   HOST_ID,
   STEP_ID,
-  createRelayRoomFixture,
+  createLiveRelayRoomFixture,
   createRoomFixture,
 } from '../client/room-fixture'
 import { createPiniaWithFakeTransport, type FakeGameTransport } from '../client/fake-game-transport'
@@ -98,7 +98,7 @@ function mountGameView(): VueWrapper {
 
 describe('接龙作答浮层挂载点', () => {
   it('猜词棒：浮层挂在中栏画布容器内、底部工具条之后', () => {
-    useRoomStore().room = createRelayRoomFixture('relay_guess', {
+    useRoomStore().room = createLiveRelayRoomFixture('relay_guess', {
       currentStep: 2,
       previousDrawing: EMPTY_CANVAS,
     })
@@ -124,7 +124,7 @@ describe('接龙作答浮层挂载点', () => {
     expect(classic.findComponent(RelayAnswerPanel).exists()).toBe(false)
     classic.unmount()
 
-    roomStore.room = createRelayRoomFixture('relay_choose')
+    roomStore.room = createLiveRelayRoomFixture('relay_choose')
     const choosing = mountGameView()
     expect(choosing.findComponent(RelayAnswerPanel).exists()).toBe(false)
     choosing.unmount()
@@ -133,7 +133,7 @@ describe('接龙作答浮层挂载点', () => {
 
 describe('接龙作答与聊天互不串（S20 / S79）', () => {
   it('作答浮层提交走 relay:submitGuess，整段交互不产生聊天事件', async () => {
-    useRoomStore().room = createRelayRoomFixture('relay_guess', {
+    useRoomStore().room = createLiveRelayRoomFixture('relay_guess', {
       currentStep: 2,
       previousDrawing: EMPTY_CANVAS,
     })
@@ -158,7 +158,7 @@ describe('接龙作答与聊天互不串（S20 / S79）', () => {
   })
 
   it('右栏聊天提交只走 chat:say：聊天通道永远不会发出作答事件', async () => {
-    useRoomStore().room = createRelayRoomFixture('relay_guess', {
+    useRoomStore().room = createLiveRelayRoomFixture('relay_guess', {
       currentStep: 2,
       previousDrawing: EMPTY_CANVAS,
     })
@@ -189,7 +189,7 @@ describe('接龙作答与聊天互不串（S20 / S79）', () => {
       playerId: GUEST_ID,
       createdAt: 1_000,
     }
-    useRoomStore().room = createRelayRoomFixture('relay_guess', {
+    useRoomStore().room = createLiveRelayRoomFixture('relay_guess', {
       currentStep: 2,
       previousDrawing: EMPTY_CANVAS,
       messages: [chatMessage],
@@ -212,7 +212,7 @@ describe('接龙作答与聊天互不串（S20 / S79）', () => {
   })
 
   it('作画棒的完成提交走 relay:submitDrawing（只标记完成，不带文本）', async () => {
-    useRoomStore().room = createRelayRoomFixture('relay_draw', { ownCanvas: EMPTY_CANVAS })
+    useRoomStore().room = createLiveRelayRoomFixture('relay_draw', { ownCanvas: EMPTY_CANVAS })
     const wrapper = mountGameView()
     const panel = wrapper.findComponent(RelayAnswerPanel)
 
@@ -234,7 +234,7 @@ describe('接龙作答与聊天互不串（S20 / S79）', () => {
 describe('左栏提交状态跟随服务端快照（S41 / S64）', () => {
   it('纯按 submittedPlayerIds 渲染，服务端代交后本人浮层与左栏一起同步为已提交', async () => {
     const roomStore = useRoomStore()
-    roomStore.room = createRelayRoomFixture('relay_guess', {
+    roomStore.room = createLiveRelayRoomFixture('relay_guess', {
       currentStep: 2,
       previousDrawing: EMPTY_CANVAS,
       submittedPlayerIds: [GUEST_ID],
@@ -248,7 +248,7 @@ describe('左栏提交状态跟随服务端快照（S41 / S64）', () => {
     expect(wrapper.findComponent(RelayAnswerPanel).find('input').exists()).toBe(true)
 
     // 服务端超时 / 掉线代为提交：快照把本人也列入已提交
-    roomStore.room = createRelayRoomFixture('relay_guess', {
+    roomStore.room = createLiveRelayRoomFixture('relay_guess', {
       currentStep: 2,
       previousDrawing: EMPTY_CANVAS,
       submitted: true,

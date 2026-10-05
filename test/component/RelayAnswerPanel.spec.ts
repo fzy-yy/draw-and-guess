@@ -8,7 +8,7 @@ import RelayAnswerPanel from '@/components/game/relay/RelayAnswerPanel.vue'
 import DraggablePanelShell from '@/components/game/DraggablePanelShell.vue'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
-import { HOST_ID, STEP_ID, createRelayRoomFixture } from '../client/room-fixture'
+import { HOST_ID, STEP_ID, createLiveRelayRoomFixture } from '../client/room-fixture'
 import { createPiniaWithFakeTransport, type FakeGameTransport } from '../client/fake-game-transport'
 
 /**
@@ -31,7 +31,7 @@ beforeEach(() => {
   setActivePinia(pinia)
   fakeTransport.setConnected(true)
   useSessionStore().playerId = HOST_ID
-  useRoomStore().room = createRelayRoomFixture('relay_guess', { currentStep: 2 })
+  useRoomStore().room = createLiveRelayRoomFixture('relay_guess', { currentStep: 2 })
 })
 
 afterEach(() => {
@@ -54,6 +54,16 @@ function mountPanel(
 }
 
 describe('RelayAnswerPanel 猜词提交', () => {
+  it('本棒截止时间已过：提交入口锁住并提示「本棒已结束」（消除归零瞬间的误导性报错）', async () => {
+    useRoomStore().room = createLiveRelayRoomFixture('relay_guess', {
+      currentStep: 2,
+      phaseEndsAt: Date.now() - 1_000,
+    })
+    const wrapper = mountPanel()
+    expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain(strings.ui.game.relayStepEnded)
+  })
+
   it('空与全空白时提交按钮置灰，输入后提交走 relay:submitGuess 且不进聊天事件', async () => {
     const wrapper = mountPanel()
     const submitButton = wrapper.find('button[type="submit"]')
@@ -137,7 +147,7 @@ describe('RelayAnswerPanel 锁定态跟随快照', () => {
 
 describe('RelayAnswerPanel 作画提交', () => {
   it('作画棒只提供完成提交，走 relay:submitDrawing 并锁定为等待', async () => {
-    useRoomStore().room = createRelayRoomFixture('relay_draw', {
+    useRoomStore().room = createLiveRelayRoomFixture('relay_draw', {
       ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: -1, drawingRevision: 0 },
     })
     const wrapper = mountPanel({ mode: 'draw' })
@@ -156,7 +166,7 @@ describe('RelayAnswerPanel 作画提交', () => {
   })
 
   it('作画棒提交失败时不解锁等待态、按钮保持可重试', async () => {
-    useRoomStore().room = createRelayRoomFixture('relay_draw', {
+    useRoomStore().room = createLiveRelayRoomFixture('relay_draw', {
       ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: -1, drawingRevision: 0 },
     })
     fakeTransport.setResponder((_event, payload) => ({
