@@ -353,6 +353,7 @@ export class GameService {
       abandonChoosing: (room, notice) => this.round.abandonChoosing(room, notice),
       addSystemNotice: (room, text) => this.lifecycle(room).addSystemNotice(room, text),
       clearHintTimers: (game) => this.round.clearHintTimers(game),
+      invalidateReady: (room, notice) => this.lifecycle(room).invalidateReady(room, notice),
       emitToPlayer: this.ports.emitToPlayer,
       // 结算期的「再来一局」评估按模式分流（接龙与经典的结算字段各自独立，S55）
       evaluateRematch: (room) =>

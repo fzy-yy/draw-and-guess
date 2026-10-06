@@ -87,7 +87,7 @@ describe('monorepo 包边界', () => {
   })
 
   it('数据库连接没有模块级路径覆盖或全局访问器', () => {
-    const databaseSource = source('../../apps/server/src/db/index.ts')
+    const databaseSource = source('../../apps/server/src/infra/sqlite/connection.ts')
     expect(databaseSource).toContain('export function createDatabase')
     expect(databaseSource).toContain('export interface DatabaseContext')
     expect(databaseSource).not.toMatch(/setDbFile|getDb|closeDb|dbFileOverride/u)
@@ -96,13 +96,17 @@ describe('monorepo 包边界', () => {
   it('运行期房间保持纯内存，迁移不再包含历史房间表', () => {
     const serverRoot = fileURLToPath(new URL('../../apps/server/src', import.meta.url))
     const runtimeSources = sourceFiles(serverRoot)
-      .filter((file) => !file.endsWith(join('db', 'migrate.ts')))
+      .filter(
+        (file) =>
+          !file.endsWith(join('infra', 'sqlite', 'migrate.ts')) &&
+          !file.endsWith(join('db', 'migrate.ts')),
+      )
       .map((file) => readFileSync(file, 'utf8'))
       .join('\n')
     expect(runtimeSources).not.toMatch(
       /RoomRepository|SqliteRoomRepository|persistRoom|saveAggregate|room_members/u,
     )
-    const migrations = source('../../apps/server/src/db/migrate.ts')
+    const migrations = source('../../apps/server/src/infra/sqlite/migrate.ts')
     expect(migrations).toContain("name: 'baseline-schema'")
     expect(migrations).not.toContain('room_members')
     expect(migrations).not.toContain('CREATE TABLE IF NOT EXISTS rooms')

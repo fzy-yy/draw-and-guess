@@ -152,7 +152,7 @@ describe('房间阶段写入静态约束', () => {
     // 其余模块（快照 / 装配 / 处理器）都不允许直接改房间阶段。
     expect(assignments).toEqual([
       { file: 'domain/relay/relay-machine.ts', statement: 'room.phase = next' },
-      { file: 'round-machine.ts', statement: 'room.phase = next' },
+      { file: 'modules/gameplay/round-machine.ts', statement: 'room.phase = next' },
     ])
   })
 })

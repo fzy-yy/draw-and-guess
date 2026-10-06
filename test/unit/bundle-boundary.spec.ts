@@ -42,7 +42,7 @@ describe('构建产物边界（静态守卫）', () => {
   })
 
   it('服务端按哈希产物长缓存、入口与 SPA 回退不缓存，时长取自配置', () => {
-    const source = read('apps/server/src/app.ts')
+    const source = read('apps/server/src/http/app.ts')
     expect(source).toContain('staticAssets.immutableMaxAgeSeconds')
     expect(source).toContain('immutable')
     expect(source).toContain("'no-cache'")

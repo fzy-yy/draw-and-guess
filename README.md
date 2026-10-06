@@ -94,6 +94,11 @@ apps/client/       Vue 3 游戏舞台、内置 SVG 头像、Pinia 状态与 Canv
                       #   settings/ 设置页分类（声音 / 显示 / 快捷键 / 诊断）
   └─ src/views/       ProfileView / LobbyView / RoomView / GameView / SettingsView
 apps/server/       Express、Socket.IO、权威领域状态与 SQLite 本地持久化
+  └─ src/core/                  # 核心层：统一配置、AppError 错误模型与统一运行时
+  └─ src/infra/                 # 基础设施：SQLite（PRAGMA 顺序与语句缓存）、迁移与文件日志
+  └─ src/modules/               # 业务模块纵切：session / room / gameplay / relay / drawing / chat / vocabulary / archive
+  └─ src/http/ 与 src/ws/        # 入口层：Express 5 适配（RFC 9457 统一错误）与 Socket.IO 网关
+  └─ src/server.ts 与 index.ts   # 组合根（纯构造函数依赖装配）与生产进程入口
   └─ src/config/                # 服务端私有限频、清理、数据库路径与部署参数
   └─ src/domain/relay/          # 接龙状态机、复盘轮播、投票结算与按观看者裁剪的接龙视图
   └─ src/db/ 与 src/repositories/   # 数据库连接/迁移与仓储（player/archive）

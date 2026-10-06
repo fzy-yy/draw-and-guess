@@ -85,39 +85,39 @@ draw-and-guess/
 │   ├── data/                      # 运行期生成：SQLite 数据库文件（game.db，已忽略入库，仅保留 .gitkeep）
 │   ├── log/                       # 运行期生成：日志文件（app-<秒级时间戳>.log，已忽略入库，仅保留 .gitkeep）
 │   └── src/
-│       ├── index.ts               # 生产入口：加载 .env（loadEnvFile）、配置校验、日志初始化（LOG_ENABLED/LOG_MAX_FILES）、运行时布局、局域网 IPv4 探测、监听、优雅关闭
+│       ├── index.ts               # 生产入口：加载 .env、环境校验、监听与优雅关闭生命周期
+│       ├── server.ts              # ★唯一组合根（Composition Root）：纯构造函数依赖装配与生命周期管理
+│       ├── core/                  # ★核心机制层：config 配置加载与校验、errors 统一 AppError 错误模型、runtime 运行时契约
+│       ├── infra/                 # ★技术基础设施：sqlite（PRAGMA 严格顺序与 StatementCache 预编译缓存、迁移）、logging 文件日志
+│       ├── modules/               # ★业务模块纵切：session / room / gameplay / relay / drawing / chat / vocabulary / archive
+│       ├── http/                  # ★HTTP 入口适配：Express 5 app 组装、RFC 9457 统一错误中间件、API 路由与静态资源托管
+│       ├── ws/                    # ★WebSocket 入口适配：泛型 contracts、handler-kit 统一包装器与跨模块网关装配
 │       ├── runtime-layout.ts      # 源码 / 分发产物两种资源布局（data、client、vocabulary、.env；产物模式端口顺延+开浏览器）
 │       ├── build/node-dist.ts     # 分发内置 Node 版本解析与下载校验（纯函数：挑最新稳定 v24、拼地址、提 SHASUMS 条目，可单测）
 │       ├── build/dist-templates.ts # 分发文本模板（start.cmd / 使用说明纯函数，两包启动差异由单测锁定）
-│       ├── config/                 # ★服务端私有配置：限频、断线清理、数据库路径、资源预算与部署覆盖
-│       ├── app.ts                 # HTTP/Socket.IO/DatabaseContext 装配；RunningApplication.close() 幂等关闭自身全部资源
-│       ├── game-service.ts        # handlers 兼容 Facade：子服务装配、对局操作与跨用例编排
-│       ├── round-machine.ts       # 回合流转状态机：仅依赖最小 RoundContext，不反向依赖整个 GameService
-│       ├── scoring.ts             # 计分纯函数：猜中明细、画家得分（可独立单测）
-│       ├── hint-scheduler.ts      # 逐步提示调度：按渐进间隔逐格揭示题目遮罩（结构化提示已移除，见 ADR-0042/0001）
-│       ├── snapshot.ts            # 角色裁剪快照构建（SnapshotViewPort 窄端口）：画家/观众视角差异化、strokesOmitted 差分（矩阵回归见 test/unit/snapshot.matrix.spec.ts）
+│       ├── config/                 # 兼容导出：服务端私有配置
+│       ├── app.ts                 # 兼容导出：HTTP/Socket.IO/DatabaseContext 装配入口
+│       ├── game-service.ts        # 兼容 Facade：模块服务协调与对局跨用例编排
+│       ├── round-machine.ts       # 经典回合流转状态机（转发至 modules/gameplay/round-machine.ts）
+│       ├── scoring.ts             # 计分纯函数（转发至 modules/gameplay/scoring.ts）
+│       ├── hint-scheduler.ts      # 逐步提示调度（转发至 modules/gameplay/hint-scheduler.ts）
+│       ├── snapshot.ts            # 角色裁剪快照构建（SnapshotViewPort 窄端口）：画家/观众视角差异化、strokesOmitted 差分
 │       ├── rate-limit.ts          # 猜词/绘图滑动窗口限频
-│       ├── errors.ts              # GameError / success / failure / RuntimeLogger / SILENT_LOGGER（避免循环依赖）
+│       ├── errors.ts              # 兼容导出：统一 AppError / GameError 类层级
 │       ├── models.ts              # 服务端内存秘密模型（PlayerSecret/RoomSecret/GameSecret/InviteSecret…）
 │       ├── security/              # 恢复令牌摘要与旋转（recovery-token.ts）
-│       ├── runtime.ts             # 统一 Clock/Scheduler/RandomSource（生产实现与测试注入边界）
-│       ├── socket-types.ts        # AppServer/AppSocket 泛型别名 + AppSocketData（socket.data 显式契约，禁任意键）
+│       ├── runtime.ts             # 统一 Clock/Scheduler/RandomSource 契约
+│       ├── socket-types.ts        # 兼容导出：AppServer/AppSocket 泛型别名与 AppSocketData
 │       ├── application/           # 应用协作者：room-publisher 发布快照；room-persistence-coordinator 映射低频仓储记录
-│       ├── domain/                # 领域协作者：session 会话、room 成员、drawing/invite/vocabulary/game 窄接口、relay 接龙状态机与视图裁剪；candidate-selector 为纯函数
-│       ├── startup/               # 启动期配置校验、环境加载、局域网地址与本机名枚举、端口顺延（产物）、自动开浏览器、优雅关闭
-│       ├── logging/               # 文件日志初始化与保留策略
+│       ├── domain/                # 领域兼容导出：session / room / drawing / invite / vocabulary / relay
+│       ├── startup/               # 启动期配置校验、环境加载、局域网地址与本机名枚举、端口顺延、自动开浏览器、优雅关闭
+│       ├── logging/               # 兼容导出：文件日志初始化与保留策略
 │       ├── observability/         # 有界进程指标：连接/房间/ack/错误/重同步（仅安全聚合）
-│       ├── vocabulary/            # 词库 Provider 架构：contract（接口）/normalize（共享纯函数）/sqlite-provider（SQLite 实现）/index（分发入口，loadVocabulary 可传目录）；test-fixture.ts 生成隔离测试词库、test-word-specs.ts 为两条 fixture 管道共用的词面数据源
-│       ├── db/                    # SQLite 实例上下文：createDatabase(filePath) 绑定连接/事务/关闭；迁移显式接收上下文
-│       ├── repositories/          # 仓储接口 + SQLite 实现（player/archive，领域层只依赖接口）
-│       ├── protocol/binder.ts     # 统一请求绑定：schema 校验、会话限频、幂等缓存、统一 ack
-│       └── handlers/              # 按领域分组的事件注册（全部走 binder）
-│           ├── session.ts         # 注册/资料/偏好/大厅/状态重同步/ping/断线
-│           ├── room.ts            # 公开/私密建房与加入、离房、准备、规则、词库、踢人/移交、邀请
-│           ├── game.ts            # 开始/选词/提前结束/返回房间
-│           ├── chat.ts            # 猜词、预设安全短语
-│           └── draw.ts            # 笔画批次/填充/撤销/重做/清空（跳过通用限频）
-│
+│       ├── vocabulary/            # 词库 Provider 架构（contract / normalize / sqlite-provider / index）
+│       ├── db/                    # 兼容导出：SQLite 实例上下文与迁移
+│       ├── repositories/          # 兼容导出：仓储接口与实现
+│       ├── protocol/binder.ts     # 统一请求绑定包装器
+│       └── handlers/              # 兼容导出：Socket.IO 各领域事件注册
 ├── apps/client/                   # 客户端（Vue 3 + Pinia + Vite + Tailwind4 + Socket.IO）
 │   ├── package.json               # 依赖见「技术栈与运行环境」
 │   ├── tsconfig.json              # 继承根配置 + DOM/vite 类型
