@@ -111,16 +111,27 @@ describe('等待页模式徽标与开局门禁（S47 / S62 / S80）', () => {
     expect(startButton().disabled).toBe(true)
   })
 
-  it('经典房：徽标同样显示为经典，且不出现接龙门禁文案', () => {
+  it('经典房：徽标显示为经典，房主可见等待准备文案，但不出现接龙门禁文案', () => {
     // 经典模式的最小可玩人数是 2（共享配置）：只有房主一人时按钮置灰
     renderRoomAsHost('classic', [])
 
     const roomName = screen.getByRole('heading', { name: '测试房间' })
     expect(roomName.nextElementSibling).toBe(screen.getByText(strings.ui.room.modeClassic))
-    // 经典模式维持现状：人数不足时只置灰，不新增原因文案
     expect(startButton().disabled).toBe(true)
+    expect(screen.getByText(strings.ui.room.waitForGuestsReady)).toBeTruthy()
     expect(
       screen.queryByText(strings.ui.room.relayGateNeedPlayers(RELAY_MIN_PLAYERS, 1)),
+    ).toBeNull()
+  })
+
+  it('非房主玩家不显示开局门禁提示文案', () => {
+    useSessionStore().playerId = '00000000-0000-4000-8000-000000000011'
+    useRoomStore().room = waitingRoom('classic', [member(1)])
+    render(RoomView, { global: { plugins: [pinia] } })
+
+    expect(screen.queryByText(strings.ui.room.waitForGuestsReady)).toBeNull()
+    expect(
+      screen.queryByText(strings.ui.room.relayGateNeedPlayers(RELAY_MIN_PLAYERS, 2)),
     ).toBeNull()
   })
 })

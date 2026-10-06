@@ -6,7 +6,7 @@
 <script setup lang="ts">
 import { computed, useAttrs } from 'vue'
 import { playInteractionSound, type InteractionAudioEvent } from '@/audio'
-import { cn } from '@/utils/cn'
+import { cn, type ClassValue } from '@/utils/cn'
 
 const props = withDefaults(
   defineProps<{
@@ -20,6 +20,8 @@ const props = withDefaults(
     active?: boolean
     /** 交互音效语义；null 用于已有专属领域音效的操作。 */
     audioFeedback?: InteractionAudioEvent | null
+    /** 使用方追加的类名，冲突时覆盖组件默认样式 */
+    class?: ClassValue
   }>(),
   {
     variant: 'primary',
@@ -27,6 +29,7 @@ const props = withDefaults(
     disabled: false,
     active: false,
     audioFeedback: 'activate',
+    class: undefined,
   },
 )
 
@@ -63,7 +66,7 @@ const attrs = useAttrs()
 // 只取 attrs.class（外部类名），不要把整包 attrs 交给 clsx——那会把 class/style/onClick 等键名当作类名
 // 追加进按钮 className，且外部类也不会经由 tailwind-merge 与内置类做冲突消解（如调用处 bg-white 覆盖内置 bg-blue）。
 // 其余 attrs（style、事件、无障碍属性等）由 Vue 单根组件的隐式透传落到 <button> 上。
-const buttonClass = computed(() => cn(variantClasses.value, attrs.class))
+const buttonClass = computed(() => cn(variantClasses.value, props.class, attrs.class))
 
 function handleClick(): void {
   if (props.audioFeedback) playInteractionSound(props.audioFeedback)

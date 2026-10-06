@@ -9,7 +9,7 @@
 <script setup lang="ts">
 import { computed, useAttrs } from 'vue'
 import { playInteractionSound, type InteractionAudioEvent } from '@/audio'
-import { cn } from '@/utils/cn'
+import { cn, type ClassValue } from '@/utils/cn'
 
 const props = withDefaults(
   defineProps<{
@@ -17,13 +17,15 @@ const props = withDefaults(
     type?: 'button' | 'submit' | 'reset'
     /** 禁用态 */
     disabled?: boolean
-    /** 交互音效语义；null 表示静音或外部自行处理 */
     audioFeedback?: InteractionAudioEvent | null
+    /** 使用方追加的类名 */
+    class?: ClassValue
   }>(),
   {
     type: 'button',
     disabled: false,
     audioFeedback: 'activate',
+    class: undefined,
   },
 )
 
@@ -35,6 +37,7 @@ const attrs = useAttrs()
 const buttonClass = computed(() =>
   cn(
     'ui-feedback inline-flex h-[4.6cqh] shrink-0 items-center justify-center gap-[0.4em] rounded-[0.6em] bg-white/10 px-[0.8em] text-fs-14 font-bold text-white transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40 [&>svg]:h-[2.6cqh] [&>svg]:w-[2.6cqh] [&>svg]:shrink-0',
+    props.class,
     attrs.class,
   ),
 )

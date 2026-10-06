@@ -192,7 +192,7 @@ draw-and-guess/
 │       │   ├── game/              # 对局组件（提供 index.ts）：GameCanvas / GameHud / ChatPanel / PlayerPanel / FloatingPanel / CanvasToolbar / BrushSizeField / PhaseOverlay / OverlayCard / HudPill / RelayPlayerChip；relay/ 子目录为接龙专属内容（顶栏两形态 / 作答浮层 / 投票卡 / 玩家状态行）；scale-fade.ts 为浮层出入场过渡（对局布局见 docs/adr/0056-three-column-layout-and-canvas-menu.md）
 │       │   ├── room/              # 房间组件（提供 index.ts）：SeatGrid / RuleSummary / RuleRow / RulesDialog / InviteDialog / VocabularyDialog / VocabTableView / VocabPackageTableView
 │       │   ├── lobby/             # 大厅组件（提供 index.ts）：CreateRoomDialog / JoinPrivateDialog
-│       │   ├── common/            # 通用原语组件（提供 index.ts）：含 DataTable 与 DataTableHeader、ContextMenu（右键菜单，白底浮层）、SelectDropdown（手写下拉，替代原生 select）、SquareIconButton / ColorSwatchButton / GroupDivider 等共享原语、各输入/按钮/规则原语
+│       │   ├── common/            # 通用原语组件（提供 index.ts）：含 DataTable 与 DataTableHeader、ContextMenu（右键菜单，白底浮层）、SelectDropdown（手写下拉，替代原生 select）、ActionCard / AlertDialog / AvatarPickerField / RadioCardGroup / SquareIconButton / ColorSwatchButton / GroupDivider 等共享原语、各输入/按钮/规则原语
 │       │   └── settings/          # 设置页组件（提供 index.ts）：AudioTab / ShortcutsTab / AccessibilityTab / DiagnosticsTab / SettingsSectionHeader
 │       ├── views/
 │       │   ├── ProfileView.vue    # 资料确认页（随机昵称/内置 SVG 头像选择，无上传）
@@ -616,16 +616,6 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm build
 
 ---
 
-## Agent skills
+## 架构决策与技能
 
-### Issue tracker
-
-议题与规格以 `.scratch/` 下的本地 Markdown 文件管理（目录**按需创建**，随仓库入库、不要加入 `.gitignore`）。见 `docs/agents/issue-tracker.md`。
-
-### Triage labels
-
-分诊标签保留五个规范角色的默认字符串（needs-triage / needs-info / ready-for-agent / ready-for-human / wontfix）。见 `docs/agents/triage-labels.md`。
-
-### Domain docs
-
-单上下文布局：根 `CONTEXT.md` + `docs/adr/`。见 `docs/agents/domain.md`。
+所有架构、领域与工程决策统一记录在 `docs/adr/`（格式见 `docs/adr/README.md`），不使用临时 Markdown 议题目录。单上下文领域词表位于根 `CONTEXT.md`。分诊标签保留五个规范角色的默认字符串（needs-triage / needs-info / ready-for-agent / ready-for-human / wontfix）。

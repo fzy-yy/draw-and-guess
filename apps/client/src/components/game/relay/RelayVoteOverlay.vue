@@ -13,7 +13,7 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ArrowRight, Check, HelpCircle, ThumbsDown, ThumbsUp, X } from 'lucide-vue-next'
+import { ArrowRight, Check, HelpCircle, X } from 'lucide-vue-next'
 import type { RelayVoteChoice } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { useGameStore } from '@/stores/game'
@@ -123,10 +123,10 @@ async function vote(choice: RelayVoteChoice): Promise<void> {
 
     <div class="mt-[1.5cqh] flex justify-center gap-[0.8em]">
       <AppButton variant="primary" :disabled="locked || pending" @click="vote('agree')">
-        <ThumbsUp />{{ strings.ui.game.relayVoteAgree }}
+        <Check />{{ strings.ui.game.relayVoteAgree }}
       </AppButton>
       <AppButton variant="danger" :disabled="locked || pending" @click="vote('disagree')">
-        <ThumbsDown />{{ strings.ui.game.relayVoteDisagree }}
+        <X />{{ strings.ui.game.relayVoteDisagree }}
       </AppButton>
     </div>
   </OverlayCard>

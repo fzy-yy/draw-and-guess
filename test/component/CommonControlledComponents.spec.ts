@@ -5,6 +5,7 @@ import type { Component } from 'vue'
 import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
 import AvatarPickerDialog from '@/components/common/AvatarPickerDialog.vue'
+import SquareIconButton from '@/components/common/SquareIconButton.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import NetworkStatusButton from '@/components/common/NetworkStatusButton.vue'
 
@@ -95,5 +96,21 @@ describe('受控通用组件', () => {
       screen.getByRole('button', { name: strings.a11y.common.sortByAria('名称') }),
     ).toBeTruthy()
     expect(screen.getByText('暂无数据')).toBeTruthy()
+  })
+  it('SquareIconButton 渲染默认插槽内容并保持交互音效', async () => {
+    const user = userEvent.setup()
+    const onClick = vi.fn()
+    render(SquareIconButton, {
+      props: { label: '画笔工具' },
+      slots: { default: '<svg data-testid="brush-icon"></svg>' },
+    })
+
+    const button = screen.getByRole('button', { name: '画笔工具' })
+    button.addEventListener('click', onClick)
+
+    expect(screen.getByTestId('brush-icon')).toBeTruthy()
+    await user.click(button)
+    expect(onClick).toHaveBeenCalledOnce()
+    expect(playInteractionSound).toHaveBeenCalledWith('activate')
   })
 })

@@ -6,7 +6,8 @@
   - Esc / 关闭按钮统一触发 close 事件；系统阻断框可用 dismissible=false 禁止关闭。
 -->
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { cn, type ClassValue } from '@/utils/cn'
 import { useFocusTrap } from '@vueuse/integrations/useFocusTrap'
 import { X } from 'lucide-vue-next'
 import { playInteractionSound } from '@/audio'
@@ -14,13 +15,19 @@ import { selectTopmostDialog } from './dialog-stack'
 
 const open = defineModel<boolean>('open', { default: false })
 
+export type DialogSize = 'sm' | 'md' | 'lg' | 'xl' | 'auto'
+
 const props = withDefaults(
   defineProps<{
-    /** 卡片宽度类（Tailwind），如 w-[58cqw]；不传则无默认宽度 */
+    /** 语义化卡片尺寸：sm(40cqw)/md(47cqw)/lg(58cqw)/xl(64cqw)/auto */
+    size?: DialogSize
+    /** 是否采用内容居中排版（通常用于确认/提示弹窗） */
+    centered?: boolean
+    /** 卡片宽度类（Tailwind），如显式传入则覆盖 size 对应的宽度 */
     widthClass?: string
-    /** 追加到卡片 section 的类（用于确认弹窗的居中/间距布局） */
+    /** 追加到卡片 section 的类（用于特殊布局微调） */
     sectionClass?: string
-    /** 追加到底部操作区的类（用于确认弹窗的整行/上边距） */
+    /** 追加到底部操作区的类 */
     footerClass?: string
     labelledby?: string
     ariaLabel?: string
@@ -32,8 +39,12 @@ const props = withDefaults(
     overlayClass?: string
     /** 标题栏是否使用三列网格居中布局（中间内容严格水平居中，右侧保留关闭按钮） */
     headerCenter?: boolean
+    /** 使用方追加的类名 */
+    class?: ClassValue
   }>(),
   {
+    size: 'auto',
+    centered: false,
     widthClass: '',
     sectionClass: '',
     footerClass: '',
@@ -43,10 +54,31 @@ const props = withDefaults(
     dismissible: true,
     overlayClass: 'z-30',
     headerCenter: false,
+    class: undefined,
   },
 )
 
 const emit = defineEmits<{ close: [] }>()
+const sizeClasses: Record<DialogSize, string> = {
+  sm: 'w-[40cqw]',
+  md: 'w-[47cqw]',
+  lg: 'w-[58cqw]',
+  xl: 'w-[64cqw]',
+  auto: '',
+}
+
+const computedWidthClass = computed(() => props.widthClass || sizeClasses[props.size])
+const computedSectionClass = computed(() =>
+  cn(
+    computedWidthClass.value,
+    props.centered && 'items-center gap-[1.4cqh] pt-[3cqh] text-center',
+    props.sectionClass,
+    props.class,
+  ),
+)
+const computedFooterClass = computed(() =>
+  cn(props.centered && 'w-full justify-center', props.footerClass),
+)
 
 function closeDialog(): void {
   if (!props.dismissible) return
@@ -152,7 +184,7 @@ onBeforeUnmount(releaseFocus)
         ref="dialogRef"
         tabindex="-1"
         class="game-dialog dialog-shell outline-hidden"
-        :class="[widthClass, sectionClass]"
+        :class="computedSectionClass"
       >
         <header
           v-if="closeAria || $slots.header"
@@ -181,7 +213,7 @@ onBeforeUnmount(releaseFocus)
         <footer
           v-if="$slots.footer"
           class="flex min-h-[8cqh] items-center justify-end gap-[0.8em] bg-line px-[1.7em] py-[1cqh]"
-          :class="footerClass"
+          :class="computedFooterClass"
         >
           <slot name="footer" />
         </footer>

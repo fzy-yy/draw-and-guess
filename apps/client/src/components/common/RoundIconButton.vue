@@ -6,19 +6,23 @@
 -->
 <script setup lang="ts">
 import { ref } from 'vue'
+import type { ClassValue } from '@/utils/cn'
 import type { InteractionAudioEvent } from '@/audio'
 import BaseIconButton from '@/components/common/BaseIconButton.vue'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     /** 无障碍标签（无可见文字，必须提供）。命名约定：图标按钮家族统一用 label prop（表单类原语用 ariaLabel），组件内部落到 aria-label；aria-* 本可正常绑定为 prop，用 label 只是家族约定。 */
     label: string
     /** 禁用态。 */
     disabled?: boolean
-    /** 交互音效语义。 */
     audioFeedback?: InteractionAudioEvent | null
+    /** 原生 type，默认 button */
+    type?: 'button' | 'submit' | 'reset'
+    /** 使用方追加的类名 */
+    class?: ClassValue
   }>(),
-  { disabled: false, audioFeedback: 'activate' },
+  { disabled: false, audioFeedback: 'activate', type: 'button', class: undefined },
 )
 const emit = defineEmits<{ click: [event: MouseEvent] }>()
 const button = ref<InstanceType<typeof BaseIconButton>>()
@@ -34,10 +38,12 @@ defineExpose({ focus })
 <template>
   <BaseIconButton
     ref="button"
+    :type="type"
     :label="label"
     :disabled="disabled"
     :audio-feedback="audioFeedback"
     base-class="round-icon-btn"
+    :class="props.class"
     @click="emit('click', $event)"
   >
     <slot />

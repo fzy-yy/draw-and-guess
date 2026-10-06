@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { InteractionAudioEvent } from '@/audio'
-import { cn } from '@/utils/cn'
+import { cn, type ClassValue } from '@/utils/cn'
 import BaseIconButton from '@/components/common/BaseIconButton.vue'
 
 const props = withDefaults(
@@ -18,8 +18,12 @@ const props = withDefaults(
     disabled?: boolean
     /** 交互音效语义。 */
     audioFeedback?: InteractionAudioEvent | null
+    /** 原生 type，默认 button */
+    type?: 'button' | 'submit' | 'reset'
+    /** 使用方追加的类名 */
+    class?: ClassValue
   }>(),
-  { size: 'default', disabled: false, audioFeedback: 'activate' },
+  { size: 'default', disabled: false, audioFeedback: 'activate', type: 'button', class: undefined },
 )
 // click 携带 MouseEvent：与 BaseIconButton/全局 onClick 扩展签名一致（见 vue-augmentations.d.ts）
 const emit = defineEmits<{ click: [event: MouseEvent] }>()
@@ -35,10 +39,12 @@ const baseClass = computed(() =>
 
 <template>
   <BaseIconButton
+    :type="type"
     :label="label"
     :disabled="disabled"
     :audio-feedback="audioFeedback"
     :base-class="baseClass"
+    :class="props.class"
     @click="emit('click', $event)"
   >
     <slot />

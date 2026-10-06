@@ -45,7 +45,11 @@ const showsStep = computed(
   <!-- 模式标签复用房间头同一份模式文案（ui.room.modeRelay）：两处都是「这一局玩什么」，同一个词 -->
   <HudPill class="shrink-0">
     <span class="text-sky text-fs-12">{{ strings.ui.room.modeRelay }}</span>
-    <b class="text-white text-fs-16 leading-none">{{ phaseText }}</b>
+    <b
+      class="text-white text-fs-16 leading-none inline-block w-[4em] text-center whitespace-nowrap"
+    >
+      {{ phaseText }}
+    </b>
   </HudPill>
   <!-- 复盘链条进度：紧跟最左标签之后（S75），与棒次胶囊互斥 -->
   <HudPill v-if="props.chainProgress" class="shrink-0">

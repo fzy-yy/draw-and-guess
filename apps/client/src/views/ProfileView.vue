@@ -1,14 +1,13 @@
 <!-- 玩家资料确认页：昵称与头像均来自公开配置，头像只允许选择内置 SVG 资源。 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { ArrowRight, CheckCircle2, RefreshCw, Wifi, WifiOff } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { countGraphemes } from '@draw-guess/shared'
-import { AppButton, AppInput, AvatarImage, AvatarPickerDialog } from '@/components/common'
+import { AppButton, AppInput, AvatarPickerField } from '@/components/common'
 import { useGameStore } from '@/stores/game'
 
 const store = useGameStore()
-const showAvatarPicker = ref(false)
 
 /** 昵称按 Unicode 码点计数，避免中文或组合字符被 UTF-16 长度误判。 */
 const nicknameValid = computed(() => {
@@ -120,24 +119,13 @@ function randomize(): void {
       </header>
 
       <!-- 大头像位于资料区顶部；整个圆形按钮均可打开头像选择弹窗。 -->
-      <div class="flex flex-col items-center mb-[2.2cqh]">
-        <span class="mb-[0.65cqh] block text-navy font-bold">{{
-          strings.ui.profile.avatarLabel
-        }}</span>
-        <button
-          class="flex flex-col items-center gap-[0.8cqh] bg-transparent text-blue text-fs-12 font-bold"
-          type="button"
-          :aria-label="strings.a11y.profile.changeAvatarAria"
-          @click="showAvatarPicker = true"
-        >
-          <AvatarImage
-            :avatar-id="store.profile.avatarId"
-            :label="strings.a11y.common.myAvatarAria"
-            class="h-[15cqh] w-[15cqh]"
-          />
-          <span>{{ strings.ui.profile.changeAvatar }}</span>
-        </button>
-      </div>
+      <AvatarPickerField
+        v-model="store.profile.avatarId"
+        :label="strings.ui.profile.avatarLabel"
+        :action-text="strings.ui.profile.changeAvatar"
+        avatar-size-class="h-[15cqh] w-[15cqh]"
+        class="mb-[2.2cqh]"
+      />
 
       <!-- 昵称位于头像下方，保留自定义输入和 Enter 提交。 -->
       <label class="mb-[0.65cqh] block text-navy font-bold" for="nickname">{{
@@ -185,11 +173,5 @@ function randomize(): void {
         {{ strings.ui.profile.offlineWarning }}
       </p>
     </section>
-
-    <AvatarPickerDialog
-      v-model="store.profile.avatarId"
-      v-model:open="showAvatarPicker"
-      :avatar-ids="store.config.player.avatarIds"
-    />
   </main>
 </template>

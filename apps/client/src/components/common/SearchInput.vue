@@ -7,19 +7,23 @@ import { Search, X } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { playInteractionSound } from '@/audio'
 import AppInput from '@/components/common/AppInput.vue'
+import type { ClassValue } from '@/utils/cn'
 
 const model = defineModel<string>({ default: '' })
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     placeholder?: string
     ariaLabel?: string
     disabled?: boolean
+    /** 使用方追加的类名 */
+    class?: ClassValue
   }>(),
   {
     placeholder: '',
     ariaLabel: undefined,
     disabled: false,
+    class: undefined,
   },
 )
 
@@ -36,6 +40,7 @@ function clear(): void {
     :placeholder="placeholder"
     :aria-label="ariaLabel"
     :disabled="disabled"
+    :class="props.class"
   >
     <template #prefix>
       <Search class="h-[3.2cqh] w-[3.2cqh] text-muted" />

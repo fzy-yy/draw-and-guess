@@ -54,13 +54,16 @@ const allSet = computed(() =>
 )
 
 /**
- * 接龙开局门禁未满足时的原因提示（S47 / S62）。
- * 经典模式维持现状：只置灰按钮、不给原因文案，与改造前完全一致。
+ * 开局门禁未满足时的原因提示（Image #4 规范）：
+ * 仅房主可见（非房主不显示）；
+ * 接龙模式在线可玩少于 4 人时显示不满 4 人提示文案；
+ * 其余未全员就绪场景（经典模式或接龙满 4 人但有人未准备）统一显示等待其他玩家准备文案。
  */
 const startGateReason = computed(() => {
-  if (store.room?.gameMode !== 'relay' || allSet.value) return undefined
-  if (onlinePlayableCount.value < RELAY_MIN_PLAYERS)
+  if (!store.isHost || allSet.value) return undefined
+  if (store.room?.gameMode === 'relay' && onlinePlayableCount.value < RELAY_MIN_PLAYERS) {
     return strings.ui.room.relayGateNeedPlayers(RELAY_MIN_PLAYERS, onlinePlayableCount.value)
+  }
   return strings.ui.room.waitForGuestsReady
 })
 

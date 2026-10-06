@@ -10,9 +10,7 @@ import { reactive } from 'vue'
 import { strings } from '@draw-guess/strings'
 import type { GameMode, RoomSettings, RoomVisibility } from '@draw-guess/shared'
 import { defaultRoomSettings } from '@draw-guess/config'
-import BaseDialog from '@/components/common/BaseDialog.vue'
-import AppButton from '@/components/common/AppButton.vue'
-import AppInput from '@/components/common/AppInput.vue'
+import { AppButton, AppInput, BaseDialog, RadioCardGroup } from '@/components/common'
 import { useGameStore } from '@/stores/game'
 
 const open = defineModel<boolean>('open', { default: false })
@@ -67,68 +65,40 @@ async function submitCreate(): Promise<void> {
       </label>
 
       <!-- 玩法模式单选组：建房时选定、房间内不可修改（S27 / S28） -->
-      <fieldset class="col-span-full m-0 grid grid-cols-2 gap-[0.8em] border-0 p-0">
-        <legend class="mb-[0.7cqh] font-bold">{{ strings.ui.lobby.gameModeField }}</legend>
-        <label
-          v-for="option in [
-            {
-              value: 'classic' as const,
-              title: strings.ui.lobby.gameModeClassic,
-              hint: strings.ui.lobby.gameModeClassicHint,
-            },
-            {
-              value: 'relay' as const,
-              title: strings.ui.lobby.gameModeRelay,
-              hint: strings.ui.lobby.gameModeRelayHint,
-            },
-          ]"
-          :key="option.value"
-          class="flex items-center gap-[0.7em] rounded-[0.7em] border-[0.18cqh] border-control bg-white px-[1em] py-[1cqh] cursor-pointer"
-        >
-          <input
-            v-model="createForm.gameMode"
-            type="radio"
-            :value="option.value"
-            class="h-[2.2cqh] w-[2.2cqh] accent-blue"
-          />
-          <span class="flex flex-col">
-            <b>{{ option.title }}</b>
-            <small class="text-muted text-fs-12">{{ option.hint }}</small>
-          </span>
-        </label>
-      </fieldset>
+      <RadioCardGroup
+        v-model="createForm.gameMode"
+        :label="strings.ui.lobby.gameModeField"
+        :options="[
+          {
+            value: 'classic',
+            title: strings.ui.lobby.gameModeClassic,
+            hint: strings.ui.lobby.gameModeClassicHint,
+          },
+          {
+            value: 'relay',
+            title: strings.ui.lobby.gameModeRelay,
+            hint: strings.ui.lobby.gameModeRelayHint,
+          },
+        ]"
+      />
 
       <!-- 可见性单选组 -->
-      <fieldset class="col-span-full m-0 grid grid-cols-2 gap-[0.8em] border-0 p-0">
-        <legend class="mb-[0.7cqh] font-bold">{{ strings.ui.lobby.visibilityField }}</legend>
-        <label
-          v-for="option in [
-            {
-              value: 'public' as const,
-              title: strings.ui.lobby.visibilityPublic,
-              hint: strings.ui.lobby.visibilityPublicHint,
-            },
-            {
-              value: 'private' as const,
-              title: strings.ui.lobby.visibilityPrivate,
-              hint: strings.ui.lobby.visibilityPrivateHint,
-            },
-          ]"
-          :key="option.value"
-          class="flex items-center gap-[0.7em] rounded-[0.7em] border-[0.18cqh] border-control bg-white px-[1em] py-[1cqh] cursor-pointer"
-        >
-          <input
-            v-model="createForm.visibility"
-            type="radio"
-            :value="option.value"
-            class="h-[2.2cqh] w-[2.2cqh] accent-blue"
-          />
-          <span class="flex flex-col">
-            <b>{{ option.title }}</b>
-            <small class="text-muted text-fs-12">{{ option.hint }}</small>
-          </span>
-        </label>
-      </fieldset>
+      <RadioCardGroup
+        v-model="createForm.visibility"
+        :label="strings.ui.lobby.visibilityField"
+        :options="[
+          {
+            value: 'public',
+            title: strings.ui.lobby.visibilityPublic,
+            hint: strings.ui.lobby.visibilityPublicHint,
+          },
+          {
+            value: 'private',
+            title: strings.ui.lobby.visibilityPrivate,
+            hint: strings.ui.lobby.visibilityPrivateHint,
+          },
+        ]"
+      />
       <p class="col-span-full m-0 text-muted text-fs-12 leading-[1.6]">
         {{
           createForm.visibility === 'public'

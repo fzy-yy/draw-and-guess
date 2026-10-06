@@ -1,19 +1,12 @@
 <!-- 在线大厅：只展示公开房间；私密房间通过服务端生成的短码加入。 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import {
-  ChevronRight,
-  CirclePlus,
-  Gamepad2,
-  KeyRound,
-  Settings,
-  Users,
-  Wifi,
-} from 'lucide-vue-next'
+import { CirclePlus, Gamepad2, KeyRound, Settings, Users, Wifi } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
 import { PLAYER_PROTOCOL_LIMITS, RELAY_STEP_COUNT } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
 import {
+  ActionCard,
   AppButton,
   AvatarImage,
   NetworkStatusButton,
@@ -104,31 +97,27 @@ function openSettings(): void {
           依赖 base.css 的全局按钮 hover brightness(0.95)，不用 hover-tint
           （hover-tint 的 bg-line 会把实色底整体替换成灰色，曾因此被标注为配色错误）。
         -->
-        <button
-          type="button"
-          class="flex min-h-[12cqh] items-center gap-[1em] rounded-[0.9em] bg-blue px-[1.4em] text-left text-white ui-feedback"
+        <ActionCard
+          variant="primary"
+          :title="strings.ui.lobby.createRoomTitle"
+          :hint="strings.ui.lobby.createRoomHint"
           @click="showCreate = true"
         >
-          <CirclePlus class="first:h-[4.5cqh] first:w-[4.5cqh] first:text-yellow" />
-          <span class="flex flex-col">
-            <b class="text-fs-18">{{ strings.ui.lobby.createRoomTitle }}</b>
-            <small class="mt-[0.35cqh] text-sky">{{ strings.ui.lobby.createRoomHint }}</small>
-          </span>
-          <ChevronRight class="last:ml-auto" />
-        </button>
+          <template #icon>
+            <CirclePlus />
+          </template>
+        </ActionCard>
 
-        <button
-          type="button"
-          class="flex min-h-[12cqh] items-center gap-[1em] rounded-[0.9em] bg-navy px-[1.4em] text-left text-white ui-feedback"
+        <ActionCard
+          variant="navy"
+          :title="strings.ui.lobby.joinPrivateTitle"
+          :hint="strings.ui.lobby.joinPrivateHint"
           @click="showJoinPrivate = true"
         >
-          <KeyRound class="first:h-[4.5cqh] first:w-[4.5cqh] first:text-yellow" />
-          <span class="flex flex-col">
-            <b class="text-fs-18">{{ strings.ui.lobby.joinPrivateTitle }}</b>
-            <small class="mt-[0.35cqh] text-sky">{{ strings.ui.lobby.joinPrivateHint }}</small>
-          </span>
-          <ChevronRight class="last:ml-auto" />
-        </button>
+          <template #icon>
+            <KeyRound />
+          </template>
+        </ActionCard>
       </div>
 
       <div

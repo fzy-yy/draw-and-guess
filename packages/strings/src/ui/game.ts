@@ -65,11 +65,11 @@ export const game = {
    * 接龙顶栏的阶段短名。阶段全名（`ui.status.phaseRelay*`）已带「接龙」前缀，
    * 与顶栏的模式标签并排会读成「接龙 接龙作画」，故顶栏单独用短名。
    */
-  relayPhaseChoose: '选词',
-  relayPhaseDraw: '作画',
-  relayPhaseGuess: '猜词',
+  relayPhaseChoose: '选词阶段',
+  relayPhaseDraw: '作画阶段',
+  relayPhaseGuess: '猜词阶段',
   relayPhaseShowcase: '复盘展示',
-  relayPhaseVote: '投票',
+  relayPhaseVote: '投票阶段',
   /** 棒次胶囊：与经典 ROUND 胶囊同构（前缀 / 大号数字 / 总数）。 */
   relayStepPrefix: '第',
   relayStepTotal: (total: number) => `/ ${total} 棒`,
@@ -108,8 +108,8 @@ export const game = {
    */
   relayChainProgress: (index: number, total: number) => `第 ${index} / ${total} 条链`,
   relayVoteTitle: '这个匹配吗？',
-  relayVoteAgree: '赞同',
-  relayVoteDisagree: '不赞同',
+  relayVoteAgree: '匹配',
+  relayVoteDisagree: '不匹配',
   /**
    * 终局接龙口径统计（S77）：替代经典第二行的「猜中 N 次 · 平均 X 秒」——
    * 接龙猜词不判对错，用参与链数与累计赞同票数表达这一局的贡献。

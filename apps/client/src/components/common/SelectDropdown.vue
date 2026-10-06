@@ -18,6 +18,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { Check, ChevronDown } from 'lucide-vue-next'
 import { playInteractionSound } from '@/audio'
+import { cn, type ClassValue } from '@/utils/cn'
 
 export interface SelectDropdownOption<V extends string | number> {
   value: V
@@ -32,8 +33,10 @@ const props = withDefaults(
     labelledby?: string
     /** 无关联标签元素时的直接无障碍名称。 */
     ariaLabel?: string
+    /** 使用方追加的类名 */
+    class?: ClassValue
   }>(),
-  { disabled: false, labelledby: undefined, ariaLabel: undefined },
+  { disabled: false, labelledby: undefined, ariaLabel: undefined, class: undefined },
 )
 
 const model = defineModel<V>({ required: true })
@@ -237,7 +240,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="rootRef" class="min-w-0">
+  <div ref="rootRef" :class="cn('min-w-0', props.class)">
     <button
       ref="triggerRef"
       type="button"

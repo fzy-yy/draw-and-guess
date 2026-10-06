@@ -43,10 +43,8 @@
 
 ## 维护约定
 
-- 新增文档前先判断归属：跨模块决策写 `docs/adr/`（编号递增、不复用）；可复现的基线/专题说明写本目录；
-  议题与规格按 [`agents/issue-tracker.md`](./agents/issue-tracker.md) 写入 `.scratch/`。
-- 文档里的路径、命令、版本号以代码为准；`test/unit/documentation.consistency.spec.ts` 会校验
-  `AGENTS.md` / `README.md` 中反引号路径的真实性与大小写。
+- 新增文档前先判断归属：跨模块决策写 `docs/adr/`（编号递增、不复用）；可复现的基线/专题说明写本目录；架构与工程决策一律编写为 ADR 写入 `docs/adr/`。
+- 文档里的路径、命令、版本号以代码为准；`test/unit/documentation.consistency.spec.ts` 会校验 `AGENTS.md` / `README.md` 中反引号路径的真实性与大小写。
 - 本页只做导航：新增/删除文档时同步更新上面的表格。
 - `adr/README.md` 的索引**按主题分组**，分组只是导航：编号与文件名是源码注释引用的稳定标识，
   不因分组调整而改动。

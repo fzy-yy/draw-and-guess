@@ -11,6 +11,7 @@ import { strings } from '@draw-guess/strings'
 import { roomSettingsDefaults } from '@draw-guess/config'
 import { PLAYER_PROTOCOL_LIMITS, type RoomSettings } from '@draw-guess/shared'
 import { useGameStore } from '@/stores/game'
+import ActionCard from '@/components/common/ActionCard.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import RuleRow from '@/components/room/RuleRow.vue'
 import { occupiesSeatMember } from '@/utils/room-facts'
@@ -192,28 +193,34 @@ const summaryRows = computed(() => {
     </div>
 
     <!-- 词库管理入口：房主可编辑、非房主可打开查看（只读），展示已选/总词条数 -->
-    <button
-      class="flex items-center gap-[0.75em] min-h-[7cqh] py-[0.8cqh] px-[0.8em] text-blue bg-sky border-l-[0.45cqh] border-l-blue text-left"
-      type="button"
+    <ActionCard
+      variant="sky"
+      :title="strings.ui.room.vocabularyTitle"
       :disabled="props.vocabularyLoading"
       @click="emit('open-vocabulary')"
     >
-      <BookOpenCheck class="h-[3.4cqh] w-[3.4cqh]" /><span class="flex-1 flex flex-col"
-        ><b>{{ strings.ui.room.vocabularyTitle }}</b>
+      <template #icon>
+        <BookOpenCheck class="h-[3.4cqh] w-[3.4cqh]" />
+      </template>
+      <template #hint>
         <small class="text-muted truncate">
-          <span v-if="store.room?.vocabularyPackageName" class="font-bold text-navy mr-[0.3em]"
-            >[{{ store.room.vocabularyPackageName }}]</span
-          >{{
+          <span v-if="store.room?.vocabularyPackageName" class="font-bold text-navy mr-[0.3em]">
+            [{{ store.room.vocabularyPackageName }}]
+          </span>
+          {{
             strings.ui.room.vocabularyCount(
               store.room?.selectedWordCount ?? 0,
               store.room?.totalWordCount ?? 0,
             )
-          }}</small
-        ></span
-      ><span class="text-fs-12 font-bold">{{
-        store.isHost ? strings.ui.room.vocabularyManage : strings.ui.room.vocabularyReadOnly
-      }}</span>
-    </button>
+          }}
+        </small>
+      </template>
+      <template #trailing>
+        <span class="text-fs-12 font-bold">
+          {{ store.isHost ? strings.ui.room.vocabularyManage : strings.ui.room.vocabularyReadOnly }}
+        </span>
+      </template>
+    </ActionCard>
 
     <!-- 邀请在线玩家：满员或无权限时禁用 -->
     <div class="my-[1.3cqh]">
