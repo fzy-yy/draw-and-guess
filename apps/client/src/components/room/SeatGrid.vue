@@ -9,7 +9,7 @@
 import { computed, ref } from 'vue'
 import { Crown, User, UserPlus, Users, X } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
-import type { RoomMember } from '@draw-guess/shared'
+import { PLAYER_PROTOCOL_LIMITS, type RoomMember } from '@draw-guess/shared'
 import AvatarImage from '@/components/common/AvatarImage.vue'
 import SectionHeader from '@/components/common/SectionHeader.vue'
 import HostCrownBadge from '@/components/common/HostCrownBadge.vue'
@@ -22,22 +22,22 @@ const store = useGameStore()
 const contextMenu = useContextMenu()
 
 /**
- * 席位计数（N/M）按**占席**口径统计：未离局即占席（观战者也占席）。
+ * 席位计数（N/M）按**占席**口径统计：未离局即占席。
  * 与服务端容量校验、大厅人数同口径（见 ADR-0023）；离局者为成绩卡保留的占位不算占席，
  * 因此计数可能小于下方卡片数——这正是「还有多少可用容量」的语义。
+ * 容量固定为协议常量（S61/S67），不再从房间规则读取。
  */
 const seatedCount = computed(() => (store.room?.members ?? []).filter(occupiesSeatMember).length)
 
 // 席位展示：解耦界面槽位与底层物理 seatIndex。
-// 优先稳定呈现全部已有成员（防止历史跳号或缩容后丢失），并在不足最大人数时用空位补齐。
+// 优先稳定呈现全部已有成员（防止历史跳号后丢失），并在不足固定容量时用空位补齐。
 const slots = computed(() => {
   const members = store.room?.members ?? []
-  const max = store.room?.settings.maxPlayers ?? store.config.player.defaultMaxPlayers
   const result: ((typeof members)[number] | undefined)[] = [...members]
-  while (result.length < max) {
+  while (result.length < PLAYER_PROTOCOL_LIMITS.maxPlayers) {
     result.push(undefined)
   }
-  // 超员（历史跳号或缩容后）刻意全部保留展示，补齐只在不足时发生——无需截断。
+  // 超员（历史跳号）刻意全部保留展示，补齐只在不足时发生——无需截断。
   return result
 })
 
@@ -100,12 +100,7 @@ function openSeatMenu(event: MouseEvent, member: RoomMember): void {
       ></SectionHeader>
       <span class="flex items-center gap-[0.45em] text-muted font-bold"
         ><Users />
-        {{
-          strings.ui.room.seatCount(
-            seatedCount,
-            store.room?.settings.maxPlayers ?? store.config.player.defaultMaxPlayers,
-          )
-        }}</span
+        {{ strings.ui.room.seatCount(seatedCount, PLAYER_PROTOCOL_LIMITS.maxPlayers) }}</span
       >
     </div>
     <!-- 席位网格：已占用的显示玩家信息，空位显示邀请提示；房主可踢人 -->
@@ -150,21 +145,17 @@ function openSeatMenu(event: MouseEvent, member: RoomMember): void {
               <User class="h-[1.1em] w-[1.1em] stroke-[2.5]" />
             </span>
           </div>
-          <!-- 准备状态标签：观战 / 已准备 / 重连中 / 未准备 -->
+          <!-- 准备状态标签：已准备 / 重连中 / 未准备 -->
           <span
-            v-if="!member.isHost || member.spectating"
+            v-if="!member.isHost"
             class="min-w-[7em] flex items-center justify-center gap-[0.35em] mt-[0.7cqh] py-[0.4cqh] px-[0.8em] rounded-[99em] text-fs-12 font-bold"
             :class="member.ready ? 'text-success-fg bg-green/10' : 'text-muted bg-line'"
             >{{
-              member.waitingForNextGame
-                ? strings.ui.status.roleWaitingNextGame
-                : member.spectating
-                  ? strings.ui.status.roleSpectating
-                  : member.ready
-                    ? strings.ui.status.roleReady
-                    : member.connection === 'reconnecting'
-                      ? strings.ui.status.roleReconnecting
-                      : strings.ui.status.roleNotReady
+              member.ready
+                ? strings.ui.status.roleReady
+                : member.connection === 'reconnecting'
+                  ? strings.ui.status.roleReconnecting
+                  : strings.ui.status.roleNotReady
             }}</span
           >
         </template>

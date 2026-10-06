@@ -11,7 +11,8 @@ export const serverPrivateConfig = {
     host: '0.0.0.0',
     port: 5174,
     reconnectGraceMs: 120_000,
-    drawerReconnectGraceMs: 20_000,
+    /** 对局中房主断线后暂留控制权的宽限：到期仍未重连才把房主迁移给在线可玩成员。 */
+    hostReconnectGraceMs: 20_000,
     inviteExpiryMs: 30_000,
     inviteCooldownMs: 5_000,
     guessEventsPerSecond: 5,
@@ -39,7 +40,7 @@ export const serverPrivateConfig = {
     maxWords: 10_000,
     maxAliasesPerWord: 8,
     maxAliasLength: 24,
-    deduplicate: true,
+    deduplicate: false,
     resetWhenExhausted: true,
   },
 } as const

@@ -19,8 +19,13 @@ export const StrokeSchema = z.object({
   id: z.string().min(4).max(64),
   tool: z.enum(['pen', 'eraser']),
   ...DrawStyleSchema,
-  points: z.array(DrawPointSchema).min(1).max(DRAWING_PROTOCOL_LIMITS.maxPointsPerBatch),
+  points: z.array(DrawPointSchema).min(1).max(DRAWING_PROTOCOL_LIMITS.maxPointsPerStroke),
   startPointIndex: z.number().int().nonnegative().optional(),
+})
+
+/** 单次绘图请求仅容纳一个批次；完整 StrokeSchema 则用于累积历史与快照。 */
+export const StrokeBatchSchema = StrokeSchema.extend({
+  points: z.array(DrawPointSchema).min(1).max(DRAWING_PROTOCOL_LIMITS.maxPointsPerBatch),
 })
 export const FillCommandSchema = z.object({
   kind: z.literal('fill'),

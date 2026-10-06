@@ -15,6 +15,7 @@ import { useSessionStore } from './session.ts'
 import { useLobbyStore } from './lobby.ts'
 import { useRoomStore } from './room.ts'
 import { useGameplayStore } from './gameplay.ts'
+import { useRelayStore } from './relay.ts'
 import { useVocabularyStore } from './vocabulary.ts'
 import { useResyncStore } from './resync.ts'
 
@@ -26,6 +27,7 @@ export const useGameStore = defineStore('game', () => {
   const lobbyStore = useLobbyStore()
   const roomStore = useRoomStore()
   const gameplayStore = useGameplayStore()
+  const relayStore = useRelayStore()
   const vocabularyStore = useVocabularyStore()
   const resyncStore = useResyncStore()
 
@@ -45,6 +47,7 @@ export const useGameStore = defineStore('game', () => {
   } = storeToRefs(sessionStore)
   const { presence, invites } = storeToRefs(lobbyStore)
   const { room, me, isHost, isDrawer } = storeToRefs(roomStore)
+  const { view: relay } = storeToRefs(relayStore)
   const { vocabulary } = storeToRefs(vocabularyStore)
 
   function notify(text: string, type: 'success' | 'warning' | 'error' = 'success'): void {
@@ -101,6 +104,8 @@ export const useGameStore = defineStore('game', () => {
     room,
     vocabulary,
     invites,
+    // 接龙视图（经典房间为 undefined）；与 `relay*` 动作族一起构成接龙消费面（S84）
+    relay,
     kickedNotice,
     protocolMismatch,
     busy,
@@ -126,6 +131,7 @@ export const useGameStore = defineStore('game', () => {
     loadVocabulary: vocabularyStore.loadVocabulary,
     saveVocabulary: vocabularyStore.saveVocabulary,
     selectVocabularyPackage: vocabularyStore.selectVocabularyPackage,
+    selectVocabularyPackages: vocabularyStore.selectVocabularyPackages,
     cancelVocabularyRequests: vocabularyStore.cancelPending,
     startGame: gameplayStore.startGame,
     chooseWord: gameplayStore.chooseWord,
@@ -138,8 +144,14 @@ export const useGameStore = defineStore('game', () => {
     sendStroke: gameplayStore.sendStroke,
     sendFill: gameplayStore.sendFill,
     drawAction: gameplayStore.drawAction,
-    pause: gameplayStore.pause,
-    resume: gameplayStore.resume,
+    // 接龙专属动作（经典房调用会被本地拒绝）：事件族与经典完全不同（S30 / S51 / S53 / S85）。
+    relaySendStroke: relayStore.sendStroke,
+    relaySendFill: relayStore.sendFill,
+    relayDrawAction: relayStore.drawAction,
+    relaySubmitGuess: relayStore.submitGuess,
+    relaySubmitDrawing: relayStore.submitDrawing,
+    relayVote: relayStore.vote,
+    relayChat: relayStore.chat,
     endEarly: gameplayStore.endEarly,
     leaveGame: gameplayStore.leaveGame,
     returnWaiting: gameplayStore.returnWaiting,

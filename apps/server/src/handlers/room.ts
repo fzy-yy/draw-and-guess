@@ -31,7 +31,7 @@ export function registerRoomHandlers(socket: AppSocket, service: GameService): v
     service.updateVocabulary(playerId, input.ids, input.expectedVersion),
   )
   bindRequest(socket, EVENTS.roomSelectVocabularyPackage, (input, playerId) =>
-    service.selectVocabularyPackage(playerId, input.packageId, input.expectedVersion),
+    service.selectVocabularyPackages(playerId, input.packageIds, input.expectedVersion),
   )
   // 房主管理：踢人 / 移交房主
   bindRequest(socket, EVENTS.roomKick, (input, playerId) => service.kick(playerId, input.targetId))

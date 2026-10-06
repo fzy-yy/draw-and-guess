@@ -85,9 +85,9 @@ describe('真实服务端响应与 ack Schema 契约', () => {
       room.stateVersion,
     )
     expectSuccessAck(EVENTS.roomUpdateVocabulary, updated)
-    const selected = harness.service.selectVocabularyPackage(
+    const selected = harness.service.selectVocabularyPackages(
       host.playerId,
-      vocabulary.packageId,
+      vocabulary.packageIds,
       room.stateVersion,
     )
     expectSuccessAck(EVENTS.roomSelectVocabularyPackage, selected)

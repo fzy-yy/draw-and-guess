@@ -1,20 +1,22 @@
 <!--
   底部横向绘图工具条：手柄拖动 / 工具 / 色板 / 画笔大小 / 历史操作，单行，浮于画布底部居中。
-  最左侧提供六点拖动手柄，支持在画布可视区内自由拖拽移动；
+  最左侧提供六点拖动手柄，支持在画布可视区内自由拖拽移动（拖动与定位由共用外壳
+  `DraggablePanelShell` 单点维护，接龙作答浮层复用同一实现，见 S86）；
   仅「画笔大小」显示数值，其余全 icon + title / aria；工具与色板复用共享原语，激活态由原语统一。
-  可见性由父组件控制（仅对画家自动显示，猜词者隐藏且不可被隐藏）；
+  可见性由父组件控制：经典模式只对画家显示；接龙作画期持有本棒画布者显示，已提交后仍保留锁定状态。
   定位在自身外层完成，内层做缩放，避免 WAAPI 的 transform 覆盖造成跳动。
   tool / color / width / position 由父组件持有；
   清空需二次确认，故抛 clear 事件交父组件处理（撤销 / 重做直接调 store）。
 -->
 <script setup lang="ts">
-import { computed, ref, type Component } from 'vue'
+import { computed, type Component } from 'vue'
 import {
   Brush,
+  Check,
   Eraser,
   GripVertical,
   PaintBucket,
-  Pipette,
+  Palette,
   Redo2,
   Trash2,
   Undo2,
@@ -23,104 +25,34 @@ import { strings } from '@draw-guess/strings'
 import { EVENTS, type ToolKind } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
-import { ColorSwatchButton, GroupDivider, SquareIconButton } from '@/components/common'
+import { AppButton, ColorSwatchButton, GroupDivider, SquareIconButton } from '@/components/common'
 import { scaleFadeEnter, scaleFadeLeave } from '@/components/game/scale-fade.ts'
 import BrushSizeField from '@/components/game/BrushSizeField.vue'
+import DraggablePanelShell from '@/components/game/DraggablePanelShell.vue'
 import { focusToolbar, toolbarZIndex } from '@/components/game/floating-panel-z'
 import type { PanelPosition } from '@/components/game'
 
-const props = defineProps<{
-  canDraw: boolean
-  /** 是否展示（顶栏「工具」开关；隐藏时执行退出动画）。 */
-  visible: boolean
-}>()
-const emit = defineEmits<{ clear: [] }>()
+const props = withDefaults(
+  defineProps<{
+    canDraw: boolean
+    /** 是否展示（顶栏「工具」开关；隐藏时执行退出动画）。 */
+    visible: boolean
+    /** 是否展示接龙模式作画完成提交按钮（仅接龙作画阶段为 true，S30 / Image 1）。 */
+    showRelaySubmit?: boolean
+    /** 接龙当前是否已提交（提交后按钮置灰并显示已提交文案）。 */
+    relaySubmitted?: boolean
+  }>(),
+  {
+    showRelaySubmit: false,
+    relaySubmitted: false,
+  },
+)
+const emit = defineEmits<{ clear: []; 'relay-submit': [] }>()
 
 const tool = defineModel<ToolKind>('tool', { required: true })
 const color = defineModel<string>('color', { required: true })
 const width = defineModel<number>('width', { required: true })
 const position = defineModel<PanelPosition | null>('position', { default: null })
-
-const toolbarRoot = ref<HTMLElement>()
-const dragging = ref(false)
-let dragOrigin:
-  | {
-      pointerX: number
-      pointerY: number
-      positionX: number
-      positionY: number
-    }
-  | undefined
-
-const rootStyle = computed<Record<string, string>>(() => {
-  const style: Record<string, string> = {
-    zIndex: String(toolbarZIndex.value),
-  }
-  if (position.value) {
-    style.left = `${position.value.x}%`
-    style.top = `${position.value.y}%`
-    style.bottom = 'auto'
-    style.transform = 'none'
-  }
-  return style
-})
-
-function beginDrag(event: PointerEvent): void {
-  if (event.button !== 0) return
-  const handle = event.currentTarget
-  if (!(handle instanceof HTMLElement)) return
-  event.preventDefault()
-  handle.setPointerCapture(event.pointerId)
-  focusToolbar()
-  dragging.value = true
-
-  const toolbar = toolbarRoot.value
-  const workspace = toolbar?.parentElement
-  if (!toolbar || !workspace) return
-
-  const bounds = workspace.getBoundingClientRect()
-  const toolbarBounds = toolbar.getBoundingClientRect()
-  if (!bounds.width || !bounds.height) return
-
-  const currentX = ((toolbarBounds.left - bounds.left) / bounds.width) * 100
-  const currentY = ((toolbarBounds.top - bounds.top) / bounds.height) * 100
-  position.value = { x: currentX, y: currentY }
-  dragOrigin = {
-    pointerX: event.clientX,
-    pointerY: event.clientY,
-    positionX: currentX,
-    positionY: currentY,
-  }
-}
-
-function moveDrag(event: PointerEvent): void {
-  const origin = dragOrigin
-  const toolbar = toolbarRoot.value
-  const workspace = toolbar?.parentElement
-  if (!dragging.value || !origin || !toolbar || !workspace) return
-
-  const bounds = workspace.getBoundingClientRect()
-  const toolbarBounds = toolbar.getBoundingClientRect()
-  if (!bounds.width || !bounds.height) return
-
-  const deltaX = ((event.clientX - origin.pointerX) / bounds.width) * 100
-  const deltaY = ((event.clientY - origin.pointerY) / bounds.height) * 100
-  const maxX = Math.max(0, 100 - (toolbarBounds.width / bounds.width) * 100)
-  const maxY = Math.max(0, 100 - (toolbarBounds.height / bounds.height) * 100)
-  position.value = {
-    x: Math.max(0, Math.min(maxX, origin.positionX + deltaX)),
-    y: Math.max(0, Math.min(maxY, origin.positionY + deltaY)),
-  }
-}
-
-function endDrag(event: PointerEvent): void {
-  const handle = event.currentTarget
-  if (handle instanceof HTMLElement && handle.hasPointerCapture(event.pointerId)) {
-    handle.releasePointerCapture(event.pointerId)
-  }
-  dragging.value = false
-  dragOrigin = undefined
-}
 
 const store = useGameStore()
 
@@ -190,93 +122,106 @@ function runHistory(key: HistoryKey): void {
 </script>
 
 <template>
-  <div
-    ref="toolbarRoot"
-    class="pointer-events-auto absolute select-none"
-    :class="{
-      'bottom-[1.2cqh] left-1/2 -translate-x-1/2': !position,
-    }"
-    :style="rootStyle"
-    @pointerdown.stop="focusToolbar"
+  <DraggablePanelShell
+    v-model:position="position"
+    :default-class="'bottom-[1.2cqh] left-1/2 -translate-x-1/2 w-max max-w-full'"
+    :drag-title="strings.a11y.game.dragToolbarTitle"
+    :drag-aria="strings.a11y.game.dragToolbarAria"
+    :style="{ zIndex: String(toolbarZIndex) }"
+    @activate="focusToolbar"
   >
-    <Transition :css="false" @enter="scaleFadeEnter" @leave="scaleFadeLeave">
-      <div
-        v-if="visible"
-        role="toolbar"
-        :aria-label="strings.a11y.game.toolbarAria"
-        class="flex items-center gap-[0.55em] rounded-[0.5em] border-[0.25cqh] border-navy bg-paper/95 px-[0.7em] py-[0.45cqh]"
-      >
-        <!-- 拖动手柄：按住可拖动工具条在画布内移动 -->
+    <template #default="{ drag }">
+      <Transition :css="false" @enter="scaleFadeEnter" @leave="scaleFadeLeave">
         <div
-          class="flex cursor-grab touch-none items-center justify-center px-[0.1em] py-[0.2em] text-muted transition-colors hover:text-navy active:cursor-grabbing"
-          :title="strings.a11y.game.dragToolbarTitle"
-          :aria-label="strings.a11y.game.dragToolbarAria"
-          @pointerdown="beginDrag"
-          @pointermove="moveDrag"
-          @pointerup="endDrag"
-          @pointercancel="endDrag"
+          v-if="visible"
+          role="toolbar"
+          :aria-label="strings.a11y.game.toolbarAria"
+          class="flex w-max max-w-full items-center gap-[0.55em] rounded-[0.5em] border-[0.25cqh] border-navy bg-paper/95 px-[0.7em] py-[0.45cqh]"
         >
-          <GripVertical class="h-[2.4cqh] w-[2.4cqh]" />
+          <!-- 拖动手柄：按住可拖动工具条在画布内移动（绑定与定位来自共用外壳） -->
+          <div v-bind="drag" class="px-[0.1em] py-[0.2em] hover:text-navy">
+            <GripVertical class="h-[2.4cqh] w-[2.4cqh]" />
+          </div>
+
+          <!-- 工具组：画笔 / 橡皮擦 / 填充 -->
+          <SquareIconButton
+            v-for="item in TOOLS"
+            :key="item.key"
+            :active="tool === item.key"
+            :disabled="!props.canDraw"
+            :label="item.aria"
+            :title="item.label"
+            audio-feedback="select"
+            @click="tool = item.key"
+          >
+            <component :is="item.icon" />
+          </SquareIconButton>
+
+          <GroupDivider />
+
+          <!-- 色板：预设色 + 自定义取色，选中环由 ColorSwatchButton 统一 -->
+          <ColorSwatchButton
+            v-for="paint in presetColors"
+            :key="paint"
+            :paint="paint"
+            :selected="color.toUpperCase() === paint"
+            :label="strings.a11y.game.presetColorAria(paint)"
+            :disabled="!props.canDraw"
+            @select="selectColor"
+          />
+          <ColorSwatchButton
+            custom
+            :paint="color"
+            :selected="isCustomColor"
+            :label="strings.a11y.game.customColorTitle"
+            :aria-label="strings.a11y.game.customColorAria"
+            :disabled="!props.canDraw"
+            @select="selectCustomColorPreview"
+            @commit="selectCustomColorCommit"
+          >
+            <Palette class="pointer-events-none h-[62%] w-[62%] text-navy" aria-hidden="true" />
+          </ColorSwatchButton>
+
+          <GroupDivider />
+
+          <!-- 画笔大小：只显示数值，悬停变画笔圆点，滚轮调整 -->
+          <BrushSizeField v-model="width" :disabled="!props.canDraw" :color="color" />
+
+          <GroupDivider />
+
+          <!-- 历史操作组：撤销 / 重做 / 清空 -->
+          <SquareIconButton
+            v-for="item in HISTORY"
+            :key="item.key"
+            :disabled="!props.canDraw"
+            :label="item.aria"
+            :title="item.label"
+            :audio-feedback="item.key === 'clear' ? null : 'activate'"
+            @click="runHistory(item.key)"
+          >
+            <component :is="item.icon" />
+          </SquareIconButton>
+
+          <!-- 接龙模式作画完成提交按钮（S30 / Image 1 修正：置于工具栏末尾，同高同圆角完全包进工具栏内，不发生溢出） -->
+          <template v-if="props.showRelaySubmit">
+            <GroupDivider />
+            <AppButton
+              variant="primary"
+              class="min-h-0 h-[4.4cqh] rounded-[0.45em] px-[0.8em] text-fs-12 font-bold shrink-0 gap-[0.3em]"
+              :disabled="props.relaySubmitted || !props.canDraw"
+              :audio-feedback="props.relaySubmitted ? null : 'activate'"
+              @click="emit('relay-submit')"
+            >
+              <Check class="h-[2cqh] w-[2cqh]" />
+              <span>{{
+                props.relaySubmitted
+                  ? strings.ui.game.relayWaitingOthers
+                  : strings.ui.game.relayDrawingSubmit
+              }}</span>
+            </AppButton>
+          </template>
         </div>
-        <!-- 工具组：画笔 / 橡皮擦 / 填充 -->
-        <SquareIconButton
-          v-for="item in TOOLS"
-          :key="item.key"
-          :active="tool === item.key"
-          :disabled="!props.canDraw"
-          :label="item.aria"
-          :title="item.label"
-          audio-feedback="select"
-          @click="tool = item.key"
-        >
-          <component :is="item.icon" />
-        </SquareIconButton>
-
-        <GroupDivider />
-
-        <!-- 色板：预设色 + 自定义取色，选中环由 ColorSwatchButton 统一 -->
-        <ColorSwatchButton
-          v-for="paint in presetColors"
-          :key="paint"
-          :paint="paint"
-          :selected="color.toUpperCase() === paint"
-          :label="strings.a11y.game.presetColorAria(paint)"
-          :disabled="!props.canDraw"
-          @select="selectColor"
-        />
-        <ColorSwatchButton
-          custom
-          :paint="color"
-          :selected="isCustomColor"
-          :label="strings.a11y.game.customColorTitle"
-          :aria-label="strings.a11y.game.customColorAria"
-          :disabled="!props.canDraw"
-          @select="selectCustomColorPreview"
-          @commit="selectCustomColorCommit"
-        >
-          <Pipette class="pointer-events-none h-[62%] w-[62%] text-navy" aria-hidden="true" />
-        </ColorSwatchButton>
-
-        <GroupDivider />
-
-        <!-- 画笔大小：只显示数值，悬停变画笔圆点，滚轮调整 -->
-        <BrushSizeField v-model="width" :disabled="!props.canDraw" :color="color" />
-
-        <GroupDivider />
-
-        <!-- 历史操作组：撤销 / 重做 / 清空 -->
-        <SquareIconButton
-          v-for="item in HISTORY"
-          :key="item.key"
-          :disabled="!props.canDraw"
-          :label="item.aria"
-          :title="item.label"
-          :audio-feedback="item.key === 'clear' ? null : 'activate'"
-          @click="runHistory(item.key)"
-        >
-          <component :is="item.icon" />
-        </SquareIconButton>
-      </div>
-    </Transition>
-  </div>
+      </Transition>
+    </template>
+  </DraggablePanelShell>
 </template>

@@ -17,10 +17,10 @@ import { useFullscreenPrompt } from '@/composables/useFullscreenPrompt'
 import { useInviteQueue } from '@/composables/useInviteQueue'
 import {
   ActionBanner,
+  AlertDialog,
   AppButton,
   AppToaster,
   AvatarImage,
-  BaseDialog,
   ContextMenu,
 } from '@/components/common'
 
@@ -65,61 +65,45 @@ function reloadForProtocolUpdate(): void {
       <ProfileView v-else />
 
       <!-- 本人断线/会话恢复阻断框：Socket 重连后仍保持，直到身份与权威 room|null 同步完成。 -->
-      <BaseDialog
+      <!-- 协议不兼容提示阻断框 -->
+      <AlertDialog
         :open="store.protocolMismatch"
         :dismissible="false"
         overlay-class="z-[100]"
         width-class="w-[47cqw]"
-        section-class="items-center gap-[1em] px-[2.2em] py-[4.5cqh] text-center"
-        :aria-label="strings.a11y.app.protocolMismatchAria"
-      >
-        <div
-          class="grid h-[10cqh] w-[10cqh] place-items-center rounded-full bg-red/10 text-red"
-          aria-hidden="true"
-        >
-          <RotateCw class="h-[5cqh] w-[5cqh]" />
-        </div>
-        <h2 class="text-fs-24 font-bold text-navy">{{ strings.ui.app.protocolMismatchTitle }}</h2>
-        <p class="max-w-[37cqw] text-fs-14 font-bold leading-relaxed text-muted" role="alert">
-          {{ strings.ui.app.protocolMismatchBody }}
-        </p>
-        <template #footer>
-          <AppButton type="button" @click="reloadForProtocolUpdate">
-            <RotateCw />{{ strings.ui.app.protocolMismatchAction }}
-          </AppButton>
-        </template>
-      </BaseDialog>
+        :title="strings.ui.app.protocolMismatchTitle"
+        :body="strings.ui.app.protocolMismatchBody"
+        :action-label="strings.ui.app.protocolMismatchAction"
+        :icon="RotateCw"
+        icon-tone="danger"
+        role="alert"
+        @action="reloadForProtocolUpdate"
+      />
 
-      <BaseDialog
+      <!-- 断线重连与恢复阻断框 -->
+      <AlertDialog
         :open="store.sessionState === 'disconnected' || store.sessionState === 'restoring'"
         :dismissible="false"
         overlay-class="z-[90]"
         width-class="w-[47cqw]"
-        section-class="items-center gap-[1em] px-[2.2em] py-[4.5cqh] text-center"
-        :aria-label="strings.a11y.app.disconnectDialogAria"
+        :title="
+          store.sessionState === 'disconnected'
+            ? strings.ui.app.disconnectedTitle
+            : strings.ui.app.restoringTitle
+        "
+        :body="
+          store.sessionState === 'disconnected'
+            ? strings.ui.app.disconnectedBody
+            : strings.ui.app.restoringBody
+        "
+        icon-tone="danger"
+        role="status"
       >
-        <div
-          class="grid h-[10cqh] w-[10cqh] place-items-center rounded-full bg-red/10 text-red"
-          aria-hidden="true"
-        >
+        <template #icon>
           <WifiOff v-if="store.sessionState === 'disconnected'" class="h-[5cqh] w-[5cqh]" />
           <LoaderCircle v-else class="h-[5cqh] w-[5cqh] animate-spin" />
-        </div>
-        <h2 class="text-fs-24 font-bold text-navy">
-          {{
-            store.sessionState === 'disconnected'
-              ? strings.ui.app.disconnectedTitle
-              : strings.ui.app.restoringTitle
-          }}
-        </h2>
-        <p class="max-w-[37cqw] text-fs-14 font-bold leading-relaxed text-muted" role="status">
-          {{
-            store.sessionState === 'disconnected'
-              ? strings.ui.app.disconnectedBody
-              : strings.ui.app.restoringBody
-          }}
-        </p>
-      </BaseDialog>
+        </template>
+      </AlertDialog>
 
       <!-- 操作通知 Toast 堆栈：自实现了 AppToaster（使用 useToasts 状态层），
            通知内容通过 store.notify 触发（见 stores/game.ts）。它在画框内右上角渲染。 -->
@@ -200,28 +184,19 @@ function reloadForProtocolUpdate(): void {
       <!-- 被房主移出房间提示框：模态弹窗确保玩家知晓被踢（此前仅一闪而过的 Toast）。
            footer-class 必须占满整行：section 为 items-center 时 footer 会收缩成按钮宽度，
            在白色卡片中央留下一块突兀的灰色方框（曾是用户标注的 bug） -->
-      <BaseDialog
-        :open="store.kickedNotice"
+      <!-- 被房主移出房间提示框：使用 AlertDialog 统一尺寸与居中排版 -->
+      <AlertDialog
+        :open="Boolean(store.kickedNotice)"
+        overlay-class="z-[100]"
         width-class="w-[42cqw]"
-        section-class="items-center gap-[1.4cqh] pt-[3cqh] text-center"
-        footer-class="w-full"
-        labelledby="kicked-title"
+        :title="strings.ui.app.kickedTitle"
+        :body="strings.ui.app.kickedBody"
+        :action-label="strings.ui.app.kickedConfirm"
+        :icon="LogOut"
+        icon-tone="danger"
+        @action="store.dismissKickedNotice"
         @close="store.dismissKickedNotice"
-      >
-        <div
-          class="grid h-[9cqh] w-[9cqh] place-items-center rounded-full bg-red/10 text-red"
-          aria-hidden="true"
-        >
-          <LogOut class="h-[4.5cqh] w-[4.5cqh]" />
-        </div>
-        <h2 id="kicked-title">{{ strings.ui.app.kickedTitle }}</h2>
-        <p class="max-w-[30em] text-muted leading-[1.6]">{{ strings.ui.app.kickedBody }}</p>
-        <template #footer>
-          <AppButton variant="primary" type="button" @click="store.dismissKickedNotice">
-            {{ strings.ui.app.kickedConfirm }}
-          </AppButton>
-        </template>
-      </BaseDialog>
+      />
 
       <!-- 全局右键菜单：舞台内唯一实例，由 useContextMenu 单例状态驱动；
            放在舞台末尾以保证与同层浮层（横幅等）重叠时菜单在上 -->

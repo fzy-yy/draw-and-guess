@@ -4,11 +4,10 @@
  */
 import { z } from 'zod'
 import { ProfileSchema, RequestSchema } from './protocol/base.ts'
-import { FillCommandSchema, StrokeSchema } from './protocol/drawing.ts'
+import { FillCommandSchema, StrokeBatchSchema } from './protocol/drawing.ts'
 import {
   ChooseWordSchema,
   GuessWordSchema,
-  PauseGameSchema,
   RerollWordsSchema,
   CustomWordSchema,
   CanvasPingPayloadSchema,
@@ -16,6 +15,13 @@ import {
   StartGameSchema,
 } from './protocol/gameplay.ts'
 import { RespondInviteSchema, SendInviteSchema } from './protocol/invite.ts'
+import {
+  RelayDrawingRoundSchema,
+  RelayVoteSchema,
+  SendChatSchema,
+  SubmitDrawingSchema,
+  SubmitGuessSchema,
+} from './protocol/relay.ts'
 import {
   CreateRoomSchema,
   JoinPrivateRoomSchema,
@@ -63,13 +69,22 @@ export const EVENTS = {
   gameChooseWord: 'game:chooseWord',
   gameRerollWords: 'game:rerollWords',
   gameCustomWord: 'game:customWord',
-  gamePauseRequest: 'game:pauseRequest',
-  gameResume: 'game:resume',
   gameEndEarly: 'game:endEarly',
   gameLeave: 'game:leave',
   gameReturnWaiting: 'game:returnWaiting',
   guessSubmit: 'guess:submit',
   chatPreset: 'chat:preset',
+  /* 接龙专属请求事件（S51 / S30 / S79）：绘图族用 stepId 定位本步画布，提交拆成猜词/作画两条，聊天独立。 */
+  relayDrawStrokeBatch: 'relay:drawStrokeBatch',
+  relayDrawFillCommit: 'relay:drawFillCommit',
+  relayDrawUndo: 'relay:drawUndo',
+  relayDrawRedo: 'relay:drawRedo',
+  relayDrawClear: 'relay:drawClear',
+  relaySubmitGuess: 'relay:submitGuess',
+  relaySubmitDrawing: 'relay:submitDrawing',
+  /* 投票（S13 / S14）：每条链展示完后收赞同 / 不赞同，点下即锁定、一律等满倒计时。 */
+  relayVote: 'relay:vote',
+  chatSay: 'chat:say',
   gameCanvasPing: 'game:canvas_ping',
   drawStrokeBatch: 'draw:strokeBatch',
   drawFillCommit: 'draw:fillCommit',
@@ -120,15 +135,24 @@ export const CLIENT_REQUEST_SCHEMAS = {
   [EVENTS.gameChooseWord]: ChooseWordSchema,
   [EVENTS.gameRerollWords]: RerollWordsSchema,
   [EVENTS.gameCustomWord]: CustomWordSchema,
-  [EVENTS.gamePauseRequest]: PauseGameSchema,
-  [EVENTS.gameResume]: RequestSchema,
   [EVENTS.gameEndEarly]: RequestSchema,
   [EVENTS.gameLeave]: RequestSchema,
   [EVENTS.gameReturnWaiting]: RequestSchema,
   [EVENTS.guessSubmit]: GuessWordSchema,
   [EVENTS.chatPreset]: SendPresetSchema,
+  [EVENTS.relayDrawStrokeBatch]: RelayDrawingRoundSchema.extend({
+    stroke: StrokeBatchSchema,
+  }),
+  [EVENTS.relayDrawFillCommit]: RelayDrawingRoundSchema.extend({ fill: FillCommandSchema }),
+  [EVENTS.relayDrawUndo]: RelayDrawingRoundSchema,
+  [EVENTS.relayDrawRedo]: RelayDrawingRoundSchema,
+  [EVENTS.relayDrawClear]: RelayDrawingRoundSchema,
+  [EVENTS.relaySubmitGuess]: SubmitGuessSchema,
+  [EVENTS.relaySubmitDrawing]: SubmitDrawingSchema,
+  [EVENTS.relayVote]: RelayVoteSchema,
+  [EVENTS.chatSay]: SendChatSchema,
   [EVENTS.gameCanvasPing]: CanvasPingPayloadSchema,
-  [EVENTS.drawStrokeBatch]: DrawingRoundSchema.extend({ stroke: StrokeSchema }),
+  [EVENTS.drawStrokeBatch]: DrawingRoundSchema.extend({ stroke: StrokeBatchSchema }),
   [EVENTS.drawFillCommit]: DrawingRoundSchema.extend({ fill: FillCommandSchema }),
   [EVENTS.drawUndo]: DrawingRoundSchema,
   [EVENTS.drawRedo]: DrawingRoundSchema,

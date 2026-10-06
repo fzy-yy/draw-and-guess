@@ -17,7 +17,7 @@ function startGame(harness: GameHarness, guesserCount: number) {
   const room = harness.service.createRoom(host.playerId, {
     name: '测试房间',
     visibility: 'public',
-    settings: testRoomSettings({ maxPlayers: guesserCount + 1, drawSeconds: 60 }),
+    settings: testRoomSettings({ drawSeconds: 60 }),
   })
   let stateVersion = room.stateVersion
   for (const guest of guests)
@@ -31,9 +31,9 @@ function startGame(harness: GameHarness, guesserCount: number) {
   return { host, guests, room: secret, game: secret.game }
 }
 
-/** 本回合的猜词者（非画家、非观战）：画家由服务端洗牌指派，故从房间实况取。 */
+/** 本回合的猜词者（非画家）：画家由服务端洗牌指派，故从房间实况取。 */
 function guessersOf(room: { members: MemberState[] }, drawerId: string): MemberState[] {
-  return room.members.filter((member) => member.playerId !== drawerId && !member.spectating)
+  return room.members.filter((member) => member.playerId !== drawerId)
 }
 
 describe('固定 100 分制计分', () => {

@@ -3,11 +3,11 @@ import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
 import { startTwoPlayerGame, createGameHarness, testRoomSettings } from './helpers/game-harness.ts'
 
 describe('统一假运行时驱动完整回合生命周期', () => {
-  it('开始→选词→作画→提示→暂停→恢复→结算的时间戳与入账分保持一致', () => {
+  it('开始→选词→作画→提示→猜中结算的时间戳与入账分保持一致', () => {
     const harness = createGameHarness()
     const { host, guest, room, game } = startTwoPlayerGame(
       harness,
-      testRoomSettings({ drawSeconds: 90, chooseSeconds: 10, allowChooseTimeLimit: true }),
+      testRoomSettings({ drawSeconds: 90, chooseSeconds: 10 }),
     )
     expect(room.phase).toBe('choosing_word')
     const answer = game.candidates[0]!
@@ -25,16 +25,6 @@ describe('统一假运行时驱动完整回合生命周期', () => {
     expect(maskAfter).not.toBe(maskBefore)
     expect(maskAfter?.length).toBe(maskBefore?.length)
 
-    const remainingBeforePause = game.phaseEndsAt - harness.runtime.now()
-    harness.service.pause(host.playerId, '测试暂停')
-    expect(room.phase).toBe('paused')
-    expect(game.pauseState?.remainingMs).toBe(remainingBeforePause)
-    harness.runtime.advance(30_000)
-    expect(room.phase).toBe('paused')
-
-    harness.service.resume(host.playerId)
-    expect(room.phase).toBe('drawing')
-    expect(game.phaseEndsAt - harness.runtime.now()).toBe(remainingBeforePause)
     expect(harness.service.submitGuess(guesser.playerId, game.roundId, answer.text)).toEqual({
       correct: true,
     })

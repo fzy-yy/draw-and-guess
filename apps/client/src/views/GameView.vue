@@ -23,6 +23,11 @@ import {
   GameHud,
   PhaseOverlay,
   PlayerPanel,
+  RelayAnswerPanel,
+  RelayPlayerStatus,
+  RelayTopBarCenter,
+  RelayTopBarLeading,
+  RelayVoteOverlay,
   type PanelPosition,
 } from '@/components/game'
 import { useGameHud } from '@/composables/useGameHud'
@@ -41,9 +46,80 @@ const store = useGameStore()
 // 触发条件与防误触发取舍见 composables/useGuessConfetti.ts 与 docs/adr/0031-*）。
 useGuessConfetti(store)
 // ---- 对局 HUD（计时/进度/权限/排行等，含 ticker 生命周期，见 composables/useGameHud.ts）----
-// 整局只在此处调用一次 useGameHud，把派生值（剩余秒数/进度/排位）作为 props 下发给
+// 整局只在此处调用一次 useGameHud，把派生值（剩余秒数/进度/排位/接龙派生）作为 props 下发给
 // GameHud/PhaseOverlay 等子组件，避免各组件各自开启 ticker 造成重复刷新。
-const { game, secondsLeft, progress, rankings, phaseLabel, canGuess } = useGameHud(store)
+const {
+  game,
+  relay,
+  phaseEndsAt,
+  secondsLeft,
+  progress,
+  rankings,
+  phaseLabel,
+  canGuess,
+  relayStep,
+  relayPrompt,
+  relayPromptKind,
+  relayArtist,
+  relayArtistPaints,
+  relayStatusMode,
+  relaySubmittedIds,
+  relayChainProgress,
+} = useGameHud(store)
+
+/**
+ * 房间玩法：接龙与经典共用舞台骨架，只在这里分流数据源与顶栏内容（S84）。
+ * 经典房恒为 false，因此下面所有三元分支的经典侧都与改造前逐条一致。
+ */
+const isRelay = computed(() => store.room?.gameMode === 'relay')
+
+/**
+ * 舞台门禁：经典房＝存在对局视图（逐条不变）；接龙房＝**非等待阶段**即可渲染。
+ * 接龙房在开局倒计时期还没有 `relay` 视图（服务端的接龙阶段白名单，S22），
+ * 若仍以「存在 relay 视图」为门禁，这 3 秒会整屏空白、随后舞台整块重挂；
+ * 接龙侧因此放宽到阶段口径，插槽里的部件各自按「拿不到 relay 字段就渲染安全缺省」处理。
+ */
+const hasStageSource = computed(() =>
+  Boolean(game.value || relay.value || (isRelay.value && store.room?.phase !== 'waiting')),
+)
+
+/**
+ * 接龙画布会话键：动手期＝步骤 id（每步一画布）；复盘期再叠加「链序号 + 半场」，
+ * 让重放机器在每个半场都当作新画面重新起步（否则机器会把两条不同的历史当成同一条续接）。
+ */
+const relayCanvasRoundId = computed(() => {
+  const view = relay.value
+  if (!view) return ''
+  const showcase = view.showcase
+  return showcase ? `${view.stepId}:${showcase.chainIndex}-${showcase.half}` : view.stepId
+})
+
+/**
+ * 画布数据源：经典＝对局视图的权威历史；接龙＝**本棒**画布（作画棒＝自己的、猜词棒＝上家的只读画作）。
+ * 复盘 / 投票期没有「本棒画布」，改取当前半场的公开画作（`showcase.drawing`，随快照全量下发，S32）——
+ * 三条来源字段同形（strokes / undoneStrokeIds / lastSequence / drawingRevision），
+ * 因此画布组件与工具条都不需要知道模式，只按这一份快照渲染，**不新建渲染路径**。
+ */
+const canvasSource = computed(() => {
+  if (isRelay.value) {
+    const view = relay.value
+    const canvas = view?.ownCanvas ?? view?.previousDrawing ?? view?.showcase?.drawing
+    return {
+      roundId: relayCanvasRoundId.value,
+      strokes: canvas?.strokes ?? [],
+      undoneStrokeIds: canvas?.undoneStrokeIds ?? [],
+      lastSequence: canvas?.lastSequence ?? -1,
+      revision: canvas?.drawingRevision ?? 0,
+    }
+  }
+  return {
+    roundId: game.value?.roundId ?? '',
+    strokes: game.value?.strokes ?? [],
+    undoneStrokeIds: game.value?.undoneStrokeIds ?? [],
+    lastSequence: game.value?.lastSequence ?? -1,
+    revision: game.value?.drawingRevision ?? 0,
+  }
+})
 // ---- 画板快捷键与工具切换（含 keydown 监听生命周期，见 composables/useShortcuts.ts）----
 const { tool } = useShortcuts(store)
 
@@ -55,29 +131,74 @@ const showEndConfirm = ref(false) // 提前结束确认弹窗
 const showLeaveGameConfirm = ref(false) // 设置页退出对局确认弹窗
 const showGameSettings = ref(false) // 对局内设置弹窗
 
+/**
+ * 房主当下能否提前结束本局：与服务端 `GameService.endEarly` 的守卫同口径——
+ * 对局进行中且非开局倒计时；接龙复盘期（展示 / 投票）完全不可干预，故排除在外。
+ */
+const canEndEarly = computed(() => {
+  if (!store.isHost) return false
+  const phase = store.room?.phase
+  return (
+    phase === 'choosing_word' ||
+    phase === 'drawing' ||
+    phase === 'round_result' ||
+    phase === 'relay_choose' ||
+    phase === 'relay_draw' ||
+    phase === 'relay_guess'
+  )
+})
+
 // 底部工具条本地位置（仅画家拖拽微调避让，刷新即重置；位置为相对画布容器的百分比）
 const toolbarPosition = ref<PanelPosition | null>(null)
 // 画家是否主动展示工具条（支持右键菜单显隐）
 const isToolbarVisible = ref(true)
 
 // 换人作画或新回合开始时，重置工具条位置到底部居中默认位置并重置为显示状态；
-// 监听源采用具体 getter 数组，避免对整个 game 对象的其它属性变动（如撤销时的 undoneStrokeIds）产生非预期触发
+// 接龙换棒（步骤 id 变化）同样复位一次。监听源采用具体 getter 数组，避免对整个 game 对象的
+// 其它属性变动（如撤销时的 undoneStrokeIds）产生非预期触发
 watch(
-  [() => game.value?.roundId, () => game.value?.drawerId],
-  ([newRound, newDrawer], oldValues) => {
-    const oldRound = oldValues?.[0]
-    const oldDrawer = oldValues?.[1]
-    if (newRound !== oldRound || newDrawer !== oldDrawer) {
+  [() => game.value?.roundId, () => game.value?.drawerId, () => relay.value?.stepId],
+  ([newRound, newDrawer, newStep], oldValues) => {
+    const [oldRound, oldDrawer, oldStep] = oldValues ?? []
+    if (newRound !== oldRound || newDrawer !== oldDrawer || newStep !== oldStep) {
       toolbarPosition.value = null
       isToolbarVisible.value = true
     }
   },
 )
 
-/** 仅画家在作画阶段可绘制：驱动画布与底部工具条的启用，非画家/非该阶段整组置灰。 */
-const canDraw = computed(() => store.isDrawer && store.room?.phase === 'drawing')
-/** 底部绘图工具条可见性：仅画家在未主动隐藏时显示，猜词者完全隐藏。 */
-const showToolbar = computed(() => store.isDrawer && isToolbarVisible.value)
+/**
+ * 当前是否可绘制：经典＝画家在作画阶段；接龙＝作画棒且未提交（本棒人人只画自己那条链，
+ * 且要有自己的画布、提交后即锁定不可继续修改，S30 / S179）。
+ */
+const canDraw = computed(() =>
+  isRelay.value
+    ? relay.value?.phase === 'relay_draw' &&
+      relay.value.ownCanvas !== undefined &&
+      !relay.value.submitted
+    : store.isDrawer && store.room?.phase === 'drawing',
+)
+
+/** 接龙作答浮层仅用于猜词；作画提交操作集成在底部工具条末尾（Image #1）。 */
+
+/**
+ * 接龙作画阶段的工具条在提交后仍显示锁定状态；经典模式维持仅画家可见的既有行为。
+ */
+const showToolbar = computed(
+  () =>
+    (isRelay.value
+      ? relay.value?.phase === 'relay_draw' && relay.value.ownCanvas !== undefined
+      : store.isDrawer) && isToolbarVisible.value,
+)
+
+/**
+ * 画布状态遮罩（「画家正在选择题目」那层）：只对经典的非作画阶段覆盖。
+ * 接龙各阶段的画布本身就是内容（选词期被遮罩卡盖住、作画期可画、猜词期看上家的画、复盘期看重播），
+ * 覆盖一层会把要看的画作挡掉，因此接龙不渲染它。
+ */
+const showCanvasMask = computed(
+  () => !isRelay.value && store.room?.phase !== 'drawing' && store.room?.phase !== 'round_result',
+)
 
 /** 画布引用与回合结束作画重播与停顿状态 */
 const gameCanvasRef = ref<{ speedrunReplay: (durationMs?: number) => Promise<void> }>()
@@ -126,6 +247,23 @@ watch(
   },
 )
 
+/**
+ * 复盘半场（链序号 + 半场）：变化即该半场的画作换了一幅，按配置时长只读重播一次（S32 / S43）。
+ * 页序「重播 → 停顿 → 揭晓」的节奏由服务端权威计时（每页各是一个快照窗口），客户端只负责
+ * 重播这一段；空白画布保持空白、不加标注（S66）——机器在没有笔画时不会绘制任何东西。
+ */
+const relayShowcaseKey = computed(() => {
+  const showcase = isRelay.value ? relay.value?.showcase : undefined
+  return showcase ? `${showcase.chainIndex}-${showcase.half}` : ''
+})
+
+watch(relayShowcaseKey, async (key) => {
+  if (!key) return
+  // 等本帧的子组件同步完画布数据源再重播，避免重播跑在旧快照上（与经典重播同一手法）
+  await nextTick()
+  await gameCanvasRef.value?.speedrunReplay(APP_CONFIG.relay.replaySeconds * 1_000)
+})
+
 // ---- 猜词框快捷键：Enter 键自动聚焦猜词输入框 ----
 // 对局内设置弹窗打开时让位，避免与设置页的输入控件冲突。
 const chatPanelRef = ref<{ focusInput: () => void }>()
@@ -165,6 +303,11 @@ async function clearDrawing(): Promise<void> {
   showClearConfirm.value = false
 }
 
+/** 提交接龙本棒作画：标记完成并将已有笔画交至下一棒（S30 / Image #1）。 */
+async function submitRelayDrawing(): Promise<void> {
+  await store.relaySubmitDrawing()
+}
+
 /** 先收起确认框再提交，避免进入最终结算后弹窗仍遮住页面。 */
 async function endGameEarly(): Promise<void> {
   showEndConfirm.value = false
@@ -186,18 +329,45 @@ function handleFullscreenToggle(): void {
 </script>
 
 <template>
-  <!-- 对局主骨架：仅在房间存在且对局未结束时渲染；画框以外区域统一使用 paper（近白）语义色 -->
-  <main v-if="store.room && game" class="relative flex h-full flex-col bg-paper">
-    <!-- 固定顶栏：回合 / 题目 / 倒计时 / 网络 / 暂停·设置·全屏（高度统一） -->
+  <!-- 对局主骨架：仅在房间存在、且本模式已有可渲染的舞台来源时挂载；画框以外区域统一使用 paper（近白）语义色。
+       经典房＝存在 `game`；接龙房＝非等待阶段（含开局倒计时期，该期还没有 relay 视图，S84 / S22）。 -->
+  <main v-if="store.room && hasStageSource" class="relative flex h-full flex-col bg-paper">
+    <!-- 固定顶栏：回合 / 题目 / 倒计时 / 网络 / 设置·全屏（高度统一）。
+         接龙经 leading / center 插槽换成「模式 + 阶段 + 棒次」与「上一家 chip + 单个答案 UI」，
+         不传插槽时渲染经典胶囊，两条路径互不影响。
+         门禁只看**玩法**而不看 relay 视图：开局倒计时期还没有接龙视图（S22），
+         但顶栏必须已经在，且不得回落到经典 ROUND 胶囊（relay 侧各 prop 都有安全缺省）。 -->
     <GameHud
       :is-fullscreen="isFullscreen"
       :game="game"
       :seconds-left="secondsLeft"
       :progress="progress"
+      :phase-ends-at="phaseEndsAt"
       :is-replaying="isReplayingRound"
+      :can-end-early="canEndEarly"
       @settings="showGameSettings = true"
       @toggle-fullscreen="handleFullscreenToggle"
-    />
+      @end-early="showEndConfirm = true"
+    >
+      <template v-if="isRelay" #leading>
+        <RelayTopBarLeading
+          :phase="relay?.phase"
+          :step="relayStep"
+          :chain-progress="relayChainProgress"
+        />
+      </template>
+      <template v-if="isRelay" #center>
+        <!-- 阶段判断放在组件内部：插槽必须始终有内容，否则会回落到经典中央占位（终局尤其明显） -->
+        <RelayTopBarCenter
+          :phase="relay?.phase"
+          :prompt="relayPrompt"
+          :prompt-kind="relayPromptKind"
+          :artist="relayArtist"
+          :artist-paints="relayArtistPaints"
+          :showcase="relay?.showcase"
+        />
+      </template>
+    </GameHud>
 
     <!--
       对局主舞台：精确 100cqw 物理闭环三栏结构
@@ -205,11 +375,20 @@ function handleFullscreenToggle(): void {
     -->
     <div class="min-h-0 flex-1 px-[0.2cqw] py-[0.7cqh]">
       <div class="flex h-full items-stretch gap-[0.8cqw]">
-        <!-- 左栏：16cqw 舒展玩家榜，独立粗黑边框包裹 -->
+        <!-- 左栏：16cqw 舒展玩家榜，独立粗黑边框包裹；接龙经 status 插槽换成提交 / 投票状态 -->
         <aside
           class="w-[16cqw] shrink-0 overflow-hidden rounded-[0.6em] border-[0.35cqh] border-line bg-paper"
         >
-          <PlayerPanel />
+          <PlayerPanel>
+            <!-- 接龙房始终接管状态位：展示期与终局不表达状态时渲染空插槽，
+                 以免 PlayerPanel 回落到经典角色文案（如「猜词中」）。 -->
+            <template v-if="isRelay" #status="{ member }">
+              <RelayPlayerStatus
+                :submitted="relaySubmittedIds.has(member.id)"
+                :mode="relayStatusMode"
+              />
+            </template>
+          </PlayerPanel>
         </aside>
 
         <!-- 中栏：62cqw 黄金画板主角，宽高比约 4:3 方正舒适，全屏零遮挡 -->
@@ -223,12 +402,12 @@ function handleFullscreenToggle(): void {
             v-model:tool="tool"
             v-model:color="color"
             v-model:show-toolbar="isToolbarVisible"
-            :round-id="game.roundId"
-            :strokes="game.strokes"
-            :undone-stroke-ids="game.undoneStrokeIds"
-            :last-sequence="game.lastSequence"
+            :round-id="canvasSource.roundId"
+            :strokes="canvasSource.strokes"
+            :undone-stroke-ids="canvasSource.undoneStrokeIds"
+            :last-sequence="canvasSource.lastSequence"
             :can-draw="canDraw"
-            :revision="game.drawingRevision"
+            :revision="canvasSource.revision"
             @clear="showClearConfirm = true"
             @stroke="submitStroke"
             @stroke-failure="recoverAuthoritativeDrawing"
@@ -236,9 +415,10 @@ function handleFullscreenToggle(): void {
             @fill-failure="recoverAuthoritativeDrawing"
           />
 
-          <!-- 画布状态遮罩：选词/暂停等阶段覆盖在画布上；回合结算（round_result）期间不遮挡，以便玩家欣赏画作与快速重播 -->
+          <!-- 画布状态遮罩：经典在选词阶段覆盖在画布上；回合结算（round_result）期间不遮挡，
+               以便玩家欣赏画作与快速重播。接龙各阶段的画布本身就是内容，故不渲染（见 showCanvasMask）。 -->
           <div
-            v-if="store.room.phase !== 'drawing' && store.room.phase !== 'round_result'"
+            v-if="showCanvasMask"
             class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-[0.6cqh] bg-paper text-muted"
           >
             <Brush class="h-[7cqh] w-[7cqh] text-blue" /><b class="text-fs-20">{{ phaseLabel }}</b>
@@ -249,7 +429,8 @@ function handleFullscreenToggle(): void {
             >
           </div>
 
-          <!-- 底部横向工具条：仅画家显示（visible="showToolbar"），猜词者完全隐藏，支持拖动手柄在画布内移动避让 -->
+          <!-- 底部横向工具条：仅可绘制者显示（visible="showToolbar"），其余角色完全隐藏，支持拖动手柄在画布内移动避让。
+               工单 10 的接龙作答浮层挂在这一层（画布容器内、工具条之后），共用 DraggablePanelShell。 -->
           <CanvasToolbar
             v-model:tool="tool"
             v-model:color="color"
@@ -257,19 +438,44 @@ function handleFullscreenToggle(): void {
             v-model:position="toolbarPosition"
             :visible="showToolbar"
             :can-draw="canDraw"
+            :show-relay-submit="
+              isRelay && relay?.phase === 'relay_draw' && Boolean(relay?.ownCanvas)
+            "
+            :relay-submitted="Boolean(relay?.submitted)"
             @clear="showClearConfirm = true"
+            @relay-submit="submitRelayDrawing"
           />
+          <!-- 接龙猜词浮层：作画提交位于底部工具条末尾，只有猜词棒需要浮层输入答案。 -->
+          <RelayAnswerPanel
+            v-if="isRelay && relay?.phase === 'relay_guess'"
+            :step-id="relay.stepId"
+            :submitted="relay.submitted"
+            :enabled="canGuess"
+          />
+
+          <!-- 接龙投票卡（S78）：轮到投票时浮在画布上（画布容器内、与作答浮层同层），
+               卡片自带 OverlayCard 遮罩；其余阶段不挂载。 -->
+          <RelayVoteOverlay v-if="isRelay && relay?.phase === 'relay_vote'" />
         </div>
 
-        <!-- 右栏：20cqw 常驻聊天区，独立粗黑边框包裹，单行容纳 15~16 汉字不折行 -->
+        <!-- 右栏：20cqw 常驻聊天区，独立粗黑边框包裹，单行容纳 15~16 汉字不折行。
+             接龙传入接龙聊天语义：标题与「发送消息」占位（与画家发言同义，这条输入框只发消息、
+             不发作答），提交目标为 chat（走独立事件 `chat:say`，与作答彻底分离，S79 / S20）。 -->
         <aside
           class="w-[20cqw] shrink-0 overflow-hidden rounded-[0.6em] border-[0.35cqh] border-line bg-paper"
         >
-          <ChatPanel ref="chatPanelRef" :can-guess="canGuess" />
+          <ChatPanel
+            ref="chatPanelRef"
+            :can-guess="canGuess"
+            :submit-target="isRelay ? 'chat' : 'guess'"
+            :title="isRelay ? strings.ui.game.relayChatTitle : undefined"
+            :placeholder="isRelay ? strings.ui.game.drawerChatPlaceholder : undefined"
+          />
         </aside>
       </div>
     </div>
-    <!-- 阶段遮罩：开局倒计时 / 画家选词 / 暂停 / 回合结算 / 最终结算 -->
+    <!-- 阶段遮罩：开局倒计时 / 选词卡（经典画家 / 接龙第 1 棒全员）/ 回合结算 / 最终结算。
+         接龙复用的是同一份卡片标记与同一组事件（选词三事件由 store 按模式分流，S84）。 -->
     <PhaseOverlay
       :seconds-left="secondsLeft"
       :game="game"
@@ -277,8 +483,6 @@ function handleFullscreenToggle(): void {
       :is-replaying="isResultModalSuppressed"
       @choose-word="store.chooseWord"
       @reroll-words="store.rerollWords"
-      @resume="store.resume"
-      @open-end-confirm="showEndConfirm = true"
       @return-waiting="store.returnWaiting"
       @leave-room="store.leaveRoom"
     />

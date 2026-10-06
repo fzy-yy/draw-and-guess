@@ -1,0 +1,64 @@
+# 0059 移除游戏内暂停与统一断线挂机化处理
+
+**状态**：已采纳
+
+## 背景
+
+在历史演进中，游戏内置了由房主控制的「游戏内暂停」功能（`allowPause` 与 `paused` 阶段），并在不同阶段和模式下为断线玩家维护了复杂的特殊处理分支：
+
+1. **暂停引入的非线性状态机爆炸**：`paused` 作为一个全局拦截阶段，要求 `RoundMachine` 在选词、作画、回合结算等多个阶段记住暂停前现场（`pauseState`）、冻结剩余毫秒数、清理全部调度定时器，并在恢复时重新计算 `phaseStartedAt` 与 `phaseEndsAt`；快照层需特殊计算 `pausedRemainingMs` 并换算虚拟截止时间；而在接龙模式中，由于多链并行与严格步调，暂停从一开始就被禁用（不可达）。局域网派对场景下暂停使用率极低，却导致状态机与快照维护成本居高不下。
+2. **断线处理策略碎片化且脆弱**：
+   - 经典模式下，画家在选词阶段断线会被立即移出房间并废弃回合；作画阶段断线则安排 5 秒短宽限定时器，超时未重连即提前废弃本回合；猜词者断线与画家断线处理口径不一致；
+   - 房间规则中曾存在「选词不限时」开关（`allowChooseTimeLimit`），若房主关闭限时且画家掉线，系统将失去计时驱动，陷入永久等待的死锁；
+   - 接龙模式下，成员断线会安排 5 秒短宽限提前代交定时器（`autoSubmitTimers`），导致断线成员在倒计时未结束前提前换手，破坏步调一致性并增加了定时器重叠竞争的复杂度。
+
+## 决策
+
+### 1. 彻底移除全模式游戏内暂停功能
+
+彻底废除暂停功能及其在协议、状态机、快照与前端界面中的所有残留：
+
+- **协议层**：从 `RoomPhaseSchema` 枚举中彻底删除 `'paused'`；从 `EVENTS` 中删除 `game:pauseRequest` 与 `game:resume`；从 `RoomSettingsSchema` 中删除 `allowPause`；从 `GameViewSchema` 中删除 `phaseBeforePause` 与 `pausedRemainingMs`；协议版本升至 `'20'`；
+- **状态机与领域层**：`LEGAL_PHASES` 移除全部指向和来自 `paused` 的转换边；删除 `pauseState` 与 `isPausable` 守卫；`RoundMachine` 退化为纯单向线性状态推进；
+- **客户端界面**：移除顶栏暂停/恢复按钮与 `PhaseOverlay` 暂停遮罩，仅保留设置按钮；清理相关 UI/无障碍文案。
+
+### 2. 统一选词阶段倒计时驱动（移除不限时开关）
+
+从房间设置（`RoomSettings`）中彻底移除 `allowChooseTimeLimit` 开关，选词阶段一律强制开启倒计时（由 `chooseSeconds` 驱动，默认 15 秒）：
+
+- 无论玩家在线挂机还是断线，选词倒计时均正常递减；
+- 倒计时归零时，系统从当前候选词库中**随机挑选一个词**直接开画，彻底杜绝无倒计时卡死漏洞。
+
+### 3. 断线玩家挂机化与统一倒计时大扫掠
+
+对于在对局进行中断线的玩家，确立统一处理模型：**不给予断线玩家任何立即的行为，将断线玩家视同没有任何操作的挂机玩家**：
+
+- **全阶段保留席位**：经典模式与接龙模式进行中，断线玩家席位全程保留在房间内，不执行立即离房（`leaveRoom`），不安排任何提前终止对局或提前废弃回合的短宽限定时器；
+- **连接态提示**：仅将成员状态标记为断线（`connected = false`，`connection: 'reconnecting'`），供其他玩家在头像或席位角标处感知，倒计时正常流逝；
+- **倒计时大扫掠统一兜底**：
+  - **经典选词超时**：统一随机挑一候选词开画；若画家断线未归，画板保持留白；
+  - **经典作画超时**：自然计时到 0 并触发正常结算（画板留白则无人猜中，双方 0 分，揭晓答案并进入下一轮）；全员猜中提前结束规则将断线猜词者视为未猜中，不触发提前结束，自然跑完倒计时；
+  - **接龙各棒超时**：统一由各步骤倒计时归零时的 `autoSubmitRemaining` 批量处理：选词超时随机挑词、作画超时交已有笔画（未画即空白）、猜词超时交「上家未作答」、投票超时默认不计赞同；移除 5 秒提前代交定时器；
+- **低人数对局容错**：对局进行中若在线人数低于开局门槛，只要房间内至少有 1 人在线，流程继续走完倒计时直至终局战报；仅当全员 0 人在线且长期宽限过期时才回收房间。
+
+## 后果
+
+- **大幅降低维护负担**：移除了跨模块的 `pauseState` 冻结与恢复逻辑，消除了 `autoSubmitTimers` 等易竞态短定时器，断线与挂机收敛为同一套超时兜底；
+- **消除死锁隐患**：所有对局阶段均有明确的时间上限与超时默认操作，杜绝了无限挂起；
+- **协议向前不兼容**：`RoomPhase` 枚举精简与请求事件移除使通信协议版本从 `'19'` 升级为 `'20'`，客户端与服务端需同步更新。
+
+## 关联
+
+- 代码：`packages/shared/src/protocol/{base,room,gameplay,response}.ts`（阶段枚举 / 房间设置 / 视图字段 / ack 边界）、
+  `packages/shared/src/pure.ts`（`LEGAL_PHASES`）、`apps/server/src/round-machine.ts`、
+  `apps/server/src/domain/relay/relay-machine.ts`、`apps/server/src/domain/room/{phase-facts,member-facts}.ts`、
+  `apps/server/src/domain/session/session-service.ts`、`apps/server/src/domain/room/room-membership-service.ts`、
+  `apps/server/src/config/private.ts`（宽限配置 `hostReconnectGraceMs`）、
+  `apps/client/src/components/game/{GameHud,PhaseOverlay}.vue`
+- 测试：`test/unit/{relay-steps,relay-phase-facts,server-defects,runtime-lifecycle,game-rematch}.spec.ts`、
+  `test/component/ClientRelaySurfaces.spec.ts`、
+  `test/e2e/specs/{05-game-lifecycle,09-drawing-history-limit}.spec.ts`
+- 取代：[ADR-0040](0040-round-timing-and-phase-facts.md) 的暂停现场 / `isPausable` / 阶段时长冻结部分、
+  [ADR-0045](0045-custom-word-and-untimed-choosing.md) 的「选词阶段不限时」部分
+- 相关：ADR-0010（绘图历史上限）、ADR-0023（成员事实单一口径）、ADR-0024（回合所有权）、
+  ADR-0058（接龙权威流程）

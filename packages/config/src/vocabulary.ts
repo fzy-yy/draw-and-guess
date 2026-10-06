@@ -5,7 +5,7 @@ export const vocabulary = {
    * 注意：每局最少选择数是协议常量 MIN_SELECTED_VOCABULARY_WORDS（60），
    * 与本加载门槛无关；6～59 词的库可加载，但作为房间词库会被选中门槛拒绝。
    */
-  minWords: 6,
+  minWords: 1,
   /** 单条词面最大字符数 */
   maxWordLength: 24,
 } as const

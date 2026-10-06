@@ -1,6 +1,9 @@
 /**
   局内对局与画布操作 Store。
-  管理选词、猜词、绘图笔画与填充增量、局内暂停与提前结算。
+  管理选词、猜词、绘图笔画与填充增量、提前结算。
+  两模式共用的动作（选词三出口、绘图四族、快捷短语）在这里按 `gameMode` 分流到接龙子 Store：
+  客户端侧与「服务端按模式委托」同构（S51 / S55），调用方（画布、工具条、选词遮罩）因此
+  不需要各自写一遍模式分支，经典路径保持逐条不变。
 */
 import { defineStore } from 'pinia'
 import {
@@ -13,10 +16,11 @@ import {
   type CanvasPingBroadcast,
   type CanvasPingType,
 } from '@draw-guess/shared'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { strings } from '@draw-guess/strings'
 import { useGameTransport } from '@/application/game-transport'
 import type { RequestResult } from './request.ts'
+import { useRelayStore } from './relay.ts'
 import { useRoomStore } from './room.ts'
 import { useSessionStore } from './session.ts'
 import { getErrorRecoveryAction } from './error-recovery.ts'
@@ -25,6 +29,24 @@ export const useGameplayStore = defineStore('gameplay', () => {
   const { request, notify } = useGameTransport()
   const roomStore = useRoomStore()
   const sessionStore = useSessionStore()
+  const relayStore = useRelayStore()
+
+  /** 房间是否接龙模式：两模式共用动作的分流开关（未知房间按经典处理）。 */
+  const isRelayRoom = computed(() => roomStore.room?.gameMode === 'relay')
+
+  /** 选词三出口（选词 / 换一批 / 自定义）的目标 id：经典＝当前回合，接龙＝当前步骤（S53）。 */
+  function chooseTargetId(): string | undefined {
+    const room = roomStore.room
+    if (!room) return undefined
+    return room.gameMode === 'relay' ? room.relay?.stepId : room.game?.roundId
+  }
+
+  /** 经典绘图历史事件 → 接龙同名事件：语义一一对应，只有目标 id 的口径不同。 */
+  const RELAY_DRAW_EVENTS = {
+    [EVENTS.drawUndo]: EVENTS.relayDrawUndo,
+    [EVENTS.drawRedo]: EVENTS.relayDrawRedo,
+    [EVENTS.drawClear]: EVENTS.relayDrawClear,
+  } as const
 
   /** 最近收到的画布微表情广播（带递增唯一序号以确保连续同类表情响应式触发） */
   const latestCanvasPing = ref<(CanvasPingBroadcast & { id: number }) | null>(null)
@@ -82,13 +104,15 @@ export const useGameplayStore = defineStore('gameplay', () => {
   }
 
   async function chooseWord(wordId: string): Promise<void> {
-    if (!roomStore.room?.game) return
-    await request(EVENTS.gameChooseWord, { roundId: roomStore.room.game.roundId, wordId })
+    const targetId = chooseTargetId()
+    if (!targetId) return
+    await request(EVENTS.gameChooseWord, { roundId: targetId, wordId })
   }
 
   async function rerollWords(): Promise<void> {
-    if (!roomStore.room?.game) return
-    await request(EVENTS.gameRerollWords, { roundId: roomStore.room.game.roundId })
+    const targetId = chooseTargetId()
+    if (!targetId) return
+    await request(EVENTS.gameRerollWords, { roundId: targetId })
   }
 
   /**
@@ -96,9 +120,10 @@ export const useGameplayStore = defineStore('gameplay', () => {
    * 时弹窗保持打开，让画家改词重试，错误文案由统一 ack 通道展示。
    */
   async function chooseCustomWord(text: string): Promise<boolean> {
-    if (!roomStore.room?.game) return false
+    const targetId = chooseTargetId()
+    if (!targetId) return false
     const result = await request(EVENTS.gameCustomWord, {
-      roundId: roomStore.room.game.roundId,
+      roundId: targetId,
       text,
     })
     return result.ok
@@ -114,6 +139,8 @@ export const useGameplayStore = defineStore('gameplay', () => {
   }
 
   async function sendPreset(preset: string): Promise<boolean> {
+    // 快捷短语在接龙里就是一次独立聊天发言（经典走 `chat:preset` 的猜词频道，两模式互不串频道）。
+    if (isRelayRoom.value) return relayStore.chat(preset)
     if (!roomStore.room?.game) return false
     const result = await request(EVENTS.chatPreset, {
       roundId: roomStore.room.game.roundId,
@@ -144,6 +171,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
   }
 
   async function sendStroke(stroke: Stroke): Promise<RequestResult<StrokeAck>> {
+    if (isRelayRoom.value) return relayStore.sendStroke(stroke)
     if (!roomStore.room?.game) return staleDrawingFailure<StrokeAck>()
     const result = await request(
       EVENTS.drawStrokeBatch,
@@ -156,6 +184,7 @@ export const useGameplayStore = defineStore('gameplay', () => {
   }
 
   async function sendFill(fill: FillCommand): Promise<RequestResult<{ drawingRevision: number }>> {
+    if (isRelayRoom.value) return relayStore.sendFill(fill)
     if (!roomStore.room?.game) return staleDrawingFailure<{ drawingRevision: number }>()
     const result = await request(
       EVENTS.drawFillCommit,
@@ -170,20 +199,13 @@ export const useGameplayStore = defineStore('gameplay', () => {
   async function drawAction(
     event: typeof EVENTS.drawUndo | typeof EVENTS.drawRedo | typeof EVENTS.drawClear,
   ): Promise<void> {
+    if (isRelayRoom.value) return relayStore.drawAction(RELAY_DRAW_EVENTS[event])
     if (!roomStore.room?.game) return
     await request(
       event,
       { roundId: roomStore.room.game.roundId },
       { retry: false, notify: 'silent' },
     )
-  }
-
-  async function pause(reason: string = strings.ui.store.pauseReasonHost): Promise<void> {
-    await request(EVENTS.gamePauseRequest, { reason })
-  }
-
-  async function resume(): Promise<void> {
-    await request(EVENTS.gameResume)
   }
 
   async function endEarly(): Promise<void> {
@@ -247,8 +269,6 @@ export const useGameplayStore = defineStore('gameplay', () => {
     sendStroke,
     sendFill,
     drawAction,
-    pause,
-    resume,
     endEarly,
     leaveGame,
     returnWaiting,

@@ -26,7 +26,6 @@ export const CustomWordSchema = RequestSchema.extend({
   roundId: z.string().uuid(),
   text: z.string().min(1).max(64),
 })
-export const PauseGameSchema = RequestSchema.extend({ reason: z.string().max(40) })
 
 /** 画布微表情反应类型枚举（点赞、困惑/问号、火焰/神仙画画）。 */
 export const CANVAS_PING_TYPES = ['thumbs_up', 'confused', 'fire'] as const

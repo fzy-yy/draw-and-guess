@@ -10,6 +10,7 @@ import { app, network } from './app.ts'
 import { player } from './player.ts'
 import { room } from './room.ts'
 import { defaultRoomSettings, game, roomSettingsDefaults } from './game.ts'
+import { relay } from './relay.ts'
 import { drawing } from './drawing.ts'
 import { vocabulary } from './vocabulary.ts'
 import { audio, soundCatalog } from './audio.ts'
@@ -23,6 +24,7 @@ export const APP_CONFIG = {
   player,
   room,
   game,
+  relay,
   drawing,
   vocabulary,
   audio,
@@ -39,6 +41,7 @@ export {
   player,
   room,
   game,
+  relay,
   roomSettingsDefaults,
   defaultRoomSettings,
   drawing,

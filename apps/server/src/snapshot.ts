@@ -19,12 +19,12 @@ import { GameError } from './errors.ts'
 import type { InviteSecret, PlayerSecret, RoomSecret } from './models.ts'
 import type { Clock } from './runtime.ts'
 import type { VocabularyStore } from './vocabulary/index.ts'
+import { RelaySnapshotBuilder } from './domain/relay/relay-snapshot.ts'
 import { invalidateMemberCanvasSync } from './domain/drawing/canvas-sync.ts'
 import {
   connectionStatus,
   isActivePlayer,
   nicknameOf,
-  nominalPhaseDurationMs,
   occupiesSeat,
 } from './domain/room/member-facts.ts'
 
@@ -45,7 +45,15 @@ export interface SnapshotViewPort {
 
 /** 按观看者角色裁剪房间/玩家视图的构建器。 */
 export class SnapshotBuilder {
-  constructor(private readonly port: SnapshotViewPort) {}
+  /** 接龙视图构建器：与经典 `GameView` 并列产出 `RoomSnapshot.relay`（S57），经典路径完全不动。 */
+  private readonly relayViews: RelaySnapshotBuilder
+
+  constructor(private readonly port: SnapshotViewPort) {
+    this.relayViews = new RelaySnapshotBuilder({
+      players: port.players,
+      now: () => port.clock.now(),
+    })
+  }
 
   /** 为指定观看者生成裁剪后的房间快照（画家可见答案与候选词，结算阶段全员可见答案）。 */
   snapshot(
@@ -63,7 +71,7 @@ export class SnapshotBuilder {
     // 强制全量：作废观看者的差分游标，使本次快照必须携带完整画布历史。
     // 游标语义归本构建器所有（重连恢复 / 客户端自检修复通道），调用方不再直接改写领域状态。
     if (options.forceFull) invalidateMemberCanvasSync(viewerMember)
-    // 候场/观战身份永远不能获得画家答案权限；即使异常状态下 ID 碰巧与 drawerId 相同也要裁剪。
+    // 已离局身份永远不能获得画家答案权限；即使异常状态下 ID 碰巧与 drawerId 相同也要裁剪。
     const viewerIsDrawer = isActivePlayer(viewerMember) && game?.drawerId === viewerId
     // game && 直接参与条件让 TS 收窄（Boolean(game) 不产生收窄，曾迫使下游写 game!）
     const canOmitStrokes =
@@ -72,33 +80,16 @@ export class SnapshotBuilder {
       viewerMember.lastSyncedSeq !== undefined &&
       viewerMember.lastSyncedSeq >= game.lastSequence &&
       Boolean(this.port.players.get(viewerId)?.connected)
-    // 暂停现场（pauseState）由 RoundMachine 成对写入：暂停态下快照按它换算冻结的截止时间
-    // 与剩余毫秒；非暂停态为 undefined，直接下发权威 phaseEndsAt。
-    const pauseState = room.phase === 'paused' ? game?.pauseState : undefined
-    // 暂停阶段按原阶段标称总时长换算截止时间，供客户端把倒计时与进度条准确冻结在暂停时刻的
-    // 数值上（标称总时长由 member-facts 单一口径给出，覆盖全部可暂停阶段含 round_result）。
-    // 没有标称总时长意味着该阶段本就没有截止时间（选词阶段关闭限时）：下发哨兵 0 表达
-    // 「无倒计时」，与未暂停时的口径一致。
-    const pauseNominalMs =
-      game && pauseState ? nominalPhaseDurationMs(pauseState.phase, game, room.settings) : undefined
-    const pausedEndsAt =
-      game && pauseState
-        ? pauseNominalMs === undefined
-          ? 0
-          : game.phaseStartedAt + pauseNominalMs
-        : undefined
     // 按观看者角色裁剪对局视图的敏感字段
     const gameView: GameView | undefined = game
       ? {
           gameId: game.id,
           roundId: game.roundId,
-          ...(pauseState ? { phaseBeforePause: pauseState.phase } : {}),
           currentRound: game.currentRound,
           totalRounds: game.totalRounds,
           drawerId: game.drawerId,
           phaseStartedAt: game.phaseStartedAt,
-          phaseEndsAt: pausedEndsAt ?? game.phaseEndsAt,
-          ...(pauseState ? { pausedRemainingMs: pauseState.remainingMs } : {}),
+          phaseEndsAt: game.phaseEndsAt,
           // 答案展示规则：结算阶段公开全文；否则按设置显示遮罩或隐藏字数
           answerMask: game.answer
             ? room.phase === 'round_result' || room.phase === 'game_result'
@@ -141,11 +132,15 @@ export class SnapshotBuilder {
       : undefined
     // 词库元信息在同一快照里被三个字段引用：取一次端口结果即可（原实现连调 4 次）。
     const vocabulary = this.port.getRoomVocabularyStore(room)
+    // 接龙视图：只在房间挂着接龙局且当前是接龙阶段时产出；经典房间恒为 undefined（S57）
+    const relayView = this.relayViews.build(room, viewerId)
     return {
       id: room.id,
       name: room.name,
       hostId: room.hostId,
       visibility: room.visibility,
+      // 玩法与可见性同级下发：客户端据此选择经典/接龙界面与快照门禁分支（S28 / S57）
+      gameMode: room.gameMode,
       // 房间码仅向当前私密房房主显示，普通成员和大厅快照均不可见。
       ...(room.visibility === 'private' && room.hostId === viewerId && room.privateJoinCode
         ? { privateJoinCode: room.privateJoinCode }
@@ -182,8 +177,6 @@ export class SnapshotBuilder {
           isHost: room.hostId === member.playerId,
           isDrawer: isActivePlayer(member) && game?.drawerId === member.playerId,
           guessed: Boolean(member.guessedAt),
-          spectating: Boolean(member.spectating),
-          waitingForNextGame: Boolean(member.waitingForNextGame),
           rematchReady: Boolean(member.rematchReady),
           leftGame: Boolean(member.leftGame),
           connection: connectionStatus(member, player),
@@ -193,15 +186,20 @@ export class SnapshotBuilder {
       selectedWordCount: room.selectedWordIds.size,
       // 同一次快照对词库 store 只取一份（旧实现连调 4 次，均为同参数重复）。
       totalWordCount: vocabulary.items.length,
-      vocabularyPackageId: room.vocabularyPackageId || vocabulary.meta.id,
-      vocabularyPackageName: vocabulary.meta.name || vocabulary.meta.id,
+      vocabularyPackageIds:
+        room.vocabularyPackageIds ?? (room.vocabularyPackageId ? [room.vocabularyPackageId] : []),
+      vocabularyPackageNames: vocabulary.meta.name
+        ? vocabulary.meta.name.split('、')
+        : [vocabulary.meta.id || ''],
       ...(gameView ? { game: gameView } : {}),
+      // 接龙视图与经典 game 并列、互斥出现（S56 / S57）
+      ...(relayView ? { relay: relayView } : {}),
     }
   }
 
   /**
    * 公开玩家视图：根据连接状态与所在房间计算在场状态。
-   * isPlaying 含暂停（phase-facts 单一口径）：暂停中的房间成员在大厅显示为「游戏中」。
+   * isPlaying 即 phase-facts 的 isInMatchPhase 单一口径：对局进行中的房间成员在大厅显示为「游戏中」。
    */
   toPublicPlayer(player: PlayerSecret): PublicPlayer {
     const room = player.roomId ? this.port.rooms.get(player.roomId) : undefined
@@ -233,11 +231,11 @@ export class SnapshotBuilder {
       name: room.name,
       hostName: nicknameOf(this.port.players, room.hostId, serverStrings.notices.hostUnknown),
       playerCount: room.members.filter(occupiesSeat).length,
-      maxPlayers: room.settings.maxPlayers,
+      // 大厅行的模式徽标（S47 / S80）；容量固定为协议常量，不再下发人数上限
+      gameMode: room.gameMode,
       phase: room.phase,
       roundsPerPlayer: room.settings.roundsPerPlayer,
       drawSeconds: room.settings.drawSeconds,
-      joinPolicy: room.settings.joinPolicy, // 大厅据此判断能否观战加入
     }
   }
 

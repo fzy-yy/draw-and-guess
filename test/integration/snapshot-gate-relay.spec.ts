@@ -1,0 +1,242 @@
+import { describe, expect, it } from 'vitest'
+import { acceptRoomSnapshot } from '@/stores/snapshot-gate'
+import { STEP_ID, createRelayRoomFixture, createRoomFixture } from '../client/room-fixture'
+
+/**
+ * 快照门禁的接龙分支（S60）：接龙房没有经典 `game` 字段，改按
+ * 「画布身份（步骤 id + 复盘游标）+ 画布修订 + 状态版本」三键裁决；经典分支的行为由
+ * `test/unit/client-boundaries.spec.ts` 守护，这里同时钉一条经典用例，
+ * 确保加入接龙分支后经典裁决没有被顺带改动。
+ */
+
+const NEXT_STEP_ID = '00000000-0000-4000-8000-00000000000e'
+
+describe('acceptRoomSnapshot 接龙分支', () => {
+  it('同一步骤内画布修订倒退的迟到包被丢弃（否则会覆盖本客户端已落地的笔画）', () => {
+    const current = createRelayRoomFixture('relay_draw', {
+      ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: 2, drawingRevision: 2 },
+    })
+    const stale = createRelayRoomFixture('relay_draw', {
+      ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: 1, drawingRevision: 1 },
+    })
+    expect(acceptRoomSnapshot(current, stale)).toBe('ignore')
+  })
+
+  it('同一步骤内容相同或修订前进都采纳', () => {
+    const current = createRelayRoomFixture('relay_draw', {
+      ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: 1, drawingRevision: 1 },
+    })
+    const equal = createRelayRoomFixture('relay_draw', {
+      ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: 1, drawingRevision: 1 },
+    })
+    const newer = createRelayRoomFixture('relay_draw', {
+      ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: 2, drawingRevision: 2 },
+    })
+    expect(acceptRoomSnapshot(current, equal)).toBe('accept')
+    expect(acceptRoomSnapshot(current, newer)).toBe('accept')
+  })
+
+  it('换棒（步骤 id 变化）即采纳：新步骤的画布与本步不同源，修订号不具可比性', () => {
+    const current = createRelayRoomFixture('relay_draw', {
+      ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: 5, drawingRevision: 5 },
+    })
+    const nextStep = createRelayRoomFixture('relay_guess', {
+      currentStep: 2,
+      stepId: NEXT_STEP_ID,
+      previousDrawing: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 0 },
+    })
+    expect(acceptRoomSnapshot(current, nextStep)).toBe('accept')
+  })
+
+  it('状态版本倒退一律丢弃；本地尚无接龙视图时采纳（首次推送 / 重连落位）', () => {
+    const current = createRelayRoomFixture('relay_draw')
+    const older = createRelayRoomFixture('relay_draw', {}, { stateVersion: 0 })
+    expect(acceptRoomSnapshot(current, older)).toBe('ignore')
+
+    const withoutRelayView = createRelayRoomFixture('relay_draw')
+    delete withoutRelayView.relay
+    expect(acceptRoomSnapshot(withoutRelayView, current)).toBe('accept')
+  })
+
+  it('接龙局回退（载荷不再带接龙视图）只有状态版本前进才可信', () => {
+    const current = createRelayRoomFixture('relay_draw')
+    const fallback = createRelayRoomFixture('relay_draw')
+    delete fallback.relay
+    expect(acceptRoomSnapshot(current, fallback)).toBe('ignore')
+    expect(acceptRoomSnapshot(current, { ...fallback, stateVersion: 2 })).toBe('accept')
+  })
+
+  it('接龙取哪幅画布的修订：作画棒取自己的、猜词棒取上家的、复盘取当前半场', () => {
+    const drawing = createRelayRoomFixture('relay_draw', {
+      ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 3 },
+    })
+    const drawingStale = createRelayRoomFixture('relay_draw', {
+      ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 2 },
+    })
+    expect(acceptRoomSnapshot(drawing, drawingStale)).toBe('ignore')
+
+    const guess = createRelayRoomFixture('relay_guess', {
+      currentStep: 2,
+      previousDrawing: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 3 },
+    })
+    const guessStale = createRelayRoomFixture('relay_guess', {
+      currentStep: 2,
+      previousDrawing: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 2 },
+    })
+    expect(acceptRoomSnapshot(guess, guessStale)).toBe('ignore')
+
+    // 复盘期展示的是当前半场的画作：修订同样不允许倒退
+    const player = { id: STEP_ID, nickname: '画家', avatarId: '01' as const }
+    const showcase = {
+      chainIndex: 1,
+      chainCount: 4,
+      half: 1 as const,
+      prompt: { player, text: '气球' },
+      answer: { player, text: null },
+    }
+    const reveal = createRelayRoomFixture('relay_showcase', {
+      showcase: {
+        ...showcase,
+        drawing: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 4 },
+      },
+    })
+    const revealStale = createRelayRoomFixture('relay_showcase', {
+      showcase: {
+        ...showcase,
+        drawing: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 3 },
+      },
+    })
+    expect(acceptRoomSnapshot(reveal, revealStale)).toBe('ignore')
+    expect(acceptRoomSnapshot(revealStale, reveal)).toBe('accept')
+  })
+
+  it('复盘换半场 / 换链即采纳：换了一幅画布，修订号不具可比性（否则整场复盘会卡死在上一幅画上）', () => {
+    const player = { id: STEP_ID, nickname: '画家', avatarId: '01' as const }
+    const capsule = (text: string | null) => ({ player, text })
+    // 半场 1 展示第一幅画（命令多），半场 2 展示同一条链的第二幅画（很可能画得更少、修订更小）
+    const halfOne = createRelayRoomFixture('relay_showcase', {
+      showcase: {
+        chainIndex: 1,
+        chainCount: 4,
+        half: 1,
+        prompt: capsule('气球'),
+        answer: capsule('气球'),
+        drawing: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 4 },
+      },
+    })
+    const halfTwo = createRelayRoomFixture(
+      'relay_showcase',
+      {
+        showcase: {
+          chainIndex: 1,
+          chainCount: 4,
+          half: 2,
+          prompt: capsule('气球'),
+          answer: capsule(null),
+          drawing: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 1 },
+        },
+      },
+      { stateVersion: halfOne.stateVersion + 1 },
+    )
+    expect(acceptRoomSnapshot(halfOne, halfTwo)).toBe('accept')
+
+    // 下一条链的半场 1 又是另一幅画布：链间切换同样不比较修订
+    const nextChain = createRelayRoomFixture(
+      'relay_showcase',
+      {
+        showcase: {
+          chainIndex: 2,
+          chainCount: 4,
+          half: 1,
+          prompt: capsule('太阳'),
+          answer: capsule('太阳'),
+          drawing: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 0 },
+        },
+      },
+      { stateVersion: halfTwo.stateVersion + 1 },
+    )
+    expect(acceptRoomSnapshot(halfTwo, nextChain)).toBe('accept')
+
+    // 同一幅画布内（同链同半场）仍然禁止修订倒退：这才是「旧包覆盖已落地笔画」的防线
+    const sameCanvasNewer = createRelayRoomFixture(
+      'relay_showcase',
+      {
+        showcase: {
+          chainIndex: 2,
+          chainCount: 4,
+          half: 1,
+          prompt: capsule('太阳'),
+          answer: capsule(null),
+          drawing: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 2 },
+        },
+      },
+      { stateVersion: nextChain.stateVersion + 1 },
+    )
+    const sameCanvasStale = createRelayRoomFixture(
+      'relay_showcase',
+      {
+        showcase: {
+          chainIndex: 2,
+          chainCount: 4,
+          half: 1,
+          prompt: capsule('太阳'),
+          answer: capsule(null),
+          drawing: { strokes: [], undoneStrokeIds: [], lastSequence: 0, drawingRevision: 0 },
+        },
+      },
+      { stateVersion: sameCanvasNewer.stateVersion + 1 },
+    )
+    expect(acceptRoomSnapshot(sameCanvasNewer, sameCanvasStale)).toBe('ignore')
+  })
+
+  it('进入终局（game_result）必须采纳：终局视图不下发画布，不能用「修订 0」判成倒退', () => {
+    // 缺陷回归：房主提前结束 / 复盘结束进入终局时，客户端正停在本棒作画页（ownCanvas 修订已 > 0），
+    // 而终局接龙视图只带排名与统计、没有任何画布字段，于是被读成「修订 0」而判成倒退丢弃——
+    // 房主已结束比赛，客户端却永远停在对局页：画家画不了、别人也发不出消息。
+    const drawing = createRelayRoomFixture('relay_draw', {
+      ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: 4, drawingRevision: 4 },
+    })
+    const finished = createRelayRoomFixture(
+      'game_result',
+      { finalRanking: [] },
+      { stateVersion: drawing.stateVersion + 1 },
+    )
+
+    expect(acceptRoomSnapshot(drawing, finished)).toBe('accept')
+
+    // 猜词棒与复盘期同样必须能进终局（三者的画布来源各不相同）
+    const guessing = createRelayRoomFixture('relay_guess', {
+      currentStep: 2,
+      previousDrawing: { strokes: [], undoneStrokeIds: [], lastSequence: 3, drawingRevision: 3 },
+    })
+    expect(acceptRoomSnapshot(guessing, finished)).toBe('accept')
+
+    const showcase = createRelayRoomFixture('relay_showcase', {
+      showcase: {
+        chainIndex: 1,
+        chainCount: 4,
+        half: 1,
+        prompt: { player: { id: STEP_ID, nickname: '画家', avatarId: '01' }, text: '气球' },
+        answer: { player: { id: STEP_ID, nickname: '画家', avatarId: '01' }, text: null },
+        drawing: { strokes: [], undoneStrokeIds: [], lastSequence: 5, drawingRevision: 5 },
+      },
+    })
+    expect(acceptRoomSnapshot(showcase, finished)).toBe('accept')
+
+    // 终局本身不允许被更旧的终局包覆盖（状态版本倒退仍丢弃）
+    expect(acceptRoomSnapshot(finished, { ...finished, stateVersion: 0 })).toBe('ignore')
+  })
+
+  it('经典分支不受影响：同回合修订倒退仍丢弃、状态版本倒退仍丢弃', () => {
+    const current = createRoomFixture('drawing', { drawingRevision: 3 })
+    expect(
+      acceptRoomSnapshot(current, {
+        ...current,
+        game: { ...current.game!, drawingRevision: 1 },
+      }),
+    ).toBe('ignore')
+    expect(acceptRoomSnapshot(current, { ...current, stateVersion: 0 })).toBe('ignore')
+    // 同一份快照（同修订、同状态版本）仍可接收：聊天这类高频状态不为每条消息推进房间版本
+    expect(acceptRoomSnapshot(current, { ...current })).toBe('accept')
+  })
+})

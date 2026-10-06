@@ -6,7 +6,7 @@
 <script setup lang="ts">
 import { computed, ref, useAttrs } from 'vue'
 import { playInteractionSound, type InteractionAudioEvent } from '@/audio'
-import { cn } from '@/utils/cn'
+import { cn, type ClassValue } from '@/utils/cn'
 
 const props = withDefaults(
   defineProps<{
@@ -16,10 +16,20 @@ const props = withDefaults(
     disabled?: boolean
     /** 变体底座类（尺寸/配色/激活态由各变体拼装后传入）。 */
     baseClass: string
+    /** 原生 type，默认 button */
+    type?: 'button' | 'submit' | 'reset'
     /** 交互音效语义；null 用于已有专属领域音效的操作。 */
     audioFeedback?: InteractionAudioEvent | null
+    /** 使用方追加的类名 */
+    class?: ClassValue
   }>(),
-  { label: undefined, disabled: false, audioFeedback: 'activate' },
+  {
+    label: undefined,
+    disabled: false,
+    type: 'button',
+    audioFeedback: 'activate',
+    class: undefined,
+  },
 )
 
 // click 事件携带原生 MouseEvent：与全局组件属性扩展（vue-augmentations）签名一致，
@@ -33,7 +43,7 @@ const button = ref<HTMLElement>()
 // 底座 + 调用处透传的外部 class：只取 attrs.class，避免把 style/onClick 等键名当类名；
 // 其余 attrs（style、事件、无障碍属性等）由 Vue 单根组件的隐式透传落到 <button> 上。
 // 旧的 .touch-target/.compact-control 触控契约类已移除：命中区即视觉尺寸，控件随舞台等比缩放。
-const buttonClass = computed(() => cn(props.baseClass, attrs.class))
+const buttonClass = computed(() => cn(props.baseClass, props.class, attrs.class))
 
 /** 供带弹层的上层图标按钮在 Esc 关闭后恢复键盘焦点。 */
 function focus(): void {
@@ -51,7 +61,7 @@ defineExpose({ focus })
 <template>
   <button
     ref="button"
-    type="button"
+    :type="type"
     :aria-label="label"
     :disabled="disabled"
     :class="buttonClass"

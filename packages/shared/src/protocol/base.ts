@@ -40,9 +40,15 @@ export const RoomPhaseSchema = z.enum([
   'choosing_word',
   'drawing',
   'round_result',
-  'paused',
   'game_result',
   'closed',
+  /**
+   * 接龙专属阶段（S10 / S22 / S23）：与经典阶段共存于同一枚举，由房间玩法（gameMode）决定走哪条链。
+   * 合法转换白名单见 `pure.ts` 的 LEGAL_PHASES。
+   */
+  'relay_choose',
+  'relay_draw',
+  'relay_guess',
+  'relay_showcase',
+  'relay_vote',
 ])
-/** 中途加入策略：房间规则与大厅列表共用同一枚举，避免常量在协议内重复内联。 */
-export const JoinPolicySchema = z.enum(['forbid', 'spectate', 'next_game'])

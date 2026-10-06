@@ -15,13 +15,13 @@
 
 ### 专题参考
 
-| 文档                                                         | 主题                                            |
-| ------------------------------------------------------------ | ----------------------------------------------- |
-| [`canvas-resolution-model.md`](./canvas-resolution-model.md) | 画布双层分辨率模型：逻辑层重放 + DPR 封顶展示层 |
-| [`flood-fill-performance.md`](./flood-fill-performance.md)   | 洪泛填充性能与一致性基线（基准命令与历史数据）  |
-| [`game-result-exit.md`](./game-result-exit.md)               | 最终结算退出状态机（展示期与自动返回上限）      |
-| [`next-game-join-policy.md`](./next-game-join-policy.md)     | `joinPolicy = 'next_game'` 中途候场语义         |
-| [`wcag-aa-color-contrast.md`](./wcag-aa-color-contrast.md)   | WCAG AA 颜色对比基线（令牌与实测比值）          |
+| 文档                                                         | 主题                                                           |
+| ------------------------------------------------------------ | -------------------------------------------------------------- |
+| [`后端架构规范.md`](./后端架构规范.md)                       | 后端架构、分层与文件结构规范（Express 5 + Socket.IO + SQLite） |
+| [`canvas-resolution-model.md`](./canvas-resolution-model.md) | 画布双层分辨率模型：逻辑层重放 + DPR 封顶展示层                |
+| [`flood-fill-performance.md`](./flood-fill-performance.md)   | 洪泛填充性能与一致性基线（基准命令与历史数据）                 |
+| [`game-result-exit.md`](./game-result-exit.md)               | 最终结算退出状态机（展示期与自动返回上限）                     |
+| [`wcag-aa-color-contrast.md`](./wcag-aa-color-contrast.md)   | WCAG AA 颜色对比基线（令牌与实测比值）                         |
 
 ### 架构决策记录
 
@@ -44,10 +44,8 @@
 
 ## 维护约定
 
-- 新增文档前先判断归属：跨模块决策写 `docs/adr/`（编号递增、不复用）；可复现的基线/专题说明写本目录；
-  议题与规格按 [`agents/issue-tracker.md`](./agents/issue-tracker.md) 写入 `.scratch/`。
-- 文档里的路径、命令、版本号以代码为准；`test/unit/documentation.consistency.spec.ts` 会校验
-  `AGENTS.md` / `README.md` 中反引号路径的真实性与大小写。
+- 新增文档前先判断归属：跨模块决策写 `docs/adr/`（编号递增、不复用）；可复现的基线/专题说明写本目录；架构与工程决策一律编写为 ADR 写入 `docs/adr/`。
+- 文档里的路径、命令、版本号以代码为准；`test/unit/documentation.consistency.spec.ts` 会校验 `AGENTS.md` / `README.md` 中反引号路径的真实性与大小写。
 - 本页只做导航：新增/删除文档时同步更新上面的表格。
 - `adr/README.md` 的索引**按主题分组**，分组只是导航：编号与文件名是源码注释引用的稳定标识，
   不因分组调整而改动。

@@ -8,15 +8,8 @@
 import { ref } from 'vue'
 import { Clipboard, RotateCcw, Trash2 } from 'lucide-vue-next'
 import { strings } from '@draw-guess/strings'
-import AvatarImage from '@/components/common/AvatarImage.vue'
-import AvatarPickerDialog from '@/components/common/AvatarPickerDialog.vue'
-import AppButton from '@/components/common/AppButton.vue'
-import AppInput from '@/components/common/AppInput.vue'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import { AppButton, AppInput, AvatarPickerField, ConfirmDialog } from '@/components/common'
 import { useGameStore } from '@/stores/game'
-
-// 头像选择弹窗显隐：弹窗在本组件模板内渲染、开关也在本组件内触发，显隐状态由本组件自持。
-const showAvatarPicker = ref(false)
 
 defineProps<{
   diagnostic: string
@@ -33,27 +26,19 @@ const showClearProfileConfirm = ref(false)
 
 <template>
   <section
-    class="relative min-h-0 px-[5cqw] py-[3cqh] grid grid-cols-[1fr_1.3fr] grid-rows-[1fr_auto] gap-[2cqh_2cqw]"
+    class="min-h-0 px-[5cqw] py-[3cqh] grid grid-cols-[1fr_1.3fr] grid-rows-[1fr_auto] gap-[2cqh_2cqw]"
   >
     <!-- 资料卡片 -->
     <div
       class="flex flex-col items-center justify-center gap-[1.2cqh] border-t-[0.4cqh] border-blue bg-white p-[2cqh_1.5em]"
       :class="{ 'opacity-50': profileEditingDisabled }"
     >
-      <button
-        type="button"
-        class="flex flex-col items-center gap-[0.7cqh] text-blue bg-transparent text-fs-12 font-bold"
+      <AvatarPickerField
+        v-model="store.profile.avatarId"
+        :action-text="strings.ui.settings.avatarField"
         :disabled="profileEditingDisabled"
-        :aria-label="strings.a11y.profile.changeAvatarAria"
-        @click="showAvatarPicker = true"
-      >
-        <AvatarImage
-          :avatar-id="store.profile.avatarId"
-          :label="strings.a11y.common.myAvatarAria"
-          class="h-[13cqh] w-[13cqh]"
-        />
-        <span>{{ strings.ui.settings.avatarField }}</span>
-      </button>
+        avatar-size-class="h-[13cqh] w-[13cqh]"
+      />
 
       <label class="flex w-full flex-col items-center gap-[0.6cqh] font-bold text-fs-14">
         {{ strings.ui.settings.nicknameField }}
@@ -136,12 +121,5 @@ const showClearProfileConfirm = ref(false)
     :cancel-label="strings.ui.common.cancel"
     :icon="Trash2"
     @confirm="store.clearProfile"
-  />
-
-  <AvatarPickerDialog
-    v-if="!profileEditingDisabled"
-    v-model="store.profile.avatarId"
-    v-model:open="showAvatarPicker"
-    :avatar-ids="store.config.player.avatarIds"
   />
 </template>

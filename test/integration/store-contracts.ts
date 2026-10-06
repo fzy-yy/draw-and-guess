@@ -32,6 +32,15 @@ expectTypeOf<BusinessKeys<ReturnType<typeof useGameStore>>>().toEqualTypeOf<
   | 'room'
   | 'vocabulary'
   | 'invites'
+  // 接龙消费面（S84）：视图 + `relay*` 动作族
+  | 'relay'
+  | 'relaySendStroke'
+  | 'relaySendFill'
+  | 'relayDrawAction'
+  | 'relaySubmitGuess'
+  | 'relaySubmitDrawing'
+  | 'relayVote'
+  | 'relayChat'
   | 'kickedNotice'
   | 'protocolMismatch'
   | 'busy'
@@ -55,6 +64,7 @@ expectTypeOf<BusinessKeys<ReturnType<typeof useGameStore>>>().toEqualTypeOf<
   | 'loadVocabulary'
   | 'saveVocabulary'
   | 'selectVocabularyPackage'
+  | 'selectVocabularyPackages'
   | 'cancelVocabularyRequests'
   | 'startGame'
   | 'chooseWord'
@@ -67,8 +77,6 @@ expectTypeOf<BusinessKeys<ReturnType<typeof useGameStore>>>().toEqualTypeOf<
   | 'sendStroke'
   | 'sendFill'
   | 'drawAction'
-  | 'pause'
-  | 'resume'
   | 'endEarly'
   | 'leaveGame'
   | 'returnWaiting'
@@ -80,7 +88,23 @@ expectTypeOf<BusinessKeys<ReturnType<typeof useGameStore>>>().toEqualTypeOf<
 >()
 
 expectTypeOf<keyof ReturnType<typeof useGameHud>>().toEqualTypeOf<
-  'game' | 'secondsLeft' | 'progress' | 'canGuess' | 'phaseLabel' | 'rankings'
+  | 'game'
+  | 'relay'
+  | 'phaseEndsAt'
+  | 'secondsLeft'
+  | 'progress'
+  | 'canGuess'
+  | 'phaseLabel'
+  | 'rankings'
+  // 接龙派生（S74 / S84）：棒次、题面、上一家 chip、提交状态与复盘链进度
+  | 'relayStep'
+  | 'relayPrompt'
+  | 'relayPromptKind'
+  | 'relayArtist'
+  | 'relayArtistPaints'
+  | 'relayStatusMode'
+  | 'relaySubmittedIds'
+  | 'relayChainProgress'
 >()
 
 expectTypeOf<keyof ReturnType<typeof useRoomSync>>().toEqualTypeOf<

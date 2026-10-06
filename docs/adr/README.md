@@ -48,16 +48,23 @@
 
 ### 服务端领域与持久化
 
-| 编号                                         | 主题                                          | 状态   |
-| :------------------------------------------- | :-------------------------------------------- | :----- |
-| [0002](0002-final-ranking-no-gaps.md)        | 战报名次按实际产出条目递增，不留下排名空洞    | 已采纳 |
-| [0005](0005-log-retention-order.md)          | 日志保留按创建时间删最旧，不按文件名排序      | 已采纳 |
-| [0007](0007-local-observability-privacy.md)  | 本地运维诊断采用有界安全聚合                  | 已采纳 |
-| [0011](0011-session-logout-atomicity.md)     | 会话注销先原子吊销持久化令牌，再清理内存      | 已采纳 |
-| [0023](0023-member-facts-single-source.md)   | 成员事实单一口径：具名谓词取代内联组合判定    | 已采纳 |
-| [0024](0024-round-machine-ownership.md)      | 回合所有权归 RoundMachine：阶段写入与对局消息 | 已采纳 |
-| [0040](0040-round-timing-and-phase-facts.md) | 回合时序与阶段事实收口：RoundMachine 独占时序 | 已采纳 |
-| [0047](0047-fixed-100-point-scoring.md)      | 计分改为固定 100 分制                         | 已采纳 |
+| 编号                                                           | 主题                                          | 状态                           |
+| :------------------------------------------------------------- | :-------------------------------------------- | :----------------------------- |
+| [0002](0002-final-ranking-no-gaps.md)                          | 战报名次按实际产出条目递增，不留下排名空洞    | 已采纳                         |
+| [0005](0005-log-retention-order.md)                            | 日志保留按创建时间删最旧，不按文件名排序      | 已采纳                         |
+| [0007](0007-local-observability-privacy.md)                    | 本地运维诊断采用有界安全聚合                  | 已采纳                         |
+| [0011](0011-session-logout-atomicity.md)                       | 会话注销先原子吊销持久化令牌，再清理内存      | 已采纳                         |
+| [0023](0023-member-facts-single-source.md)                     | 成员事实单一口径：具名谓词取代内联组合判定    | 已采纳                         |
+| [0024](0024-round-machine-ownership.md)                        | 回合所有权归 RoundMachine：阶段写入与对局消息 | 已采纳                         |
+| [0040](0040-round-timing-and-phase-facts.md)                   | 回合时序与阶段事实收口：RoundMachine 独占时序 | 已采纳（暂停部分被 0059 取代） |
+| [0047](0047-fixed-100-point-scoring.md)                        | 计分改为固定 100 分制                         | 已采纳                         |
+| [0059](0059-remove-game-pause-and-unified-offline-handling.md) | 移除游戏内暂停与统一断线挂机化处理            | 已采纳                         |
+
+### 玩法模式（接龙）
+
+| 编号                                                    | 主题                                           | 状态   |
+| :------------------------------------------------------ | :--------------------------------------------- | :----- |
+| [0058](0058-relay-mode-authoritative-flow-and-reuse.md) | 接龙模式：服务端权威推进、策略分流与插槽式复用 | 已采纳 |
 
 ### 客户端架构与 UI 原语
 
@@ -80,20 +87,21 @@
 | [0055](0055-player-panel-visual-balance-and-identity-highlight.md) | 玩家栏独立黑框视觉平衡、高对比度座位色与本人高亮重构 | 已采纳                 |
 | [0056](0056-three-column-layout-and-canvas-menu.md)                | 黄金三栏对局布局、画板双角色右键菜单与趣味机制升级   | 已采纳                 |
 | [0057](0057-round-drawing-replay-and-result-improvements.md)       | 回合画作快速重播与结算流程优化                       | 已采纳                 |
+| [0060](0060-ui-component-deepening-and-visual-stability.md)        | UI 组件深度模块化与视觉稳定性治理                    | 已采纳                 |
 
 ### 词汇与提示
 
-| 编号                                                       | 主题                                         | 状态                   |
-| :--------------------------------------------------------- | :------------------------------------------- | :--------------------- |
-| [0001](0001-progressive-hint-interval.md)                  | 逐步提示间隔用毫秒计算、不再按秒向下取整     | 已采纳                 |
-| [0004](0004-vocabulary-default-package.md)                 | 词库默认包按「词数 + id」确定性选择          | 已采纳                 |
-| [0013](0013-vocabulary-level-config-and-hints.md)          | 词库难度级配置加载期解析与提示字段改版       | 已废弃（被 0046 取代） |
-| [0045](0045-custom-word-and-untimed-choosing.md)           | 画家自定义题目与选词阶段不限时               | 已采纳                 |
-| [0046](0046-vocabulary-slimming-and-unified-round-time.md) | 词库瘦身与统一回合时长（取代 0013）          | 已采纳                 |
-| [0048](0048-vocabulary-schema-slimming.md)                 | 词库表结构落地瘦身：只留词面/分类/别称       | 已采纳                 |
-| [0032](0032-drawer-hint-full-and-progressive.md)           | 画家模式完整提示、猜词者逐渐披露（wordHint） | 已废弃（被 0042 取代） |
-| [0042](0042-remove-structured-hints.md)                    | 移除结构化提示：只保留逐字遮罩               | 已采纳                 |
-| [0053](0053-vocabulary-collection-and-toolbar-redesign.md) | 词库分类升级为自定义合集与工具栏图文胶囊化   | 已采纳                 |
+| 编号                                                       | 主题                                         | 状态                             |
+| :--------------------------------------------------------- | :------------------------------------------- | :------------------------------- |
+| [0001](0001-progressive-hint-interval.md)                  | 逐步提示间隔用毫秒计算、不再按秒向下取整     | 已采纳                           |
+| [0004](0004-vocabulary-default-package.md)                 | 词库默认包按「词数 + id」确定性选择          | 已采纳                           |
+| [0013](0013-vocabulary-level-config-and-hints.md)          | 词库难度级配置加载期解析与提示字段改版       | 已废弃（被 0046 取代）           |
+| [0045](0045-custom-word-and-untimed-choosing.md)           | 画家自定义题目与选词阶段不限时               | 已采纳（不限时部分被 0059 取代） |
+| [0046](0046-vocabulary-slimming-and-unified-round-time.md) | 词库瘦身与统一回合时长（取代 0013）          | 已采纳                           |
+| [0048](0048-vocabulary-schema-slimming.md)                 | 词库表结构落地瘦身：只留词面/分类/别称       | 已采纳                           |
+| [0032](0032-drawer-hint-full-and-progressive.md)           | 画家模式完整提示、猜词者逐渐披露（wordHint） | 已废弃（被 0042 取代）           |
+| [0042](0042-remove-structured-hints.md)                    | 移除结构化提示：只保留逐字遮罩               | 已采纳                           |
+| [0053](0053-vocabulary-collection-and-toolbar-redesign.md) | 词库分类升级为自定义合集与工具栏图文胶囊化   | 已采纳                           |
 
 ### 本机反馈
 

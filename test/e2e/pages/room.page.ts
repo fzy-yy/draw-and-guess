@@ -1,8 +1,38 @@
 import { type Page, expect } from '@playwright/test'
-import { joinPolicyLabels, selectDropdownOption } from './dropdown'
+import { strings } from '../../../packages/strings/src/index.ts'
+import { selectDropdownOption } from './dropdown'
 
 export class RoomPage {
   constructor(readonly page: Page) {}
+
+  /**
+   * 房间头模式徽标（S80）：经典 / 接龙都显示，文案由建房时选定的 `gameMode` 决定、
+   * 房间内不可修改。传 `strings.ui.room.modeRelay` 或 `strings.ui.room.modeClassic`。
+   */
+  async expectModeBadge(label: string): Promise<void> {
+    await expect(this.page.getByText(label, { exact: true }).first()).toBeVisible({
+      timeout: 10_000,
+    })
+  }
+
+  /**
+   * 接龙开局门禁（S47 / S62）：在线可玩人数不足门槛时「开始游戏」置灰并给出含当前人数的原因。
+   * 经典房不渲染该原因，故本断言只用于接龙房。
+   */
+  async expectRelayStartGated(min: number, current: number): Promise<void> {
+    await expect(
+      this.page.getByText(strings.ui.room.relayGateNeedPlayers(min, current)),
+    ).toBeVisible({ timeout: 10_000 })
+    await expect(this.page.getByRole('button', { name: /开始游戏/ })).toBeDisabled()
+  }
+
+  /** 已凑够人数但尚未全员准备时的置灰原因（接龙与经典共用同一句话）。 */
+  async expectWaitingAllReady(): Promise<void> {
+    await expect(this.page.getByText(strings.ui.room.waitForGuestsReady)).toBeVisible({
+      timeout: 10_000,
+    })
+    await expect(this.page.getByRole('button', { name: /开始游戏/ })).toBeDisabled()
+  }
 
   async getPrivateCode(): Promise<string> {
     const codeBtn = this.page.locator('button[aria-label*="私密房间码"] b')
@@ -27,27 +57,14 @@ export class RoomPage {
     await expect(this.page.getByRole('dialog')).toBeVisible({ timeout: 10_000 })
   }
 
-  async updateMaxPlayers(maxPlayers: number) {
+  /**
+   * 改一个「秒数下拉」规则字段并保存（选词时间 / 单回合时长等）：
+   * 字段按可见 label 定位，档位文案与规则弹窗一致（见 ADR-0051）。
+   */
+  async updateSecondsRule(label: string, seconds: number): Promise<void> {
     await this.openRules()
     const dialog = this.page.getByRole('dialog')
-    await selectDropdownOption(dialog, '最大玩家数', `${maxPlayers} 人`)
-    await dialog.getByRole('button', { name: /保存规则/ }).click()
-    await expect(dialog).toBeHidden({ timeout: 10_000 })
-  }
-
-  async updateChooseSeconds(seconds: number) {
-    await this.openRules()
-    const dialog = this.page.getByRole('dialog')
-    // 选词时间已合并成单个下拉（默认「不限时」）：选具体秒数即同时开启限时（见 ADR-0045、ADR-0051）
-    await selectDropdownOption(dialog, '选词时间', `${seconds} 秒`)
-    await dialog.getByRole('button', { name: /保存规则/ }).click()
-    await expect(dialog).toBeHidden({ timeout: 10_000 })
-  }
-
-  async updateJoinPolicy(policy: 'forbid' | 'spectate' | 'next_game') {
-    await this.openRules()
-    const dialog = this.page.getByRole('dialog')
-    await selectDropdownOption(dialog, '中途加入', joinPolicyLabels[policy])
+    await selectDropdownOption(dialog, label, `${seconds} 秒`)
     await dialog.getByRole('button', { name: /保存规则/ }).click()
     await expect(dialog).toBeHidden({ timeout: 10_000 })
   }

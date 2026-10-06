@@ -139,7 +139,7 @@ function goBack(): void {
 
 <template>
   <!-- 设置子页骨架：顶栏 + 下方左右两栏（左侧导航 / 右侧正文：声音/显示/快捷键/资料诊断） -->
-  <main class="grid h-full grid-rows-[11%_minmax(0,1fr)] bg-sky">
+  <main class="relative grid h-full grid-rows-[11%_minmax(0,1fr)] bg-sky">
     <!-- 顶栏：复用 StageHeader 统一步调骨架，返回动作可配置。 -->
     <StageHeader>
       <template #leading>
@@ -167,7 +167,7 @@ function goBack(): void {
     <div class="grid min-h-0 grid-cols-[minmax(11em,15%)_minmax(0,1fr)]">
       <SideNav v-model="tab" :items="navItems" :label="strings.a11y.settings.categoryAria" />
       <!-- 正文区：内容高度由设置项自然撑开；relative 保留为一般定位锚点 -->
-      <div class="relative min-h-0 min-w-0">
+      <div class="min-h-0 min-w-0">
         <!-- 声音设置 -->
         <AudioTab v-if="tab === 'audio'" />
         <!-- 显示与操作设置 -->

@@ -10,10 +10,17 @@ export const serverStrings = {
     PROTOCOL_MISMATCH: '客户端版本与服务器不兼容，请刷新或更新页面',
     INVALID_AVATAR_ID: '头像无效，请重新选择内置头像',
     PROFILE_LOCKED: '进入房间后不能修改昵称，请先退出房间',
+    /** 接龙：重复提交同一棒（提交即锁定，不可撤回修改）。 */
+    ALREADY_SUBMITTED: '本棒已提交，不能修改',
+    /** 接龙：重复投票（点下即锁定；与 ALREADY_SUBMITTED 同码，只是投票场景的专属文案）。 */
+    ALREADY_VOTED: '本链已投过票，不能修改',
+    /** 接龙：投票窗口只在每条链的复盘展示之后打开（其余阶段投票一律按非法阶段拒绝）。 */
+    INVALID_PHASE_VOTE: '当前不在投票阶段',
+    /** 接龙开局门槛：下限取自协议常量 RELAY_MIN_PLAYERS，与经典的 2 人口径分开表述。 */
+    NOT_ENOUGH_PLAYERS_RELAY: (min: number) => `接龙模式至少需要 ${min} 名在线玩家才能开始`,
     INVALID_NICKNAME: (min: number, max: number) => `昵称需为 ${min}～${max} 个可见字符`,
     DUPLICATE_NICKNAME: '昵称已被占用，请换一个昵称',
     INVALID_SETTINGS: '房间规则超出服务器允许范围',
-    INVALID_SETTINGS_MAX_PLAYERS: '最大人数不能少于当前房间人数',
     UNAUTHORIZED_REGISTER: '请先确认玩家资料并登录',
     UNAUTHORIZED: '身份已失效，请重新进入游戏',
     ALREADY_IN_ROOM: '你已经在一个房间中，请先退出',
@@ -21,6 +28,8 @@ export const serverStrings = {
     NOT_IN_ROOM_KICK: '目标玩家已不在房间',
     NOT_IN_ROOM_TRANSFER: '目标玩家不在房间',
     FORBIDDEN: '只有房主可以执行此操作',
+    /** 接龙房整体禁用画布微表情（S19）：模式级拒绝，与经典房「房主专属」语义区分开。 */
+    FORBIDDEN_RELAY_CANVAS_PING: '接龙模式不支持画布微表情',
     FORBIDDEN_INVITE: '本房间仅房主可以邀请',
     NO_GAME: '当前房间没有进行中的游戏',
     NOT_DRAWER: '只有当前画家可以修改画板',
@@ -30,12 +39,9 @@ export const serverStrings = {
     RATE_LIMITED_PRIVATE_JOIN: '房间码尝试过于频繁，请稍后再试',
     INVALID_PAYLOAD: '请求格式无效或字段超出允许范围',
     INVALID_PHASE_READY: '当前阶段不能修改准备状态',
-    INVALID_PHASE_SPECTATOR_READY: '观战成员不能准备，须退出后重新加入',
     INVALID_PHASE_GAME_STARTED: '游戏已经开始或正在倒计时',
     INVALID_PHASE_GUESS: '当前不能猜词',
     INVALID_PHASE_PRESET: '当前不能发送互动短语',
-    INVALID_PHASE_RESUME: '游戏当前没有暂停',
-    INVALID_PHASE_PAUSE: '开局倒计时阶段不能暂停',
     PHASE_EXPIRED: '当前操作已超时，阶段已结束',
     DRAW_BUDGET_EXCEEDED: '本回合画布细节已达上限，请撤销或清空后再继续',
     DRAW_HISTORY_LIMIT_REACHED: '本回合画布命令已达上限，请撤销或清空后再继续',
@@ -62,8 +68,6 @@ export const serverStrings = {
     NOT_ENOUGH_PLAYERS: '至少需要 2 名玩家才能开始',
     NOT_ALL_READY: '其他在线玩家全部准备后才能开始',
     DRAWER_CANNOT_GUESS: '无法发送答案',
-    SPECTATOR_CANNOT_GUESS: '观战成员不能参与猜词',
-    SPECTATOR_CANNOT_CHAT: '观战成员不能发送互动短语',
     ALREADY_GUESSED: '你已经猜中了，只能发送预设短语',
     INVALID_MESSAGE_EMPTY: '猜词内容为空或过长',
     INVALID_MESSAGE_PRESET: '该互动短语不在安全列表中',
@@ -72,18 +76,12 @@ export const serverStrings = {
     STALE_DRAWING_CONTEXT: '绘图上下文已失效，请等待权威状态同步',
     INVALID_DRAW_STYLE: '画笔颜色或线宽无效',
     INVALID_FILL: '填充颜色无效',
-    PAUSE_DISABLED: '本房间未开启暂停权限',
     REROLL_DISABLED: '本房间未开启选词换一组功能',
     REROLL_ALREADY_USED: '本回合已更换过一次候选词',
     CUSTOM_WORD_DISABLED: '本房间未开启自定义题目功能',
     CUSTOM_WORD_INVALID: '自定义题目不合法，请修改后再试',
-    CUSTOM_WORD_EMPTY: '请输入要画的词',
-    CUSTOM_WORD_TOO_LONG: (max: number) => `最多 ${max} 个字，请缩短后再试`,
-    CUSTOM_WORD_INVALID_CHARACTER: '只能输入中英文、数字、空格与常用标点',
-    CUSTOM_WORD_ONLY_PUNCTUATION: '请至少输入一个文字或数字',
     CUSTOM_WORD_DUPLICATE: '这个词本局已经出现过了，换一个吧',
     INVALID_TARGET_SELF: '房主不能移除自己，请使用退出房间',
-    SPECTATOR_CANNOT_HOST: '观战成员不能成为房主',
     ROOM_NOT_JOINABLE_INVITE: '房间已开始或已满员，不能邀请',
     TARGET_UNAVAILABLE: '该玩家当前无法接收邀请',
     INVITE_EXPIRED: '邀请已失效，请让对方重新邀请',
@@ -93,7 +91,7 @@ export const serverStrings = {
     PRIVATE_ROOM_NOT_FOUND: '房间码无效或私密房间已经关闭',
     PRIVATE_CODE_EXHAUSTED: '私密房间码生成失败，请重试',
     ROOM_FULL: '房间已经满员，请加入其他房间',
-    GAME_IN_PROGRESS_FORBID: '本房间不允许中途加入，请等待下一局',
+    GAME_IN_PROGRESS_FORBID: '本房间已开始游戏，无法中途加入',
     UNKNOWN_FAILURE: '服务暂时不可用，请稍后重试',
   },
 
@@ -114,7 +112,6 @@ export const serverStrings = {
     countdownCanceled: '开始倒计时因成员变化而取消',
     candidatesExhausted: '候选词已耗尽，本回合作废',
     drawerLeftChoosing: (nickname: string) => `${nickname} 在选词时离开，本回合作废`,
-    autoPaused: '在线玩家不足，比赛已自动暂停',
     rulesUpdated: '房间规则已修改，所有人需重新准备',
     vocabularyUpdated: '本局词库已修改，已准备状态保持不变',
     vocabularyPackageSwitched: (name: string) => `词库已切换为「${name}」`,
@@ -122,8 +119,6 @@ export const serverStrings = {
     hostTransferred: (nickname: string) => `房主已移交给 ${nickname}`,
     hostMigrated: (nickname: string) => `房主已迁移给 ${nickname}`,
     hostMigratedTimeout: (nickname: string) => `原房主重连超时，控制权已迁移给 ${nickname}`,
-    pauseRequest: (nickname: string, reason: string) => `${nickname} 请求房主暂停：${reason}`,
-    pauseFallbackReason: '需要短暂暂停',
     endEarlyByHost: '房主提前结束了本局游戏',
     drawingStarted: '作画开始，猜词玩家请在右侧输入答案',
     guessCorrect: (nickname: string) => `${nickname} 猜中了！`,
@@ -132,6 +127,20 @@ export const serverStrings = {
     playerDisconnectedLeave: (nickname: string) => `${nickname} 已断线并退出房间`,
     playerReconnectedTimeout: '玩家重连超时离开',
     nearMissHint: '离答案只差一个字了',
+    /* ---- 接龙系统通知（S65：只播关键节点，不逐条播报成员提交）---- */
+    /** 开局：全员进入步 1 的选词阶段。 */
+    relayStarted: '接龙开始，请从候选词中选择你的题目',
+    /** 进入下一棒：第 step 棒开始（含作画与猜词）。 */
+    relayStepStarted: (step: number) => `第 ${step} 棒开始`,
+    /** 复盘开始：四步走完、全员统一步调进入轮播（S65 的关键节点，只播一次）。 */
+    relayShowcaseStarted: '复盘开始，逐条链回放',
+    /** 每条链展示开始：轮播切到第 index / total 条链（S11 的席位顺序；S65 只播链与链的切换）。 */
+    relayChainShowcaseStarted: (index: number, total: number) =>
+      `第 ${index} / ${total} 条链开始展示`,
+    /** 投票开始：该链展示完毕、进入固定时长的投标窗口（S65 的关键节点，只播一次）。 */
+    relayVoteStarted: '投票开始',
+    /** 终局：全部链走完（或房主提前结束），进入最终结算页。 */
+    relayFinished: '本局结束，查看最终成绩',
   },
 
   /* ---- 词库加载错误（服务启动校验，展示给运维 / 终端）---- */
@@ -145,6 +154,7 @@ export const serverStrings = {
 export const serverErrorMessages = {
   ALREADY_GUESSED: serverStrings.errors.ALREADY_GUESSED,
   ALREADY_IN_ROOM: serverStrings.errors.ALREADY_IN_ROOM,
+  ALREADY_SUBMITTED: serverStrings.errors.ALREADY_SUBMITTED,
   DRAW_BUDGET_EXCEEDED: serverStrings.errors.DRAW_BUDGET_EXCEEDED,
   DRAW_HISTORY_LIMIT_REACHED: serverStrings.errors.DRAW_HISTORY_LIMIT_REACHED,
   DRAWER_CANNOT_GUESS: serverStrings.errors.DRAWER_CANNOT_GUESS,
@@ -173,7 +183,6 @@ export const serverErrorMessages = {
   NOT_FOUND: serverStrings.errors.VOCABULARY_PACKAGE_NOT_FOUND,
   NOT_IN_ROOM: serverStrings.errors.NOT_IN_ROOM,
   NO_GAME: serverStrings.errors.NO_GAME,
-  PAUSE_DISABLED: serverStrings.errors.PAUSE_DISABLED,
   PHASE_EXPIRED: serverStrings.errors.PHASE_EXPIRED,
   PRIVATE_CODE_EXHAUSTED: serverStrings.errors.PRIVATE_CODE_EXHAUSTED,
   PRIVATE_ROOM_HIDDEN: serverStrings.errors.ROOM_NOT_FOUND,
@@ -187,8 +196,6 @@ export const serverErrorMessages = {
   ROOM_NOT_FOUND: serverStrings.errors.ROOM_NOT_FOUND,
   ROOM_NOT_JOINABLE: serverStrings.errors.ROOM_NOT_JOINABLE_INVITE,
   SETTINGS_LOCKED: serverStrings.errors.SETTINGS_LOCKED_UPDATE,
-  SPECTATOR_CANNOT_CHAT: serverStrings.errors.SPECTATOR_CANNOT_CHAT,
-  SPECTATOR_CANNOT_GUESS: serverStrings.errors.SPECTATOR_CANNOT_GUESS,
   STALE_DRAW_EVENT: serverStrings.errors.STALE_DRAW_EVENT_STROKE,
   STALE_DRAWING_CONTEXT: serverStrings.errors.STALE_DRAWING_CONTEXT,
   TARGET_UNAVAILABLE: serverStrings.errors.TARGET_UNAVAILABLE,

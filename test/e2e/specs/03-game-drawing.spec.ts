@@ -1,5 +1,5 @@
 import { test, expect, createPlayer, startTwoPlayerGame } from '../fixtures/test-base'
-
+import { readLogicalRaster } from '../fixtures/canvas-probe'
 test.describe('03 - 对局画板与绘图工具 (Game Drawing & Canvas)', () => {
   test('选词流程、画笔/橡皮擦、撤销重做与清空画板', async ({ browser }) => {
     const host = await createPlayer(browser, '画家房主')
@@ -16,12 +16,10 @@ test.describe('03 - 对局画板与绘图工具 (Game Drawing & Canvas)', () => 
       await expect(drawer.page.locator('canvas.bg-white')).toBeVisible()
       await expect(guesser.page.locator('canvas.bg-white')).toBeVisible()
 
-      // 3. 新浮层布局：底部工具条与浮层面板均可由顶栏开关收起 / 重新打开
+      // 3. 浮层布局：底部工具条是画家常驻元素，顶栏不再提供「绘图工具」开关
+      //（工具条改为不可隐藏 + 手柄拖拽，见 ADR-0054），因此只断言存在性与旧开关缺席。
       await expect(drawer.game.toolbar).toBeVisible()
-      await drawer.game.toggleToolbar()
-      await expect(drawer.game.toolbar).toBeHidden()
-      await drawer.game.toggleToolbar()
-      await expect(drawer.game.toolbar).toBeVisible()
+      await expect(drawer.page.getByRole('button', { name: '绘图工具' })).toHaveCount(0)
 
       // 玩家面板是常驻左栏：没有顶栏开关，始终可见
       await expect(drawer.game.playersPanel).toBeVisible()
@@ -93,6 +91,36 @@ test.describe('03 - 对局画板与绘图工具 (Game Drawing & Canvas)', () => 
           { timeout: 5_000 },
         )
         .toBeLessThanOrEqual(2)
+    } finally {
+      await host.close()
+      await guest.close()
+    }
+  })
+
+  test('游戏中刷新页面后恢复身份与超过单批上限的完整笔画', async ({ browser }) => {
+    const host = await createPlayer(browser, '刷新恢复房主')
+    const guest = await createPlayer(browser, '刷新恢复客人')
+
+    try {
+      const { drawer } = await startTwoPlayerGame(host, guest, `刷新恢复-${Date.now()}`)
+      await drawer.game.chooseWord(0)
+
+      // 生成一条累计超过线上单批 120 点的长笔画，覆盖「批次上限误用于快照历史」回归。
+      const points = Array.from({ length: 150 }, (_, index) => ({
+        x: 0.12 + (index / 149) * 0.76,
+        y: 0.5 + Math.sin((index / 149) * Math.PI * 6) * 0.2,
+      }))
+      await drawer.game.drawStroke(points)
+      await drawer.page.waitForTimeout(700)
+      const beforeReload = await readLogicalRaster(drawer.page.locator('canvas.bg-white'))
+
+      await drawer.page.reload()
+      await expect(drawer.game.topBar).toBeVisible({ timeout: 20_000 })
+      await expect(drawer.page.locator('canvas.bg-white')).toBeVisible()
+      await expect(drawer.page.getByRole('button', { name: /恢复/ })).toHaveCount(0)
+
+      const afterReload = await readLogicalRaster(drawer.page.locator('canvas.bg-white'))
+      expect(afterReload).toEqual(beforeReload)
     } finally {
       await host.close()
       await guest.close()

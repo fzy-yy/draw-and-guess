@@ -9,6 +9,9 @@ import {
   PLAYER_PROTOCOL_LIMITS,
   PRIVATE_ROOM_CODE,
   PROTOCOL_VERSION,
+  RELAY_CHOOSE_SECONDS_OPTIONS,
+  RELAY_DRAW_SECONDS_OPTIONS,
+  RELAY_GUESS_SECONDS_OPTIONS,
   ROOM_RULE_LIMITS,
 } from '@draw-guess/shared'
 import { APP_CONFIG } from '@draw-guess/config'
@@ -45,6 +48,13 @@ describe('monorepo 包边界', () => {
     expect(APP_CONFIG.drawing.colorPattern).toBe(DRAWING_PROTOCOL_LIMITS.colorPattern)
     expect(APP_CONFIG.drawing.width.min).toBe(DRAWING_PROTOCOL_LIMITS.width.min)
     expect(APP_CONFIG.drawing.maxPointsPerBatch).toBe(DRAWING_PROTOCOL_LIMITS.maxPointsPerBatch)
+    // 接龙三时长的档位白名单同样只有协议常量一份来源，默认值落在配置包（S17 / S39）
+    expect(APP_CONFIG.relay.chooseSeconds.options).toBe(RELAY_CHOOSE_SECONDS_OPTIONS)
+    expect(APP_CONFIG.relay.drawSeconds.options).toBe(RELAY_DRAW_SECONDS_OPTIONS)
+    expect(APP_CONFIG.relay.guessSeconds.options).toBe(RELAY_GUESS_SECONDS_OPTIONS)
+    expect(APP_CONFIG.relay.chooseSeconds.options).toContain(APP_CONFIG.relay.chooseSeconds.default)
+    expect(APP_CONFIG.relay.drawSeconds.options).toContain(APP_CONFIG.relay.drawSeconds.default)
+    expect(APP_CONFIG.relay.guessSeconds.options).toContain(APP_CONFIG.relay.guessSeconds.default)
   })
 
   it('浏览器配置包不声明服务端限频、数据库路径或清理策略', () => {
@@ -77,7 +87,7 @@ describe('monorepo 包边界', () => {
   })
 
   it('数据库连接没有模块级路径覆盖或全局访问器', () => {
-    const databaseSource = source('../../apps/server/src/db/index.ts')
+    const databaseSource = source('../../apps/server/src/infra/sqlite/connection.ts')
     expect(databaseSource).toContain('export function createDatabase')
     expect(databaseSource).toContain('export interface DatabaseContext')
     expect(databaseSource).not.toMatch(/setDbFile|getDb|closeDb|dbFileOverride/u)
@@ -86,13 +96,17 @@ describe('monorepo 包边界', () => {
   it('运行期房间保持纯内存，迁移不再包含历史房间表', () => {
     const serverRoot = fileURLToPath(new URL('../../apps/server/src', import.meta.url))
     const runtimeSources = sourceFiles(serverRoot)
-      .filter((file) => !file.endsWith(join('db', 'migrate.ts')))
+      .filter(
+        (file) =>
+          !file.endsWith(join('infra', 'sqlite', 'migrate.ts')) &&
+          !file.endsWith(join('db', 'migrate.ts')),
+      )
       .map((file) => readFileSync(file, 'utf8'))
       .join('\n')
     expect(runtimeSources).not.toMatch(
       /RoomRepository|SqliteRoomRepository|persistRoom|saveAggregate|room_members/u,
     )
-    const migrations = source('../../apps/server/src/db/migrate.ts')
+    const migrations = source('../../apps/server/src/infra/sqlite/migrate.ts')
     expect(migrations).toContain("name: 'baseline-schema'")
     expect(migrations).not.toContain('room_members')
     expect(migrations).not.toContain('CREATE TABLE IF NOT EXISTS rooms')

@@ -27,8 +27,6 @@ function createMember(
     isHost: false,
     isDrawer: false,
     guessed: false,
-    spectating: false,
-    waitingForNextGame: false,
     rematchReady: false,
     leftGame: false,
     connection: 'online',

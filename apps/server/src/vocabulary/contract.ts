@@ -26,6 +26,10 @@ export interface VocabularyMeta {
   name?: string
   /** 词库描述（metadata 的 description 行） */
   description?: string
+  /** 词库作者（metadata 的 author 行） */
+  author?: string
+  /** 词库备注（metadata 的 remark 行） */
+  remark?: string
   /** 词库数据自身的版本号（SQLite metadata 的 version 行；无则缺省） */
   fileVersion?: string
   /** 词库最后更新日期（SQLite metadata 的 updated_at 行；无则缺省） */

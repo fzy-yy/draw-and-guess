@@ -115,7 +115,7 @@ vueRuleTester.run('ban-forbidden-utility', projectConventions.rules['ban-forbidd
       code: `
           <template>
             <!-- font-medium 与 font-[900] 只是一段说明 -->
-            <div class="font-bold font-mediumish font-sans font-mono" :class="dynamicClass" />
+            <div class="font-bold font-mediumish font-sans" :class="dynamicClass" />
           </template>
         `,
     },
@@ -133,7 +133,7 @@ vueRuleTester.run('ban-forbidden-utility', projectConventions.rules['ban-forbidd
     },
     {
       filename: 'apps/client/src/ArbitraryWeight.vue',
-      code: '<template><div class="font-[900]" /></template>',
+      code: '<template><div class="font-black" /></template>',
       errors: [{ messageId: 'forbidden' }],
     },
     {
@@ -224,6 +224,38 @@ describe('eslint.config.js 规则作用域', () => {
       expect(messages).toContain('project-conventions/require-server-runtime')
     }
     expect(runtime).not.toContain('project-conventions/require-server-runtime')
+  })
+
+  it('业务模块（modules/）与 core 机制层同样受运行时禁令约束，只有真实适配层放行', async () => {
+    // 缺陷回归：目录纵切重构后业务模块搬到 modules/，而禁令作用域仍停留在 domain/ 等旧路径，
+    // 于是 modules/chat 里的 `Math.random()` 逃过 ESLint 直接进了生产代码（污染快照解码）。
+    const governedFiles = [
+      'apps/server/src/modules/chat/chat.service.ts',
+      'apps/server/src/modules/gameplay/round-machine.ts',
+      'apps/server/src/modules/relay/relay.service.ts',
+      'apps/server/src/core/config.ts',
+    ]
+    const governedRandom = await Promise.all(
+      governedFiles.map((filePath) => ruleIds('export const roll = Math.random()', filePath)),
+    )
+    const governedClock = await Promise.all(
+      governedFiles.map((filePath) => ruleIds('export const now = Date.now()', filePath)),
+    )
+
+    for (const messages of [...governedRandom, ...governedClock]) {
+      expect(messages).toContain('project-conventions/require-server-runtime')
+    }
+
+    // 唯一把抽象绑定到真实 Date/crypto/Node timer 的适配层（core/runtime.ts）与基础设施实现
+    // （infra 的日志/迁移，属技术适配而非领域规则）保持放行。
+    const adapters = await Promise.all([
+      ruleIds('export const now = Date.now()', 'apps/server/src/core/runtime.ts'),
+      ruleIds('export const now = Date.now()', 'apps/server/src/infra/logging/file-logger.ts'),
+      ruleIds('export const at = Date.now()', 'apps/server/src/infra/sqlite/migrate.ts'),
+    ])
+    for (const messages of adapters) {
+      expect(messages).not.toContain('project-conventions/require-server-runtime')
+    }
   })
 
   it('客户端 stores/composables 的 .ts 同样禁止硬编码中文，audio 资源诊断不受影响', async () => {

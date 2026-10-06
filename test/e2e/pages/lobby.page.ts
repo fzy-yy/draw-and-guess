@@ -1,5 +1,4 @@
 import { type Page, expect } from '@playwright/test'
-import { selectDropdownOption } from './dropdown'
 
 export class LobbyPage {
   constructor(readonly page: Page) {}
@@ -12,23 +11,23 @@ export class LobbyPage {
   async createRoom(options?: {
     name?: string
     visibility?: 'public' | 'private'
-    maxPlayers?: number
+    /** 玩法模式：建房时选定、房间内不可修改（S27 / S28）；缺省即经典模式。 */
+    gameMode?: 'classic' | 'relay'
   }) {
     await this.openCreateRoom()
+    if (options?.gameMode === 'relay') {
+      // 单选组的可访问名＝label 全文（标题 + 提示），故用标题片段匹配
+      await this.page
+        .getByRole('dialog')
+        .getByRole('radio', { name: /接龙模式/ })
+        .check()
+    }
     if (options?.visibility === 'private') {
       await this.page.locator('label:has-text("私密") input[type="radio"]').check()
     }
     if (options?.name) {
       const nameInput = this.page.locator('div[role="dialog"] input[type="text"]').first()
       await nameInput.fill(options.name)
-    }
-    if (options?.maxPlayers) {
-      // 手写下拉组件：按「最大人数」标签展开并点选「N 人」选项
-      await selectDropdownOption(
-        this.page.getByRole('dialog'),
-        '最大人数',
-        `${options.maxPlayers} 人`,
-      )
     }
     await this.page.getByRole('button', { name: /创建并进入/ }).click()
     // 等待进入房间页面
@@ -51,26 +50,19 @@ export class LobbyPage {
   async joinPublicRoom(roomName: string) {
     const row = this.page.locator(`article:has-text("${roomName}")`)
     await expect(row).toBeVisible({ timeout: 10_000 })
-    await row.getByRole('button', { name: /加入/ }).click()
+    // 开局中的房间入口置灰（文案切为「游戏中」）：先断言可点击，避免误点禁用态而非真正加入
+    const joinButton = row.getByRole('button', { name: /加入|游戏中/ }).first()
+    await expect(joinButton).toBeEnabled()
+    await joinButton.click()
     await expect(this.page.locator('text=玩家席位')).toBeVisible({ timeout: 10_000 })
   }
 
-  async joinNextGame(roomName: string) {
+  /** 断言指定房间行的加入入口已禁用，且行内显示「游戏中」（开局后不再接受中途加入）。 */
+  async expectRoomJoinDisabled(roomName: string) {
     const row = this.page.locator(`article:has-text("${roomName}")`)
     await expect(row).toBeVisible({ timeout: 10_000 })
-    await row.getByRole('button', { name: '加入候场' }).click()
-    await expect(
-      this.page.getByLabel('玩家', { exact: true }).getByText('等待下一局', { exact: true }),
-    ).toBeVisible({ timeout: 10_000 })
-  }
-
-  async spectatePublicRoom(roomName: string) {
-    const row = this.page.locator(`article:has-text("${roomName}")`)
-    await expect(row).toBeVisible({ timeout: 10_000 })
-    await row.getByRole('button', { name: '观战' }).click()
-    await expect(this.page.locator('canvas[data-canvas-layer="display"]')).toBeVisible({
-      timeout: 10_000,
-    })
+    await expect(row.getByRole('button', { name: /加入|游戏中/ }).first()).toBeDisabled()
+    await expect(row.getByText('游戏中', { exact: true }).first()).toBeVisible()
   }
 
   async goToSettings() {

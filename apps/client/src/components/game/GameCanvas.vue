@@ -227,6 +227,12 @@ function sendReactionPing(type: CanvasPingType): void {
 const allowReactions = computed(() => store.room?.settings.allowCanvasReactions ?? true)
 
 /**
+ * 是否处于接龙模式房间：接龙内微表情整体禁用（S19），右键菜单不渲染该组，
+ * 与服务端 `sendCanvasPing` 的模式守卫同源判断（客户端只负责不展示，兜底在服务端）。
+ */
+const isRelayRoom = computed(() => store.room?.gameMode === 'relay')
+
+/**
  * 生成语义化画作文件名：draw-and-guess-YYYY-MM-DD-HH-mm-ss.png。
  */
 function formatDrawingFileName(date: Date = new Date()): string {
@@ -355,7 +361,7 @@ const drawerMenuItems = computed<ContextMenuItem[]>(() => {
   ]
 })
 
-/** 猜词者 / 观战者专属右键菜单项 */
+/** 猜词者专属右键菜单项 */
 const guesserMenuItems = computed<ContextMenuItem[]>(() => {
   const items: ContextMenuItem[] = [
     {
@@ -367,37 +373,39 @@ const guesserMenuItems = computed<ContextMenuItem[]>(() => {
       },
     },
   ]
-  // 微表情互动组（点赞 👍、满头问号 ❓、神仙画画 🔥）
-  items.push(
-    {
-      id: 'reaction-thumbs_up',
-      label: strings.ui.game.canvasMenuReactionThumbsUp,
-      icon: ThumbsUp,
-      disabled: !allowReactions.value,
-      separatorBefore: true,
-      action: () => {
-        sendReactionPing('thumbs_up')
+  // 微表情互动组（点赞 👍、满头问号 ❓、神仙画画 🔥）：接龙内整体禁用（S19），整组不渲染
+  if (!isRelayRoom.value) {
+    items.push(
+      {
+        id: 'reaction-thumbs_up',
+        label: strings.ui.game.canvasMenuReactionThumbsUp,
+        icon: ThumbsUp,
+        disabled: !allowReactions.value,
+        separatorBefore: true,
+        action: () => {
+          sendReactionPing('thumbs_up')
+        },
       },
-    },
-    {
-      id: 'reaction-confused',
-      label: strings.ui.game.canvasMenuReactionConfused,
-      icon: HelpCircle,
-      disabled: !allowReactions.value,
-      action: () => {
-        sendReactionPing('confused')
+      {
+        id: 'reaction-confused',
+        label: strings.ui.game.canvasMenuReactionConfused,
+        icon: HelpCircle,
+        disabled: !allowReactions.value,
+        action: () => {
+          sendReactionPing('confused')
+        },
       },
-    },
-    {
-      id: 'reaction-fire',
-      label: strings.ui.game.canvasMenuReactionFire,
-      icon: Flame,
-      disabled: !allowReactions.value,
-      action: () => {
-        sendReactionPing('fire')
+      {
+        id: 'reaction-fire',
+        label: strings.ui.game.canvasMenuReactionFire,
+        icon: Flame,
+        disabled: !allowReactions.value,
+        action: () => {
+          sendReactionPing('fire')
+        },
       },
-    },
-  )
+    )
+  }
 
   // 快捷发言短语列表
   const safePhrases = store.config.presets.safeChat

@@ -15,22 +15,21 @@ type RegisterSocket = Parameters<GameService['register']>[0]
 
 /** 最小合法房间设置：全部值落在 shared protocol constants 的合法区间内。 */
 const settings: RoomSettings = {
-  maxPlayers: 4,
   roundsPerPlayer: 2,
   drawSeconds: 90,
   chooseSeconds: 15,
-  allowChooseTimeLimit: false,
   optionCount: 3,
   showWordLength: true,
   progressiveHints: true,
   allowPlayerInvite: true,
-  allowPause: true,
   allowWordReroll: true,
   allowCustomWord: false,
   allowNearMissHint: true,
   allowCanvasReactions: true,
   allowRoundReplay: true,
-  joinPolicy: 'forbid',
+  relayChooseSeconds: 20,
+  relayDrawSeconds: 90,
+  relayGuessSeconds: 45,
 }
 
 /** 录制型 socket 桩：记录发给该成员的最新房间快照，供测试断言当前对局状态。 */

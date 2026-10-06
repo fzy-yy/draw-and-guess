@@ -2,9 +2,9 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { APP_CONFIG, getDeploymentConfig } from './config/index.ts'
-import { createApplication } from './app.ts'
-import { makeLogger } from './logging/file-logger.ts'
+import { APP_CONFIG, getDeploymentConfig } from './core/config.ts'
+import { createApplication } from './server.ts'
+import { makeLogger } from './infra/logging/file-logger.ts'
 import { loadVocabulary } from './vocabulary/index.ts'
 import { loadProjectEnv } from './startup/environment.ts'
 import { findLanAddresses, warnIfWindowsConsoleNotUtf8 } from './startup/lan-addresses.ts'
@@ -13,7 +13,7 @@ import { pickAvailablePort } from './startup/port.ts'
 import { registerShutdown } from './startup/shutdown.ts'
 import { validateBusinessConfig } from './startup/validate-config.ts'
 import { resolveRuntimeLayout, type RuntimeLayout, type RuntimeMode } from './runtime-layout.ts'
-import { runtimeErrorType, SILENT_LOGGER } from './errors.ts'
+import { runtimeErrorType, SILENT_LOGGER } from './core/errors.ts'
 
 /**
  * 运行模式：构建产物由 esbuild 注入 `DRAW_GUESS_RUNTIME_MODE=dist`，

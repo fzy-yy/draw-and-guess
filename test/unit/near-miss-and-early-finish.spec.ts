@@ -57,7 +57,6 @@ describe('差一字私密通知与全员猜中提前结算端到端行为', () =
       name: '测试房间',
       visibility: 'public',
       settings: testRoomSettings({
-        maxPlayers: 3,
         drawSeconds: 60,
         allowNearMissHint,
       }),
@@ -97,6 +96,8 @@ describe('差一字私密通知与全员猜中提前结算端到端行为', () =
       text: '冰淇淋',
       aliases: ['冰激凌'],
       collection: 'food',
+      packageId: 'test_pkg',
+      packageName: '测试',
     }
 
     // 猜词者 A 发送差一个字的猜测「冰淇林」
@@ -143,6 +144,8 @@ describe('差一字私密通知与全员猜中提前结算端到端行为', () =
       text: '长颈鹿',
       aliases: [],
       collection: 'animal',
+      packageId: 'test_pkg',
+      packageName: '测试',
     }
 
     // 提交差一字答案「短颈鹿」
@@ -167,6 +170,8 @@ describe('差一字私密通知与全员猜中提前结算端到端行为', () =
       text: '哈密瓜',
       aliases: [],
       collection: 'food',
+      packageId: 'test_pkg',
+      packageName: '测试',
     }
 
     expect(room.phase).toBe('drawing')

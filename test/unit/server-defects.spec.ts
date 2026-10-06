@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
-import type { Stroke } from '@draw-guess/shared'
+import { PLAYER_PROTOCOL_LIMITS, type Stroke } from '@draw-guess/shared'
 import { GameError } from '../../apps/server/src/errors.ts'
 import { createGameHarness, startTwoPlayerGame, testRoomSettings } from './helpers/game-harness.ts'
 
@@ -45,13 +45,19 @@ describe('会话恢复与断线时序', () => {
     expect(player.socketId).toBe('new-socket')
   })
 
-  it('画家兼房主断线超过短宽限后结算回合并迁移房主', () => {
+  it('画家兼房主断线：房主控制权按短宽限迁移，回合不提前废弃、走完作画倒计时自然结算', () => {
     const { harness, host, guest, room, game } = enterDrawing()
     expect(game.drawerId).toBe(host.playerId)
     harness.service.handleDisconnect(host.socket as never)
-    harness.runtime.advance(APP_CONFIG.network.drawerReconnectGraceMs)
-    expect(room.phase).toBe('round_result')
+
+    // 短宽限后房主控制权迁移给在线客人，但不提前结算回合（ADR-0059 断线挂机化）
+    harness.runtime.advance(APP_CONFIG.network.hostReconnectGraceMs)
     expect(room.hostId).toBe(guest.playerId)
+    expect(room.phase).toBe('drawing')
+
+    // 作画倒计时走完，自然结算进入 round_result
+    harness.runtime.advance(game.roundDurationMs - APP_CONFIG.network.hostReconnectGraceMs)
+    expect(room.phase).toBe('round_result')
   })
 })
 
@@ -76,11 +82,14 @@ describe('私密房与邀请竞态', () => {
     const harness = createGameHarness()
     const host = harness.register('邀请者')
     const target = harness.register('受邀者')
-    const filler = harness.register('占位者')
+    // 容量固定为协议常量：填满房间需要房主 + (maxPlayers - 1) 名占位者
+    const fillers = Array.from({ length: PLAYER_PROTOCOL_LIMITS.maxPlayers - 1 }, (_item, index) =>
+      harness.register(`占位者${index + 1}`),
+    )
     const room = harness.service.createRoom(host.playerId, {
       name: '邀请房',
       visibility: 'public',
-      settings: testRoomSettings({ maxPlayers: 2 }),
+      settings: testRoomSettings(),
     })
 
     const expiring = harness.service.sendInvite(host.playerId, target.playerId)
@@ -91,11 +100,11 @@ describe('私密房与邀请竞态', () => {
 
     harness.runtime.advance(APP_CONFIG.network.inviteCooldownMs)
     const pending = harness.service.sendInvite(host.playerId, target.playerId)
-    harness.service.joinRoom(filler.playerId, room.id)
+    for (const filler of fillers) harness.service.joinRoom(filler.playerId, room.id)
     expect(() => harness.service.respondInvite(target.playerId, pending.id, true)).toThrow(/满员/)
     expect(harness.service.invites.has(pending.id)).toBe(true)
 
-    harness.service.leaveRoom(filler.playerId)
+    harness.service.leaveRoom(fillers[0]!.playerId)
     expect(harness.service.respondInvite(target.playerId, pending.id, true)?.id).toBe(room.id)
     expect(() => harness.service.respondInvite(target.playerId, pending.id, true)).toThrow(
       /邀请|失效|过期/,

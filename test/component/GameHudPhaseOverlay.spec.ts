@@ -34,7 +34,7 @@ function mountWithPinia(component: Parameters<typeof mount>[0], props: Record<st
 }
 
 describe('useGameHud 角色与计时派生', () => {
-  it('猜词者可猜、暂停冻结计时，并按服务端榜单展示最终排名', async () => {
+  it('猜词者可猜、计时随阶段推进，并按服务端榜单展示最终排名', async () => {
     const now = Date.now()
     const roomStore = useRoomStore()
     const session = useSessionStore()
@@ -49,13 +49,6 @@ describe('useGameHud 角色与计时派生', () => {
     expect(hud.canGuess.value).toBe(true)
     expect(hud.secondsLeft.value).toBeGreaterThanOrEqual(29)
     expect(hud.progress.value).toBeGreaterThan(0.45)
-
-    roomStore.room.phase = 'paused'
-    roomStore.room.game!.pausedRemainingMs = 12_500
-    await nextTick()
-    expect(hud.secondsLeft.value).toBe(13)
-    expect(hud.canGuess.value).toBe(false)
-    expect(hud.phaseLabel.value).toBe(strings.ui.status.phasePaused)
 
     roomStore.room.phase = 'game_result'
     roomStore.room.game!.finalRanking = [
@@ -73,7 +66,7 @@ describe('useGameHud 角色与计时派生', () => {
     wrapper.unmount()
   })
 
-  it('无倒计时安全归零，并在实时成员榜单中排除观战者和保留并列名次', () => {
+  it('无倒计时安全归零，并在实时成员榜单中包含全员且保留并列名次', () => {
     const roomStore = useRoomStore()
     const session = useSessionStore()
     roomStore.room = createRoomFixture('drawing', { phaseStartedAt: 2_000, phaseEndsAt: 1_000 })
@@ -81,9 +74,7 @@ describe('useGameHud 角色与计时派生', () => {
     roomStore.room.members.push({
       ...roomStore.room.members[1]!,
       id: '00000000-0000-4000-8000-000000000010',
-      nickname: '观战者',
-      spectating: true,
-      waitingForNextGame: false,
+      nickname: '后来者',
       rematchReady: false,
       score: 999,
     })
@@ -93,8 +84,9 @@ describe('useGameHud 角色与计时派生', () => {
 
     expect(hud.secondsLeft.value).toBe(0)
     expect(hud.progress.value).toBe(0)
-    expect(hud.rankings.value.map(({ rank }) => rank)).toEqual([1, 1])
-    expect(hud.rankings.value.map(({ nickname }) => nickname)).not.toContain('观战者')
+    // 观战与候场已删除：房间成员全员进榜（离局者以冻结成绩卡保留），同分并列同名次
+    expect(hud.rankings.value.map(({ nickname }) => nickname)).toEqual(['后来者', '房主', '猜词者'])
+    expect(hud.rankings.value.map(({ rank }) => rank)).toEqual([1, 2, 2])
 
     roomStore.room.members[1]!.guessed = true
     expect(hud.canGuess.value).toBe(false)
@@ -141,32 +133,20 @@ describe('GameHud 与 PhaseOverlay 角色差异', () => {
     wrapper.unmount()
   })
 
-  it('暂停操作只向房主显示，选词候选只向画家显示', async () => {
+  it('选词候选只向画家显示', async () => {
     const roomStore = useRoomStore()
     const session = useSessionStore()
-    roomStore.room = createRoomFixture('paused', { pausedRemainingMs: 10_000 })
+    roomStore.room = createRoomFixture('choosing_word')
+    roomStore.room.game!.wordOptions = [
+      { id: 'word-1', text: '苹果' },
+      { id: 'word-2', text: '香蕉' },
+    ]
     session.playerId = HOST_ID
     const wrapper = mountWithPinia(PhaseOverlay, {
       secondsLeft: 10,
       game: roomStore.room.game,
       rankings: [],
     }) as VueWrapper
-
-    expect(wrapper.findAll('[aria-live]').length).toBe(1)
-    expect(wrapper.get('[aria-live]').text()).toBe(strings.ui.status.phasePaused)
-
-    expect(wrapper.text()).toContain(strings.ui.game.resumeGame)
-    expect(wrapper.text()).toContain(strings.ui.game.endEarly)
-    session.playerId = GUEST_ID
-    await nextTick()
-    expect(wrapper.text()).not.toContain(strings.ui.game.resumeGame)
-
-    roomStore.room.phase = 'choosing_word'
-    roomStore.room.game!.wordOptions = [
-      { id: 'word-1', text: '苹果' },
-      { id: 'word-2', text: '香蕉' },
-    ]
-    session.playerId = HOST_ID
     await nextTick()
     expect(wrapper.get('[aria-live]').text()).toBe(strings.ui.status.phaseChoosing)
     expect(wrapper.text()).toContain('苹果')

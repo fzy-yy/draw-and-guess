@@ -245,7 +245,17 @@ export const projectConventions = {
 
 export default tseslint.config([
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/release/**'],
+    // 忽略产物与依赖（与 .gitignore / .prettierignore 同口径）：
+    // Playwright 的报告与 trace 里是压缩过的第三方 JS bundle，纳入 lint 会让本地跑完 e2e 后 pnpm lint 恒失败。
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/release/**',
+      '**/test-results/**',
+      '**/playwright-report/**',
+      '**/blob-report/**',
+      '.pi/**',
+    ],
   },
   {
     // 过期豁免守护：被禁用却不再命中任何问题的 eslint-disable 直接报错（AGENTS 要求生产源码零 eslint-disable 记录）。
@@ -354,6 +364,10 @@ export default tseslint.config([
       'apps/server/src/domain/**/*.ts',
       'apps/server/src/application/**/*.ts',
       'apps/server/src/protocol/**/*.ts',
+      // 纵切重构后的业务模块与核心机制层：领域规则一律经注入的 Clock/Scheduler/RandomSource，
+      // 否则 `Math.random()` 这类调用会直接进生产代码（曾污染快照解码，见 snapshot-wire-contract 回归）。
+      'apps/server/src/modules/**/*.ts',
+      'apps/server/src/core/**/*.ts',
     ],
     plugins: { 'project-conventions': projectConventions },
     rules: {
@@ -361,8 +375,9 @@ export default tseslint.config([
     },
   },
   {
-    // 系统运行时是唯一把抽象绑定到 Date/crypto/Node timer 的生产适配层。
-    files: ['apps/server/src/runtime.ts'],
+    // 系统运行时是唯一把抽象绑定到 Date/crypto/Node timer 的生产适配层
+    //（src/runtime.ts 为兼容转发出口，core/runtime.ts 为真实实现）。
+    files: ['apps/server/src/runtime.ts', 'apps/server/src/core/runtime.ts'],
     plugins: { 'project-conventions': projectConventions },
     rules: {
       'project-conventions/require-server-runtime': 'off',

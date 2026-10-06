@@ -8,7 +8,8 @@ import type {
   RoomSecret,
 } from '../../apps/server/src/models.ts'
 import { GameError } from '../../apps/server/src/errors.ts'
-import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
+import { createRelayChainSecret } from '../../apps/server/src/domain/relay/relay-models.ts'
+import type { RelayShowcaseCursor } from '../../apps/server/src/domain/relay/relay-showcase.ts'
 import { createMemoryVocabularyRegistry } from './helpers/mini-vocabulary.ts'
 import { testRoomSettings } from './helpers/game-harness.ts'
 
@@ -28,9 +29,9 @@ const NOW = 1_700_000_000_000
 const HOST_ID = '00000000-0000-4000-8000-0000000000a1'
 const DRAWER_ID = '00000000-0000-4000-8000-0000000000b2'
 const GUESSER_ID = '00000000-0000-4000-8000-0000000000c3'
-const SPECTATOR_ID = '00000000-0000-4000-8000-0000000000d4'
-const NEXT_GAME_ID = '00000000-0000-4000-8000-0000000000e5'
 const LEFT_GAME_ID = '00000000-0000-4000-8000-0000000000f6'
+/** 在房里但没有分到链的公开房成员（接龙矩阵的越权格）。 */
+const UNSEATED_ID = '00000000-0000-4000-8000-0000000000e5'
 const ROOM_ID = '00000000-0000-4000-8000-000000000101'
 const GAME_ID = '00000000-0000-4000-8000-000000000202'
 const ROUND_ID = '00000000-0000-4000-8000-000000000303'
@@ -69,6 +70,22 @@ const FORBIDDEN_KEYS = [
   'fillCount',
   'correctOrder',
   'correctDetails',
+  // RelayGameSecret / RelayChainSecret 内部（工单 05）：接龙视图只经 relay 字段裁剪下发，
+  // 链数组、两幅画布、四棒产出与本步提交集都不允许按任何键位出现在快照里。
+  'chains',
+  'originPlayerId',
+  'step1Canvas',
+  'step3Canvas',
+  'step1Word',
+  'step2Guess',
+  'step4Guess',
+  'stepSubmissions',
+  'autoSubmitTimers',
+  // 注：`currentStep` / `stepId` / `phaseStartedAt` / `phaseEndsAt` / `messages` / `votes`(复盘票行)
+  // 是接龙视图的**合法**字段，不能进禁止清单（禁止清单只收「任何观看者都不该看到」的簿记）。
+  // 复盘期的 `showcase` 子树同理合法（工单 07）：`chainIndex` / `chainCount` / `half` / `prompt` /
+  // `answer` / `drawing` 都是按游标裁剪后的公开内容（只含当前链），未揭晓的答案表现为
+  // `answer.text === null`（既无文本也无长度，S32 / S63 / S81）。
   // 逐字遮罩已揭示字符下标是服务端秘密簿记；公开视图只经 answerMask 表达，
   // 键与值都不得进快照（结构化提示已移除，见 docs/adr/0042-remove-structured-hints.md）。
   'revealedIndices',
@@ -123,13 +140,11 @@ const PHASES: RoomPhase[] = [
   'choosing_word',
   'drawing',
   'round_result',
-  'paused',
   'game_result',
 ]
 
 /** 观看者在其所在格子中的身份标签。 */
-type ViewerRole =
-  'drawer-host' | 'drawer' | 'guesser' | 'host-not-drawer' | 'spectator' | 'next-game' | 'left-game'
+type ViewerRole = 'drawer-host' | 'drawer' | 'guesser' | 'host-not-drawer' | 'left-game'
 
 function makeGame(phase: RoomPhase, drawerId: string): GameSecret {
   const registry = createMemoryVocabularyRegistry()
@@ -177,9 +192,6 @@ function makeGame(phase: RoomPhase, drawerId: string): GameSecret {
           correctDetails: [{ playerId: GUESSER_ID, order: 1, total: 100 }],
         }
       : {}),
-    ...(phase === 'paused'
-      ? { pauseState: { phase: 'drawing' as const, remainingMs: 20_000 } }
-      : {}),
     ...(phase === 'game_result'
       ? {
           finalRanking: [
@@ -209,13 +221,11 @@ const VIEWERS: MatrixCase[] = [
   { role: 'drawer', viewerId: GUESSER_ID }, // 画家（非房主）
   { role: 'guesser', viewerId: HOST_ID }, // 普通猜词者（此格是房主；房主身份不影响猜词裁剪）
   { role: 'host-not-drawer', viewerId: HOST_ID }, // 房主非画家（与上格同数据不同断言轴：privateJoinCode）
-  { role: 'spectator', viewerId: SPECTATOR_ID },
-  { role: 'next-game', viewerId: NEXT_GAME_ID },
   { role: 'left-game', viewerId: LEFT_GAME_ID },
 ]
 
 /**
- * 组装一个房间：画家固定为 drawerId，成员覆盖 7 种身份；
+ * 组装一个房间：画家固定为 drawerId，成员覆盖房主 / 画家 / 已离局三类身份；
  * 每个格子重建 fixture，避免跨用例串状态。
  */
 function makeRoom(
@@ -227,16 +237,13 @@ function makeRoom(
   const rawMembers: MemberState[] = [
     makeMember(HOST_ID, 0),
     makeMember(drawerId, 1),
-    makeMember(SPECTATOR_ID, 2, { spectating: true }),
-    makeMember(NEXT_GAME_ID, 3, { waitingForNextGame: true }),
     // 已离局成员：无 player 身份也能渲染（leftProfile 兜底路径）
     {
-      ...makeMember(LEFT_GAME_ID, 4, { leftGame: true }),
+      ...makeMember(LEFT_GAME_ID, 2, { leftGame: true }),
       leftProfile: { nickname: '已离局', avatarId: '02' },
     },
   ]
-  // drawerId 恰为固定角色成员时会产生重复 playerId：后写覆盖，保留带角色标记的席位
-  //（如「观战者兼任画家」防御格要求 spectating 席位不被普通席位遮蔽）。
+  // drawerId 恰为房主时会产生重复 playerId：后写覆盖，保留带画家角色的席位（drawer-host 格）。
   const deduped = new Map<string, MemberState>()
   for (const member of rawMembers) deduped.set(member.playerId, member)
   const members = [...deduped.values()]
@@ -251,9 +258,12 @@ function makeRoom(
     name: '矩阵房间',
     hostId: HOST_ID,
     visibility: options.visibility ?? 'public',
+    // 矩阵主体是经典阶段：接龙维度由工单 04 起在快照矩阵中扩展
+    gameMode: 'classic',
     privateJoinCode: options.visibility === 'private' ? PRIVATE_CODE : undefined,
     phase,
     stateVersion: 7,
+    vocabularyPackageIds: ['base_words'],
     settings: testRoomSettings({ showWordLength: true }),
     members,
     selectedWordIds: new Set(['word-1', 'word-2', 'word-3']),
@@ -271,9 +281,8 @@ function makePort(
     players,
     rooms: new Map([[room.id, room]]),
     clock: { now: () => now },
-    // 与生产实现（phase-facts 的 isInMatchPhase）一致：暂停也是对局进行中
-    isPlaying: (phase) =>
-      ['starting', 'choosing_word', 'drawing', 'round_result', 'paused'].includes(phase),
+    // 与生产实现（phase-facts 的 isInMatchPhase）一致：经典四个阶段都算对局进行中
+    isPlaying: (phase) => ['starting', 'choosing_word', 'drawing', 'round_result'].includes(phase),
     getRoomVocabularyStore: () => createMemoryVocabularyRegistry().getDefault(),
     requirePlayer: (playerId) => {
       const player = players.get(playerId)
@@ -293,10 +302,6 @@ function viewerIdFor(role: ViewerRole, drawerId: string): string {
       return drawerId
     case 'guesser':
       return HOST_ID
-    case 'spectator':
-      return SPECTATOR_ID
-    case 'next-game':
-      return NEXT_GAME_ID
     case 'left-game':
       return LEFT_GAME_ID
   }
@@ -340,7 +345,7 @@ describe('角色裁剪快照穷举矩阵', () => {
         const gameView = snapshot.game
         expect(gameView).toBeDefined()
         // 画家本人（房主与否无关）在任何阶段都收 answer 真值；
-        // 观战身份即使 ID 与 drawerId 相同也不算画家。
+        // 已离局身份即使 ID 碰巧等于 drawerId 也不算画家（isActivePlayer 排除离局者）。
         const isViewerDrawer =
           (role === 'drawer' || role === 'drawer-host') && viewerId === roomDrawerId
         // 答案明文只发给画家本人（所有对局阶段一致）；猜词者只有逐字遮罩
@@ -365,34 +370,13 @@ describe('角色裁剪快照穷举矩阵', () => {
   }
 
   describe('私密房与时间轴专项', () => {
-    it('暂停中的 round_result 快照按标称总时长换算 phaseEndsAt，进度条不钉死', () => {
-      const { room, players } = makeRoom('paused', DRAWER_ID)
-      const game = room.game!
-      // 覆盖 fixture 的默认暂停现场：暂停发生在回合结算期，冻结剩余 3 秒。
-      // 修复前 round_result 无标称时长，phaseEndsAt 会退化为「阶段开始时间 + 冻结剩余量」，
-      // 使客户端进度条分母等于剩余量、被钉死在 100%。
-      game.pauseState = { phase: 'round_result', remainingMs: 3_000 }
-      const builder = new SnapshotBuilder(makePort(players, room))
-
-      const view = builder.snapshot(room, HOST_ID).game
-      expect(view?.phaseBeforePause).toBe('round_result')
-      expect(view?.pausedRemainingMs).toBe(3_000)
-      const expectedNominalMs =
-        (room.settings.allowRoundReplay
-          ? APP_CONFIG.game.roundReplaySeconds +
-            APP_CONFIG.game.roundReplayPauseSeconds +
-            APP_CONFIG.game.roundResultSeconds
-          : APP_CONFIG.game.roundResultSeconds) * 1_000
-      expect((view?.phaseEndsAt ?? 0) - (view?.phaseStartedAt ?? 0)).toBe(expectedNominalMs)
-    })
-
-    it('私密房码只进当前房主的快照，普通成员与观战拿不到', () => {
+    it('私密房码只进当前房主的快照，普通成员拿不到', () => {
       const { room, players } = makeRoom('drawing', DRAWER_ID, { visibility: 'private' })
       const builder = new SnapshotBuilder(makePort(players, room))
 
       expect(builder.snapshot(room, HOST_ID).privateJoinCode).toBe(PRIVATE_CODE)
       expect(builder.snapshot(room, DRAWER_ID).privateJoinCode).toBeUndefined()
-      expect(builder.snapshot(room, SPECTATOR_ID).privateJoinCode).toBeUndefined()
+      expect(builder.snapshot(room, LEFT_GAME_ID).privateJoinCode).toBeUndefined()
     })
 
     it('逐字遮罩只经 answerMask 下发，已揭示字符下标簿记不出现在序列化结果中', () => {
@@ -440,14 +424,17 @@ describe('角色裁剪快照穷举矩阵', () => {
       const syncedMember = roomWithStrokes.members.find((m) => m.playerId === HOST_ID)!
       syncedMember.lastSyncedSeq = roomWithStrokes.game!.lastSequence
       // 离线防御格：追平但身份不在线——仍必须收全量（省略的前提是「确实在同步」）。
-      const offlineMember = roomWithStrokes.members.find((m) => m.playerId === NEXT_GAME_ID)!
+      const offlineId = '00000000-0000-4000-8000-0000000000e5'
+      const offlineMember = makeMember(offlineId, 3)
       offlineMember.lastSyncedSeq = roomWithStrokes.game!.lastSequence
-      players.get(NEXT_GAME_ID)!.connected = false
+      roomWithStrokes.members.push(offlineMember)
+      players.set(offlineId, makePlayer(offlineId, '离线成员'))
+      players.get(offlineId)!.connected = false
 
       const builder = new SnapshotBuilder(makePort(players, roomWithStrokes))
       const synced = builder.snapshot(roomWithStrokes, HOST_ID)
       const behind = builder.snapshot(roomWithStrokes, DRAWER_ID)
-      const offline = builder.snapshot(roomWithStrokes, NEXT_GAME_ID)
+      const offline = builder.snapshot(roomWithStrokes, offlineId)
 
       expect(synced.game?.strokes).toEqual([])
       expect(synced.game?.strokesOmitted).toBe(true)
@@ -457,22 +444,320 @@ describe('角色裁剪快照穷举矩阵', () => {
       expect(offline.game?.strokesOmitted).toBeUndefined()
     })
 
-    it('观战身份即使 ID 恰好等于 drawerId 也拿不到画家视图', () => {
-      const { players } = makeRoom('drawing', SPECTATOR_ID)
-      const { room } = makeRoom('drawing', SPECTATOR_ID)
-      // 画家即观战成员本人：异常时序防御路径
-      const builder = new SnapshotBuilder(makePort(players, room))
-      const snapshot = builder.snapshot(room, SPECTATOR_ID)
-      expect(snapshot.game?.answer).toBeUndefined()
-      expect(snapshot.game?.wordOptions).toBeUndefined()
-    })
-
     it('非成员观看者被拒绝且不泄漏房间字段', () => {
       const { room, players } = makeRoom('drawing', DRAWER_ID)
       const builder = new SnapshotBuilder(makePort(players, room))
       expect(() => builder.snapshot(room, '00000000-0000-4000-8000-000000000999')).toThrow(
         GameError,
       )
+    })
+  })
+
+  /**
+   * 接龙维度（工单 05）：角色 × 接龙阶段 × 步骤 × 链归属。
+   * 与「接龙视图裁剪矩阵」（relay-view.spec.ts）分工：这里走**整份快照**，
+   * 因此额外把关 ① `RoomSnapshotSchema` strict 闸门、② 禁止键清单（含接龙秘密键）、
+   * ③ 成员视角下的 `game` / `relay` 互斥与「不在本局链阵容」的降级路径。
+   */
+  describe('接龙维度（角色 × 阶段 × 步骤 × 链归属）', () => {
+    const RELAY_STEP_ID = '00000000-0000-4000-8000-000000000303'
+    /** 链发起人按席位顺序：4 名成员各占一条链（已离局成员仍占链位，S37）。 */
+    const CHAIN_ORIGINS = [HOST_ID, DRAWER_ID, GUESSER_ID, LEFT_GAME_ID]
+    const relayWordText = (chain: number) => `SENTINEL-接龙题面-${chain}`
+    const relayGuessText = (chain: number) => `SENTINEL-接龙猜词-${chain}`
+    const relayLastGuessText = (chain: number) => `SENTINEL-接龙末答-${chain}`
+    const relayCandidateText = (chain: number) => `SENTINEL-接龙候选-${chain}`
+    const relayStrokeId = (chain: number, half: 1 | 3) => `SENTINEL-接龙笔画-${chain}-${half}`
+    const RELAY_SENTINELS = CHAIN_ORIGINS.flatMap((_origin, chain) => [
+      relayWordText(chain),
+      relayGuessText(chain),
+      relayLastGuessText(chain),
+      relayCandidateText(chain),
+      relayStrokeId(chain, 1),
+      relayStrokeId(chain, 3),
+    ])
+    /** 格子：接龙阶段 × 步骤；复盘期额外带游标（链序号 / 半场 / 页，工单 07）。 */
+    const RELAY_CELLS: {
+      phase: RoomPhase
+      step: 1 | 2 | 3 | 4
+      cursor?: RelayShowcaseCursor
+    }[] = [
+      { phase: 'relay_choose', step: 1 },
+      { phase: 'relay_draw', step: 1 },
+      { phase: 'relay_draw', step: 3 },
+      { phase: 'relay_guess', step: 2 },
+      { phase: 'relay_guess', step: 4 },
+      // 游标缺失的残缺现场：只给阶段骨架（fail-safe 不泄漏）
+      { phase: 'relay_showcase', step: 4 },
+      { phase: 'relay_showcase', step: 4, cursor: { chainIndex: 2, half: 1, page: 'replay' } },
+      { phase: 'relay_showcase', step: 4, cursor: { chainIndex: 2, half: 1, page: 'reveal' } },
+      { phase: 'relay_showcase', step: 4, cursor: { chainIndex: 3, half: 2, page: 'pause' } },
+      { phase: 'relay_vote', step: 4, cursor: { chainIndex: 4, half: 2, page: 'reveal' } },
+      // 终局：只有排名与统计值得下发，链内容一条都不在（游标虽在状态里，也不该出现在快照里）
+      { phase: 'game_result', step: 4, cursor: { chainIndex: 4, half: 2, page: 'reveal' } },
+    ]
+
+    /** 链 j 的两幅画布各一笔哨兵笔画 + 题面与步 2 文本都是哨兵值。 */
+    function makeRelayChain(chainIndex: number) {
+      const chain = createRelayChainSecret(CHAIN_ORIGINS[chainIndex] ?? HOST_ID)
+      chain.candidates = [
+        {
+          id: `word-c${chainIndex}`,
+          text: relayCandidateText(chainIndex),
+          aliases: [],
+          collection: '物品',
+          packageId: 'base_words',
+          packageName: '基础词库',
+        },
+      ]
+      chain.offeredWordIds.add(`word-c${chainIndex}`)
+      chain.step1Word = {
+        id: `word-c${chainIndex}`,
+        text: relayWordText(chainIndex),
+        aliases: [],
+        collection: '物品',
+        packageId: 'base_words',
+        packageName: '基础词库',
+      }
+      chain.step2Guess = relayGuessText(chainIndex)
+      chain.step4Guess = relayLastGuessText(chainIndex)
+      chain.step1Canvas.strokes = [
+        {
+          kind: 'stroke',
+          id: relayStrokeId(chainIndex, 1),
+          tool: 'pen',
+          color: '#1F2937',
+          width: 5,
+          sequence: 0,
+          startPointIndex: 0,
+          points: [{ x: 0.2, y: 0.2 }],
+        },
+      ]
+      chain.step3Canvas.strokes = [
+        {
+          kind: 'stroke',
+          id: relayStrokeId(chainIndex, 3),
+          tool: 'pen',
+          color: '#1F2937',
+          width: 5,
+          sequence: 0,
+          startPointIndex: 0,
+          points: [{ x: 0.4, y: 0.4 }],
+        },
+      ]
+      return chain
+    }
+
+    /** 组装接龙房：4 条链 + 一个不在链阵容中的残留成员 + 只有第一条链有产出的阶段现场。 */
+    function makeRelayRoom(phase: RoomPhase, step: 1 | 2 | 3 | 4, cursor?: RelayShowcaseCursor) {
+      const players = new Map<string, PlayerSecret>()
+      const members: MemberState[] = []
+      for (const [index, playerId] of CHAIN_ORIGINS.entries()) {
+        // 已离局成员故意不注册玩家身份：驱动冻结资料兜底分支
+        if (playerId !== LEFT_GAME_ID)
+          players.set(playerId, makePlayer(playerId, `接龙${index + 1}`))
+        members.push(
+          playerId === LEFT_GAME_ID
+            ? {
+                ...makeMember(playerId, index, { leftGame: true }),
+                leftProfile: { nickname: '离局链主', avatarId: '02' },
+              }
+            : makeMember(playerId, index),
+        )
+      }
+      players.set(UNSEATED_ID, makePlayer(UNSEATED_ID, '残留连接'))
+      members.push(makeMember(UNSEATED_ID, 4))
+      const room: RoomSecret = {
+        id: ROOM_ID,
+        name: '接龙矩阵房间',
+        hostId: HOST_ID,
+        visibility: 'public',
+        gameMode: 'relay',
+        phase,
+        stateVersion: 11,
+        settings: testRoomSettings(),
+        members,
+        vocabularyPackageIds: ['base_words'],
+        selectedWordIds: new Set(['word-c0', 'word-c1', 'word-c2', 'word-c3']),
+        relay: {
+          id: GAME_ID,
+          startedAt: NOW - 30_000,
+          currentStep: step,
+          stepId: RELAY_STEP_ID,
+          phaseStartedAt: NOW - 5_000,
+          phaseEndsAt: NOW + 5_000,
+          ...(cursor ? { showcase: cursor } : {}),
+          chains: CHAIN_ORIGINS.map((_origin, chain) => makeRelayChain(chain)),
+          stepSubmissions: new Set([HOST_ID]),
+          messages: [
+            {
+              id: '00000000-0000-4000-8000-000000000404',
+              type: 'system',
+              // 聊天 / 通知是合法公开内容：不含哨兵值，否则 ② 的哨兵扫描会误报
+              text: '接龙开始',
+              createdAt: NOW - 1_000,
+            },
+          ],
+        },
+      }
+      // 投票期：游标所在链上先落两张真票（房主赞同、猜词者反对）——票行与「已投票」集合
+      // 都从链上的票箱派生（S41 / S42 / S64），与动手期的本步提交集是两套记录。
+      if (phase === 'relay_vote' && cursor) {
+        const chain = room.relay?.chains[cursor.chainIndex - 1]
+        if (!chain) throw new Error('投票格缺少游标指向的链')
+        chain.votes.push(
+          { playerId: HOST_ID, choice: 'agree' },
+          { playerId: GUESSER_ID, choice: 'disagree' },
+        )
+      }
+      // 终局：榜单一经冻结即只读；这里给出一行真实形状（链内容仍留在秘密里，由哨兵扫描证明不下发）
+      if (phase === 'game_result' && room.relay) {
+        room.relay.finalRanking = [
+          {
+            id: HOST_ID,
+            nickname: '接龙1',
+            avatarId: '01',
+            rank: 1,
+            score: 120,
+            chainCount: 4,
+            agreeVotes: 9,
+          },
+        ]
+        room.relay.gameResultMinEndsAt = NOW + 5_000
+      }
+      return { room, players }
+    }
+    /** 测试侧独立算式：观看者 i 在第 s 棒动手的链 = (i - s + 1) mod N。 */
+    function chainForViewer(viewerIndex: number, step: number): number {
+      return (viewerIndex - (step - 1) + CHAIN_ORIGINS.length) % CHAIN_ORIGINS.length
+    }
+
+    /** 该格允许出现的哨兵值：只有「观看者本棒」的那部分链内容（复盘期＝游标指向的那条链）。 */
+    function allowedSentinels(
+      phase: RoomPhase,
+      step: number,
+      viewerIndex: number,
+      cursor?: RelayShowcaseCursor,
+    ): string[] {
+      const chain = chainForViewer(viewerIndex, step)
+      if (phase === 'relay_choose') return [relayCandidateText(chain)]
+      if (phase === 'relay_draw')
+        return step === 1
+          ? [relayWordText(chain), relayStrokeId(chain, 1)]
+          : [relayGuessText(chain), relayStrokeId(chain, 3)]
+      if (phase === 'relay_guess') return [relayStrokeId(chain, step === 2 ? 1 : 3)]
+      // 终局：排名与统计之外没有任何链内容
+      if (phase === 'game_result') return []
+      // 复盘期：只公开游标指向的那条链的本半场；未揭晓的答案（重播 / 停顿页）不在允许清单里
+      if (!cursor) return []
+      const showcaseChain = cursor.chainIndex - 1
+      // 投票期：左胶囊是该链**初始词**（S44），右胶囊恒为第四棒答案——step2Guess 不再下发。
+      if (phase === 'relay_vote')
+        return [
+          relayWordText(showcaseChain),
+          relayStrokeId(showcaseChain, cursor.half === 1 ? 1 : 3),
+          relayLastGuessText(showcaseChain),
+        ]
+      return [
+        cursor.half === 1 ? relayWordText(showcaseChain) : relayGuessText(showcaseChain),
+        relayStrokeId(showcaseChain, cursor.half === 1 ? 1 : 3),
+        ...(cursor.page === 'reveal'
+          ? [cursor.half === 1 ? relayGuessText(showcaseChain) : relayLastGuessText(showcaseChain)]
+          : []),
+      ]
+    }
+
+    for (const cell of RELAY_CELLS) {
+      for (const [viewerIndex, viewerId] of CHAIN_ORIGINS.entries()) {
+        it(`${cell.phase}（第 ${cell.step} 棒）× 观看者 ${viewerIndex + 1}：三重守卫全部成立`, () => {
+          const { room, players } = makeRelayRoom(cell.phase, cell.step, cell.cursor)
+          const builder = new SnapshotBuilder(makePort(players, room))
+
+          const snapshot = builder.snapshot(room, viewerId)
+
+          // ① strict 运行时闸门
+          const parsed = RoomSnapshotSchema.safeParse(snapshot)
+          expect(parsed.success, JSON.stringify(parsed.success ? {} : parsed.error.issues)).toBe(
+            true,
+          )
+          // 接龙房间只下发 relay，不下发经典 game（两字段由 gameMode 保证恰一个非空，S56）
+          expect(snapshot.game).toBeUndefined()
+          expect(snapshot.relay?.phase).toBe(cell.phase)
+          expect(snapshot.relay?.currentStep).toBe(cell.step)
+          // 已动作集合（S41 / S64）：动手期＝本步已提交者、投票期＝该链已投票者；只有 id、无选择与计数
+          const actors = cell.phase === 'relay_vote' ? [HOST_ID, GUESSER_ID] : [HOST_ID]
+          expect(snapshot.relay?.submittedPlayerIds).toEqual(actors)
+          expect(snapshot.relay?.submitted).toBe(actors.includes(viewerId))
+          // 票行只在投票期出现：纯选择列表（匿名，S42），且载荷里不存在「谁投了什么」的归属结构
+          expect(snapshot.relay?.showcase?.votes).toEqual(
+            cell.phase === 'relay_vote' ? ['agree', 'disagree'] : undefined,
+          )
+          if (cell.phase === 'game_result') {
+            // 终局：只有排名 / 分数 / 接龙统计 + 退出时限，链内容（含游标）一条都不在
+            expect(snapshot.relay?.showcase).toBeUndefined()
+            expect(snapshot.relay?.finalRanking?.[0]).toMatchObject({
+              rank: 1,
+              score: 120,
+              chainCount: 4,
+              agreeVotes: 9,
+            })
+            expect(snapshot.relay?.gameResultMinEndsAt).toBe(NOW + 5_000)
+            expect(snapshot.relay?.canReturnWaiting).toBe(false)
+          }
+          if (cell.cursor && cell.phase !== 'game_result') {
+            // 复盘期：链进度与半场随快照下发；未揭晓的答案只表达为 text 为 null（S63 / S81）
+            expect(snapshot.relay?.showcase?.chainIndex).toBe(cell.cursor.chainIndex)
+            expect(snapshot.relay?.showcase?.chainCount).toBe(CHAIN_ORIGINS.length)
+            expect(snapshot.relay?.showcase?.half).toBe(cell.cursor.half)
+            const chain = cell.cursor.chainIndex - 1
+            const revealed = cell.phase === 'relay_vote' || cell.cursor.page === 'reveal'
+            expect(snapshot.relay?.showcase?.answer.text).toBe(
+              revealed
+                ? cell.cursor.half === 1
+                  ? relayGuessText(chain)
+                  : relayLastGuessText(chain)
+                : null,
+            )
+          }
+
+          const serialized = JSON.stringify(snapshot)
+          // ② 禁止键清单（含接龙秘密键）与哨兵值
+          for (const key of FORBIDDEN_KEYS)
+            expect(serialized, `泄漏键 ${key}`).not.toContain(`"${key}"`)
+          // 票的「选择」只以字符串出现在匿名票行里，绝不与投票者成对出现（S42）
+          expect(serialized, '泄漏了票归属').not.toContain('"choice"')
+          const allowed = allowedSentinels(cell.phase, cell.step, viewerIndex, cell.cursor)
+          for (const sentinel of RELAY_SENTINELS) {
+            if (allowed.includes(sentinel)) continue
+            expect(serialized, `泄漏 ${sentinel}`).not.toContain(sentinel)
+          }
+          // ③ 授权字段可见性真值表：本棒应有的内容必须真在
+          for (const sentinel of allowed) expect(serialized).toContain(sentinel)
+        })
+      }
+    }
+
+    it('不在本局链阵容中的成员只拿阶段骨架（无任何链内容）', () => {
+      const { room, players } = makeRelayRoom('relay_draw', 1)
+      const builder = new SnapshotBuilder(makePort(players, room))
+
+      const snapshot = builder.snapshot(room, UNSEATED_ID)
+
+      expect(snapshot.relay?.stepId).toBe(RELAY_STEP_ID)
+      expect(snapshot.relay?.submitted).toBe(false)
+      const serialized = JSON.stringify(snapshot)
+      for (const sentinel of RELAY_SENTINELS) expect(serialized).not.toContain(sentinel)
+    })
+
+    it('开局倒计时（starting）不下发接龙视图，经典房间的 game 路径完全不受影响', () => {
+      const { room, players } = makeRelayRoom('starting', 1)
+      const relayBuilder = new SnapshotBuilder(makePort(players, room))
+      expect(relayBuilder.snapshot(room, HOST_ID).relay).toBeUndefined()
+
+      const { room: classicRoom, players: classicPlayers } = makeRoom('drawing', DRAWER_ID)
+      const classicBuilder = new SnapshotBuilder(makePort(classicPlayers, classicRoom))
+      expect(classicBuilder.snapshot(classicRoom, HOST_ID).relay).toBeUndefined()
+      expect(classicBuilder.snapshot(classicRoom, HOST_ID).game).toBeDefined()
     })
   })
 })

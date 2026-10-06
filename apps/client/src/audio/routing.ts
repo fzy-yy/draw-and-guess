@@ -26,7 +26,9 @@ export type InteractionAudioEvent = 'activate' | 'select' | 'toggle' | 'open' | 
 /**
  * 房间阶段 → 入场音效：只保留入场 SFX，无入场音的阶段返回 undefined。
  * starting/drawing/round_result/game_result 有入场音；
- * waiting/choosing_word/paused/closed 无入场音。
+ * waiting/choosing_word/closed 无入场音。
+ * 接龙阶段取与经典同义的档：`relay_draw` 沿用作画入场音；选词/猜词的提示由后续接龙界面自行决定，
+ * 复盘与投票不额外发声（关键节点由系统通知承载，S65）。
  */
 export function phaseToAudio(phase: RoomPhase): SoundName | undefined {
   switch (phase) {
@@ -42,9 +44,17 @@ export function phaseToAudio(phase: RoomPhase): SoundName | undefined {
       return 'round_result'
     case 'game_result':
       return 'game_result'
-    case 'paused':
-      return undefined
     case 'closed':
+      return undefined
+    case 'relay_choose':
+      return undefined
+    case 'relay_draw':
+      return 'drawing'
+    case 'relay_guess':
+      return undefined
+    case 'relay_showcase':
+      return undefined
+    case 'relay_vote':
       return undefined
     default: {
       // RoomPhase 已全覆盖，此处仅为未来新增阶段提供编译期遗漏提示

@@ -7,15 +7,12 @@ test.describe('06 - 跨浏览器、DPR 与后台标签页', () => {
   }, testInfo) => {
     const host = await createPlayer(browser, `兼容房主-${testInfo.project.name}`)
     const guest = await createPlayer(browser, `兼容客人-${testInfo.project.name}`)
-    const observer = await createPlayer(browser, `兼容观察者-${testInfo.project.name}`)
     try {
       const roomName = `兼容-${Date.now()}`
-      const { drawer } = await startTwoPlayerGame(host, guest, roomName, { joinPolicy: 'spectate' })
+      const { drawer } = await startTwoPlayerGame(host, guest, roomName)
       await drawer.game.chooseWord(0)
-      await observer.lobby.spectatePublicRoom(roomName)
       const canvas = drawer.page.locator('canvas.bg-white')
       const guestCanvas = guest.page.locator('canvas.bg-white')
-      const observerCanvas = observer.page.locator('canvas.bg-white')
       await expect(canvas).toBeVisible()
       const canvasSize = await canvas.evaluate((element) => ({
         width: element.width,
@@ -93,10 +90,9 @@ test.describe('06 - 跨浏览器、DPR 与后台标签页', () => {
       const logicalRasters = await Promise.all([
         readLogicalRaster(canvas),
         readLogicalRaster(guestCanvas),
-        readLogicalRaster(observerCanvas),
       ])
+      // 画家与猜词者两块画布必须呈现同一逻辑栅格
       expect(logicalRasters[0]).toEqual(logicalRasters[1])
-      expect(logicalRasters[0]).toEqual(logicalRasters[2])
       // 固定采样行（左中 / 中 / 右中）语义：左中是被填充的红色，中点是保住的墨线（深浅随
       // DPR 与画布尺寸略有抗锯齿差异，故只断言「有像素且为深色」，不锁死具体 RGB），
       // 右中在封闭边界之外必须保持透明。画布铺满后逻辑宽度变化，逐像素定值会随 Chromium/Firefox
@@ -120,7 +116,9 @@ test.describe('06 - 跨浏览器、DPR 与后台标签页', () => {
       expect(inkSample!.b).toBeLessThan(110)
       expect(outsideSample!.a).toBe(0)
 
-      const timer = drawer.page.locator('span:has-text("秒")').first().locator('..').locator('b')
+      // 顶栏倒计时胶囊：数字是全站唯一的 `w-[3ch]` 元素（固定三位等宽，见 ADR-0052）。
+      // 旧定位 `span:has-text("秒")` 依赖已移除的「秒」单位后缀，早就取不到元素。
+      const timer = drawer.page.locator('header b.w-\\[3ch\\]')
       const before = Number(await timer.textContent())
       const background = await drawer.page.context().newPage()
       await background.goto('about:blank')
@@ -133,7 +131,6 @@ test.describe('06 - 跨浏览器、DPR 与后台标签页', () => {
     } finally {
       await host.close()
       await guest.close()
-      await observer.close()
     }
   })
 })

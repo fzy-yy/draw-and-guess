@@ -14,10 +14,3 @@ export async function selectDropdownOption(
   await scope.getByRole('option', { name: optionName, exact: true }).click()
   await expect(scope.getByRole('listbox')).toHaveCount(0)
 }
-
-/** 中途加入策略枚举值 → 界面选项文案（与 strings.ui.room.joinPolicy* 对齐）。 */
-export const joinPolicyLabels = {
-  forbid: '禁止',
-  spectate: '仅观战',
-  next_game: '下一局加入',
-} as const

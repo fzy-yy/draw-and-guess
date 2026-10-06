@@ -2,17 +2,21 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import {
-  ChevronRight,
   CirclePlus,
   Gamepad2,
   KeyRound,
+  Maximize,
+  Minimize,
   Settings,
   Users,
   Wifi,
 } from 'lucide-vue-next'
+import { useFullscreen } from '@vueuse/core'
 import { strings } from '@draw-guess/strings'
+import { PLAYER_PROTOCOL_LIMITS, RELAY_STEP_COUNT } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
 import {
+  ActionCard,
   AppButton,
   AvatarImage,
   NetworkStatusButton,
@@ -46,6 +50,18 @@ function openSettings(): void {
   playInteractionSound('activate')
   store.page = 'settings'
 }
+
+/** 全屏切换管理：目标为游戏舞台外壳（.game-stage），与 GameView 保持统一 */
+const fullscreenTarget = computed<HTMLElement | null>(() =>
+  document.querySelector<HTMLElement>('.game-stage'),
+)
+const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(fullscreenTarget)
+
+function handleToggleFullscreen(): void {
+  void toggleFullscreen().catch(() => {
+    store.notify(strings.ui.game.fullscreenFailed, 'warning')
+  })
+}
 </script>
 
 <template>
@@ -78,6 +94,11 @@ function openSettings(): void {
             <Settings />
             <span>{{ strings.ui.lobby.settingsEntry }}</span>
           </StageHeaderButton>
+          <StageHeaderButton @click="handleToggleFullscreen">
+            <Minimize v-if="isFullscreen" />
+            <Maximize v-else />
+            <span>{{ strings.ui.common.fullscreen }}</span>
+          </StageHeaderButton>
         </nav>
       </template>
     </StageHeader>
@@ -103,31 +124,27 @@ function openSettings(): void {
           依赖 base.css 的全局按钮 hover brightness(0.95)，不用 hover-tint
           （hover-tint 的 bg-line 会把实色底整体替换成灰色，曾因此被标注为配色错误）。
         -->
-        <button
-          type="button"
-          class="flex min-h-[12cqh] items-center gap-[1em] rounded-[0.9em] bg-blue px-[1.4em] text-left text-white ui-feedback"
+        <ActionCard
+          variant="primary"
+          :title="strings.ui.lobby.createRoomTitle"
+          :hint="strings.ui.lobby.createRoomHint"
           @click="showCreate = true"
         >
-          <CirclePlus class="first:h-[4.5cqh] first:w-[4.5cqh] first:text-yellow" />
-          <span class="flex flex-col">
-            <b class="text-fs-18">{{ strings.ui.lobby.createRoomTitle }}</b>
-            <small class="mt-[0.35cqh] text-sky">{{ strings.ui.lobby.createRoomHint }}</small>
-          </span>
-          <ChevronRight class="last:ml-auto" />
-        </button>
+          <template #icon>
+            <CirclePlus />
+          </template>
+        </ActionCard>
 
-        <button
-          type="button"
-          class="flex min-h-[12cqh] items-center gap-[1em] rounded-[0.9em] bg-navy px-[1.4em] text-left text-white ui-feedback"
+        <ActionCard
+          variant="navy"
+          :title="strings.ui.lobby.joinPrivateTitle"
+          :hint="strings.ui.lobby.joinPrivateHint"
           @click="showJoinPrivate = true"
         >
-          <KeyRound class="first:h-[4.5cqh] first:w-[4.5cqh] first:text-yellow" />
-          <span class="flex flex-col">
-            <b class="text-fs-18">{{ strings.ui.lobby.joinPrivateTitle }}</b>
-            <small class="mt-[0.35cqh] text-sky">{{ strings.ui.lobby.joinPrivateHint }}</small>
-          </span>
-          <ChevronRight class="last:ml-auto" />
-        </button>
+          <template #icon>
+            <KeyRound />
+          </template>
+        </ActionCard>
       </div>
 
       <div
@@ -143,40 +160,45 @@ function openSettings(): void {
             <Gamepad2 />
           </div>
           <div class="flex min-w-0 flex-col">
-            <b class="truncate">{{ publicRoom.name }}</b>
+            <!-- 房间名 + 模式徽标（S47 / S80）：徽标紧跟在房间名之后，经典与接龙都显示 -->
+            <span class="flex min-w-0 items-center gap-[0.5em]">
+              <b class="truncate">{{ publicRoom.name }}</b>
+              <span class="shrink-0 rounded-full bg-yellow px-[0.6em] text-fs-10 text-navy">{{
+                publicRoom.gameMode === 'relay'
+                  ? strings.ui.room.modeRelay
+                  : strings.ui.room.modeClassic
+              }}</span>
+            </span>
             <span class="text-muted text-fs-12">{{
-              strings.ui.lobby.roomMeta(
-                publicRoom.hostName,
-                publicRoom.roundsPerPlayer,
-                publicRoom.drawSeconds,
-              )
+              publicRoom.gameMode === 'relay'
+                ? strings.ui.lobby.roomMetaRelay(publicRoom.hostName, RELAY_STEP_COUNT)
+                : strings.ui.lobby.roomMeta(
+                    publicRoom.hostName,
+                    publicRoom.roundsPerPlayer,
+                    publicRoom.drawSeconds,
+                  )
             }}</span>
           </div>
           <span class="text-muted text-fs-12">{{
-            strings.ui.status[
-              publicRoom.phase === 'waiting'
-                ? 'roomWaiting'
-                : publicRoom.joinPolicy === 'spectate'
-                  ? 'roomSpectatable'
-                  : publicRoom.joinPolicy === 'next_game'
-                    ? 'roomJoinNextGame'
-                    : 'roomInProgress'
-            ]
+            strings.ui.status[publicRoom.phase === 'waiting' ? 'roomWaiting' : 'roomInProgress']
           }}</span>
-          <!-- 6 席位入座可视化微型点阵：直观呈现已占席位与空余席位 -->
+          <!-- 固定 6 席位入座可视化微型点阵：直观呈现已占席位与空余席位 -->
           <div
             class="flex items-center gap-[0.45em]"
             :aria-label="
-              strings.a11y.lobby.seatOccupancyAria(publicRoom.playerCount, publicRoom.maxPlayers)
+              strings.a11y.lobby.seatOccupancyAria(
+                publicRoom.playerCount,
+                PLAYER_PROTOCOL_LIMITS.maxPlayers,
+              )
             "
           >
             <span class="flex items-center gap-[0.3em] font-bold text-navy">
               <Users class="h-[1.8cqh] w-[1.8cqh]" />
-              {{ publicRoom.playerCount }}/{{ publicRoom.maxPlayers }}
+              {{ publicRoom.playerCount }}/{{ PLAYER_PROTOCOL_LIMITS.maxPlayers }}
             </span>
             <div class="flex items-center gap-[0.3cqw]" aria-hidden="true">
               <span
-                v-for="seatIdx in Math.max(publicRoom.maxPlayers, 6)"
+                v-for="seatIdx in PLAYER_PROTOCOL_LIMITS.maxPlayers"
                 :key="seatIdx"
                 class="h-[1cqh] w-[1cqh] rounded-full transition-colors"
                 :class="
@@ -190,17 +212,15 @@ function openSettings(): void {
           <AppButton
             type="button"
             :disabled="
-              publicRoom.playerCount >= publicRoom.maxPlayers ||
-              (publicRoom.phase !== 'waiting' && publicRoom.joinPolicy === 'forbid')
+              publicRoom.playerCount >= PLAYER_PROTOCOL_LIMITS.maxPlayers ||
+              publicRoom.phase !== 'waiting'
             "
             @click="store.joinRoom(publicRoom.id)"
           >
             {{
-              publicRoom.phase !== 'waiting' && publicRoom.joinPolicy === 'spectate'
-                ? strings.ui.lobby.spectateButton
-                : publicRoom.phase !== 'waiting' && publicRoom.joinPolicy === 'next_game'
-                  ? strings.ui.lobby.waitNextGameButton
-                  : strings.ui.lobby.joinButton
+              publicRoom.phase === 'waiting'
+                ? strings.ui.lobby.joinButton
+                : strings.ui.lobby.joinInProgress
             }}
           </AppButton>
         </article>

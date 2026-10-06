@@ -5,11 +5,12 @@
   size 只有两档：compact（默认，表单/短码）与 body（聊天猜词等主输入，字号 ≥ 正文阈值）。
 -->
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { cn, type ClassValue } from '@/utils/cn'
 
 const model = defineModel<string>({ default: '' })
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     id?: string
     type?: string
@@ -21,6 +22,8 @@ withDefaults(
     align?: 'left' | 'center' | 'right'
     inputClass?: string
     size?: 'compact' | 'body'
+    /** 使用方追加的类名 */
+    class?: ClassValue
   }>(),
   {
     id: undefined,
@@ -33,6 +36,7 @@ withDefaults(
     align: 'left',
     inputClass: '',
     size: 'compact',
+    class: undefined,
   },
 )
 
@@ -50,17 +54,19 @@ function handleKeyDown(event: KeyboardEvent): void {
     emit('enter', event)
   }
 }
+
+const rootClass = computed(() =>
+  cn(
+    'flex items-center gap-[0.5em] rounded-[0.7em] border-[0.18cqh] border-control bg-white px-[0.75em] transition-colors focus-within:border-navy',
+    props.size === 'body' ? 'h-[5.2cqh]' : 'h-[4.8cqh]',
+    props.disabled && 'cursor-not-allowed opacity-50 bg-line/40',
+    props.class,
+  ),
+)
 </script>
 
 <template>
-  <div
-    class="flex items-center gap-[0.5em] rounded-[0.7em] border-[0.18cqh] bg-white px-[0.75em] transition-colors focus-within:border-navy"
-    :class="[
-      size === 'body' ? 'h-[5.2cqh]' : 'h-[4.8cqh]',
-      'border-control',
-      disabled ? 'cursor-not-allowed opacity-50 bg-line/40' : '',
-    ]"
-  >
+  <div :class="rootClass">
     <div v-if="$slots.prefix" class="flex shrink-0 items-center text-muted">
       <slot name="prefix" />
     </div>

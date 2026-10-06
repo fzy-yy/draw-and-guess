@@ -44,9 +44,9 @@ function confirm(): void {
 <template>
   <BaseDialog
     v-model:open="open"
-    width-class="w-[40cqw]"
-    section-class="items-center gap-[1.4cqh] pt-[3cqh] text-center"
-    footer-class="w-full mt-[1cqh]"
+    size="sm"
+    centered
+    footer-class="mt-[1cqh]"
     :labelledby="titleId"
     :overlay-class="overlayClass"
     @close="cancel"

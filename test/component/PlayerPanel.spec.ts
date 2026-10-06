@@ -47,13 +47,28 @@ describe('PlayerPanel 成员展示', () => {
     wrapper.unmount()
   })
 
-  it('已猜中的成员角色切换为已猜中', () => {
+  it('已猜中的成员角色切换为已猜中：文案为绿色、前置对号图标且卡片背景不变色', () => {
     const roomStore = useRoomStore()
     roomStore.room = createRoomFixture('drawing')
-    roomStore.room.members.find((member) => member.id === GUEST_ID)!.guessed = true
+    const guessedMember = roomStore.room.members.find((member) => member.id === GUEST_ID)!
+    guessedMember.guessed = true
 
     const wrapper = mountPanel()
     expect(wrapper.text()).toContain(strings.ui.status.roleGuessed)
+
+    // 已猜中文案带有绿色文字类名 text-success-fg
+    const guessedText = wrapper.find('.text-success-fg')
+    expect(guessedText.exists()).toBe(true)
+    expect(guessedText.text()).toContain(strings.ui.status.roleGuessed)
+
+    // 前置对号 icon 渲染
+    expect(guessedText.find('svg').exists()).toBe(true)
+
+    // 已猜中卡片背景不变色：保持 bg-white，不带 bg-green/10
+    const articles = wrapper.findAll('article')
+    const guessedArticle = articles.find((article) => article.text().includes('猜词者'))!
+    expect(guessedArticle.classes()).toContain('bg-white')
+    expect(guessedArticle.classes()).not.toContain('bg-green/10')
     wrapper.unmount()
   })
 

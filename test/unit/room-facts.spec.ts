@@ -5,30 +5,15 @@ import { slidingWindowAllow } from '../../apps/server/src/rate-limit.ts'
 import type { RoomSecret } from '../../apps/server/src/models.ts'
 
 /** 把房间压成判定所需的最小形状（其余字段与本口径无关）。 */
-function roomOf(phase: RoomPhase, pausedPhase?: RoomPhase): RoomSecret {
-  return {
-    phase,
-    ...(pausedPhase ? { game: { pauseState: { phase: pausedPhase, remainingMs: 1_000 } } } : {}),
-  } as unknown as RoomSecret
+function roomOf(phase: RoomPhase): RoomSecret {
+  return { phase } as unknown as RoomSecret
 }
 
-/** 保养波次 C2 的三个具名口径：阶段等价（暂停穿透）、席位紧凑重排、滑动窗口限频。 */
 describe('phaseEquivalent（名义阶段等价判定）', () => {
-  it('直接命中与 paused 穿透各自成立', () => {
+  it('阶段相同时为 true，不同时或房间未定义时为 false', () => {
     expect(phaseEquivalent(roomOf('drawing'), 'drawing')).toBe(true)
-    expect(phaseEquivalent(roomOf('paused', 'drawing'), 'drawing')).toBe(true)
-    expect(phaseEquivalent(roomOf('paused', 'choosing_word'), 'choosing_word')).toBe(true)
-  })
-
-  it('不等价场景一律 false：他阶段、暂停前非目标、房间未定义', () => {
     expect(phaseEquivalent(roomOf('choosing_word'), 'drawing')).toBe(false)
-    expect(phaseEquivalent(roomOf('paused', 'choosing_word'), 'drawing')).toBe(false)
-    expect(phaseEquivalent(roomOf('paused'), 'paused')).toBe(true)
     expect(phaseEquivalent(undefined, 'drawing')).toBe(false)
-  })
-
-  it('paused 但 game 缺席时不回退命中（防把无主暂停当作画）', () => {
-    expect(phaseEquivalent(roomOf('paused'), 'drawing')).toBe(false)
   })
 })
 

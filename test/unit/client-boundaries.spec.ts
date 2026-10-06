@@ -43,12 +43,15 @@ function snapshot(settings: RoomSettings = testRoomSettings()): RoomSnapshot {
     name: '测试房',
     hostId: HOST_ID,
     visibility: 'public',
+    gameMode: 'classic',
     phase: 'drawing',
     stateVersion: 5,
     settings,
     members: [],
     selectedWordCount: 60,
     totalWordCount: 60,
+    vocabularyPackageIds: [],
+    vocabularyPackageNames: [],
     game: {
       gameId: GAME_ID,
       roundId: ROUND_ID,
@@ -207,8 +210,6 @@ describe('请求响应注册表与 ack 边界', () => {
       EVENTS.gameChooseWord,
       EVENTS.gameRerollWords,
       EVENTS.gameCustomWord,
-      EVENTS.gamePauseRequest,
-      EVENTS.gameResume,
       EVENTS.gameEndEarly,
       EVENTS.gameLeave,
       EVENTS.gameReturnWaiting,
@@ -216,6 +217,14 @@ describe('请求响应注册表与 ack 边界', () => {
       EVENTS.drawUndo,
       EVENTS.drawRedo,
       EVENTS.drawClear,
+      // 接龙：提交、独立聊天与投票都是空响应（猜词不判对错、投票只记票，S3 / S79 / S13）
+      EVENTS.relayDrawUndo,
+      EVENTS.relayDrawRedo,
+      EVENTS.relayDrawClear,
+      EVENTS.relaySubmitGuess,
+      EVENTS.relaySubmitDrawing,
+      EVENTS.relayVote,
+      EVENTS.chatSay,
       EVENTS.gameCanvasPing,
       // 成功但可能没有房间：invite:respond / state:resync 允许 data 缺省。
       EVENTS.inviteRespond,
@@ -255,7 +264,7 @@ describe('请求响应注册表与 ack 边界', () => {
     for (let index = 0; index < 25; index += 1) {
       expect(
         decodeClientResponse(
-          EVENTS.gameResume,
+          EVENTS.gameEndEarly,
           {
             ok: false,
             requestId: '00000000-0000-4000-8000-000000000001',

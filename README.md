@@ -1,6 +1,6 @@
 # 你画我猜
 
-基于 Vue 3、TypeScript、Socket.IO 与 Express 的 2～6 人局域网实时派对游戏。支持大厅公开房间和短码私密房间；服务端权威维护身份、访问控制、答案、计时、绘图资格和分数。除源码运行外，还可打成 **Windows 分发包**（服务端单 JS + 前端产物 + 内置 Node 运行时），解压双击 `start.cmd` 即可用，无需预装 Node。
+基于 Vue 3、TypeScript、Socket.IO 与 Express 的 2～6 人局域网实时派对游戏。支持大厅公开房间和短码私密房间；服务端权威维护身份、访问控制、答案、计时、绘图资格和分数。两种玩法在**建房时选定、房间内不可修改**：**经典模式**轮流当画家、一轮一题；**接龙模式**下每人发起一条传话链、全员并行开画，四步（画 → 猜 → 画 → 猜）走完后逐链复盘并投票。房间容量固定 6 人、开局后不可加入。除源码运行外，还可打成 **Windows 分发包**（服务端单 JS + 前端产物 + 内置 Node 运行时），解压双击 `start.cmd` 即可用，无需预装 Node。
 
 ## 运行环境
 
@@ -72,6 +72,7 @@ pnpm package:dist     # 构建 Windows 分发包（一个可运行目录 + zip�
 ## 配置与词库
 
 - **配置边界**：协议版本、头像白名单和载荷范围以 [`packages/shared/src/protocol/constants.ts`](packages/shared/src/protocol/constants.ts) 为唯一来源；浏览器安全默认值由 [`@draw-guess/config`](packages/config/src/index.ts) 导出；限频、数据库路径和清理策略位于 [`apps/server/src/config/`](apps/server/src/config/)；禁止跨边界复制协议常量。
+- **玩法模式与接龙规则**：玩法模式（经典 / 接龙）只在**建房弹窗**选定，`gameMode` 位于房间顶层、创建后不可修改，房间头部用徽标显示当前模式。接龙房额外有**选词 / 作画 / 猜词**三档时长（各自白名单，默认 20 / 90 / 45 秒），复盘四时长（重播 3 / 停顿 1 / 揭晓 3 / 投票 10 秒）是固定常量、房主不可改；对当前模式不生效的规则字段由服务端在 `updateSettings` 严格拒绝。档位白名单在 [`packages/shared/src/protocol/constants.ts`](packages/shared/src/protocol/constants.ts)，默认值与复盘时长在 `packages/config/src/relay.ts`。
 - **部署覆盖**：复制 [`.env.example`](.env.example) 为根目录 `.env`，可配置 `HOST`、`PORT`、`LOG_LEVEL`、`LOG_ENABLED`、`LOG_MAX_FILES`、`HEALTH_METRICS_ENABLED`、`DRAW_GUESS_OPEN_BROWSER`（浏览器开关仅分发产物模式生效）；服务启动时会自动加载 `.env`（进程已有环境变量优先级更高）。环境变量不会覆盖游戏规则。
   - `LOG_ENABLED=false` 时完全不创建日志记录器、不写日志文件（零内存开销）；
   - `LOG_MAX_FILES` 控制日志文件保留条数（默认 10，每次启动新建一个 `apps/server/log/app-<秒级时间戳>.log`，超出删除最老）；
@@ -87,19 +88,26 @@ apps/client/       Vue 3 游戏舞台、内置 SVG 头像、Pinia 状态与 Canv
   └─ src/components/  # 按领域分子目录，各自提供 index.ts barrel：
                       #   common/   共享原语（AppButton / BaseDialog / ConfirmDialog / 输入与开关等）
                       #   game/     对局（固定顶栏 / 铺满画布 / 常驻左栏玩家面板 / 浮层聊天面板 / 底部工具条 / 阶段遮罩）
+                      #             其中 relay/ 为接龙专属内容（顶栏两形态 / 作答浮层 / 投票卡 / 玩家状态行）
                       #   lobby/    大厅弹窗（建房 / 私密房加入）
                       #   room/     房间（席位 / 规则 / 邀请 / 词库）
                       #   settings/ 设置页分类（声音 / 显示 / 快捷键 / 诊断）
   └─ src/views/       ProfileView / LobbyView / RoomView / GameView / SettingsView
 apps/server/       Express、Socket.IO、权威领域状态与 SQLite 本地持久化
+  └─ src/core/                  # 核心层：统一配置、AppError 错误模型与统一运行时
+  └─ src/infra/                 # 基础设施：SQLite（PRAGMA 顺序与语句缓存）、迁移与文件日志
+  └─ src/modules/               # 业务模块纵切：session / room / gameplay / relay / drawing / chat / vocabulary / archive
+  └─ src/http/ 与 src/ws/        # 入口层：Express 5 适配（RFC 9457 统一错误）与 Socket.IO 网关
+  └─ src/server.ts 与 index.ts   # 组合根（纯构造函数依赖装配）与生产进程入口
   └─ src/config/                # 服务端私有限频、清理、数据库路径与部署参数
+  └─ src/domain/relay/          # 接龙状态机、复盘轮播、投票结算与按观看者裁剪的接龙视图
   └─ src/db/ 与 src/repositories/   # 数据库连接/迁移与仓储（player/archive）
   └─ src/runtime-layout.ts      # 源码 / 分发产物两种运行布局（data、client、vocabulary、.env）
   └─ src/build/node-dist.ts     # 分发内置 Node 版本解析与 SHASUMS 校验条目提取（纯函数，可单测）
   └─ src/build/dist-templates.ts # 分发文本模板：start.cmd / 使用说明（纯函数，两包启动差异有单测锁定）
   └─ scripts/package-dist.ts    # 构建 Windows 分发包（esbuild 单文件 + 资源 + 内置 Node + zip）
 packages/shared/   DTO、Zod schema、协议常量、事件名和领域纯函数（完全自包含）
-packages/config/   浏览器安全的公开应用配置 workspace 包
+packages/config/   浏览器安全的公开应用配置 workspace 包（含接龙三时长默认值与复盘四时长 `relay.ts`）
 packages/strings/  展示文案包（`strings.ui` 可见 / `strings.a11y` 无障碍 / `serverStrings` 服务端）
 vocabulary/        唯一权威词库目录（SQLite 数据库，Provider 加载）
 docs/adr/          架构决策记录（背景 / 决策 / 后果），源码注释引用此处
@@ -131,6 +139,9 @@ docs/adr/          架构决策记录（背景 / 决策 / 后果），源码注�
 
 - 玩家头像从 40 个内置 SVG 中选择，协议只传递白名单编号，不支持上传、任意 URL 或 SVG 正文。
 - 公开房间实时进入大厅列表；私密房不公开，由房主分享服务端生成的房间码或发送定向邀请。
+- 建房时选择**玩法模式**（经典 / 接龙），房间内不可修改；房间头部显示模式徽标。房间容量固定 6 人、开局后不可加入。
+- **接龙模式**：每人发起一条传话链、全员并行开画——选词 → 作画 → 猜词 → 作画 → 猜词，每步全员对自己负责的那条链动手一次，画完即提交、全员提交即进入下一棒；猜词的作答浮层可拖动避让画布，作答与聊天互不串（聊天不会带出答案）。
+- 四步走完后全员统一步调进入复盘：按链发起人席位顺序逐条轮播，每条链两个半场（先重播画作、再揭晓答案），随后对该链「初始词与最终答案是否匹配」投票；全部链走完后显示接龙口径的终局战报（排名、分数与「参与 N 条链 · 共获 M 张赞同票」）。
 - 画板支持自由画笔、橡皮擦和封闭区域填充；画笔与橡皮擦共用连续粗细滑块，并都可在画板内用滚轮调整。
 - 画笔与填充支持预设或任意 HEX 颜色；画笔、橡皮擦和填充均可使用设置页中的自定义快捷键切换。
 - UI 静态文字默认不可拖选；按钮、弹窗和状态变化提供统一轻量动效，并可在设置中关闭。

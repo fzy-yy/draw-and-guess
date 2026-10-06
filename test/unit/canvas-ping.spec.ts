@@ -6,8 +6,9 @@
  * 3. 合法微表情通过轻量广播推送给房间全员，不持久化、不影响笔画历史。
  */
 import { describe, expect, it } from 'vitest'
-import { EVENTS, SERVER_PUSH_SCHEMAS } from '@draw-guess/shared'
+import { ERROR_CODES, EVENTS, SERVER_PUSH_SCHEMAS } from '@draw-guess/shared'
 import { createGameHarness, startTwoPlayerGame, testRoomSettings } from './helpers/game-harness.ts'
+import { errorCodeOf, startRelayGame } from './helpers/relay-game-fixture.ts'
 
 describe('画布轻量微表情广播 (Ticket 04)', () => {
   it('当房间 allowCanvasReactions === true 时，合法微表情广播给房间所有连接且不追加笔画', () => {
@@ -69,5 +70,57 @@ describe('画布轻量微表情广播 (Ticket 04)', () => {
     expect(() => {
       harness.service.sendCanvasPing(guest.playerId, 0.2, 0.3, 'fire')
     }).not.toThrow()
+  })
+})
+
+/**
+ * S19：接龙内微表情整体禁用（spec.md 的 Out of Scope）。
+ * 服务端是兜底方——即使客户端被改或仍是旧客户端，也必须零广播地拒绝，
+ * 且拒绝与阶段无关（复盘 / 投票期同样不可用）。经典房行为由上面的既有用例逐条守卫。
+ */
+describe('接龙模式禁用画布微表情 (S19)', () => {
+  it('接龙房（等待期，允许的房间规则）拒绝画布 ping (FORBIDDEN) 且零广播', () => {
+    const harness = createGameHarness()
+    const host = harness.register('接龙房主')
+    // allowCanvasReactions 取默认 true：证明拒绝来自模式守卫而非规则开关
+    const room = harness.service.createRoom(host.playerId, {
+      name: '接龙拒绝房',
+      visibility: 'public',
+      gameMode: 'relay',
+      settings: testRoomSettings({ allowCanvasReactions: true }),
+    })
+    expect(room.settings.allowCanvasReactions).toBe(true)
+
+    expect(
+      errorCodeOf(() => harness.service.sendCanvasPing(host.playerId, 0.5, 0.5, 'thumbs_up')),
+    ).toBe(ERROR_CODES.FORBIDDEN)
+    expect(
+      harness.ioEvents.filter((record) => record.event === EVENTS.gameCanvasPing),
+    ).toHaveLength(0)
+  })
+
+  it('接龙复盘期与投票期同样拒绝画布 ping 且零广播（守卫与阶段无关）', () => {
+    const scenario = startRelayGame()
+    scenario.playToShowcase()
+    expect(scenario.room.phase).toBe('relay_showcase')
+    const player = scenario.players[0]
+    if (!player) throw new Error('接龙房缺少开赛玩家')
+
+    expect(
+      errorCodeOf(() =>
+        scenario.harness.service.sendCanvasPing(player.playerId, 0.3, 0.4, 'confused'),
+      ),
+    ).toBe(ERROR_CODES.FORBIDDEN)
+
+    // 走到投票期（复盘轮播走完当前链的两个半场）
+    scenario.finishShowcaseChain()
+    expect(scenario.room.phase).toBe('relay_vote')
+    expect(
+      errorCodeOf(() => scenario.harness.service.sendCanvasPing(player.playerId, 0.3, 0.4, 'fire')),
+    ).toBe(ERROR_CODES.FORBIDDEN)
+
+    expect(
+      scenario.harness.ioEvents.filter((record) => record.event === EVENTS.gameCanvasPing),
+    ).toHaveLength(0)
   })
 })

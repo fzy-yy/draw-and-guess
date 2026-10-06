@@ -1,24 +1,32 @@
 /**
- * 领域配置：本地设置、界面与预设短语，由公开配置 workspace 包导出。
+ * 领域配置：本地设置、界面时长与预设短语，由公开配置 workspace 包导出。
  */
 export const localSettings = {
+  /** 默认主音量（0~1），设置页音量滑块初值，与音效音量相乘得到实际音量。 */
   masterVolume: 0.8,
+  /** 默认音效音量（0~1），无对应 UI 控件：与主音量相乘决定音效实际音量。 */
   soundVolume: 0.8,
+  /** 是否默认静音（设置页「静音」开关初值）。 */
   muted: false,
-  /** 统一控制非必要的界面过渡与反馈动画；关闭后不影响倒计时和画布逻辑。 */
+  /** 默认是否启用界面动效；关闭后设置页会挂 `motion-disabled`、猜中礼花也不放（useGuessConfetti）。 */
   animationsEnabled: true,
-  showShortcuts: true,
   /**
    * 单键快捷键（画板工具 + 面板显隐）只保存单个可打印字符；
    * 客户端会阻止重复键互相覆盖（工具之间、面板之间、工具与面板之间都不得重键）。
    */
+  /** 默认画笔工具快捷键。 */
   penShortcut: 'b',
+  /** 默认橡皮擦工具快捷键。 */
   eraserShortcut: 'e',
+  /** 默认填充工具快捷键。 */
   fillShortcut: 'f',
   /** 显示/隐藏聊天面板（回车键固定用于打开聊天，见 usePanelShortcuts）。 */
   chatPanelShortcut: 'c',
+  /** 默认是否在进入猜词时自动聚焦输入框（设置页「自动聚焦」开关初值）。 */
   autoFocusGuess: true,
+  /** 默认是否在大厅对其他人可见（设置页「可被发现」开关初值）。 */
   discoverable: true,
+  /** 默认是否接收他人邀请（设置页「接收邀请」开关初值）。 */
   acceptsInvites: true,
   /** 画家默认显示答案：开启后作画时默认显示答案，关闭则与猜词玩家一致（只看到下划线遮罩）。 */
   drawerDefaultReveal: true,
@@ -73,8 +81,9 @@ export const staticAssets = {
 } as const
 
 export const ui = {
-  toastDurationMs: 3_200, // Toast 展示时长
-  // 聊天区允许回看最近 80 条消息；服务端按 2 倍裁剪内存队列，兼顾滚动回看与内存上限。
+  /** Toast（自建 AppToaster）的展示时长（毫秒）。 */
+  toastDurationMs: 3_200,
+  /** 聊天区允许回看最近 80 条消息；服务端按 2 倍裁剪内存队列，兼顾滚动回看与内存上限。 */
   recentMessageCount: 80,
   /** 对局 HUD 时间刷新的毫秒间隔（useGameHud 的 useTimestamp interval）。 */
   tickIntervalMs: 200,
@@ -87,6 +96,7 @@ export const ui = {
 } as const
 
 export const presets = {
+  /** 猜中后/已猜中者可发送的预设短语（服务端白名单校验）。 */
   safeChat: ['画得真棒！', '我知道了！', '再来一点提示', '好难猜呀'],
   /** 表情反应同样经过服务端白名单校验，避免把任意聊天入口开放给画家或已猜中者。 */
   chatReactions: ['👏', '🎉', '😂', '🤔', '😮', '💡'],

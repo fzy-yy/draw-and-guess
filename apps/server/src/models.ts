@@ -5,6 +5,7 @@
 import type {
   Ack,
   ChatMessage,
+  GameMode,
   PresencePreferences,
   Profile,
   RoomPhase,
@@ -18,6 +19,7 @@ import type {
 } from '@draw-guess/shared'
 import type { AppSocket } from './socket-types.ts'
 import type { TimerHandle } from './runtime.ts'
+import type { RelayGameSecret } from './domain/relay/relay-models.ts'
 
 /** 服务端内部持有的聊天消息记录：包含可选的私密接收人 recipientId。 */
 export interface ServerChatMessage extends ChatMessage {
@@ -39,9 +41,9 @@ export interface PlayerSecret {
   connected: boolean // 是否在线（断线宽限期内为 false）
   joinedAt: number // 注册时间戳
   disconnectedAt?: number // 最近断线时间戳（用于宽限期判断）
-  /** 在作画阶段断线时保留的房间 ID；用于重连后只向同局成员广播恢复提示。 */
+  /** 对局阶段断线时保留的房间 ID（经典作画回合与接龙对局阶段共用）；用于重连后只向同局成员广播恢复提示。 */
   drawingDisconnectRoomId?: string
-  /** 每次有效断线递增；画家/房主短宽限回调只处理创建它的断线代次。 */
+  /** 每次有效断线递增；房主短宽限回调只处理创建它的断线代次。 */
   disconnectGeneration: number
   disconnectTimer?: TimerHandle // 断线清理定时器
   requestCache: Map<string, Ack<unknown>> // event + requestId → 完整 ack 的幂等缓存
@@ -59,10 +61,6 @@ export interface PlayerSecret {
 export interface MemberState {
   playerId: string // 对应玩家 ID
   seatIndex: number // 固定席位序号，对局内颜色与玩家身份据此保持稳定
-  /** 是否为观战成员：不参与准备/画家轮换/猜词/计分，游戏中加入时置位。 */
-  spectating?: boolean
-  /** 是否为下一局候场成员：当前局按观战权限裁剪，回到 waiting 时自动转为普通未准备成员。 */
-  waitingForNextGame?: boolean
   /** 最终结算中本成员是否已表达“再来一局”；进入 waiting 时清除。 */
   rematchReady?: boolean
   /** 主动退出本局后保留结果卡片，但不再参与房间裁决或接收房间快照。 */
@@ -90,11 +88,6 @@ export interface GameSecret {
   roundId: string // 当前回合 ID（每回合重新生成）
   phaseStartedAt: number // 当前阶段开始时间
   phaseEndsAt: number // 当前阶段权威结束时间
-  /**
-   * 暂停现场：暂停前阶段与冻结的剩余毫秒成对存在（半状态由类型消除，恢复时无需兜底）。
-   * 恢复/结算/清场时整体删除；只有可暂停阶段（choosing_word/drawing/round_result）会写入。
-   */
-  pauseState?: { phase: RoomPhase; remainingMs: number }
   currentRound: number // 当前回合序号（从 1 开始）
   totalRounds: number // 总回合数 = 人数 × 每人轮数
   /** 当前回合实际作画时长（毫秒）：只取房间单回合时长，计分与逐步提示调度统一用它 */
@@ -133,7 +126,7 @@ export interface GameSecret {
   timer?: TimerHandle // 主阶段计时器
   /** 最短展示期计时器；与最终结算自动返回主计时器分离。 */
   rematchTimer?: TimerHandle
-  /** 绘图阶段的逐步提示计时器，与主阶段计时器一起在暂停/切换时清理。 */
+  /** 绘图阶段的逐步提示计时器，与主阶段计时器一起在阶段切换时清理。 */
   hintTimers?: TimerHandle[]
 }
 
@@ -143,15 +136,23 @@ export interface RoomSecret {
   name: string
   hostId: string // 房主玩家 ID（可迁移）
   visibility: RoomVisibility
+  /** 房间玩法（经典 / 接龙）：建房时确定、房间内不可修改（S27 / S28），快照与大厅行据此显示模式徽标。 */
+  gameMode: GameMode
   /** 服务端生成的私密房间码；仅通过角色裁剪快照向当前房主显示。 */
   privateJoinCode?: string
   phase: RoomPhase
   stateVersion: number // 状态版本号（乐观并发控制）
   settings: RoomSettings
   members: MemberState[] // 成员席位（顺序即加入顺序）
-  vocabularyPackageId?: string // 本局绑定的词库包 ID（缺省为词数最多者）
+  vocabularyPackageIds: string[] // 本局绑定的词库包 ID 列表
+  vocabularyPackageId?: string // 兼容单包 ID 访问
   selectedWordIds: Set<string> // 本局启用的词条 ID 集合
   game?: GameSecret // 对局进行中才有
+  /**
+   * 接龙局秘密状态：与 `game?` 并列、由 `gameMode` 保证恰好一个非空（S56）。
+   * 接龙的提交与投票记录挂在接龙结构上，成员状态零新增字段（S64）。
+   */
+  relay?: RelayGameSecret
 }
 
 /** 定向邀请秘密状态：过期后由定时器自动回收。 */

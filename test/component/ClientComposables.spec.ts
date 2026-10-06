@@ -26,7 +26,13 @@ import { useGameStore } from '@/stores/game'
 import { useLobbyStore } from '@/stores/lobby'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
-import { GUEST_ID, HOST_ID, ROOM_ID, createRoomFixture } from '../client/room-fixture'
+import {
+  GUEST_ID,
+  HOST_ID,
+  ROOM_ID,
+  createRelayRoomFixture,
+  createRoomFixture,
+} from '../client/room-fixture'
 import { createPiniaWithFakeTransport } from '../client/fake-game-transport'
 
 let pinia: Pinia
@@ -290,6 +296,33 @@ describe('邀请与快捷键 composables', () => {
     expect(shortcuts.tool.value).toBe('eraser')
     input.remove()
   })
+  it('接龙作画阶段允许使用工具与撤销快捷键，已提交后全部失效', async () => {
+    useRoomStore().room = createRelayRoomFixture('relay_draw', {
+      currentStep: 1,
+      ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: -1, drawingRevision: 0 },
+    })
+    useSessionStore().playerId = HOST_ID
+    const store = useGameStore()
+    const drawAction = vi.spyOn(store, 'drawAction').mockResolvedValue()
+    const shortcuts = mountComposable(() => useShortcuts(store))
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' }))
+    expect(shortcuts.tool.value).toBe('eraser')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true }))
+    expect(drawAction).toHaveBeenNthCalledWith(1, EVENTS.drawUndo)
+    expect(drawAction).toHaveBeenNthCalledWith(2, EVENTS.drawRedo)
+
+    useRoomStore().room = createRelayRoomFixture('relay_draw', {
+      ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: -1, drawingRevision: 0 },
+      submitted: true,
+    })
+    await nextTick()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }))
+    expect(shortcuts.tool.value).toBe('eraser')
+    expect(drawAction).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe('表格、选择与词库 composables', () => {
@@ -299,17 +332,39 @@ describe('表格、选择与词库 composables', () => {
       text: '苹果',
       aliases: ['红苹果'],
       collection: '水果',
+      packageId: 'p1',
+      packageName: '基础',
     },
     {
       id: 'b',
       text: '巴士',
       aliases: ['公交车'],
       collection: '交通',
+      packageId: 'p1',
+      packageName: '基础',
     },
   ]
   const packages: VocabularyPackageInfo[] = [
-    { id: 'p2', name: '进阶', wordCount: 20, description: '难词', version: '2', updatedAt: '2' },
-    { id: 'p1', name: '基础', wordCount: 10, description: '常用', version: '1', updatedAt: '1' },
+    {
+      id: 'p2',
+      name: '进阶',
+      wordCount: 20,
+      description: '难词',
+      author: '作者2',
+      remark: '备注2',
+      version: '2',
+      updatedAt: '2',
+    },
+    {
+      id: 'p1',
+      name: '基础',
+      wordCount: 10,
+      description: '常用',
+      author: '作者1',
+      remark: '备注1',
+      version: '1',
+      updatedAt: '1',
+    },
   ]
 
   it('排序、全选三态与只读选择分支保持一致', () => {

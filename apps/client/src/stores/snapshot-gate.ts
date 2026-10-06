@@ -16,7 +16,7 @@
  *   （需要 roomId），因此其返回类型收窄为 RoomSnapshotDecision
  *   （见 docs/adr/0041-snapshot-gate-decision-narrowing.md）。
  */
-import type { RoomSnapshot } from '@draw-guess/shared'
+import type { RelayGameView, RoomSnapshot } from '@draw-guess/shared'
 
 type PushDecision = 'accept' | 'ignore' | 'resync'
 
@@ -26,6 +26,38 @@ type PushDecision = 'accept' | 'ignore' | 'resync'
  * （类型收窄后编译即强制删除该死分支，取舍见 docs/adr/0041-snapshot-gate-decision-narrowing.md）。
  */
 type RoomSnapshotDecision = Extract<PushDecision, 'accept' | 'ignore'>
+
+/**
+ * 接龙快照的画布修订口径：一件接龙快照里最多只有一幅画布（作画棒＝自己的、猜词棒＝上家的、
+ * 复盘期＝当前半场的），三者按观看者与步骤互斥，因此取任一存在者的修订即可（都没有时按 0）。
+ * 接龙**零广播**（S49），本客户端自己上传的笔画会先落到本地镜像上，所以这个修订正是
+ * 「快照里的画布是否被本客户端的在途提交甩在后面」的判据。
+ */
+function relayDrawingRevision(relay: RelayGameView): number {
+  return (
+    relay.ownCanvas?.drawingRevision ??
+    relay.previousDrawing?.drawingRevision ??
+    relay.showcase?.drawing.drawingRevision ??
+    0
+  )
+}
+
+/**
+ * 一件接龙快照里那幅画的**身份**：同一时刻只有一幅画，但它会随阶段与复盘游标更换
+ * （作画棒＝自己的、猜词棒＝上家的；复盘期每个「链 + 半场」各是一幅画）。
+ * 只有身份相同，「画布修订」才比得出大小——换了一幅画就与换棒同理：两幅画的写入次数
+ * 本来就没有可比性，拿它们的修订号比较会把整场复盘卡死在上一幅画上（半场 2 常比半场 1 画得少）。
+ * 复盘期 `stepId` 是不变的（停机时停在最后一步），因此游标必须进身份。
+ *
+ * 终局（`game_result`）单独成键：终局视图**不下发任何画布**（只有排名、分数与统计），
+ * 与对局期任一画布都不同源。若把它当成本棒画布去比修订，就会读成「修订 0 倒退」而丢掉
+ * 整份终局快照——房主已提前结束比赛，客户端却永远停在对局页（画家画不了、别人也发不出消息）。
+ */
+function relayCanvasKey(relay: RelayGameView): string {
+  if (relay.phase === 'game_result') return 'game_result'
+  const cursor = relay.showcase
+  return cursor ? `${relay.stepId}:${cursor.chainIndex}-${cursor.half}` : relay.stepId
+}
 
 /**
  * 房间快照统一门禁：拒绝旧房间、旧状态、旧对局、旧回合与画布修订倒退。
@@ -41,6 +73,23 @@ export function acceptRoomSnapshot(
   if (incoming.id !== current.id) return 'ignore'
   // 房间状态版本倒退：乱序旧包，丢弃。
   if (incoming.stateVersion < current.stateVersion) return 'ignore'
+
+  // 接龙分支（S60）：接龙房间没有经典 `game` 字段，改按「步骤 id + 画布修订 + 状态版本」裁决。
+  // 放在经典分支之前、并在本分支内穷尽返回，经典路径因此一行不动。
+  if (incoming.gameMode === 'relay') {
+    const currentRelay = current.relay
+    const incomingRelay = incoming.relay
+    // 本地还没有接龙视图（刚进房 / 开局首包）：无镜像可倒退，采纳。
+    if (!currentRelay) return 'accept'
+    // 本地有接龙视图而载荷没有（接龙局已结束的回退包）：只有状态版本前进才可信。
+    if (!incomingRelay) return incoming.stateVersion > current.stateVersion ? 'accept' : 'ignore'
+    // 换棒（步骤 id 变化）或复盘游标切换（链 / 半场变化）：快照里已换成另一幅画，修订号不具可比性。
+    if (relayCanvasKey(incomingRelay) !== relayCanvasKey(currentRelay)) return 'accept'
+    // 同一幅画布内：画布修订不允许倒退，否则会用旧画布覆盖本客户端已落地的笔画。
+    return relayDrawingRevision(incomingRelay) < relayDrawingRevision(currentRelay)
+      ? 'ignore'
+      : 'accept'
+  }
 
   const currentGame = current.game
   const incomingGame = incoming.game

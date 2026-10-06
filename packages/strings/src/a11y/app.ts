@@ -8,6 +8,4 @@ export const app = {
   stageAriaLabel: (appName: string) => `${appName} 游戏舞台`,
   inviteDialogAria: '房间邀请',
   inviterAvatarAria: '邀请者 SVG 头像',
-  disconnectDialogAria: '连接中断提示',
-  protocolMismatchAria: '版本不兼容提示',
 } as const

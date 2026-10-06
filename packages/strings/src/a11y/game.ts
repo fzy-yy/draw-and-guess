@@ -5,20 +5,11 @@
  */
 
 export const game = {
-  pauseAriaHost: '暂停游戏',
-  pauseAriaGuest: '请求房主暂停',
-  resumeAria: '继续游戏',
   settingsAria: '打开对局设置',
   enterFullscreenAria: '进入全屏',
   exitFullscreenAria: '退出全屏',
-  quickPhrasePickerAria: '选择快捷短语',
-  quickPhrasePanelAria: '快捷短语列表',
+  endEarlyAria: '提前结束本局',
   sendGuessAria: '发送猜词',
-  chatActionsAria: '快捷互动',
-  reactionPickerAria: '选择表情反应',
-  reactionPanelAria: '表情反应列表',
-  sendReactionAria: (reaction: string) => `发送表情 ${reaction}`,
-  sendQuickPhraseAria: (phrase: string) => `发送快捷短语：${phrase}`,
   penTool: '画笔',
   penAria: (key: string) => `画笔，快捷键 ${key}`,
   eraserTool: '橡皮擦',
@@ -45,6 +36,20 @@ export const game = {
   toggleChat: '聊天面板',
   dragToolbarTitle: '拖动工具条',
   dragToolbarAria: '拖动移动工具条位置',
+  // 接龙作答浮层（S41，工单 10）：拖动手柄与输入框的无障碍名。
+  dragAnswerPanelTitle: '拖动作答框',
+  dragAnswerPanelAria: '拖动移动作答框位置',
+  answerInputAria: '接龙作答输入框',
+  // 复盘双胶囊与投票卡（S75 / S78 / S82，工单 11）：未揭晓答案与匿名票行的无障碍名。
+  relayHiddenAnswerAria: '答案尚未揭晓',
+  relayVoteRowAria: '匿名票行',
+  /**
+   * 接龙聊天输入区（S79）：这条输入框只发社交消息、永不携带作答，
+   * 故读屏文案用聊天语义，不复用猜词的「输入你的答案 / 发送猜词」。
+   * 可见文案（占位）与无障碍名是**两个 key**：占位在 `strings.ui`，无障碍名只在本层。
+   */
+  relayChatInputAria: '接龙聊天输入框',
+  relayChatSendAria: '发送聊天消息',
   playersPanelTitle: '玩家',
   closePanelAria: '关闭面板',
   toolbarAria: '绘图工具栏',

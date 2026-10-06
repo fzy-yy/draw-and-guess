@@ -1,18 +1,78 @@
 /**
  * 房间客户端事实的单一具名口径（与服务端 `domain/room/member-facts.ts` 对齐）。
  *
- * 「可玩成员」判定与「玩家人数下拉选项」此前在 RoomView（allSet 与其模板内联重算）、
- * 建房弹窗与规则弹窗各写一遍；集中后改口径只需一处（见 docs/adr/0028-client-room-facts.md）。
+ * 「可玩成员」判定此前在 RoomView、建房弹窗与规则弹窗各写一遍；集中后改口径只需一处
+ *（见 docs/adr/0028-client-room-facts.md）。
  *
  * 注意：最终榜单的成员口径**不是**可玩成员——服务端榜单保留离局者（ADR-0023），
  * 因此榜单回退不使用 `activeMembers`。
  */
-import { strings } from '@draw-guess/strings'
-import type { RoomMember } from '@draw-guess/shared'
+import {
+  DEFAULT_GAME_MODE,
+  type GameMode,
+  type RoomMember,
+  type RoomSettings,
+} from '@draw-guess/shared'
 
-/** 可玩成员：非观战且未离局（与服务端 `isActivePlayer` 同口径）。 */
+/**
+ * 模式 → 生效的规则键名，**按服务端 `apps/server/src/game-service.ts` 的 `MODE_SETTINGS_KEYS` 逐条镜像**
+ * （客户端不能 import 服务端模块，因此这里只能声明一份；两端一致由
+ * `test/unit/room-settings-mode-whitelist.spec.ts` 守护，禁止只改一边）。
+ *
+ * 用途：规则弹窗据此决定渲染哪些字段、`updateRoomSettings` 据此把完整草稿裁剪成当前模式生效的补丁
+ * ——服务端会严格拒绝出现不生效键的补丁（S52），不裁剪的完整草稿必然被拒。
+ */
+export const MODE_SETTINGS_KEYS: Record<GameMode, readonly (keyof RoomSettings)[]> = {
+  classic: [
+    'roundsPerPlayer',
+    'drawSeconds',
+    'chooseSeconds',
+    'showWordLength',
+    'progressiveHints',
+    'allowNearMissHint',
+    'allowCanvasReactions',
+    'allowRoundReplay',
+    'optionCount',
+    'allowWordReroll',
+    'allowCustomWord',
+    'allowPlayerInvite',
+  ],
+  relay: [
+    'relayChooseSeconds',
+    'relayDrawSeconds',
+    'relayGuessSeconds',
+    'optionCount',
+    'allowWordReroll',
+    'allowCustomWord',
+    'allowPlayerInvite',
+  ],
+}
+
+/** 取某模式生效的规则键名（缺省按协议默认模式，用于尚未装配房间快照的调用点）。 */
+function modeSettingsKeys(gameMode: GameMode | undefined): readonly (keyof RoomSettings)[] {
+  return MODE_SETTINGS_KEYS[gameMode ?? DEFAULT_GAME_MODE]
+}
+
+/**
+ * 按模式裁剪规则补丁：只保留该模式生效的键。
+ * 规则弹窗回传的是完整草稿（含全部字段），而服务端按模式白名单严格拒绝不生效键（S52），
+ * 因此发送前必须过这一层；逐键赋值保持键与值的一一对应，不使用 `any` 或非空断言。
+ */
+export function scopeSettingsPatch(
+  patch: Partial<RoomSettings>,
+  gameMode: GameMode | undefined,
+): Partial<RoomSettings> {
+  const scoped: Partial<RoomSettings> = {}
+  for (const key of modeSettingsKeys(gameMode)) {
+    const value = patch[key]
+    if (value !== undefined) Object.assign(scoped, { [key]: value })
+  }
+  return scoped
+}
+
+/** 可玩成员：未离局（与服务端 `isActivePlayer` 同口径；观战与候场已删除）。 */
 export function isActiveMember(member: RoomMember): boolean {
-  return !member.spectating && !member.leftGame
+  return !member.leftGame
 }
 
 /** 可玩成员集合。 */
@@ -21,32 +81,18 @@ export function activeMembers(members: readonly RoomMember[]): RoomMember[] {
 }
 
 /**
- * 是否仍占席位：未主动离局（观战者仍占席，离局者为成绩卡保留的占位不再占席）。
- * 与服务端 `domain/room/member-facts.ts` 的 `occupiesSeat` 同口径——容量与房间规则里的
- * 「最大玩家数下限」都认它，不要改用 `activeMembers`（口径见 docs/adr/0023-member-facts-single-source.md）。
+ * 是否仍占席位：未主动离局。
+ * 与服务端 `domain/room/member-facts.ts` 的 `occupiesSeat` 同口径——容量与大厅人数都认它，
+ * 不要改用 `activeMembers`（口径见 docs/adr/0023-member-facts-single-source.md）。
  */
 export function occupiesSeatMember(member: RoomMember): boolean {
   return !member.leftGame
 }
 
 /**
- * 在线可玩身份：非观战且连接在线。
+ * 在线可玩身份：连接在线（未离局占位由调用方按语义另行排除）。
  * 用于「准备就绪」「可猜词」「可发送互动」这类要求当前身份即时在线的判定。
- * 与 `isActiveMember` 的差异：本谓词不排除 leftGame——调用点本身就是当前在线身份场景，
- * 离局占位成员是否需要排除由调用方按语义另行处理。
  */
 export function isOnlineActiveMember(member: RoomMember): boolean {
-  return !member.spectating && member.connection === 'online'
-}
-
-/** 玩家人数下拉选项（min..max 闭区间，文案经 strings.ui.common.playersUnit）。 */
-export function playerCountOptions(range: { min: number; max: number }): Array<{
-  value: number
-  label: string
-}> {
-  const options: Array<{ value: number; label: string }> = []
-  for (let count = range.min; count <= range.max; count += 1) {
-    options.push({ value: count, label: strings.ui.common.playersUnit(count) })
-  }
-  return options
+  return member.connection === 'online'
 }

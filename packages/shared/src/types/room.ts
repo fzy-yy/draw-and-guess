@@ -7,13 +7,16 @@ import type {
   RoomMemberSchema,
   RoomSnapshotSchema,
 } from '../protocol/push.ts'
-import type { RoomSettingsSchema } from '../protocol/room.ts'
+import type { GameModeSchema, RoomSettingsSchema } from '../protocol/room.ts'
 
 /**
  * 房间规则设置：
- * 包含人数上限、回合轮数、单回合时长、选词时限、差一字私密提示与画布微表情开关等。
+ * 包含回合轮数、单回合时长、选词时限、差一字私密提示与画布微表情开关等；
+ * 房间容量固定为 `PLAYER_PROTOCOL_LIMITS.maxPlayers`（协议常量，不属可调规则）。
  */
 export type RoomSettings = z.infer<typeof RoomSettingsSchema>
+/** 房间玩法模式：经典 / 接龙，建房时确定、房间内不可修改（S27 / S28）。 */
+export type GameMode = z.infer<typeof GameModeSchema>
 export type RoomMember = z.infer<typeof RoomMemberSchema>
 export type PublicRoom = z.infer<typeof PublicRoomSchema>
 export type RoomSnapshot = z.infer<typeof RoomSnapshotSchema>

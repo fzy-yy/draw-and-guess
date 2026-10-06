@@ -31,6 +31,8 @@ describe('自定义词的词面校验（纯函数）', () => {
       text: '屋顶 上的猫',
       aliases: [],
       collection: '自定义',
+      packageId: 'custom',
+      packageName: '自定义',
     })
   })
 

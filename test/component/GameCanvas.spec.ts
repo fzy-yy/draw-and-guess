@@ -12,6 +12,9 @@ import type { FloodFillWorkerRequest, FloodFillWorkerResponse } from '@/canvas/f
 import GameCanvas from '@/components/game/GameCanvas.vue'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { useGameplayStore } from '@/stores/gameplay'
+import { useRoomStore } from '@/stores/room'
+import { createRelayRoomFixture } from '../client/room-fixture'
+
 /**
  * GameCanvas 组合层的组件级保障：真实挂载组件（含视口/光标/笔迹三个 composable），
  * 统一替换 Canvas 2D 与布局 API，验证权威历史重放、增量投影与指针批次上送。
@@ -682,6 +685,24 @@ describe('GameCanvas 右键菜单与画作导出', () => {
     expect(guesserIds).toContain('reaction-fire')
     expect(guesserIds).not.toContain('tool-pen')
     expect(guesserIds).not.toContain('history-clear')
+    menu.close()
+  })
+
+  it('接龙房猜词者右键菜单不渲染微表情互动组（S19），快捷短语与导出保持不变', async () => {
+    const menu = useContextMenu()
+    // 接龙房（经典房路径由上一个用例逐条守卫）：微表情整组不渲染，不给玩家任何入口
+    useRoomStore().room = createRelayRoomFixture('relay_draw')
+    const wrapper = mountCanvas({ canDraw: false })
+
+    await wrapper.trigger('contextmenu', { clientX: 150, clientY: 150 })
+    expect(menu.state.open).toBe(true)
+
+    const ids = menu.state.items.map((i) => i.id)
+    expect(ids).not.toContain('reaction-thumbs_up')
+    expect(ids).not.toContain('reaction-confused')
+    expect(ids).not.toContain('reaction-fire')
+    // 导出与快捷短语不属于微表情，接龙内不受影响
+    expect(ids).toContain('export-save')
     menu.close()
   })
 

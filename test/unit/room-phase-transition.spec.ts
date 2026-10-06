@@ -24,16 +24,14 @@ function collectTypeScriptFiles(directory: string): string[] {
 }
 
 describe('房间阶段转换边界', () => {
-  it('暂停中的作画回合可直接结算，并只保留新的结算倒计时', () => {
-    const { harness, host, room, game } = enterDrawing()
-    harness.service.pause(host.playerId, '暂停后结算')
-    const pausedVersion = room.stateVersion
+  it('作画回合可直接结算，并只保留新的结算倒计时', () => {
+    const { harness, room } = enterDrawing()
+    const version = room.stateVersion
 
     harness.service.round.finishRound(room, false)
 
     expect(room.phase).toBe('round_result')
-    expect(room.stateVersion).toBe(pausedVersion + 1)
-    expect(game.pauseState).toBeUndefined()
+    expect(room.stateVersion).toBe(version + 1)
     expect(harness.runtime.pendingTimerCount()).toBe(1)
     const resultDurationMs =
       (room.settings.allowRoundReplay
@@ -45,16 +43,14 @@ describe('房间阶段转换边界', () => {
     expect(room.phase).toBe('choosing_word')
   })
 
-  it('暂停中提前结束可直接进入最终结算并只保留结算退出计时器', () => {
-    const { harness, host, room, game } = enterDrawing()
-    harness.service.pause(host.playerId, '暂停后提前结束')
-    const pausedVersion = room.stateVersion
+  it('作画中提前结束可直接进入最终结算并只保留结算退出计时器', () => {
+    const { harness, host, room } = enterDrawing()
+    const version = room.stateVersion
 
     harness.service.endEarly(host.playerId)
 
     expect(room.phase).toBe('game_result')
-    expect(room.stateVersion).toBe(pausedVersion + 1)
-    expect(game.pauseState).toBeUndefined()
+    expect(room.stateVersion).toBe(version + 1)
     expect(harness.runtime.pendingTimerCount()).toBe(2)
     expect(harness.repositories.archive.games).toHaveLength(1)
   })
@@ -123,8 +119,6 @@ describe('房间阶段转换边界', () => {
   })
 
   it('合法表允许所有活跃阶段关闭，并保留目标转换边', () => {
-    expect(canTransition('paused', 'round_result')).toBe(true)
-    expect(canTransition('paused', 'game_result')).toBe(true)
     expect(canTransition('starting', 'waiting')).toBe(true)
     expect(canTransition('game_result', 'waiting')).toBe(true)
     const phases: RoomPhase[] = [
@@ -133,7 +127,6 @@ describe('房间阶段转换边界', () => {
       'choosing_word',
       'drawing',
       'round_result',
-      'paused',
       'game_result',
     ]
     expect(phases.every((phase) => canTransition(phase, 'closed'))).toBe(true)
@@ -141,7 +134,7 @@ describe('房间阶段转换边界', () => {
 })
 
 describe('房间阶段写入静态约束', () => {
-  it('服务端只有 RoundMachine.transition 可以直接赋值 phase', () => {
+  it('服务端只有两个平级状态机可以直接赋值 phase（经典回合机 + 接龙状态机，S55）', () => {
     const sourceRoot = fileURLToPath(new URL('../../apps/server/src/', import.meta.url))
     const assignments = collectTypeScriptFiles(sourceRoot).flatMap((path) => {
       const source = readFileSync(path, 'utf8')
@@ -155,6 +148,77 @@ describe('房间阶段写入静态约束', () => {
       }))
     })
 
-    expect(assignments).toEqual([{ file: 'round-machine.ts', statement: 'room.phase = next' }])
+    // 阶段写入的唯一归属是「模式状态机」：经典与接龙各一台、平级并存，
+    // 其余模块（快照 / 装配 / 处理器）都不允许直接改房间阶段。
+    expect(assignments).toEqual([
+      { file: 'domain/relay/relay-machine.ts', statement: 'room.phase = next' },
+      { file: 'modules/gameplay/round-machine.ts', statement: 'room.phase = next' },
+    ])
+  })
+})
+
+/** 接龙的五个专属阶段（S10 / S22 / S23）。 */
+const RELAY_PHASES = [
+  'relay_choose',
+  'relay_draw',
+  'relay_guess',
+  'relay_showcase',
+  'relay_vote',
+] as const satisfies readonly RoomPhase[]
+
+describe('接龙阶段转换白名单（S10 / S22 / S23 / S34）', () => {
+  it('四步链的每条边都放行：选词 → 步1画 → 步2猜 → 步3画 → 步4猜 → 复盘 ⇄ 投票 → 终局', () => {
+    const chain: Array<[RoomPhase, RoomPhase]> = [
+      ['starting', 'relay_choose'],
+      ['relay_choose', 'relay_draw'],
+      ['relay_draw', 'relay_guess'],
+      ['relay_guess', 'relay_draw'],
+      ['relay_guess', 'relay_showcase'],
+      ['relay_showcase', 'relay_vote'],
+      ['relay_vote', 'relay_showcase'],
+      ['relay_vote', 'game_result'],
+      ['game_result', 'waiting'],
+    ]
+    for (const [from, to] of chain) {
+      expect(canTransition(from, to), `${from} → ${to}`).toBe(true)
+    }
+  })
+
+  it('接龙不允许跳步或越级进入复盘，且活跃阶段均可关闭', () => {
+    for (const phase of RELAY_PHASES) {
+      // 任何活跃阶段都必须能关闭房间（成员清空 / 房主解散）
+      expect(canTransition(phase, 'closed'), `${phase} → closed`).toBe(true)
+    }
+    expect(canTransition('relay_choose', 'relay_guess')).toBe(false)
+    expect(canTransition('relay_choose', 'relay_showcase')).toBe(false)
+    expect(canTransition('relay_draw', 'relay_showcase')).toBe(false)
+    expect(canTransition('relay_guess', 'relay_vote')).toBe(false)
+    expect(canTransition('relay_vote', 'waiting')).toBe(false)
+    // 任何接龙阶段都没有自环边：四步链严格递进（步 1 与步 3 共用 relay_draw 这个阶段名，
+    // 但状态机从不把 relay_draw 写回 relay_draw）
+    for (const phase of RELAY_PHASES)
+      expect(canTransition(phase, phase), `${phase} → ${phase}`).toBe(false)
+  })
+
+  it('对局期（选词 / 作画 / 猜词）可提前结束；展示轮播期没有进终局的边（S34 / S12）', () => {
+    for (const phase of ['relay_choose', 'relay_draw', 'relay_guess'] as const) {
+      expect(canTransition(phase, 'game_result'), `${phase} → game_result`).toBe(true)
+    }
+    // 轮播期完全不可干预（无跳过、无提前结束）；投票期进终局是正常链路，是否放行「提前结束」由业务守卫裁决
+    expect(canTransition('relay_showcase', 'game_result')).toBe(false)
+    expect(canTransition('relay_showcase', 'waiting')).toBe(false)
+    expect(canTransition('relay_vote', 'waiting')).toBe(false)
+  })
+
+  it('经典阶段不获得接龙边，接龙也不回经典对局阶段', () => {
+    expect(canTransition('waiting', 'relay_choose')).toBe(false)
+    expect(canTransition('choosing_word', 'relay_draw')).toBe(false)
+    expect(canTransition('drawing', 'relay_guess')).toBe(false)
+    expect(canTransition('round_result', 'relay_showcase')).toBe(false)
+    expect(canTransition('relay_choose', 'choosing_word')).toBe(false)
+    expect(canTransition('relay_draw', 'drawing')).toBe(false)
+    expect(canTransition('relay_guess', 'round_result')).toBe(false)
+    expect(canTransition('relay_showcase', 'round_result')).toBe(false)
+    expect(canTransition('relay_vote', 'round_result')).toBe(false)
   })
 })

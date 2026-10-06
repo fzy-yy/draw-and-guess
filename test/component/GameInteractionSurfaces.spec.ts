@@ -11,8 +11,16 @@ import { useGameStore } from '@/stores/game'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
-import { createPiniaWithFakeTransport } from '../client/fake-game-transport'
-import { GUEST_ID, HOST_ID, createRoomFixture } from '../client/room-fixture'
+import {
+  createPiniaWithFakeTransport,
+  installFakeGameTransport,
+} from '../client/fake-game-transport'
+import {
+  GUEST_ID,
+  HOST_ID,
+  createLiveRelayRoomFixture,
+  createRoomFixture,
+} from '../client/room-fixture'
 
 let pinia: Pinia
 
@@ -61,10 +69,10 @@ describe('GameHud 角色视图', () => {
     expect(screen.queryByText(room.room.game!.answer!)).toBeNull()
   })
 
-  it('暂停时仅房主能继续，普通成员仍可使用设置与全屏动作', async () => {
+  it('成员可使用设置与全屏动作', async () => {
     const room = useRoomStore()
     const session = useSessionStore()
-    room.room = createRoomFixture('paused', { pausedRemainingMs: 12_000 })
+    room.room = createRoomFixture('drawing')
     session.playerId = GUEST_ID
 
     renderWithPinia(GameHud, {
@@ -75,10 +83,6 @@ describe('GameHud 角色视图', () => {
     })
 
     expect(
-      (screen.getByRole('button', { name: strings.a11y.game.resumeAria }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(true)
-    expect(
       (screen.getByRole('button', { name: strings.a11y.game.settingsAria }) as HTMLButtonElement)
         .disabled,
     ).toBe(false)
@@ -88,13 +92,6 @@ describe('GameHud 角色视图', () => {
           name: strings.a11y.game.enterFullscreenAria,
         }) as HTMLButtonElement
       ).disabled,
-    ).toBe(false)
-
-    session.playerId = HOST_ID
-    await nextTick()
-    expect(
-      (screen.getByRole('button', { name: strings.a11y.game.resumeAria }) as HTMLButtonElement)
-        .disabled,
     ).toBe(false)
   })
 })
@@ -151,7 +148,37 @@ describe('ChatPanel 输入与快捷互动', () => {
     ).toBe(true)
   })
 
-  it('系统消息渲染为居中圆角卡片，玩家消息使用独立胶囊标签徽章', async () => {
+  it('接龙聊天目标下，即使当前不可作答也必须能发送消息（聊天与作答彻底分离，S79）', async () => {
+    // 缺陷回归：接龙房的聊天输入被 `canGuess`（只在猜词棒且未提交时为真）错误门禁——
+    // 选词 / 作画 / 复盘期一律禁用，提交后也发不出，聊天区因此永远刷不出自己的消息。
+    const fakeTransport = installFakeGameTransport(pinia)
+    const user = userEvent.setup()
+    const room = useRoomStore()
+    const session = useSessionStore()
+    room.room = createLiveRelayRoomFixture('relay_draw')
+    session.playerId = HOST_ID
+
+    renderWithPinia(ChatPanel, { canGuess: false, submitTarget: 'chat' })
+
+    const input = screen.getByLabelText(strings.a11y.game.relayChatInputAria) as HTMLInputElement
+    expect(input.disabled).toBe(false)
+
+    await user.type(input, '这条消息必须发得出去')
+    await user.click(screen.getByRole('button', { name: strings.a11y.game.relayChatSendAria }))
+
+    await waitFor(() =>
+      expect(fakeTransport.requests.map((entry) => entry.event)).toContain('chat:say'),
+    )
+    expect(fakeTransport.requests.find((entry) => entry.event === 'chat:say')?.payload.text).toBe(
+      '这条消息必须发得出去',
+    )
+
+    // 经典猜词通路不受影响：无猜词权限时仍禁用（其语义是「作答」而非社交）
+    const classicInput = screen.queryByLabelText(strings.ui.game.guessLabel)
+    expect(classicInput).toBeNull()
+  })
+
+  it('聊天面板中仅展示玩家发出的消息，系统消息不出现在聊天列表中', async () => {
     const room = useRoomStore()
     const session = useSessionStore()
     room.room = createRoomFixture()
@@ -175,7 +202,9 @@ describe('ChatPanel 输入与快捷互动', () => {
 
     renderWithPinia(ChatPanel, { canGuess: true })
 
-    expect(screen.getByText('作画开始，猜词玩家请在右侧输入答案')).toBeTruthy()
+    // 系统消息不再渲染在聊天流中（统一走 Toast 通知）
+    expect(screen.queryByText('作画开始，猜词玩家请在右侧输入答案')).toBeNull()
+    // 玩家消息正常渲染并带昵称徽章
     expect(screen.getByText('这是一条猜词')).toBeTruthy()
     expect(screen.getByText('房主')).toBeTruthy()
   })
@@ -209,7 +238,7 @@ describe('ChatPanel 输入与快捷互动', () => {
 })
 
 describe('PhaseOverlay 阶段分支', () => {
-  it('覆盖开局、选词与暂停阶段的角色动作', async () => {
+  it('覆盖开局与选词阶段的角色动作', async () => {
     const user = userEvent.setup()
     const room = useRoomStore()
     const session = useSessionStore()
@@ -244,14 +273,7 @@ describe('PhaseOverlay 阶段分支', () => {
     session.playerId = GUEST_ID
     await nextTick()
     expect(screen.queryByRole('button', { name: /苹果/ })).toBeNull()
-
-    room.room.phase = 'paused'
-    session.playerId = HOST_ID
-    await nextTick()
-    await user.click(screen.getByRole('button', { name: strings.ui.game.resumeGame }))
-    expect(onResume).toHaveBeenCalledOnce()
   })
-
   it('回合结算展示权威计分明细，最终结算提供对应角色动作', async () => {
     const user = userEvent.setup()
     const room = useRoomStore()

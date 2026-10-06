@@ -7,6 +7,8 @@ const pool: VocabularyWord[] = Array.from({ length: 10 }, (_, index) => ({
   text: `词${index}`,
   aliases: [],
   collection: `类${index % 5}`,
+  packageId: 'test_pkg',
+  packageName: '测试',
 }))
 
 describe('CandidateSelector 纯函数契约', () => {

@@ -13,7 +13,6 @@ export const room = {
   seatMenuAria: '席位操作菜单',
   inviteCooldownAria: (seconds: number) => `邀请冷却中，${seconds} 秒后可重试`,
   vocabToggleAllAria: '全选或取消当前结果',
-  spectatorReadyTitle: '观战成员不能参与准备',
   vocabCloseAria: '关闭词库',
   vocabSearchAria: '搜索词条',
   vocabFilterAria: (name: string) => `按${name}筛选`,

@@ -5,13 +5,16 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import {
+  DEFAULT_GAME_MODE,
   EVENTS,
+  type GameMode,
   type RoomSettings,
   type RoomSnapshot,
   type RoomVisibility,
 } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { useGameTransport } from '@/application/game-transport'
+import { scopeSettingsPatch } from '@/utils/room-facts'
 import { useSessionStore } from './session.ts'
 
 export const useRoomStore = defineStore('room', () => {
@@ -32,9 +35,14 @@ export const useRoomStore = defineStore('room', () => {
   async function createRoom(input: {
     name: string
     visibility: RoomVisibility
+    /** 玩法模式：建房时确定（S27 / S28）；缺省保持经典模式，与协议默认值同源。 */
+    gameMode?: GameMode
     settings: RoomSettings
   }): Promise<boolean> {
-    const snapshot = await request(EVENTS.roomCreate, input)
+    const snapshot = await request(EVENTS.roomCreate, {
+      ...input,
+      gameMode: input.gameMode ?? DEFAULT_GAME_MODE,
+    })
     if (!snapshot.ok) return false
     room.value = snapshot.data
     return true
@@ -67,8 +75,10 @@ export const useRoomStore = defineStore('room', () => {
 
   async function updateRoomSettings(patch: Partial<RoomSettings>): Promise<boolean> {
     if (!room.value) return false
+    // 规则弹窗回传完整草稿，而服务端按模式白名单严格拒绝不生效字段（S52），
+    // 因此先按当前模式裁剪成生效键补丁再上送（清单与服务端同口径，见 utils/room-facts.ts）。
     const result = await request(EVENTS.roomUpdateSettings, {
-      patch,
+      patch: scopeSettingsPatch(patch, room.value.gameMode),
       expectedVersion: room.value.stateVersion,
     })
     return result.ok

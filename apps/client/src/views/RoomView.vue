@@ -21,7 +21,7 @@ import {
   VocabularyDialog,
 } from '@/components/room'
 import { activeMembers, isOnlineActiveMember } from '@/utils/room-facts'
-import type { RoomSettings } from '@draw-guess/shared'
+import { RELAY_MIN_PLAYERS, type RoomSettings } from '@draw-guess/shared'
 
 const store = useGameStore()
 // ---- 弹窗开关状态 ----
@@ -32,18 +32,43 @@ const showLeaveConfirm = ref(false) // 退出确认弹窗
 const settingsDraft = ref<RoomSettings>() // 规则编辑草稿：打开弹窗时以当前规则初始化，作为 RulesDialog 本地副本的种子（保存直接用回传的 draft）
 const vocabularyLoading = ref(false) // 词库拉取中（RuleSummary 禁用按钮 + VocabularyDialog v-model）
 
-// 可玩成员集合（非观战且未离局，口径见 utils/room-facts）：allSet 与下方提示文案共用。
+// 可玩成员集合（未离局，口径见 utils/room-facts）：allSet 与提示文案共用。
 const activePlayers = computed(() => activeMembers(store.room?.members ?? []))
 
+/** 在线且可玩的成员数：接龙开局门禁按它计数（S62）。 */
+const onlinePlayableCount = computed(() => activePlayers.value.filter(isOnlineActiveMember).length)
+
+/** 开局所需在线可玩人数下限：接龙取协议常量 RELAY_MIN_PLAYERS，经典沿用共享配置。 */
+const requiredPlayers = computed(() =>
+  store.room?.gameMode === 'relay' ? RELAY_MIN_PLAYERS : store.config.player.minPlayers,
+)
+
 // 开局/全员就绪判定：服务端快照已把房主裁剪为「隐式已准备」（见 snapshot.ts 的 ready 字段），
-// 因此房主与非房主共用同一个条件：≥ minPlayers 名可玩成员在线且全部已准备（下限取共享配置，与服务端开局门槛一致）。
+// 因此房主与非房主共用同一个条件：达到模式所需人数、全部在线且已准备（下限与服务端开局门槛一致）。
 const allSet = computed(() =>
   Boolean(
     store.room &&
-    activePlayers.value.length >= store.config.player.minPlayers &&
+    onlinePlayableCount.value >= requiredPlayers.value &&
     activePlayers.value.every((member) => isOnlineActiveMember(member) && member.ready),
   ),
 )
+
+/**
+ * 开局门禁未满足时的原因提示（Image #4 规范）：
+ * 仅房主可见（非房主不显示）；
+ * 接龙模式在线可玩少于 4 人时显示不满 4 人提示文案；
+ * 其余未全员就绪场景（经典模式或接龙满 4 人但有人未准备）统一显示等待其他玩家准备文案。
+ */
+const startGateReason = computed(() => {
+  if (!store.isHost || allSet.value) return undefined
+  if (store.room?.gameMode === 'relay' && onlinePlayableCount.value < RELAY_MIN_PLAYERS) {
+    return strings.ui.room.relayGateNeedPlayers(RELAY_MIN_PLAYERS, onlinePlayableCount.value)
+  }
+  return strings.ui.room.waitForGuestsReady
+})
+
+/** 原因提示的锚点 id：与开始按钮的 aria-describedby 关联，读屏也能听到置灰原因。 */
+const startGateReasonId = 'room-start-gate-reason'
 
 /** 打开词库弹窗：实际拉取与虚拟网格初始化由 VocabularyDialog 在 open 触发时完成。 */
 function openVocabulary(): void {
@@ -86,7 +111,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
     v-if="store.room"
     class="relative grid h-full grid-cols-[minmax(0,67%)_33%] grid-rows-[11%_89%] bg-sky"
   >
-    <!-- 顶栏：房间名、房间可见性标识、连接状态与退出按钮（共享 StageHeader 骨架） -->
+    <!-- 顶栏：房间名、模式徽标、房间可见性标识、连接状态与退出按钮（共享 StageHeader 骨架） -->
     <StageHeader>
       <template #leading>
         <div class="flex items-baseline gap-[0.8em] min-w-0">
@@ -96,6 +121,17 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           <h1 class="overflow-hidden text-ellipsis whitespace-nowrap text-fs-20">
             {{ store.room.name }}
           </h1>
+          <!-- 模式徽标（S80）：固定在房间名之后，经典与接龙都显示，内容由 gameMode 决定；
+               self-center 抵消 leading 区的基线对齐，徽标不被文字基线拉偏 -->
+          <span
+            class="shrink-0 self-center rounded-full bg-yellow px-[0.7em] py-[0.15cqh] text-fs-10 text-navy"
+          >
+            {{
+              store.room.gameMode === 'relay'
+                ? strings.ui.room.modeRelay
+                : strings.ui.room.modeClassic
+            }}
+          </span>
         </div>
       </template>
       <template #center>
@@ -159,29 +195,28 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
         @edit-rules="openSettings"
       />
 
-      <!-- 房主只显示开始按钮；其他玩家保留准备按钮，观战者不能参与准备。 -->
+      <!-- 房主只显示开始按钮；其他玩家保留准备按钮。 -->
       <div class="mt-auto pt-[1.3cqh] border-t-[0.2cqh] border-t-line text-center">
+        <!-- 接龙门禁原因（S47 / S62）：置于操作按钮上方，避免文案显隐造成按钮位置上下跳动 -->
+        <p
+          v-if="startGateReason"
+          :id="startGateReasonId"
+          class="mb-[0.8cqh] font-bold text-fs-12 text-warning-fg"
+        >
+          {{ startGateReason }}
+        </p>
         <!-- 准备按钮：复用 AppButton secondary（白底描边），已准备时经外部类切换为绿色高亮。 -->
         <AppButton
-          v-if="!store.isHost && !store.me?.spectating"
+          v-if="!store.isHost"
           variant="secondary"
           type="button"
           class="w-full"
           :class="{ 'text-success-fg bg-green/10 border-green': store.me?.ready }"
+          :aria-describedby="startGateReason ? startGateReasonId : undefined"
           :audio-feedback="store.me?.ready ? 'activate' : null"
           @click="store.setReady(!store.me?.ready)"
         >
           {{ store.me?.ready ? strings.ui.room.cancelReady : strings.ui.room.readyGo }}
-        </AppButton>
-        <AppButton
-          v-else-if="!store.isHost"
-          variant="secondary"
-          type="button"
-          class="w-full"
-          disabled
-          :title="strings.a11y.room.spectatorReadyTitle"
-        >
-          {{ strings.ui.room.spectatorReadyButton }}
         </AppButton>
         <AppButton
           v-if="store.isHost"
@@ -189,6 +224,7 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
           type="button"
           class="w-full"
           :disabled="!allSet"
+          :aria-describedby="startGateReason ? startGateReasonId : undefined"
           :audio-feedback="null"
           @click="store.startGame"
         >
@@ -204,11 +240,12 @@ async function saveSettings(draft: RoomSettings): Promise<void> {
     -->
     <VocabularyDialog v-model:open="showVocabulary" v-model:loading="vocabularyLoading" />
 
-    <!-- 弹窗二：房间规则编辑（房主）——滑块与开关修改规则（动画由 BaseDialog 内部负责） -->
+    <!-- 弹窗二：房间规则编辑（房主）——字段集合按房间模式裁剪；动画由 BaseDialog 内部负责 -->
     <RulesDialog
       v-model:open="showSettings"
       :draft="settingsDraft"
       :read-only="!store.isHost"
+      :game-mode="store.room.gameMode"
       @save="saveSettings"
     />
 

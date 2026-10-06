@@ -1,0 +1,150 @@
+<!--
+  接龙猜词作答浮层（依据 S41 / S72 / S79 / S86）：
+  仅在猜词棒浮于画布上，玩家写下答案并提交，提交后锁定为「等待其他玩家」。
+  作画棒的完成提交按钮位于 CanvasToolbar 末尾，避免浮层遮挡画作（S30，见 GameView）。
+
+  为什么复用共享外壳：拖动定位、百分比记账与工作区夹取只在 `DraggablePanelShell` 维护一处（S86），
+  本组件只负责猜词输入与提交语义，绝不重复实现拖动。
+
+  锁定态跟随服务端快照：`submitted` 为真（含超时 / 掉线时服务端代交）即锁定；本地提交成功
+  只做即时反馈；他人是否已交只由快照 `submittedPlayerIds` 表达（S64）。
+-->
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { useTimestamp } from '@vueuse/core'
+import { GripVertical } from 'lucide-vue-next'
+import { strings } from '@draw-guess/strings'
+import { AppButton, AppInput } from '@/components/common'
+import DraggablePanelShell from '@/components/game/DraggablePanelShell.vue'
+import type { PanelPosition } from '@/components/game/FloatingPanel.vue'
+import { playInteractionSound } from '@/audio'
+import { useGameStore } from '@/stores/game'
+
+const props = defineProps<{
+  /** 当前步骤 id：换棒即复位草稿与浮层拖动位置。 */
+  stepId: string
+  /** 本步是否已提交（服务端快照口径，含服务端代交）。 */
+  submitted: boolean
+  /** 当前观看者是否可提交（沿用 HUD 的在线可玩成员口径）。 */
+  enabled: boolean
+}>()
+
+const store = useGameStore()
+const defaultClass = 'bottom-[1.2cqh] left-1/2 -translate-x-1/2'
+const position = ref<PanelPosition | null>(null)
+const now = useTimestamp({ interval: store.config.ui.tickIntervalMs })
+const draft = ref('')
+const pending = ref(false)
+const locallySubmitted = ref(false)
+
+const isSubmitted = computed(() => props.submitted || locallySubmitted.value)
+const stepEnded = computed(() => {
+  const endsAt = store.room?.relay?.phaseEndsAt ?? 0
+  return endsAt > 0 && now.value + store.clockOffset >= endsAt
+})
+const canSubmit = computed(
+  () => props.enabled && !isSubmitted.value && !pending.value && !stepEnded.value,
+)
+/** 猜词禁止空提交与超长提交（S15 客户端侧）：全空白或超出字符上限不可提交。 */
+const canSubmitGuess = computed(
+  () =>
+    canSubmit.value &&
+    draft.value.trim().length > 0 &&
+    Array.from(draft.value.trim()).length <= store.config.player.chatMaxLength,
+)
+
+watch(
+  () => props.stepId,
+  () => {
+    position.value = null
+    draft.value = ''
+    locallySubmitted.value = false
+    pending.value = false
+  },
+)
+
+/** 服务端代交或正常提交到达后，丢弃已经无效的本地草稿。 */
+watch(
+  () => props.submitted,
+  (submittedNow) => {
+    if (submittedNow) draft.value = ''
+  },
+)
+
+async function submitGuess(): Promise<void> {
+  const text = draft.value.trim()
+  if (!text || !canSubmitGuess.value) return
+  const stepId = props.stepId
+  pending.value = true
+  try {
+    const delivered = await store.relaySubmitGuess(text)
+    if (delivered && props.stepId === stepId) {
+      locallySubmitted.value = true
+      draft.value = ''
+      playInteractionSound('activate')
+    }
+  } finally {
+    if (props.stepId === stepId) pending.value = false
+  }
+}
+</script>
+
+<template>
+  <DraggablePanelShell
+    v-model:position="position"
+    :default-class="defaultClass"
+    :drag-title="strings.a11y.game.dragAnswerPanelTitle"
+    :drag-aria="strings.a11y.game.dragAnswerPanelAria"
+  >
+    <template #default="{ drag }">
+      <!-- 单行悬浮栏：边框与圆角完全对齐底部工具条（border-[0.25cqh] border-navy bg-paper/95，Image 2 示意图） -->
+      <div
+        class="flex w-[28cqw] max-w-[90cqw] items-center gap-[0.55em] rounded-[0.5em] border-[0.25cqh] border-navy bg-paper/95 px-[0.7em] py-[0.45cqh] shadow-float"
+      >
+        <!-- 左侧拖动手柄：按住可拖动作答框在画布内移动（绑定与定位来自共用外壳） -->
+        <div
+          v-bind="drag"
+          class="grid cursor-grab place-items-center px-[0.1em] py-[0.2em] text-muted hover:text-navy active:cursor-grabbing"
+        >
+          <GripVertical class="h-[2.4cqh] w-[2.4cqh]" />
+        </div>
+
+        <!-- 猜词棒作答表单：输入框 + 提交按钮（单行紧凑布局） -->
+        <form
+          v-if="!isSubmitted"
+          class="flex min-w-0 flex-1 items-center gap-[0.5em]"
+          @submit.prevent="submitGuess"
+        >
+          <AppInput
+            v-model="draft"
+            size="body"
+            class="min-w-0 flex-1"
+            :maxlength="store.config.player.chatMaxLength"
+            :disabled="!canSubmit"
+            :placeholder="strings.ui.game.relayAnswerPlaceholder"
+            :aria-label="strings.a11y.game.answerInputAria"
+          />
+          <span v-if="stepEnded" class="shrink-0 text-fs-12 font-bold text-warning-fg">
+            {{ strings.ui.game.relayStepEnded }}
+          </span>
+          <AppButton
+            type="submit"
+            variant="primary"
+            class="shrink-0 min-h-0 h-[4.4cqh] rounded-[0.45em] px-[1em] text-fs-14 font-bold"
+            :disabled="!canSubmitGuess"
+            :audio-feedback="null"
+          >
+            {{ strings.ui.game.relayAnswerSubmit }}
+          </AppButton>
+        </form>
+        <!-- 已提交（本地即时锁定或服务端快照，含超时 / 掉线代交）：锁定等待其他玩家 -->
+        <div
+          v-else
+          class="flex flex-1 min-h-[4.4cqh] items-center justify-center gap-[0.4em] rounded-[0.45em] bg-green/10 text-fs-14 font-bold text-success-fg"
+        >
+          {{ strings.ui.game.relayWaitingOthers }}
+        </div>
+      </div>
+    </template>
+  </DraggablePanelShell>
+</template>

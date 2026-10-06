@@ -7,12 +7,11 @@
  * - test/unit/helpers/mini-vocabulary.ts → 内存 VocabularyRegistry（单测）。
  * 单独成模块（而非放 test-fixture 里）是为了让纯逻辑单测不背原生依赖加载。
  */
-import { MIN_SELECTED_VOCABULARY_WORDS } from '@draw-guess/shared'
+/** 单测与夹具默认生成的测试词数。 */
+export const DEFAULT_TEST_WORD_COUNT = 60
 
 /** 测试词库合集轮转表（与 SqliteProvider/快照的合集聚合对齐）。 */
 export const TEST_WORD_COLLECTIONS = ['物品', '动物', '动作'] as const
-/** 保持向后兼容别名 */
-export const TEST_WORD_CATEGORIES = TEST_WORD_COLLECTIONS
 
 /** 一条测试词面规格：编号/词面/合集（难度/可绘制性/提示已随词库瘦身移除）。 */
 interface TestWordSpec {
@@ -25,7 +24,7 @@ interface TestWordSpec {
  * 生成词面规格：词面唯一（padStart 编号）；分类三值轮转（覆盖分类白名单与候选多样性）。
  * 默认条数即协议裁决线 MIN_SELECTED_VOCABULARY_WORDS——少于它 startGame 会拒绝开局。
  */
-export function buildWordSpecs(count = MIN_SELECTED_VOCABULARY_WORDS): TestWordSpec[] {
+export function buildWordSpecs(count = DEFAULT_TEST_WORD_COUNT): TestWordSpec[] {
   const specs: TestWordSpec[] = []
   for (let index = 1; index <= count; index += 1) {
     specs.push({

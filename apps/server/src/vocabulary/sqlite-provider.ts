@@ -57,10 +57,11 @@ export class SqliteProvider implements VocabularyProvider {
     const database = new Database(resolved, { readonly: true, fileMustExist: true })
     try {
       const meta = this.readMeta(database)
+      const baseId = path.basename(this.dbPath, '.db')
+      const packageName = meta.name || baseId
       const usedIds = new Set<number>()
       const parsedWords: VocabularyWord[] = []
       const collectionsSet = new Set<string>()
-
       // 检查 words 表结构以兼容 collection 与遗留 category 列
       const columns = database.prepare('PRAGMA table_info(words)').all() as Array<{ name: string }>
       const hasCollection = columns.some((col) => col.name === 'collection')
@@ -80,10 +81,12 @@ export class SqliteProvider implements VocabularyProvider {
         const collection = row.collection.trim()
         collectionsSet.add(collection)
         parsedWords.push({
-          id: canonicalWordId(this.sourceId, row.id),
+          id: canonicalWordId(baseId, row.id),
           text: row.text,
           aliases,
           collection,
+          packageId: baseId,
+          packageName,
         })
       }
 
@@ -99,15 +102,17 @@ export class SqliteProvider implements VocabularyProvider {
       }
       if (APP_CONFIG.vocabulary.deduplicate) assertNoDuplicateText(parsedWords)
 
-      const baseId = path.basename(this.dbPath, '.db')
+      // baseId 与 packageName 已在读取前预计算
       return {
         words: parsedWords,
         version: hashWords(parsedWords),
         meta: {
           sourceId: this.sourceId,
           id: baseId,
-          name: meta.name || baseId,
+          name: packageName,
           description: meta.description || '',
+          author: meta.author || '',
+          remark: meta.remark || '',
           fileVersion: meta.version,
           updatedAt: meta.updatedAt,
           collections: Array.from(collectionsSet),
@@ -119,10 +124,12 @@ export class SqliteProvider implements VocabularyProvider {
     }
   }
 
-  /** 读取元数据表：仅保留 name / description / version / updated_at。 */
+  /** 读取元数据表：包含 name / description / author / remark / version / updated_at。 */
   private readMeta(database: Database.Database): {
     name?: string
     description?: string
+    author?: string
+    remark?: string
     version?: string
     updatedAt?: string
   } {
@@ -133,6 +140,8 @@ export class SqliteProvider implements VocabularyProvider {
     return {
       name: map.get('name')?.trim(),
       description: map.get('description')?.trim(),
+      author: map.get('author')?.trim(),
+      remark: map.get('remark')?.trim(),
       version: map.get('version'),
       updatedAt: map.get('updated_at'),
     }

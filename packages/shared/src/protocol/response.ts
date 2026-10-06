@@ -46,6 +46,8 @@ export const VocabularyWordSchema = z
     text: z.string().min(1),
     aliases: z.array(z.string()),
     collection: z.string().min(1),
+    packageId: z.string().min(1),
+    packageName: z.string().min(1),
   })
   .strict()
 
@@ -56,6 +58,8 @@ export const VocabularyPackageInfoSchema = z
     name: z.string().min(1),
     wordCount: z.number().int().nonnegative(),
     description: z.string(),
+    author: z.string(),
+    remark: z.string(),
     version: z.string(),
     updatedAt: z.string(),
   })
@@ -64,7 +68,7 @@ export const VocabularyPackageInfoSchema = z
 /** 房间词库快照：当前包、全部可用包、词条列表、已选词条、版本与自动检测聚合的合集列表。 */
 export const VocabularySnapshotSchema = z
   .object({
-    packageId: z.string(),
+    packageIds: z.array(z.string().min(1)),
     packages: z.array(VocabularyPackageInfoSchema),
     items: z.array(VocabularyWordSchema),
     selectedIds: z.array(WordIdSchema),
@@ -139,13 +143,22 @@ export const CLIENT_RESPONSE_SCHEMAS = {
   [EVENTS.gameChooseWord]: emptyAckSchema,
   [EVENTS.gameRerollWords]: emptyAckSchema,
   [EVENTS.gameCustomWord]: emptyAckSchema,
-  [EVENTS.gamePauseRequest]: emptyAckSchema,
-  [EVENTS.gameResume]: emptyAckSchema,
   [EVENTS.gameEndEarly]: emptyAckSchema,
   [EVENTS.gameLeave]: emptyAckSchema,
   [EVENTS.gameReturnWaiting]: emptyAckSchema,
   [EVENTS.guessSubmit]: eventAckSchema(guessResultSchema),
   [EVENTS.chatPreset]: emptyAckSchema,
+  /* 接龙（S30 / S51 / S79）：绘图族沿用经典绘图 ack 口径（笔画批带预算、填充带修订、其余空响应）；
+     猜词不判对错故无 correct 结果，提交与独立聊天都是空响应。 */
+  [EVENTS.relayDrawStrokeBatch]: eventAckSchema(StrokeAckSchema),
+  [EVENTS.relayDrawFillCommit]: eventAckSchema(drawingRevisionSchema),
+  [EVENTS.relayDrawUndo]: emptyAckSchema,
+  [EVENTS.relayDrawRedo]: emptyAckSchema,
+  [EVENTS.relayDrawClear]: emptyAckSchema,
+  [EVENTS.relaySubmitGuess]: emptyAckSchema,
+  [EVENTS.relaySubmitDrawing]: emptyAckSchema,
+  [EVENTS.relayVote]: emptyAckSchema,
+  [EVENTS.chatSay]: emptyAckSchema,
   [EVENTS.gameCanvasPing]: emptyAckSchema,
   [EVENTS.drawStrokeBatch]: eventAckSchema(StrokeAckSchema),
   [EVENTS.drawFillCommit]: eventAckSchema(drawingRevisionSchema),
