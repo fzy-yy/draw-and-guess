@@ -140,7 +140,7 @@ describe('ChatPanel 输入与快捷互动', () => {
     ).toBe(true)
   })
 
-  it('系统消息渲染为居中圆角卡片，玩家消息使用独立胶囊标签徽章', async () => {
+  it('聊天面板中仅展示玩家发出的消息，系统消息不出现在聊天列表中', async () => {
     const room = useRoomStore()
     const session = useSessionStore()
     room.room = createRoomFixture()
@@ -164,7 +164,9 @@ describe('ChatPanel 输入与快捷互动', () => {
 
     renderWithPinia(ChatPanel, { canGuess: true })
 
-    expect(screen.getByText('作画开始，猜词玩家请在右侧输入答案')).toBeTruthy()
+    // 系统消息不再渲染在聊天流中（统一走 Toast 通知）
+    expect(screen.queryByText('作画开始，猜词玩家请在右侧输入答案')).toBeNull()
+    // 玩家消息正常渲染并带昵称徽章
     expect(screen.getByText('这是一条猜词')).toBeTruthy()
     expect(screen.getByText('房主')).toBeTruthy()
   })

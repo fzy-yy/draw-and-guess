@@ -4,14 +4,15 @@
   宽度扩展至 16cqw（净宽 120px 以上），以充足空间展示 8~10 字长昵称；
   结构微调：左侧头像（4.6cqh），右侧两行清晰排布：第一行完整展示昵称，第二行并排展示分数与当前状态角色；
   画家仅通过「作画中」角色文案与画笔角标表达（无背景底色）；
-  玩家本人通过卡片背景显示自身座位色浅色底表达（保留本人卡片自我高亮定位）；已猜中通过眼睛角标与文案表达，掉线用虚线边框与半透明底表达。
+  玩家本人通过卡片背景显示自身座位色浅色底表达（保留本人卡片自我高亮定位）；已猜中通过绿色文案与对号图标表达（背景不变色），掉线用虚线边框与半透明底表达。
   宽度与高度由宿主（GameView 左栏 aside）给定：自身流内占位、不浮动、无标题栏、不可关闭。
   `status` 插槽（S84）：第二行的「局内角色」位置可按模式替换——接龙传入「已提交 / 未提交 / 已投票 / 未投票」；
   不传该插槽时按现状渲染经典局内角色，经典行为逐条不变。
 -->
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { Brush, Eye } from 'lucide-vue-next'
+import { Brush, Check, Eye } from 'lucide-vue-next'
+import type { RoomMember } from '@draw-guess/shared'
 import { strings } from '@draw-guess/strings'
 import { playSound } from '@/audio'
 import { useGameStore } from '@/stores/game'
@@ -19,6 +20,10 @@ import { AvatarImage } from '@/components/common'
 import { PLAYER_BADGE_CLASS } from '@/components/game/player-badge.ts'
 import { roleTextFor } from '@/utils/role-text'
 
+defineSlots<{
+  /** 局内角色/状态插槽（接龙模式下由父级传入提交/投票状态行） */
+  status?: (props: { member: RoomMember }) => unknown
+}>()
 const store = useGameStore()
 
 /**
@@ -71,11 +76,8 @@ watch(
     <article
       v-for="member in store.room.members"
       :key="member.id"
-      class="grid min-h-[6cqh] min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-[0.45em] border-l-[0.32cqh] px-[0.45em] py-[0.35cqh]"
-      :class="[
-        member.guessed ? 'bg-green/10' : 'bg-white',
-        member.connection !== 'online' && 'border-dashed bg-line/40',
-      ]"
+      class="grid min-h-[6cqh] min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-[0.45em] border-l-[0.32cqh] bg-white px-[0.45em] py-[0.35cqh]"
+      :class="[member.connection !== 'online' && 'border-dashed bg-line/40']"
       :style="{
         '--seat-color': member.seatColor,
         borderLeftColor: member.seatColor,
@@ -123,16 +125,22 @@ watch(
           <!-- 状态位：缺省＝经典局内角色；接龙经 `status` 插槽换成提交 / 投票状态（S84） -->
           <slot name="status" :member="member">
             <span
-              class="truncate text-fs-10 font-bold"
+              class="flex shrink-0 items-center gap-[0.25em] truncate text-fs-10 font-bold"
               :class="[
                 member.isDrawer
                   ? 'bg-[linear-gradient(90deg,var(--seat-color),var(--color-navy),var(--seat-color))] bg-size-[200%_100%] bg-clip-text text-transparent animate-[drawer-role-flow_1.4s_linear_infinite]'
                   : member.guessed
-                    ? 'text-warning-fg'
+                    ? 'text-success-fg'
                     : 'text-muted',
               ]"
-              >{{ roleTextFor(member) }}</span
             >
+              <Check
+                v-if="member.guessed"
+                class="h-[1.6cqh] w-[1.6cqh] shrink-0"
+                aria-hidden="true"
+              />
+              <span class="truncate">{{ roleTextFor(member) }}</span>
+            </span>
           </slot>
         </div>
       </div>

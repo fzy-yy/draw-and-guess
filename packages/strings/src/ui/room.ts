@@ -8,7 +8,7 @@ export const room = {
   publicRoomBadge: '公开房间 · 大厅自由加入',
   privateRoomBadge: '私密房间',
   /** 模式徽标（S80 / Image 3 统一）：固定在房间名之后，经典与接龙都显示，接龙模式完整展示四字。 */
-  modeClassic: '经典',
+  modeClassic: '经典模式',
   modeRelay: '接龙模式',
   privateCodeCopied: '房间码已复制',
   privateCodeCopyFailed: '无法自动复制，请手动记录房间码',

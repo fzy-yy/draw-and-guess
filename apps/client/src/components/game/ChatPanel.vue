@@ -66,10 +66,14 @@ const guess = ref('')
 // 消息列表 DOM 引用与「是否跟随最新消息」标记：上滚时暂停跟随，底部时恢复。
 const messageList = ref<HTMLElement>()
 const shouldFollowMessages = ref(true)
-// 消息数据直接读取房间快照中的聊天记录，无需独立 ticker。
-// 经典房的聊天流在 `game.messages`；接龙房没有经典 `game`，其房间级自由聊天在 `relay.messages`
-// （与作答彻底分离，S79 / S20）——两者互斥，一次回退即可同时覆盖两种模式，经典读取顺序与改造前一致。
-const messages = computed(() => store.room?.game?.messages ?? store.room?.relay?.messages ?? [])
+// 消息数据读取房间快照中的聊天记录，并在所有模式下过滤掉系统消息：
+// 聊天面板仅展示玩家发出的聊天消息内容，系统消息一律使用 Toast 弹出通知。
+// 经典房的聊天流在 `game.messages`；接龙房没有经典 `game`，其房间级自由聊天在 `relay.messages`。
+const messages = computed(() =>
+  (store.room?.game?.messages ?? store.room?.relay?.messages ?? []).filter(
+    (message) => message.type !== 'system',
+  ),
+)
 function memberForMessage(message: ChatMessage): RoomMember | undefined {
   return message.playerId
     ? store.room?.members.find((member) => member.id === message.playerId)
@@ -81,8 +85,8 @@ function memberForMessage(message: ChatMessage): RoomMember | undefined {
  * 覆盖底色与边框。
  */
 function messageStyle(message: ChatMessage): Record<string, string> | undefined {
-  // 非玩家普通发言不附加席位强调色
-  if (message.type === 'system' || message.type === 'correct' || message.type === 'near_miss') {
+  // 猜对广播与差一字提示不附加玩家席位强调色
+  if (message.type === 'correct' || message.type === 'near_miss') {
     return undefined
   }
   const member = memberForMessage(message)
@@ -109,9 +113,6 @@ function nicknameBadgeStyle(message: ChatMessage): Record<string, string> | unde
 /** 聊天消息类型对应的分层着色样式类。 */
 function messageClass(message: ChatMessage): string {
   switch (message.type) {
-    case 'system':
-      // 常规系统消息（进出房间等）：中性浅灰微字，低侵入感
-      return 'border-line/60 bg-paper/60 text-muted border-l-line'
     case 'correct':
       // 猜对答案广播：淡绿微底色，清晰激励
       return 'bg-green/10 text-success-fg border border-green/30 border-l-green'
@@ -218,7 +219,7 @@ defineExpose({ focusInput })
         >{{ roleTextFor(store.me) }}</span
       >
     </header>
-    <!-- 消息列表：猜词、系统、猜中、预设等类型分别高亮 -->
+    <!-- 消息列表：普通猜词、预设互动、猜中通报、差一字提示等玩家消息分别高亮 -->
     <div
       ref="messageList"
       class="flex min-h-0 flex-1 flex-col gap-[0.6cqh] overflow-y-auto overflow-x-hidden py-[1cqh] pl-0 pr-[0.35em] overscroll-contain scrollbar-gutter-stable"
@@ -231,16 +232,8 @@ defineExpose({ focusInput })
         内容超过一屏后 mt-auto 归零，不影响滚动跟随逻辑。
       -->
       <template v-for="message in messages" :key="message.id">
-        <!-- 系统通知消息：水平垂直居中对齐的圆角矩形卡片 -->
+        <!-- 玩家消息（普通猜词、预设互动、猜中通报、差一字提示） -->
         <div
-          v-if="message.type === 'system'"
-          class="self-center mx-auto my-[0.35cqh] flex flex-col items-center justify-center text-center rounded-[0.55em] border-[0.16cqh] border-line/80 bg-paper/85 px-[0.9em] py-[0.45cqh] text-fs-10 text-muted leading-[1.35] max-w-[92%] first:mt-auto ui-feedback"
-        >
-          <span>{{ message.text }}</span>
-        </div>
-        <!-- 其它消息（普通猜词、猜中通报、差一字提示） -->
-        <div
-          v-else
           :class="[
             'flex flex-wrap items-center gap-[0.45em] border-l-[0.3cqh] px-[0.65em] py-[0.5cqh] text-fs-12 leading-[1.35] first:mt-auto ui-feedback rounded-r-[0.35em]',
             messageClass(message),
