@@ -90,6 +90,8 @@ function validSnapshot(): RoomSnapshot {
     members: [],
     selectedWordCount: 0,
     totalWordCount: 0,
+    vocabularyPackageIds: [],
+    vocabularyPackageNames: [],
     game: {
       gameId: GAME_ID,
       roundId: ROUND_ID,

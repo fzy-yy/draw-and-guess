@@ -131,6 +131,7 @@ export const useGameStore = defineStore('game', () => {
     loadVocabulary: vocabularyStore.loadVocabulary,
     saveVocabulary: vocabularyStore.saveVocabulary,
     selectVocabularyPackage: vocabularyStore.selectVocabularyPackage,
+    selectVocabularyPackages: vocabularyStore.selectVocabularyPackages,
     cancelVocabularyRequests: vocabularyStore.cancelPending,
     startGame: gameplayStore.startGame,
     chooseWord: gameplayStore.chooseWord,

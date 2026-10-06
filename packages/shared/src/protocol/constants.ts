@@ -145,4 +145,4 @@ export const MAX_VOCABULARY_SELECTION_IDS = 10_000
  * 房间词库「最少勾选词条数」裁决线：服务端拒选（VOCABULARY_TOO_SMALL）与客户端选词
  * 提示共用；属线上可观察协议范围，故按单一来源约定写在协议常量（CONTEXT：词库包）。
  */
-export const MIN_SELECTED_VOCABULARY_WORDS = 60
+export const MIN_SELECTED_VOCABULARY_WORDS = 1

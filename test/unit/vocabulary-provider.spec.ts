@@ -68,6 +68,8 @@ function createVocabDb(options: FixtureOptions = {}): string {
     const meta: Record<string, string> = {
       name: '测试词库',
       description: 'Provider 单测词库',
+      author: '测试作者',
+      remark: '测试备注',
       version: '1.0.0',
       updated_at: '2026-09-23',
       ...(options.meta ?? {}),
@@ -113,20 +115,22 @@ describe('SqliteProvider 正常加载', () => {
     const loaded = await load(createVocabDb())
     expect(loaded.words).toHaveLength(7)
     expect(loaded.words.map((word) => word.id)).toEqual([
-      'sqlite:1',
-      'sqlite:2',
-      'sqlite:3',
-      'sqlite:4',
-      'sqlite:5',
-      'sqlite:6',
-      'sqlite:7',
+      'vocab-1:1',
+      'vocab-1:2',
+      'vocab-1:3',
+      'vocab-1:4',
+      'vocab-1:5',
+      'vocab-1:6',
+      'vocab-1:7',
     ])
-    // 词条只剩词面/合集/别称/ID
+    // 词条携带词面/合集/别称/ID/packageId/packageName
     expect(loaded.words[0]).toEqual({
-      id: 'sqlite:1',
+      id: 'vocab-1:1',
       text: '猫',
       aliases: ['小猫'],
       collection: '动物',
+      packageId: 'vocab-1',
+      packageName: '测试词库',
     })
     // 版本号为 12 位 hex 内容哈希
     expect(loaded.version).toMatch(/^[0-9a-f]{12}$/)
@@ -138,6 +142,8 @@ describe('SqliteProvider 正常加载', () => {
     expect(loaded.meta.name).toBe('测试词库')
     expect(loaded.meta.fileVersion).toBe('1.0.0')
     expect(loaded.meta.collections).toEqual(['动物', '植物', '自然', '电器'])
+    expect(loaded.meta.author).toBe('测试作者')
+    expect(loaded.meta.remark).toBe('测试备注')
     expect(loaded.meta.wordCount).toBe(7)
   })
 
@@ -221,20 +227,21 @@ describe('SqliteProvider 严格校验（异常数据阻止加载）', () => {
     ).rejects.toThrow(/别称.*长度超出允许范围/)
   })
 
-  it('词面重复 → 拒绝', async () => {
-    await expect(
-      load(
-        createVocabDb({
-          // 把「狗」的词面改成与「猫」相同：Provider 去重校验应拒绝
-          words: (words) => words.map((word) => (word.id === 2 ? { ...word, text: '猫' } : word)),
-        }),
-      ),
-    ).rejects.toThrow(/重复词面/)
+  it('允许词库存在重复词面', async () => {
+    const loaded = await load(
+      createVocabDb({
+        // 把「狗」的词面改成与「猫」相同：已解除重复限制，应正常加载
+        words: (words) => words.map((word) => (word.id === 2 ? { ...word, text: '猫' } : word)),
+      }),
+    )
+    expect(loaded.words).toHaveLength(7)
+    expect(loaded.words[0]!.text).toBe('猫')
+    expect(loaded.words[1]!.text).toBe('猫')
   })
 
   it('词数不足 minWords → 拒绝', async () => {
-    await expect(load(createVocabDb({ words: (words) => words.slice(0, 5) }))).rejects.toThrow(
-      /有效词条仅 5 个，至少需要 6 个/,
+    await expect(load(createVocabDb({ words: () => [] }))).rejects.toThrow(
+      /有效词条仅 0 个，至少需要 1 个/,
     )
   })
 })

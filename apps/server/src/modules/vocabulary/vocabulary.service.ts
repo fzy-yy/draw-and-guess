@@ -41,10 +41,15 @@ export class RoomVocabularyService {
     const { room } = this.context.getMembership(playerId)
     const store = this.context.getStore(room)
     const packages = this.context.registry.packages
-    const packageId = room.vocabularyPackageId || this.context.registry.defaultPackageId
+    const packageIds =
+      room.vocabularyPackageIds && room.vocabularyPackageIds.length > 0
+        ? room.vocabularyPackageIds
+        : room.vocabularyPackageId
+          ? [room.vocabularyPackageId]
+          : [this.context.registry.defaultPackageId]
 
     return {
-      packageId,
+      packageIds,
       packages,
       items: store.items,
       selectedIds: [...room.selectedWordIds],
@@ -54,9 +59,13 @@ export class RoomVocabularyService {
   }
 
   /**
-   * 切换房间绑定的词库包。
+   * 切换房间绑定的词库包列表（支持同时选择多个词库）。
    */
-  selectPackage(playerId: string, packageId: string, expectedVersion?: number): VocabularySnapshot {
+  selectPackages(
+    playerId: string,
+    packageIds: string[],
+    expectedVersion?: number,
+  ): VocabularySnapshot {
     const room = this.context.getHostRoom(playerId)
     if (room.phase !== 'waiting') {
       throw new AppError({
@@ -73,14 +82,24 @@ export class RoomVocabularyService {
       )
     }
 
-    const target = this.context.registry.get(packageId)
-    if (!target) {
-      throw new NotFoundError(
-        serverStrings.errors.VOCABULARY_PACKAGE_NOT_FOUND,
-        ERROR_CODES.NOT_FOUND,
-      )
+    if (!packageIds.length) {
+      throw new AppError({
+        message: serverStrings.errors.VOCABULARY_PACKAGE_NOT_FOUND,
+        code: ERROR_CODES.NOT_FOUND,
+        status: 422,
+      })
     }
 
+    for (const id of packageIds) {
+      if (!this.context.registry.get(id)) {
+        throw new NotFoundError(
+          serverStrings.errors.VOCABULARY_PACKAGE_NOT_FOUND,
+          ERROR_CODES.NOT_FOUND,
+        )
+      }
+    }
+
+    const target = this.context.registry.getCombined(packageIds)
     if (target.items.length < MIN_SELECTED_VOCABULARY_WORDS) {
       throw new AppError({
         message: serverStrings.errors.VOCABULARY_PACKAGE_TOO_SMALL(
@@ -92,17 +111,30 @@ export class RoomVocabularyService {
       })
     }
 
-    room.vocabularyPackageId = packageId
+    room.vocabularyPackageIds = [...packageIds]
+    room.vocabularyPackageId = packageIds[0]
     room.selectedWordIds = new Set(target.items.map((word) => word.id))
     room.stateVersion += 1
 
     this.context.addNotice(
       room,
-      serverStrings.notices.vocabularyPackageSwitched(target.meta.name || packageId),
+      serverStrings.notices.vocabularyPackageSwitched(target.meta.name || packageIds.join('、')),
     )
     this.context.emitRoom(room.id)
 
     return this.get(playerId)
+  }
+
+  /**
+   * 切换房间绑定的词库包（兼容单 ID 或多 ID 入参）。
+   */
+  selectPackage(
+    playerId: string,
+    packageIdOrIds: string | string[],
+    expectedVersion?: number,
+  ): VocabularySnapshot {
+    const packageIds = Array.isArray(packageIdOrIds) ? packageIdOrIds : [packageIdOrIds]
+    return this.selectPackages(playerId, packageIds, expectedVersion)
   }
 
   /**

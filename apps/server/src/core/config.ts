@@ -55,7 +55,7 @@ export const serverPrivateConfig = {
     maxWords: 10_000,
     maxAliasesPerWord: 8,
     maxAliasLength: 24,
-    deduplicate: true,
+    deduplicate: false,
     resetWhenExhausted: true,
   },
 } as const

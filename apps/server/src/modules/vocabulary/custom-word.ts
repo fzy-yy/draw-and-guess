@@ -18,6 +18,9 @@ import { AppError } from '../../core/errors.ts'
 
 /** 自定义词统一合集名称 */
 const CUSTOM_WORD_COLLECTION = '自定义'
+/** 自定义词所属虚拟词库 ID 与名称 */
+const CUSTOM_WORD_PACKAGE_ID = 'custom'
+const CUSTOM_WORD_PACKAGE_NAME = '自定义'
 
 /** 禁止出现的特殊字符正则（控制字符、格式控制、零宽连接符及 Emoji） */
 const FORBIDDEN_CHARACTER = /[\p{Cc}\p{Cf}\u200D\p{Extended_Pictographic}]/u
@@ -68,5 +71,7 @@ export function buildCustomWord(input: { rawText: string; wordId: string }): Voc
     text,
     aliases: [],
     collection: CUSTOM_WORD_COLLECTION,
+    packageId: CUSTOM_WORD_PACKAGE_ID,
+    packageName: CUSTOM_WORD_PACKAGE_NAME,
   }
 }

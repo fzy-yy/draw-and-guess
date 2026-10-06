@@ -339,6 +339,9 @@ pnpm format:check  # 仅检查格式
   - **单元素绝对居中**：严格使用 `grid place-items-center`（如圆形头像底座 `AvatarImage`、独立图标按钮 `IconButton`/`RoundIconButton`、徽章 `HostCrownBadge`、模态遮罩居中），杜绝单元素使用 `flex items-center justify-center` 导致子项伸缩变形；
   - **保留专用布局**：弹窗/画布状态遮罩（`BaseDialog`/`ConfirmDialog`/`OverlayCard`/`PhaseOverlay`）、对局浮层面板与底部工具条（`FloatingPanel`/`CanvasToolbar`）与 Toast 悬浮层（`AppToaster`）保留 `absolute`/`fixed` 定位；吸顶表头保留 `sticky`；数据表格（`DataTable.vue`）保留原生 `table`/`table-fixed`；
   - **反模式禁令**：严禁单子项容器使用 `grid-cols-1` 伪网格；严禁单元素容器使用无意义的 `flex`；严禁一维简单按钮使用 Grid；严禁二维页面大框架采用多层嵌套 flex。
+- **顶栏按钮文案与呈现规范（对局内 vs 对局外）**：
+  - **对局游戏内（`GameView` / `GameHud`）**：顶栏操作按钮（全屏切换、对局设置、提前结束等）应该无文案而只有 icon（使用 `IconButton`，尺寸紧凑、零文字冗余），将空间最大化让渡给回合进度、题目遮罩与倒计时；
+  - **对局外（如大厅 `LobbyView`、房间 `RoomView`、设置 `SettingsView`）**：顶栏的操作与状态按钮应该有文案（使用 `StageHeaderButton`，采用「图标 + 文本」水平排列，如设置、全屏、退出房间），确保操作语义直观明确。
 - **字体与排印规范（统一字号标尺、二元字重、统一字体族）**：
   - **字体家族统管**：字体族集中在 `apps/client/src/style/tokens.css` 的 `@theme` 中声明 `--font-sans`（默认无衬线系统字体）与 `--font-mono`（等宽数字/房间码/快捷键字体），全站经 Tailwind `font-sans` / `font-mono` 类统一调用，严禁在模板中临时编写私有 `font-[...]` 字体栈；
   - **偶数字号标尺（`text-fs-*`）**：全站字号均为偶数，集中定义于 `tokens.css`（并在 `apps/client/src/utils/cn.ts` 注册 `CUSTOM_FONT_SIZES` 参与 TailwindMerge 冲突消解）。底层采用相对单位 `em` 随舞台等比缩放（基准 1em = 16px @ 1080p）：

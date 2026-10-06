@@ -14,13 +14,19 @@ import {
   TEST_WORD_COLLECTIONS,
 } from '../../../apps/server/src/vocabulary/test-word-specs.ts'
 
-/** 把共享词面规格映射为内存 VocabularyWord（id 前缀 sqlite: 贴合 Provider 产出的编号形态）。 */
-function buildWords(count?: number): VocabularyWord[] {
+/** 把共享词面规格映射为内存 VocabularyWord（id 前缀包名 贴合 Provider 产出的编号形态）。 */
+function buildWords(
+  count?: number,
+  packageId = 'base_words',
+  packageName = '最小测试词库',
+): VocabularyWord[] {
   return buildWordSpecs(count).map((spec) => ({
-    id: `sqlite:${spec.index}`,
+    id: `${packageId}:${spec.index}`,
     text: spec.text,
     aliases: [],
     collection: spec.collection,
+    packageId,
+    packageName,
   }))
 }
 
@@ -41,6 +47,8 @@ export function createMemoryVocabularyRegistry(wordCount?: number): VocabularyRe
       id: packageId,
       name: '最小测试词库',
       description: '内存单测词库',
+      author: '单测作者',
+      remark: '单测备注',
       fileVersion: '1.0.0',
       updatedAt: '2026-01-01T00:00:00.000Z',
       collections: [...TEST_WORD_COLLECTIONS],
@@ -55,12 +63,15 @@ export function createMemoryVocabularyRegistry(wordCount?: number): VocabularyRe
         name: '最小测试词库',
         wordCount: items.length,
         description: '内存单测词库',
+        author: '单测作者',
+        remark: '单测备注',
         version: '1.0.0',
         updatedAt: '2026-01-01T00:00:00.000Z',
       },
     ],
     defaultPackageId: packageId,
     get: (id: string) => (id === packageId ? store : undefined),
+    getCombined: () => store,
     getDefault: () => store,
   } as unknown as VocabularyRegistry
 }

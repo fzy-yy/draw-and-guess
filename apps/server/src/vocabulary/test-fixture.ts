@@ -19,6 +19,8 @@ interface MinimalVocabularyFixtureOptions {
   wordCount?: number
   name?: string
   description?: string
+  author?: string
+  remark?: string
   version?: string
   updatedAt?: string
 }
@@ -32,6 +34,8 @@ export function createMinimalVocabularyDb(
     wordCount = MIN_SELECTED_VOCABULARY_WORDS,
     name = path.basename(filePath, '.db'),
     description = 'E2E 隔离环境自动生成的最小词库',
+    author = '测试作者',
+    remark = '测试备注',
     version = '1.0.0',
     updatedAt = '2026-01-01T00:00:00.000Z',
   } = options
@@ -45,7 +49,7 @@ export function createMinimalVocabularyDb(
       );
       CREATE TABLE words(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        text TEXT NOT NULL UNIQUE,
+        text TEXT NOT NULL,
         collection TEXT NOT NULL,
         aliases TEXT NOT NULL DEFAULT '[]'
       );
@@ -54,6 +58,8 @@ export function createMinimalVocabularyDb(
     const metaRows: Array<[string, string]> = [
       ['name', name],
       ['description', description],
+      ['author', author],
+      ['remark', remark],
       ['version', version],
       ['updated_at', updatedAt],
     ]

@@ -54,7 +54,7 @@ export function registerRoomGateway(socket: AppSocket, deps: RoomGatewayDeps): v
     vocabularyService.update(playerId, input.ids, input.expectedVersion),
   )
   bindRequest(socket, EVENTS.roomSelectVocabularyPackage, (input, playerId) =>
-    vocabularyService.selectPackage(playerId, input.packageId, input.expectedVersion),
+    vocabularyService.selectPackages(playerId, input.packageIds, input.expectedVersion),
   )
 
   // 4. 房主管理：踢人、移交房主

@@ -46,6 +46,8 @@ export const VocabularyWordSchema = z
     text: z.string().min(1),
     aliases: z.array(z.string()),
     collection: z.string().min(1),
+    packageId: z.string().min(1),
+    packageName: z.string().min(1),
   })
   .strict()
 
@@ -56,6 +58,8 @@ export const VocabularyPackageInfoSchema = z
     name: z.string().min(1),
     wordCount: z.number().int().nonnegative(),
     description: z.string(),
+    author: z.string(),
+    remark: z.string(),
     version: z.string(),
     updatedAt: z.string(),
   })
@@ -64,7 +68,7 @@ export const VocabularyPackageInfoSchema = z
 /** 房间词库快照：当前包、全部可用包、词条列表、已选词条、版本与自动检测聚合的合集列表。 */
 export const VocabularySnapshotSchema = z
   .object({
-    packageId: z.string(),
+    packageIds: z.array(z.string().min(1)),
     packages: z.array(VocabularyPackageInfoSchema),
     items: z.array(VocabularyWordSchema),
     selectedIds: z.array(WordIdSchema),

@@ -104,7 +104,7 @@ export class GameplayService {
       })
     }
 
-    const requiredWords = Math.max(MIN_SELECTED_VOCABULARY_WORDS, room.settings.optionCount)
+    const requiredWords = MIN_SELECTED_VOCABULARY_WORDS
     if (room.selectedWordIds.size < requiredWords) {
       throw new AppError({
         message: serverStrings.errors.VOCABULARY_TOO_SMALL_GAME(requiredWords),
@@ -234,13 +234,8 @@ export class GameplayService {
     this.context.round.beginDrawing(room, word)
   }
 
-  private isCustomWordDuplicate(room: RoomSecret, game: GameSecret, text: string): boolean {
+  private isCustomWordDuplicate(_room: RoomSecret, game: GameSecret, text: string): boolean {
     const normalized = normalizeAnswer(text)
-    const store = this.context.getRoomVocabularyStore(room)
-    for (const id of game.offeredWordIds) {
-      const word = store.byId.get(id)
-      if (word && normalizeAnswer(word.text) === normalized) return true
-    }
     return game.candidates.some((word) => normalizeAnswer(word.text) === normalized)
   }
 

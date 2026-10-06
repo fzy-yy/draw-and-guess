@@ -263,6 +263,7 @@ function makeRoom(
     privateJoinCode: options.visibility === 'private' ? PRIVATE_CODE : undefined,
     phase,
     stateVersion: 7,
+    vocabularyPackageIds: ['base_words'],
     settings: testRoomSettings({ showWordLength: true }),
     members,
     selectedWordIds: new Set(['word-1', 'word-2', 'word-3']),
@@ -505,6 +506,8 @@ describe('角色裁剪快照穷举矩阵', () => {
           text: relayCandidateText(chainIndex),
           aliases: [],
           collection: '物品',
+          packageId: 'base_words',
+          packageName: '基础词库',
         },
       ]
       chain.offeredWordIds.add(`word-c${chainIndex}`)
@@ -513,6 +516,8 @@ describe('角色裁剪快照穷举矩阵', () => {
         text: relayWordText(chainIndex),
         aliases: [],
         collection: '物品',
+        packageId: 'base_words',
+        packageName: '基础词库',
       }
       chain.step2Guess = relayGuessText(chainIndex)
       chain.step4Guess = relayLastGuessText(chainIndex)
@@ -572,6 +577,7 @@ describe('角色裁剪快照穷举矩阵', () => {
         stateVersion: 11,
         settings: testRoomSettings(),
         members,
+        vocabularyPackageIds: ['base_words'],
         selectedWordIds: new Set(['word-c0', 'word-c1', 'word-c2', 'word-c3']),
         relay: {
           id: GAME_ID,

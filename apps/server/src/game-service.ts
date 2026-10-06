@@ -239,6 +239,9 @@ export class GameService {
       },
       // VocabularyRegistry 契约保证 get/getDefault 必存在（必选成员），无需再运行时探活。
       getRoomVocabularyStore: (room) => {
+        if (room?.vocabularyPackageIds?.length) {
+          return this.vocabulary.getCombined(room.vocabularyPackageIds)
+        }
         if (room?.vocabularyPackageId) {
           const store = this.vocabulary.get(room.vocabularyPackageId)
           if (store) return store
@@ -605,12 +608,20 @@ export class GameService {
    * 房主切换房间词库包（默认选择词数最多的词库；亦可在词库管理中自由切换）。
    * 切换后重置为新词库全部词条，自增房间状态版本并推送快照与系统通知。
    */
-  selectVocabularyPackage(
+  selectVocabularyPackages(
     playerId: string,
-    packageId: string,
+    packageIds: string[],
     expectedVersion?: number,
   ): VocabularySnapshot {
-    return this.roomVocabulary.selectPackage(playerId, packageId, expectedVersion)
+    return this.roomVocabulary.selectPackages(playerId, packageIds, expectedVersion)
+  }
+
+  selectVocabularyPackage(
+    playerId: string,
+    packageIdOrIds: string | string[],
+    expectedVersion?: number,
+  ): VocabularySnapshot {
+    return this.roomVocabulary.selectPackage(playerId, packageIdOrIds, expectedVersion)
   }
 
   updateVocabulary(playerId: string, ids: string[], expectedVersion: number): VocabularySnapshot {
@@ -644,7 +655,7 @@ export class GameService {
       throw new GameError('NOT_ALL_READY', serverStrings.errors.NOT_ALL_READY)
     // 本局词条数必须不少于最小词数（MIN_SELECTED_VOCABULARY_WORDS）且覆盖选词候选数。
     // 接龙每条链都从同一词池独立抽候选（S31），因此两种模式共用同一条词库门槛。
-    const requiredWords = Math.max(MIN_SELECTED_VOCABULARY_WORDS, room.settings.optionCount)
+    const requiredWords = MIN_SELECTED_VOCABULARY_WORDS
     if (room.selectedWordIds.size < requiredWords) {
       throw new GameError(
         'VOCABULARY_TOO_SMALL',
@@ -750,13 +761,8 @@ export class GameService {
    * 自定义词撞词判定：与本局已展示过的词或当前候选词（规范化后）相同即视为重复，
    * 避免同一局出现两次同一个词、破坏「整局不重复」的既有不变量。
    */
-  private isCustomWordDuplicate(room: RoomSecret, game: GameSecret, text: string): boolean {
+  private isCustomWordDuplicate(_room: RoomSecret, game: GameSecret, text: string): boolean {
     const normalized = normalizeAnswer(text)
-    const store = this.ports.getRoomVocabularyStore(room)
-    for (const id of game.offeredWordIds) {
-      const word = store.byId.get(id)
-      if (word && normalizeAnswer(word.text) === normalized) return true
-    }
     return game.candidates.some((word) => normalizeAnswer(word.text) === normalized)
   }
 

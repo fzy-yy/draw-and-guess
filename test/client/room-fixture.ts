@@ -83,6 +83,8 @@ export function createRoomFixture(
     members: [member(HOST_ID, '房主', true, true), member(GUEST_ID, '猜词者', false, false)],
     selectedWordCount: 60,
     totalWordCount: 60,
+    vocabularyPackageIds: [],
+    vocabularyPackageNames: [],
     game,
   }
 }

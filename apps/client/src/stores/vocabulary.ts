@@ -33,10 +33,10 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
   }
 
   async function loadVocabulary(): Promise<void> {
-    const context = requestGuard.begin(state(), roomStore.room?.vocabularyPackageId)
+    const context = requestGuard.begin(state(), roomStore.room?.vocabularyPackageIds)
     if (!context) return
     const snapshot = await request(EVENTS.roomGetVocabulary)
-    if (snapshot.ok && requestGuard.accepts(context, state(), snapshot.data.packageId))
+    if (snapshot.ok && requestGuard.accepts(context, state(), snapshot.data.packageIds))
       vocabulary.value = snapshot.data
   }
 
@@ -48,14 +48,12 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
    */
   async function commitVocabulary(
     send: () => Promise<RequestResult<VocabularySnapshot>>,
-    guardPackageId: string | undefined,
+    guardPackageIds: string[] | string | undefined,
   ): Promise<boolean> {
-    // 无房间时 begin 返回 undefined（context 缺 roomId），与原先显式的房空检查同义，
-    // 因此房存在性守卫收敛在骨架一处即可。
-    const context = requestGuard.begin(state(), guardPackageId)
+    const context = requestGuard.begin(state(), guardPackageIds)
     if (!context) return false
     const snapshot = await send()
-    if (!snapshot.ok || !requestGuard.accepts(context, state(), snapshot.data.packageId))
+    if (!snapshot.ok || !requestGuard.accepts(context, state(), snapshot.data.packageIds))
       return false
     vocabulary.value = snapshot.data
     // 词库修改或切包后，服务端会向全房间广播权威的 systemNotice，此处不重复弹本地通知（见 ADR-0053）
@@ -67,21 +65,26 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
     if (!room) return false
     return commitVocabulary(
       () => request(EVENTS.roomUpdateVocabulary, { ids, expectedVersion: room.stateVersion }),
-      room.vocabularyPackageId,
+      room.vocabularyPackageIds,
     )
   }
 
-  async function selectVocabularyPackage(packageId: string): Promise<boolean> {
+  async function selectVocabularyPackages(packageIds: string[]): Promise<boolean> {
     const room = roomStore.room
     if (!room) return false
     return commitVocabulary(
       () =>
         request(EVENTS.roomSelectVocabularyPackage, {
-          packageId,
+          packageIds,
           expectedVersion: room.stateVersion,
         }),
-      packageId,
+      packageIds,
     )
+  }
+
+  async function selectVocabularyPackage(packageIdOrIds: string | string[]): Promise<boolean> {
+    const packageIds = Array.isArray(packageIdOrIds) ? packageIdOrIds : [packageIdOrIds]
+    return selectVocabularyPackages(packageIds)
   }
 
   return {
@@ -91,5 +94,6 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
     loadVocabulary,
     saveVocabulary,
     selectVocabularyPackage,
+    selectVocabularyPackages,
   }
 })

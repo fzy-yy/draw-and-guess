@@ -186,8 +186,11 @@ export class SnapshotBuilder {
       selectedWordCount: room.selectedWordIds.size,
       // 同一次快照对词库 store 只取一份（旧实现连调 4 次，均为同参数重复）。
       totalWordCount: vocabulary.items.length,
-      vocabularyPackageId: room.vocabularyPackageId || vocabulary.meta.id,
-      vocabularyPackageName: vocabulary.meta.name || vocabulary.meta.id,
+      vocabularyPackageIds:
+        room.vocabularyPackageIds ?? (room.vocabularyPackageId ? [room.vocabularyPackageId] : []),
+      vocabularyPackageNames: vocabulary.meta.name
+        ? vocabulary.meta.name.split('、')
+        : [vocabulary.meta.id || ''],
       ...(gameView ? { game: gameView } : {}),
       // 接龙视图与经典 game 并列、互斥出现（S56 / S57）
       ...(relayView ? { relay: relayView } : {}),

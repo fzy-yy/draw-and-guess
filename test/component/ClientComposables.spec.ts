@@ -332,17 +332,39 @@ describe('表格、选择与词库 composables', () => {
       text: '苹果',
       aliases: ['红苹果'],
       collection: '水果',
+      packageId: 'p1',
+      packageName: '基础',
     },
     {
       id: 'b',
       text: '巴士',
       aliases: ['公交车'],
       collection: '交通',
+      packageId: 'p1',
+      packageName: '基础',
     },
   ]
   const packages: VocabularyPackageInfo[] = [
-    { id: 'p2', name: '进阶', wordCount: 20, description: '难词', version: '2', updatedAt: '2' },
-    { id: 'p1', name: '基础', wordCount: 10, description: '常用', version: '1', updatedAt: '1' },
+    {
+      id: 'p2',
+      name: '进阶',
+      wordCount: 20,
+      description: '难词',
+      author: '作者2',
+      remark: '备注2',
+      version: '2',
+      updatedAt: '2',
+    },
+    {
+      id: 'p1',
+      name: '基础',
+      wordCount: 10,
+      description: '常用',
+      author: '作者1',
+      remark: '备注1',
+      version: '1',
+      updatedAt: '1',
+    },
   ]
 
   it('排序、全选三态与只读选择分支保持一致', () => {

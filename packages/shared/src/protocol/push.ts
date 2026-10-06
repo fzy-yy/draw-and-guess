@@ -289,8 +289,8 @@ export const RoomSnapshotSchema = z
     members: z.array(RoomMemberSchema),
     selectedWordCount: z.number().int().nonnegative(),
     totalWordCount: z.number().int().nonnegative(),
-    vocabularyPackageId: z.string().optional(),
-    vocabularyPackageName: z.string().optional(),
+    vocabularyPackageIds: z.array(z.string()).default([]),
+    vocabularyPackageNames: z.array(z.string()).default([]),
     game: GameViewSchema.optional(),
     /** 接龙视图：仅接龙房间下发；经典房间与经典门禁路径完全不动（S57）。 */
     relay: RelayGameViewSchema.optional(),

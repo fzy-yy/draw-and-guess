@@ -421,21 +421,40 @@ describe('大厅、房间与词库权威请求', () => {
 
   it('词库加载、保存、切包和失效上下文只接收当前房间结果', async () => {
     const room = useRoomStore()
-    room.room = { ...createRoomFixture('waiting'), vocabularyPackageId: 'p1' }
+    room.room = { ...createRoomFixture('waiting'), vocabularyPackageIds: ['p1'] }
     const packages = [
-      { id: 'p1', name: '基础', wordCount: 1, description: '', version: '1', updatedAt: '1' },
-      { id: 'p2', name: '进阶', wordCount: 1, description: '', version: '1', updatedAt: '1' },
+      {
+        id: 'p1',
+        name: '基础',
+        wordCount: 1,
+        description: '',
+        author: '',
+        remark: '',
+        version: '1',
+        updatedAt: '1',
+      },
+      {
+        id: 'p2',
+        name: '进阶',
+        wordCount: 1,
+        description: '',
+        author: '',
+        remark: '',
+        version: '1',
+        updatedAt: '1',
+      },
     ]
     mockAck((event, payload) => {
-      const packageId =
+      const rawPkg = payload as { packageIds?: string[]; packageId?: string }
+      const packageIds =
         event === EVENTS.roomSelectVocabularyPackage
-          ? String((payload as { packageId?: string }).packageId)
-          : 'p1'
+          ? (rawPkg.packageIds ?? (rawPkg.packageId ? [rawPkg.packageId] : ['p1']))
+          : ['p1']
       return {
         ok: true,
         requestId: String(payload.requestId),
         data: {
-          packageId,
+          packageIds,
           packages,
           items: [
             {
@@ -443,6 +462,8 @@ describe('大厅、房间与词库权威请求', () => {
               text: '苹果',
               aliases: [],
               collection: '水果',
+              packageId: 'p1',
+              packageName: '基础',
             },
           ],
           selectedIds: ['word-1'],
@@ -456,7 +477,7 @@ describe('大厅、房间与词库权威请求', () => {
     await vocabulary.loadVocabulary()
     await expect(vocabulary.saveVocabulary(['word-1'])).resolves.toBe(true)
     await expect(vocabulary.selectVocabularyPackage('p2')).resolves.toBe(true)
-    expect(vocabulary.vocabulary?.packageId).toBe('p2')
+    expect(vocabulary.vocabulary?.packageIds).toEqual(['p2'])
     vocabulary.cancelPending()
     vocabulary.clear()
     expect(vocabulary.vocabulary).toBeUndefined()

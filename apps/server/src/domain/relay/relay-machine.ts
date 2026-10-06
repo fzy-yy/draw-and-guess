@@ -740,13 +740,8 @@ export class RelayMachine {
    * 自定义词撞词判定：与本链已展示过的词或当前候选（规范化后）相同即视为重复，
    * 与经典的撞词口径一致（只是把去重范围收到本链，S31）。
    */
-  private isDuplicateInChain(room: RoomSecret, chain: RelayChainSecret, text: string): boolean {
+  private isDuplicateInChain(_room: RoomSecret, chain: RelayChainSecret, text: string): boolean {
     const normalized = normalizeAnswer(text)
-    const store = this.service.getRoomVocabularyStore(room)
-    for (const id of chain.offeredWordIds) {
-      const word = store.byId.get(id)
-      if (word && normalizeAnswer(word.text) === normalized) return true
-    }
     return chain.candidates.some((candidate) => normalizeAnswer(candidate.text) === normalized)
   }
 
@@ -757,22 +752,31 @@ export class RelayMachine {
    */
   private pickCandidates(room: RoomSecret, chain: RelayChainSecret): VocabularyWord[] {
     const store = this.service.getRoomVocabularyStore(room)
-    const poolOf = (excluded: Set<string>): VocabularyWord[] =>
-      [...room.selectedWordIds]
-        .filter((id) => !excluded.has(id))
-        .map((id) => store.byId.get(id))
-        .filter((word): word is VocabularyWord => word !== undefined)
-    let pool = poolOf(chain.offeredWordIds)
-    if (pool.length < room.settings.optionCount && APP_CONFIG.vocabulary.resetWhenExhausted) {
-      chain.offeredWordIds.clear()
-      pool = poolOf(chain.offeredWordIds)
+    const pool = [...room.selectedWordIds]
+      .map((id) => store.byId.get(id))
+      .filter((word): word is VocabularyWord => word !== undefined)
+
+    const targetCount = room.settings.optionCount
+    let picked: VocabularyWord[]
+    if (pool.length >= targetCount) {
+      const selected = selectDiverseCandidates({
+        pool: this.shuffle(pool),
+        count: targetCount,
+      })
+      picked = pool.length <= targetCount ? selected : this.shuffle(selected)
+    } else if (pool.length > 0) {
+      const shuffled = this.shuffle([...pool])
+      picked = []
+      while (picked.length < targetCount) {
+        for (const word of shuffled) {
+          if (picked.length >= targetCount) break
+          picked.push(word)
+        }
+      }
+    } else {
+      picked = []
     }
-    // 先洗牌再按分类多样性抽样：分类均匀与顺序随机兼顾（与经典同一口径）
-    const selected = selectDiverseCandidates({
-      pool: this.shuffle(pool),
-      count: room.settings.optionCount,
-    })
-    const picked = pool.length <= room.settings.optionCount ? selected : this.shuffle(selected)
+
     picked.forEach((word) => chain.offeredWordIds.add(word.id))
     return picked
   }

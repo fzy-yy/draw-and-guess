@@ -44,7 +44,8 @@ const wordTable = ref<ScrollableTable>()
 const packageTable = ref<ScrollableTable>()
 /** 只读标志：非房主可打开查看，但不可选择词条（无复选框/无保存）。 */
 const isReadOnly = computed(() => !store.isHost)
-const activePackageId = computed(() => store.vocabulary?.packageId ?? '')
+const activePackageIds = computed(() => store.vocabulary?.packageIds ?? [])
+
 const words = computed(() => store.vocabulary?.items ?? [])
 const packages = computed(() => store.vocabulary?.packages ?? [])
 const selection = useVocabularySelection(() => isReadOnly.value)
@@ -64,12 +65,13 @@ const allWordIds = computed(() => (store.vocabulary?.items ?? []).map((item) => 
  * weight：列宽相对权重，配合 DataTable 的权重归一化铺满整表。
  */
 const allColumns = computed<DataTableColumn<VocabularyWord>[]>(() => [
-  { key: 'text', label: strings.ui.room.vocabColumnText, weight: 18 },
+  { key: 'text', label: strings.ui.room.vocabColumnText, weight: 16 },
+  { key: 'packageName', label: strings.ui.room.vocabColumnPackage, weight: 13 },
   { key: 'collection', label: strings.ui.room.vocabColumnCollections, weight: 11 },
   {
     key: 'aliases',
     label: strings.ui.room.vocabColumnAliases,
-    weight: 20,
+    weight: 18,
     sortValue: (word) => word.aliases.join(','),
   },
 ])
@@ -93,9 +95,9 @@ const {
 } = query
 const packageState = useVocabularyPackages({
   packages: filteredPackages,
-  activePackageId,
+  activePackageIds,
   isReadOnly: () => isReadOnly.value,
-  select: (packageId) => store.selectVocabularyPackage(packageId),
+  select: (packageIds) => store.selectVocabularyPackages(packageIds),
   onSelected: async () => {
     if (store.vocabulary) selection.reset(store.vocabulary.selectedIds)
     await nextTick()
@@ -103,15 +105,17 @@ const packageState = useVocabularyPackages({
   },
 })
 const {
+  pendingPackageIds,
   pendingPackageId,
+  displayedPackageIds,
   displayedPackageId,
   rows: tablePackageRows,
   sortKey: packageSortKey,
   sortDir: packageSortDir,
   handleSort: handlePackageSort,
-  select: handleSelectPackage,
-} = packageState
 
+  toggle: handleTogglePackage,
+} = packageState
 function toggleSelectAll(): void {
   selection.toggleAll(filteredWords.value)
 }
@@ -306,13 +310,15 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
           v-else
           ref="packageTable"
           :rows="tablePackageRows"
+          :selected-package-ids="displayedPackageIds"
           :selected-package-id="displayedPackageId"
           :sort-key="packageSortKey"
           :sort-dir="packageSortDir"
           :is-read-only="isReadOnly"
-          :selection-pending="!!pendingPackageId"
+          :selection-pending="Boolean(pendingPackageIds?.length || pendingPackageId)"
           @sort="handlePackageSort"
-          @select="handleSelectPackage"
+          @select="handleTogglePackage"
+          @toggle="handleTogglePackage"
         />
       </div>
     </template>

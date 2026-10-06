@@ -14,6 +14,7 @@ import { APP_CONFIG } from '../config/index.ts'
 import type { VocabularyPackageInfo, VocabularyWord } from '@draw-guess/shared'
 import type { VocabularyMeta } from './contract.ts'
 import { SqliteProvider } from './sqlite-provider.ts'
+import { canonicalWordId, hashWords } from './normalize.ts'
 
 /** 项目根目录：由文件位置上溯（apps/server/src/vocabulary/../../../..）。 */
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
@@ -36,6 +37,8 @@ export interface VocabularyRegistry {
   defaultPackageId: string
   /** 按 ID 获取对应词库 Store */
   get(id: string): VocabularyStore | undefined
+  /** 按一组包 ID 获取合并后的词库 Store */
+  getCombined(ids: readonly string[]): VocabularyStore
   /** 获取默认词库 Store */
   getDefault(): VocabularyStore
 }
@@ -102,11 +105,17 @@ export async function loadVocabulary(
     // 后缀归谁取决于文件系统枚举顺序——那属异常配置，这里只兜底保证不互相吞掉。
     let pkgId = baseId
     for (let suffix = 2; stores.has(pkgId); suffix += 1) pkgId = `${baseId}-${suffix}`
+    const storeWords: VocabularyWord[] = loaded.words.map((w) => ({
+      ...w,
+      id: canonicalWordId(pkgId, w.id.split(':').slice(1).join(':') || w.id),
+      packageId: pkgId,
+      packageName: loaded.meta.name || baseId,
+    }))
     const store: VocabularyStore = {
-      items: loaded.words,
-      byId: new Map(loaded.words.map((word) => [word.id, word])),
+      items: storeWords,
+      byId: new Map(storeWords.map((word) => [word.id, word])),
       version: loaded.version,
-      meta: loaded.meta,
+      meta: { ...loaded.meta, id: pkgId },
     }
     stores.set(pkgId, store)
     packages.push({
@@ -114,6 +123,8 @@ export async function loadVocabulary(
       name: loaded.meta.name || baseId,
       wordCount: loaded.words.length,
       description: loaded.meta.description || '',
+      author: loaded.meta.author || '',
+      remark: loaded.meta.remark || '',
       version: loaded.meta.fileVersion || '1.0.0',
       updatedAt: loaded.meta.updatedAt || '',
     })
@@ -138,11 +149,52 @@ export async function loadVocabulary(
     if (!first) throw new Error('没有任何有效词库已被加载')
     return first
   }
+  const getCombined = (ids: readonly string[]): VocabularyStore => {
+    const validStores: VocabularyStore[] = []
+    for (const id of ids) {
+      const s = stores.get(id)
+      if (s) validStores.push(s)
+    }
+    if (validStores.length === 0) return getDefault()
+    const single = validStores[0]
+    if (validStores.length === 1 && single) return single
+
+    const combinedItems: VocabularyWord[] = []
+    const byId = new Map<string, VocabularyWord>()
+    const collectionsSet = new Set<string>()
+
+    for (const s of validStores) {
+      for (const item of s.items) {
+        combinedItems.push(item)
+        byId.set(item.id, item)
+      }
+      for (const col of s.meta.collections) {
+        collectionsSet.add(col)
+      }
+    }
+
+    const matchedPackages = packages.filter((p) => ids.includes(p.id))
+    const combinedMeta: VocabularyMeta = {
+      sourceId: 'combined',
+      id: ids.join('+'),
+      name: matchedPackages.map((p) => p.name).join('、'),
+      collections: Array.from(collectionsSet),
+      wordCount: combinedItems.length,
+    }
+
+    return {
+      items: combinedItems,
+      byId,
+      version: hashWords(combinedItems),
+      meta: combinedMeta,
+    }
+  }
 
   return {
     packages,
     defaultPackageId,
     get: (id: string) => stores.get(id),
+    getCombined,
     getDefault,
     get items() {
       return getDefault().items

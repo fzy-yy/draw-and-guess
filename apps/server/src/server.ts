@@ -196,6 +196,9 @@ export async function createApplication(
   }
 
   const getRoomVocabularyStore = (room?: RoomSecret) => {
+    if (room?.vocabularyPackageIds?.length) {
+      return vocabulary.getCombined(room.vocabularyPackageIds)
+    }
     if (room?.vocabularyPackageId) {
       const store = vocabulary.get(room.vocabularyPackageId)
       if (store) return store

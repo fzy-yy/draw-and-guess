@@ -1,7 +1,17 @@
 <!-- 在线大厅：只展示公开房间；私密房间通过服务端生成的短码加入。 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { CirclePlus, Gamepad2, KeyRound, Settings, Users, Wifi } from 'lucide-vue-next'
+import {
+  CirclePlus,
+  Gamepad2,
+  KeyRound,
+  Maximize,
+  Minimize,
+  Settings,
+  Users,
+  Wifi,
+} from 'lucide-vue-next'
+import { useFullscreen } from '@vueuse/core'
 import { strings } from '@draw-guess/strings'
 import { PLAYER_PROTOCOL_LIMITS, RELAY_STEP_COUNT } from '@draw-guess/shared'
 import { playInteractionSound } from '@/audio'
@@ -40,6 +50,18 @@ function openSettings(): void {
   playInteractionSound('activate')
   store.page = 'settings'
 }
+
+/** 全屏切换管理：目标为游戏舞台外壳（.game-stage），与 GameView 保持统一 */
+const fullscreenTarget = computed<HTMLElement | null>(() =>
+  document.querySelector<HTMLElement>('.game-stage'),
+)
+const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(fullscreenTarget)
+
+function handleToggleFullscreen(): void {
+  void toggleFullscreen().catch(() => {
+    store.notify(strings.ui.game.fullscreenFailed, 'warning')
+  })
+}
 </script>
 
 <template>
@@ -71,6 +93,11 @@ function openSettings(): void {
           <StageHeaderButton @click="openSettings">
             <Settings />
             <span>{{ strings.ui.lobby.settingsEntry }}</span>
+          </StageHeaderButton>
+          <StageHeaderButton @click="handleToggleFullscreen">
+            <Minimize v-if="isFullscreen" />
+            <Maximize v-else />
+            <span>{{ strings.ui.common.fullscreen }}</span>
           </StageHeaderButton>
         </nav>
       </template>

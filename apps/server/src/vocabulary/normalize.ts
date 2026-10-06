@@ -25,7 +25,16 @@ export function canonicalWordId(source: string, rawId: string | number): string 
  */
 export function hashWords(words: VocabularyWord[]): string {
   const canonical = words
-    .map((word) => JSON.stringify([word.id, word.text, word.aliases, word.collection]))
+    .map((word) =>
+      JSON.stringify([
+        word.id,
+        word.text,
+        word.aliases,
+        word.collection,
+        word.packageId,
+        word.packageName,
+      ]),
+    )
     .join('\n')
   return createHash('sha256').update(canonical).digest('hex').slice(0, 12)
 }

@@ -73,6 +73,7 @@ export const room = {
   confirmSelection: '确认选择',
   // —— 词库管理：筛选 / 表格列 ——
   vocabColumnText: '词面',
+  vocabColumnPackage: '所属词库',
   vocabColumnCollections: '合集',
   vocabColumnAliases: '别称',
   vocabSelectAllShort: '全选',
@@ -86,8 +87,10 @@ export const room = {
   vocabSwitchToWordsBtn: '词条列表',
   vocabFilterCollectionsBtn: '合集筛选',
   vocabPackageColumnName: '词库名称',
+  vocabPackageColumnAuthor: '作者',
   vocabPackageColumnWordCount: '词数',
   vocabPackageColumnDescription: '词库描述',
+  vocabPackageColumnRemark: '备注',
   vocabPackageColumnVersion: '版本号',
   vocabPackageColumnUpdatedAt: '更新日期',
   vocabPackageTotal: (count: number) => `共 ${count} 个可用词库`,

@@ -144,7 +144,8 @@ export interface RoomSecret {
   stateVersion: number // 状态版本号（乐观并发控制）
   settings: RoomSettings
   members: MemberState[] // 成员席位（顺序即加入顺序）
-  vocabularyPackageId?: string // 本局绑定的词库包 ID（缺省为词数最多者）
+  vocabularyPackageIds: string[] // 本局绑定的词库包 ID 列表
+  vocabularyPackageId?: string // 兼容单包 ID 访问
   selectedWordIds: Set<string> // 本局启用的词条 ID 集合
   game?: GameSecret // 对局进行中才有
   /**

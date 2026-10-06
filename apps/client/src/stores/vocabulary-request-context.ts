@@ -3,7 +3,7 @@ interface VocabularyRequestContext {
   operationId: number
   sessionGeneration: number
   roomId: string
-  packageId?: string
+  packageIds?: string[]
 }
 
 interface VocabularyContextState {
@@ -14,14 +14,22 @@ interface VocabularyContextState {
 export class VocabularyRequestGuard {
   private operationId = 0
 
-  begin(state: VocabularyContextState, packageId?: string): VocabularyRequestContext | undefined {
+  begin(
+    state: VocabularyContextState,
+    packageIds?: string[] | string,
+  ): VocabularyRequestContext | undefined {
     if (!state.roomId) return undefined
     this.operationId += 1
+    const normalizedIds = packageIds
+      ? Array.isArray(packageIds)
+        ? packageIds
+        : [packageIds]
+      : undefined
     return {
       operationId: this.operationId,
       sessionGeneration: state.sessionGeneration,
       roomId: state.roomId,
-      ...(packageId ? { packageId } : {}),
+      ...(normalizedIds ? { packageIds: normalizedIds } : {}),
     }
   }
 
@@ -31,8 +39,9 @@ export class VocabularyRequestGuard {
   accepts(
     context: VocabularyRequestContext,
     state: VocabularyContextState,
-    responsePackageId: string,
+    responsePackageIds: string[] | string,
   ): boolean {
+    const incoming = Array.isArray(responsePackageIds) ? responsePackageIds : [responsePackageIds]
     return (
       // operationId：begin/invalidate 之外的同上下文并发——只认最后一次操作，
       // 更早发起、更晚返回的响应不得覆盖新操作的结果。
@@ -44,7 +53,9 @@ export class VocabularyRequestGuard {
       // 房间：换房后旧房间的响应不得写进当前房间的词库 UI（同理，房间经非本守卫路径变化）。
       context.roomId === state.roomId &&
       // 包 ID：请求绑定了具体词库包时，响应回显的包与请求目标不一致说明串线或已切换。
-      (!context.packageId || context.packageId === responsePackageId)
+      (!context.packageIds ||
+        (context.packageIds.length === incoming.length &&
+          context.packageIds.every((id) => incoming.includes(id))))
     )
   }
 

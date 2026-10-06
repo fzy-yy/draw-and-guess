@@ -29,15 +29,19 @@ function vocabularyFixture(packageId = 'basic'): VocabularySnapshot {
     text: index === 0 ? '苹果' : `词语${index + 1}`,
     aliases: index === 0 ? ['红苹果'] : [],
     collection: index === 0 ? '水果' : '常识',
+    packageId,
+    packageName: '基础词库',
   }))
   return {
-    packageId,
+    packageIds: [packageId],
     packages: [
       {
         id: 'basic',
         name: '基础词库',
         wordCount: 60,
         description: '常用词',
+        author: '官方',
+        remark: '默认',
         version: '1',
         updatedAt: '2026-09-12',
       },
@@ -46,6 +50,8 @@ function vocabularyFixture(packageId = 'basic'): VocabularySnapshot {
         name: '进阶词库',
         wordCount: 60,
         description: '进阶词',
+        author: '官方',
+        remark: '进阶',
         version: '1',
         updatedAt: '2026-09-12',
       },
@@ -142,7 +148,7 @@ describe('VocabularyDialog 权限与竞态', () => {
   it('非房主可搜索查看，但没有词条选择框、切包能力或保存动作', async () => {
     const user = userEvent.setup()
     const room = useRoomStore()
-    room.room = { ...createRoomFixture('waiting'), vocabularyPackageId: 'basic' }
+    room.room = { ...createRoomFixture('waiting'), vocabularyPackageIds: ['basic'] }
     useSessionStore().playerId = GUEST_ID
     const snapshot = vocabularyFixture()
     fakeTransport.setResponder((_event, payload) => ({
@@ -178,7 +184,7 @@ describe('VocabularyDialog 权限与竞态', () => {
 
   it('关闭弹窗会废弃迟到加载结果，不重新打开已关闭的界面', async () => {
     const room = useRoomStore()
-    room.room = { ...createRoomFixture('waiting'), vocabularyPackageId: 'basic' }
+    room.room = { ...createRoomFixture('waiting'), vocabularyPackageIds: ['basic'] }
     useSessionStore().playerId = HOST_ID
     let resolveLoad!: (snapshot: VocabularySnapshot) => void
     fakeTransport.setResponder(
@@ -200,7 +206,7 @@ describe('VocabularyDialog 权限与竞态', () => {
   it('词库包切换进行中禁用其它选择，避免并发响应覆盖新状态', async () => {
     const user = userEvent.setup()
     const room = useRoomStore()
-    room.room = { ...createRoomFixture('waiting'), vocabularyPackageId: 'basic' }
+    room.room = { ...createRoomFixture('waiting'), vocabularyPackageIds: ['basic'] }
     useSessionStore().playerId = HOST_ID
     const snapshot = vocabularyFixture()
     let resolveSwitch!: () => void

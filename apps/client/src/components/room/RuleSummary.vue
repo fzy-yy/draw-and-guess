@@ -204,8 +204,11 @@ const summaryRows = computed(() => {
       </template>
       <template #hint>
         <small class="text-muted truncate">
-          <span v-if="store.room?.vocabularyPackageName" class="font-bold text-navy mr-[0.3em]">
-            [{{ store.room.vocabularyPackageName }}]
+          <span
+            v-if="store.room?.vocabularyPackageNames?.length"
+            class="font-bold text-navy mr-[0.3em]"
+          >
+            [{{ store.room.vocabularyPackageNames.join('、') }}]
           </span>
           {{
             strings.ui.room.vocabularyCount(

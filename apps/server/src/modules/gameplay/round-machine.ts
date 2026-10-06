@@ -434,24 +434,33 @@ export class RoundMachine {
   }
 
   /**
-   * 抽取本回合候选词：从本局已选词库中排除本局已展示过的词条（整局绝不重复），
-   * 词池不足且配置允许时重置已展示记录；抽中的候选立即记录进 offeredWordIds。
+   * 抽取本回合候选词：从本局已选词库中随机抽词（允许跨回合重复）。
+   * 当词库词条数不足 optionCount 时，循环复用已选词条补足候选数；抽中的候选记录进 offeredWordIds。
    */
   public pickCandidates(room: RoomSecret, game: GameSecret): VocabularyWord[] {
     const store = this.service.getRoomVocabularyStore(room)
-    let pool = [...room.selectedWordIds]
-      .filter((id) => !game.offeredWordIds.has(id))
+    const pool = [...room.selectedWordIds]
       .map((id) => store.byId.get(id))
       .filter((word): word is VocabularyWord => word !== undefined)
 
-    if (pool.length < room.settings.optionCount && APP_CONFIG.vocabulary.resetWhenExhausted) {
-      game.offeredWordIds.clear()
-      pool = [...room.selectedWordIds]
-        .map((id) => store.byId.get(id))
-        .filter((word): word is VocabularyWord => word !== undefined)
+    const targetCount = room.settings.optionCount
+    let picked: VocabularyWord[]
+    if (pool.length >= targetCount) {
+      picked = this.sampleDiverseCandidates(pool, targetCount)
+    } else if (pool.length > 0) {
+      // 词库数量不足 optionCount，循环复用已选词条补足
+      const shuffled = this.shuffle([...pool])
+      picked = []
+      while (picked.length < targetCount) {
+        for (const word of shuffled) {
+          if (picked.length >= targetCount) break
+          picked.push(word)
+        }
+      }
+    } else {
+      picked = []
     }
 
-    const picked = this.sampleDiverseCandidates(pool, room.settings.optionCount)
     picked.forEach((word) => game.offeredWordIds.add(word.id))
     return picked
   }

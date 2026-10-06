@@ -110,9 +110,9 @@ describe('接龙步 1 选词', () => {
 
     scenario.harness.service.rerollWordOptions(second.playerId, scenario.stepId)
 
-    expect(scenario.chainOf(second.playerId, 1).candidates.map((word) => word.id)).toEqual([
-      shared.id,
-    ])
+    expect(
+      scenario.chainOf(second.playerId, 1).candidates.every((word) => word.id === shared.id),
+    ).toBe(true)
     expect(scenario.chainOf(first.playerId, 1).candidates.map((word) => word.id)).toContain(
       shared.id,
     )

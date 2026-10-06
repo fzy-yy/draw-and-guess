@@ -24,6 +24,7 @@ export const common = {
   percentUnit: (value: number) => `${value}%`,
   countBadge: (label: string, count: number) => `${label} · ${count}`,
   roundsField: '每人作画次数',
+  fullscreen: '全屏',
 } as const
 export const connection = {
   connecting: '正在连接',

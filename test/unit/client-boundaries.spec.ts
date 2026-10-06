@@ -50,6 +50,8 @@ function snapshot(settings: RoomSettings = testRoomSettings()): RoomSnapshot {
     members: [],
     selectedWordCount: 60,
     totalWordCount: 60,
+    vocabularyPackageIds: [],
+    vocabularyPackageNames: [],
     game: {
       gameId: GAME_ID,
       roundId: ROUND_ID,

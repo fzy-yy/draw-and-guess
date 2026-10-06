@@ -64,6 +64,7 @@ expectTypeOf<BusinessKeys<ReturnType<typeof useGameStore>>>().toEqualTypeOf<
   | 'loadVocabulary'
   | 'saveVocabulary'
   | 'selectVocabularyPackage'
+  | 'selectVocabularyPackages'
   | 'cancelVocabularyRequests'
   | 'startGame'
   | 'chooseWord'

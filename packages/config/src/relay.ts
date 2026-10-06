@@ -39,11 +39,11 @@ export const relay = {
   /** 复盘：每半场的作画重播时长（秒）。 */
   replaySeconds: 3,
   /** 复盘：重播结束到揭晓之间的画作静止停顿（秒）。 */
-  replayPauseSeconds: 5,
+  replayPauseSeconds: 1,
   /** 复盘：揭晓答案的展示时长（秒）。 */
-  revealSeconds: 5,
+  revealSeconds: 3,
   /** 投票时长（秒）：一律等满，从不提前公布（S21）。 */
-  voteSeconds: 15,
+  voteSeconds: 10,
   /**
    * 链匹配成功时「每张赞同票」给该链 4 名参与者带来的分数（S13）。
    * 定 10 是为了与经典的 100 分制同量级：一条链最多 N 张赞同票（N＝人数），

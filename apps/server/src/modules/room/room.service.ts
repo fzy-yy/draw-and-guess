@@ -161,6 +161,7 @@ export class RoomService {
       stateVersion: 1,
       settings: input.settings,
       members: [],
+      vocabularyPackageIds: [defaultPackageId],
       vocabularyPackageId: defaultPackageId,
       selectedWordIds: new Set(defaultStore.items.map((word) => word.id)),
     }

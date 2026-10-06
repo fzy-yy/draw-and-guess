@@ -79,6 +79,17 @@ defineExpose({
         row.text
       }}</span>
     </template>
+    <!-- 所属词库列：居中展示浅灰色徽章 -->
+    <template #cell-packageName="{ row }">
+      <div v-if="row.packageName" class="flex items-center justify-center">
+        <span
+          class="max-w-[90%] truncate rounded-none border border-line bg-paper px-[0.5em] py-[0.08cqh] text-fs-10 font-bold text-navy"
+          :title="row.packageName"
+          >{{ row.packageName }}</span
+        >
+      </div>
+      <span v-else class="text-muted">{{ strings.ui.room.vocabAliasEmpty }}</span>
+    </template>
     <!-- 合集群：居中展示蓝色小方角徽章 -->
     <template #cell-collection="{ row }">
       <div v-if="row.collection" class="flex items-center justify-center">

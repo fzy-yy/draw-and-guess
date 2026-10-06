@@ -13,8 +13,10 @@ import { computed, ref } from 'vue'
 const props = defineProps<{
   /** 可用词库包列表 */
   rows: VocabularyPackageInfo[]
-  /** 当前在单选列中展示的词库包 ID（请求期间可先展示待切换项） */
-  selectedPackageId: string
+  /** 当前已选中的词库包 ID 集合 */
+  selectedPackageIds?: Set<string> | string[]
+  /** 兼容单选时的词库包 ID */
+  selectedPackageId?: string
   /** 当前排序字段（null = 未排序） */
   sortKey: string | null
   /** 当前排序方向 */
@@ -28,18 +30,31 @@ const props = defineProps<{
 const emit = defineEmits<{
   sort: [key: string]
   select: [packageId: string]
+  toggle: [packageId: string]
 }>()
 
 const columns: DataTableColumn<VocabularyPackageInfo>[] = [
-  { key: 'name', label: strings.ui.room.vocabPackageColumnName, weight: 22 },
-  { key: 'wordCount', label: strings.ui.room.vocabPackageColumnWordCount, weight: 12 },
-  { key: 'description', label: strings.ui.room.vocabPackageColumnDescription, weight: 34 },
-  { key: 'version', label: strings.ui.room.vocabPackageColumnVersion, weight: 12 },
-  { key: 'updatedAt', label: strings.ui.room.vocabPackageColumnUpdatedAt, weight: 20 },
+  { key: 'name', label: strings.ui.room.vocabPackageColumnName, weight: 18 },
+  { key: 'author', label: strings.ui.room.vocabPackageColumnAuthor, weight: 12 },
+  { key: 'wordCount', label: strings.ui.room.vocabPackageColumnWordCount, weight: 10 },
+  { key: 'description', label: strings.ui.room.vocabPackageColumnDescription, weight: 24 },
+  { key: 'remark', label: strings.ui.room.vocabPackageColumnRemark, weight: 16 },
+  { key: 'version', label: strings.ui.room.vocabPackageColumnVersion, weight: 8 },
+  { key: 'updatedAt', label: strings.ui.room.vocabPackageColumnUpdatedAt, weight: 12 },
 ]
 
-/** DataTable 以 Set 作为统一受控选择接口；词库包只允许一个激活项。 */
-const selectedPackageIds = computed(() => new Set([props.selectedPackageId]))
+/** DataTable 以 Set 作为统一受控选择接口；支持多选词库包。 */
+const activeSelectedPackageIds = computed<Set<string>>(() => {
+  if (props.selectedPackageIds instanceof Set) return props.selectedPackageIds
+  if (Array.isArray(props.selectedPackageIds)) return new Set(props.selectedPackageIds)
+  if (props.selectedPackageId) return new Set([props.selectedPackageId])
+  return new Set<string>()
+})
+
+function handleToggle(packageId: string): void {
+  emit('select', packageId)
+  emit('toggle', packageId)
+}
 const table = ref<ScrollableTable>()
 
 defineExpose({
@@ -56,20 +71,29 @@ defineExpose({
     row-key="id"
     :sort-key="props.sortKey"
     :sort-dir="props.sortDir"
-    :selected-ids="selectedPackageIds"
-    selection-mode="single"
+    :selected-ids="activeSelectedPackageIds"
+    selection-mode="multiple"
     :selection-disabled="props.isReadOnly || props.selectionPending"
     :select-all-aria="strings.a11y.room.vocabPackageSelectionColumn"
     :empty-text="strings.ui.room.vocabPackagesEmpty"
     :row-aria="(row) => strings.a11y.room.vocabPackageSelectAria(row.name)"
     @sort="emit('sort', $event)"
-    @toggle="emit('select', $event)"
+    @toggle="handleToggle($event)"
   >
     <!-- 词库名称：加粗居中展示 -->
     <template #cell-name="{ row }">
       <span class="block truncate text-center font-bold text-navy" :title="row.name">{{
         row.name
       }}</span>
+    </template>
+
+    <!-- 作者：居中展示 -->
+    <template #cell-author="{ row }">
+      <span
+        class="block truncate text-center text-navy"
+        :title="row.author || strings.a11y.common.emptyDash"
+        >{{ row.author || strings.ui.common.emptyDash }}</span
+      >
     </template>
 
     <!-- 词数：等宽数字居中展示 -->
@@ -83,6 +107,15 @@ defineExpose({
         class="block truncate text-center text-muted"
         :title="row.description || strings.a11y.common.emptyDash"
         >{{ row.description || strings.ui.common.emptyDash }}</span
+      >
+    </template>
+
+    <!-- 备注：灰字居中说明 -->
+    <template #cell-remark="{ row }">
+      <span
+        class="block truncate text-center text-muted"
+        :title="row.remark || strings.a11y.common.emptyDash"
+        >{{ row.remark || strings.ui.common.emptyDash }}</span
       >
     </template>
 
