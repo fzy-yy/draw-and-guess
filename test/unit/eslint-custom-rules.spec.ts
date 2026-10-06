@@ -115,7 +115,7 @@ vueRuleTester.run('ban-forbidden-utility', projectConventions.rules['ban-forbidd
       code: `
           <template>
             <!-- font-medium 与 font-[900] 只是一段说明 -->
-            <div class="font-bold font-mediumish font-sans font-mono" :class="dynamicClass" />
+            <div class="font-bold font-mediumish font-sans" :class="dynamicClass" />
           </template>
         `,
     },
@@ -133,7 +133,7 @@ vueRuleTester.run('ban-forbidden-utility', projectConventions.rules['ban-forbidd
     },
     {
       filename: 'apps/client/src/ArbitraryWeight.vue',
-      code: '<template><div class="font-[900]" /></template>',
+      code: '<template><div class="font-black" /></template>',
       errors: [{ messageId: 'forbidden' }],
     },
     {

@@ -65,7 +65,7 @@ onBeforeUnmount(unbindBump)
   <TransitionGroup
     name="toast"
     tag="div"
-    class="pointer-events-none absolute top-[12.5cqh] right-[2.5cqh] z-[95] flex flex-col items-end gap-[1cqh]"
+    class="pointer-events-none absolute top-[12.5cqh] right-[2.5cqh] z-95 flex flex-col items-end gap-[1cqh]"
   >
     <div
       v-for="toast in toasts"

@@ -262,7 +262,7 @@ defineExpose({ focusInput })
           >
             {{ memberForMessage(message)?.nickname }}
           </span>
-          <span class="break-words">{{ message.text }}</span>
+          <span class="wrap-break-word">{{ message.text }}</span>
         </div>
       </template>
       <div v-if="!messages.length" class="m-auto flex flex-col items-center text-muted text-fs-12">
