@@ -23,7 +23,6 @@ export const game = {
   chooseWordTitle: '选择一个词',
   rerollWords: '换一组',
   customWord: '自定义',
-  customWordTitle: '画点别的',
   customWordHint: (max: number) => `输入你想画的词（最多 ${max} 个字），确认后立即开始作画`,
   customWordPlaceholder: '例如：一只在屋顶的猫',
   customWordTooLong: (max: number) => `最多 ${max} 个字`,
@@ -120,7 +119,6 @@ export const game = {
   chatPanelTitle: '聊天',
   brushUnit: 'px',
   // —— 画板右键菜单与画作导出 ——
-  canvasMenuAria: '画板操作菜单',
   canvasMenuBrush: '画笔',
   canvasMenuEraser: '橡皮擦',
   canvasMenuFill: '油漆桶',

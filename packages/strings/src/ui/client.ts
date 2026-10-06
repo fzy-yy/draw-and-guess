@@ -17,7 +17,6 @@ export const store = {
   profileUpdated: '玩家资料已更新',
   roomLeft: '已安全退出房间',
   sessionTakenOver: '会话已在新的窗口打开；如需在本窗口继续，请重新进入',
-  vocabularyUpdated: '本局词库已更新，已准备状态保持不变',
   inviteSent: '邀请已发送',
 } as const
 export const request = {
