@@ -9,12 +9,13 @@ export const drawing = {
   defaultColor: '#1F2937',
   /**
    * 画笔与橡皮擦共用同一粗细值，画板滚轮按 wheelStep 连续调整。
-   * min（最小像素）、max（最大像素）、step、default、wheelStep 均在此显式定义，可直接修改。
+   * min（最小像素）、max（最大像素）、default、wheelStep 均在此显式定义，可直接修改。
+   * 粗细的离散步长只在协议侧（`DRAWING_PROTOCOL_LIMITS.width.step = 1`，即必须为整数像素），
+   * 此处不再重复一份：服务端对奇数/偶数粗细一视同仁，wheelStep 可独立调整。
    */
   width: {
     min: 1,
     max: 30,
-    step: 1,
     default: 6,
     wheelStep: 2,
   },
