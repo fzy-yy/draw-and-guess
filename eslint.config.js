@@ -364,6 +364,10 @@ export default tseslint.config([
       'apps/server/src/domain/**/*.ts',
       'apps/server/src/application/**/*.ts',
       'apps/server/src/protocol/**/*.ts',
+      // 纵切重构后的业务模块与核心机制层：领域规则一律经注入的 Clock/Scheduler/RandomSource，
+      // 否则 `Math.random()` 这类调用会直接进生产代码（曾污染快照解码，见 snapshot-wire-contract 回归）。
+      'apps/server/src/modules/**/*.ts',
+      'apps/server/src/core/**/*.ts',
     ],
     plugins: { 'project-conventions': projectConventions },
     rules: {
@@ -371,8 +375,9 @@ export default tseslint.config([
     },
   },
   {
-    // 系统运行时是唯一把抽象绑定到 Date/crypto/Node timer 的生产适配层。
-    files: ['apps/server/src/runtime.ts'],
+    // 系统运行时是唯一把抽象绑定到 Date/crypto/Node timer 的生产适配层
+    //（src/runtime.ts 为兼容转发出口，core/runtime.ts 为真实实现）。
+    files: ['apps/server/src/runtime.ts', 'apps/server/src/core/runtime.ts'],
     plugins: { 'project-conventions': projectConventions },
     rules: {
       'project-conventions/require-server-runtime': 'off',

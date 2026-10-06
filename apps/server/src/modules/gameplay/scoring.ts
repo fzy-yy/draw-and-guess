@@ -77,6 +77,10 @@ export function rankMembers(
 
 /**
  * 冻结经典模式最终排名：把全员入榜结果映射为协议 FinalRankingEntry[]。
+ *
+ * 只输出协议 `FinalRankingEntrySchema` 声明的字段：客户端对快照做严格解码，
+ * 多写一个未声明字段会让**整份终局快照被丢弃**（房主已提前结束，客户端却停在对局页）。
+ * 「谁已离局」由房间成员视图的 `leftGame` 表达，终局榜不需要也不该重复它。
  */
 export function freezeFinalRanking(
   room: Pick<RoomSecret, 'members'>,
@@ -89,6 +93,5 @@ export function freezeFinalRanking(
     rank,
     score: member.score,
     stats: { ...member.stats },
-    leftGame: member.leftGame,
   }))
 }

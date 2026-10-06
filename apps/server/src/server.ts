@@ -513,7 +513,6 @@ export async function createApplication(
     requireMembership: (pId) => roomService.requireMembership(pId),
     requirePlayer,
     requireGame,
-    requireRelay,
     round: roundMachine,
     emitRoom,
     emitCanvasPing: (roomId, payload) =>

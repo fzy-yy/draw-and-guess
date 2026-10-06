@@ -64,7 +64,7 @@ draw-and-guess/
 │       ├── launcher.mts           # 隔离 webServer：临时目录 + fixture 词库 + 前端构建 + 清理/清扫
 │       ├── pages/                 # 页面封装（profile/lobby/room/game）+ responsive.page.ts（响应式与触控验收断言辅助）+ dropdown.ts（手写下拉操作封装）
 │       ├── fixtures/              # 测试基类 test-base.ts（建玩家/连接）与 canvas-probe.ts（逻辑栅格哈希探针）
-│       └── specs/                 # 01-profile-session / 02-lobby-room-seats / 03-game-drawing / 04-game-guessing / 05-game-lifecycle / 06-browser-compatibility / 07-responsive-touch / 08-static-asset-cache / 09-drawing-history-limit / 10-relay-mode
+│       └── specs/                 # 01-profile-session / 02-lobby-room-seats / 03-game-drawing / 04-game-guessing / 05-game-lifecycle / 06-browser-compatibility / 07-responsive-touch / 08-static-asset-cache / 09-drawing-history-limit / 10-relay-mode / 11-end-early-after-departure（有玩家退出后提前结束立即结算）/ 12-relay-chat（接龙聊天可用与推进）
 ├── README.md                     # 项目总览、十分钟启动（依赖/结构/样式/持久化/版本章节与代码保持一致）
 ├── docs/adr/                     # 架构决策记录：每条含背景 / 决策 / 后果，源码注释只链接此处
 ├── AGENTS.md                     # 本文件：导读、硬性限制、启动方法、编码/测试/提交流程

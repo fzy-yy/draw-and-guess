@@ -189,6 +189,44 @@ describe('acceptRoomSnapshot 接龙分支', () => {
     expect(acceptRoomSnapshot(sameCanvasNewer, sameCanvasStale)).toBe('ignore')
   })
 
+  it('进入终局（game_result）必须采纳：终局视图不下发画布，不能用「修订 0」判成倒退', () => {
+    // 缺陷回归：房主提前结束 / 复盘结束进入终局时，客户端正停在本棒作画页（ownCanvas 修订已 > 0），
+    // 而终局接龙视图只带排名与统计、没有任何画布字段，于是被读成「修订 0」而判成倒退丢弃——
+    // 房主已结束比赛，客户端却永远停在对局页：画家画不了、别人也发不出消息。
+    const drawing = createRelayRoomFixture('relay_draw', {
+      ownCanvas: { strokes: [], undoneStrokeIds: [], lastSequence: 4, drawingRevision: 4 },
+    })
+    const finished = createRelayRoomFixture(
+      'game_result',
+      { finalRanking: [] },
+      { stateVersion: drawing.stateVersion + 1 },
+    )
+
+    expect(acceptRoomSnapshot(drawing, finished)).toBe('accept')
+
+    // 猜词棒与复盘期同样必须能进终局（三者的画布来源各不相同）
+    const guessing = createRelayRoomFixture('relay_guess', {
+      currentStep: 2,
+      previousDrawing: { strokes: [], undoneStrokeIds: [], lastSequence: 3, drawingRevision: 3 },
+    })
+    expect(acceptRoomSnapshot(guessing, finished)).toBe('accept')
+
+    const showcase = createRelayRoomFixture('relay_showcase', {
+      showcase: {
+        chainIndex: 1,
+        chainCount: 4,
+        half: 1,
+        prompt: { player: { id: STEP_ID, nickname: '画家', avatarId: '01' }, text: '气球' },
+        answer: { player: { id: STEP_ID, nickname: '画家', avatarId: '01' }, text: null },
+        drawing: { strokes: [], undoneStrokeIds: [], lastSequence: 5, drawingRevision: 5 },
+      },
+    })
+    expect(acceptRoomSnapshot(showcase, finished)).toBe('accept')
+
+    // 终局本身不允许被更旧的终局包覆盖（状态版本倒退仍丢弃）
+    expect(acceptRoomSnapshot(finished, { ...finished, stateVersion: 0 })).toBe('ignore')
+  })
+
   it('经典分支不受影响：同回合修订倒退仍丢弃、状态版本倒退仍丢弃', () => {
     const current = createRoomFixture('drawing', { drawingRevision: 3 })
     expect(

@@ -11,8 +11,16 @@ import { useGameStore } from '@/stores/game'
 import { useRoomStore } from '@/stores/room'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
-import { createPiniaWithFakeTransport } from '../client/fake-game-transport'
-import { GUEST_ID, HOST_ID, createRoomFixture } from '../client/room-fixture'
+import {
+  createPiniaWithFakeTransport,
+  installFakeGameTransport,
+} from '../client/fake-game-transport'
+import {
+  GUEST_ID,
+  HOST_ID,
+  createLiveRelayRoomFixture,
+  createRoomFixture,
+} from '../client/room-fixture'
 
 let pinia: Pinia
 
@@ -138,6 +146,36 @@ describe('ChatPanel 输入与快捷互动', () => {
       (screen.getByRole('button', { name: strings.a11y.game.sendGuessAria }) as HTMLButtonElement)
         .disabled,
     ).toBe(true)
+  })
+
+  it('接龙聊天目标下，即使当前不可作答也必须能发送消息（聊天与作答彻底分离，S79）', async () => {
+    // 缺陷回归：接龙房的聊天输入被 `canGuess`（只在猜词棒且未提交时为真）错误门禁——
+    // 选词 / 作画 / 复盘期一律禁用，提交后也发不出，聊天区因此永远刷不出自己的消息。
+    const fakeTransport = installFakeGameTransport(pinia)
+    const user = userEvent.setup()
+    const room = useRoomStore()
+    const session = useSessionStore()
+    room.room = createLiveRelayRoomFixture('relay_draw')
+    session.playerId = HOST_ID
+
+    renderWithPinia(ChatPanel, { canGuess: false, submitTarget: 'chat' })
+
+    const input = screen.getByLabelText(strings.a11y.game.relayChatInputAria) as HTMLInputElement
+    expect(input.disabled).toBe(false)
+
+    await user.type(input, '这条消息必须发得出去')
+    await user.click(screen.getByRole('button', { name: strings.a11y.game.relayChatSendAria }))
+
+    await waitFor(() =>
+      expect(fakeTransport.requests.map((entry) => entry.event)).toContain('chat:say'),
+    )
+    expect(fakeTransport.requests.find((entry) => entry.event === 'chat:say')?.payload.text).toBe(
+      '这条消息必须发得出去',
+    )
+
+    // 经典猜词通路不受影响：无猜词权限时仍禁用（其语义是「作答」而非社交）
+    const classicInput = screen.queryByLabelText(strings.ui.game.guessLabel)
+    expect(classicInput).toBeNull()
   })
 
   it('聊天面板中仅展示玩家发出的消息，系统消息不出现在聊天列表中', async () => {

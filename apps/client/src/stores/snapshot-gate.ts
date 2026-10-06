@@ -48,8 +48,13 @@ function relayDrawingRevision(relay: RelayGameView): number {
  * 只有身份相同，「画布修订」才比得出大小——换了一幅画就与换棒同理：两幅画的写入次数
  * 本来就没有可比性，拿它们的修订号比较会把整场复盘卡死在上一幅画上（半场 2 常比半场 1 画得少）。
  * 复盘期 `stepId` 是不变的（停机时停在最后一步），因此游标必须进身份。
+ *
+ * 终局（`game_result`）单独成键：终局视图**不下发任何画布**（只有排名、分数与统计），
+ * 与对局期任一画布都不同源。若把它当成本棒画布去比修订，就会读成「修订 0 倒退」而丢掉
+ * 整份终局快照——房主已提前结束比赛，客户端却永远停在对局页（画家画不了、别人也发不出消息）。
  */
 function relayCanvasKey(relay: RelayGameView): string {
+  if (relay.phase === 'game_result') return 'game_result'
   const cursor = relay.showcase
   return cursor ? `${relay.stepId}:${cursor.chainIndex}-${cursor.half}` : relay.stepId
 }

@@ -103,6 +103,57 @@ export class GamePage {
     await expect(this.page.locator('text=玩家席位')).toBeVisible({ timeout: 10_000 })
   }
 
+  /** 房主提前结束本局（顶栏按钮 + 确认弹窗）；结算与入账仍由服务端裁决。 */
+  async endEarly() {
+    await this.page.getByRole('button', { name: strings.a11y.game.endEarlyAria }).click()
+    const dialog = this.page.getByRole('dialog')
+    await expect(dialog).toBeVisible({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: strings.ui.game.confirmEnd }).click()
+  }
+
+  /** 对局内退出本局：设置页右上角「退出游戏」→ 确认弹窗（保留成绩卡并回到大厅）。 */
+  async leaveGame() {
+    await this.page.getByRole('button', { name: strings.a11y.game.settingsAria }).click()
+    await this.page.getByRole('button', { name: strings.ui.game.leaveGame }).click()
+    const dialog = this.page.getByRole('dialog')
+    await expect(dialog).toBeVisible({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: strings.ui.game.confirmLeaveGame }).click()
+  }
+
+  /**
+   * 终局战报必须真实浮到屏幕上——这是「房主已结束但对局页卡死」缺陷的用户可见判据：
+   * 服务端 phase 已进 game_result，客户端若丢弃了该快照就会一直停在对局页（画家画不了、发不出消息）。
+   * 断言只用**所有角色共有**的标记：终局榜标题与「退出房间」按钮
+   *（「返回房间」类文案只出现在房主且过了最短展示期的那颗按钮上，非房主是「再来一局」，不能当通用判据）。
+   */
+  async expectFinalResult() {
+    await expect(
+      this.page.getByRole('heading', { name: strings.ui.game.finalRanking }),
+    ).toBeVisible({ timeout: 20_000 })
+    await expect(
+      this.page.getByRole('button', { name: strings.ui.game.leaveRoom, exact: true }),
+    ).toBeVisible({ timeout: 10_000 })
+  }
+
+  /**
+   * 终局战报卡片（OverlayCard）作用域：昵称在终局页会同时命中顶栏、左侧席位与 Toast，
+   * 榜单行断言必须收在本卡片内（取「包含终局榜标题的最内层容器」）。
+   */
+  get finalResultCard() {
+    return this.page
+      .locator('div')
+      .filter({ has: this.page.getByRole('heading', { name: strings.ui.game.finalRanking }) })
+      .last()
+  }
+
+  /** 聊天 / 作答共用同一输入框：接龙房走独立聊天频道，经典房走猜词（语义由父组件分流）。 */
+  async sendChat(text: string) {
+    const input = this.page.locator('input#guess-input')
+    await expect(input).toBeEnabled({ timeout: 10_000 })
+    await input.fill(text)
+    await input.press('Enter')
+  }
+
   async requestRematch() {
     const rematchBtn = this.page.getByRole('button', { name: '再来一局' })
     await expect(rematchBtn).toBeVisible({ timeout: 20_000 })

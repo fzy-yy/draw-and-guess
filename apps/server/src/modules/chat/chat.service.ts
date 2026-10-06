@@ -1,10 +1,13 @@
 /**
- * 猜词判定、预设互动短语与聊天领域服务。
+ * 经典猜词判定与聊天互动领域服务。
  *
  * 遵循《后端架构规范》R3.2 与 R4.3：
  * 1. 负责猜词答案匹配（标准化对比、别称识别、画家拦截、差一字私密提示）；
  * 2. 预设安全短语与画板微表情（Canvas Ping）限频校验与广播；
  * 3. 错误全量采用 AppError 抛出。
+ *
+ * 边界：本服务只服务**经典模式**的作答与画布互动；接龙房专属的自由聊天（`chat:say`）归接龙模块
+ *（`RelayService.chat` → `RelayMachine`），消息产出的唯一实现在那里，本模块不复制第二份。
  */
 import {
   ERROR_CODES,
@@ -21,7 +24,6 @@ import { enforceEventRate, slidingWindowAllow } from '../../rate-limit.ts'
 import type { Clock } from '../../core/runtime.ts'
 import { isPhaseExpired } from '../../domain/room/member-facts.ts'
 import type { RoundMachine } from '../../round-machine.ts'
-import type { RelayGameSecret } from '../../domain/relay/relay-models.ts'
 
 /**
  * 聊天服务上下文依赖契约。
@@ -35,7 +37,6 @@ export interface ChatServiceContext {
   }
   requirePlayer(playerId: string): PlayerSecret
   requireGame(room: RoomSecret): GameSecret
-  requireRelay(room: RoomSecret): RelayGameSecret
   round: RoundMachine
   emitRoom(roomId: string): void
   emitCanvasPing(roomId: string, payload: CanvasPingBroadcast): void
@@ -192,32 +193,5 @@ export class ChatService {
       senderNickname: player.profile.nickname,
     }
     this.context.emitCanvasPing(room.id, payload)
-  }
-
-  /**
-   * 接龙模式房间独立自由发言。
-   */
-  sendRelayChat(playerId: string, rawText: string): void {
-    const { room } = this.context.requireMembership(playerId)
-    const relay = this.context.requireRelay(room)
-
-    const text = rawText.trim()
-    enforceEventRate(this.context.requirePlayer(playerId), 'guess', this.context.clock)
-    if (!text || Array.from(text).length > APP_CONFIG.player.chatMaxLength) {
-      throw new AppError({
-        message: serverStrings.errors.INVALID_MESSAGE_EMPTY,
-        code: ERROR_CODES.INVALID_MESSAGE,
-        status: 422,
-      })
-    }
-
-    relay.messages.push({
-      id: this.context.clock.now() + '-' + Math.random().toString(36).slice(2, 7),
-      type: 'guess',
-      text,
-      playerId,
-      createdAt: this.context.clock.now(),
-    })
-    this.context.emitRoom(room.id)
   }
 }

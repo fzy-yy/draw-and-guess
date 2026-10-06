@@ -126,13 +126,21 @@ function messageClass(message: ChatMessage): string {
 }
 
 /**
+ * 输入区是否可用：经典＝有作答权限（`canGuess` 由父组件按阶段派生）；
+ * 接龙＝**恒可用**——`canGuess` 只在猜词棒且未提交时为真，而聊天是与作答彻底分离的社交频道
+ *（S79 / S85），选词 / 作画 / 复盘 / 终局乃至本人已提交都必须能发言。
+ * 若沿用 `canGuess` 门禁，接龙房会出现在绝大多数阶段发不出消息、聊天区永远刷不出自己消息的缺陷。
+ */
+const canSubmitInput = computed(() => isChatTarget.value || props.canGuess)
+
+/**
  * 提交输入内容：先交由服务端裁决，只有成功送达才清空输入框；
  * 超时或业务失败（如重复猜中）时保留草稿，避免玩家已输入的内容被吞。
  * 接龙的提交目标是独立聊天频道（`chat:say`），永不携带作答（S79 / S20）。
  */
 async function sendGuess(): Promise<void> {
   const text = guess.value.trim()
-  if (!text || !props.canGuess) return
+  if (!text || !canSubmitInput.value) return
 
   if (props.submitTarget === 'chat') {
     const delivered = await store.relayChat(text)
@@ -261,7 +269,7 @@ defineExpose({ focusInput })
         <Send class="h-[4cqh] w-[4cqh]" /><span>{{ strings.ui.game.noMessages }}</span>
       </div>
     </div>
-    <!-- 底部固定猜词输入：顶部分割线隔开消息列表，无猜词权限时仅禁用输入 -->
+    <!-- 底部固定输入：顶部分割线隔开消息列表；无提交权限时仅禁用输入（接龙聊天恒可用） -->
     <form
       class="flex gap-[0.5em] border-t-[0.18cqh] border-line pt-[0.8cqh]"
       @submit.prevent="sendGuess"
@@ -274,13 +282,13 @@ defineExpose({ focusInput })
         size="body"
         class="min-w-0 flex-1"
         :maxlength="store.config.player.chatMaxLength"
-        :disabled="!canGuess"
+        :disabled="!canSubmitInput"
         :placeholder="inputPlaceholder"
       />
       <button
         type="submit"
         class="grid h-[5.2cqh] w-[5.2cqh] shrink-0 place-items-center rounded-[0.65em] bg-blue text-white disabled:cursor-not-allowed disabled:bg-line"
-        :disabled="!canGuess || !guess.trim()"
+        :disabled="!canSubmitInput || !guess.trim()"
         :aria-label="sendButtonAria"
       >
         <Send class="h-[2.5cqh] w-[2.5cqh]" />

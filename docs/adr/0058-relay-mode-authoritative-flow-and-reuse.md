@@ -38,7 +38,9 @@
 
 ### 3. 按观看者最小集裁剪
 
-接龙视图（快照里可选的 `relay` 字段）按「角色 × 接龙阶段 × 步骤 × 链归属」裁剪，只下发本棒所需内容；**绝不下发**其余链的画作与答案、未揭晓的当前半场答案（含其长度）、任何玩家的候选词池、恢复令牌与提交/投票归属。复盘期是公开复盘（全员同一份），但只公开游标当前那条链的当前半场。经典的 `game` 字段与既有门禁路径完全不动，接龙另走「**画布身份（步骤 id + 复盘游标）+ 画布修订 + 状态版本**」的门禁分支——**画布修订只在同一幅画布内可比**：复盘期的 `stepId` 在停机后不再变化，游标（链 + 半场）一切换，快照里就是另一幅画，而半场 2 常比半场 1 画得少；把两幅画的修订号拿来比较，整场复盘（含投票）会永久卡死在上一幅画上。这条口径由端到端验收抓到并钉进 `test/integration/snapshot-gate-relay.spec.ts`。
+接龙视图（快照里可选的 `relay` 字段）按「角色 × 接龙阶段 × 步骤 × 链归属」裁剪，只下发本棒所需内容；**绝不下发**其余链的画作与答案、未揭晓的当前半场答案（含其长度）、任何玩家的候选词池、恢复令牌与提交/投票归属。复盘期是公开复盘（全员同一份），但只公开游标当前那条链的当前半场。经典的 `game` 字段与既有门禁路径完全不动，接龙另走「**画布身份（步骤 id + 复盘游标 + 终局）+ 画布修订 + 状态版本**」的门禁分支——**画布修订只在同一幅画布内可比**：复盘期的 `stepId` 在停机后不再变化，游标（链 + 半场）一切换，快照里就是另一幅画，而半场 2 常比半场 1 画得少；把两幅画的修订号拿来比较，整场复盘（含投票）会永久卡死在上一幅画上。这条口径由端到端验收抓到并钉进 `test/integration/snapshot-gate-relay.spec.ts`。
+
+**终局（`game_result`）也必须单独成键**：终局视图只带排名、分数与接龙口径统计，一个画布字段都不下发，若仍按「本棒画布」去比修订，就会被读成「修订 0 倒退」而丢掉整份终局快照——房主已提前结束比赛，客户端却永远停在对局页（画家画不了、其他玩家也发不出消息）。同一类「协议未声明字段导致整份快照被丢弃」的缺陷在经典侧也发生过一次（终局榜多写 `leftGame`），故两侧都由 `test/unit/snapshot-wire-contract.spec.ts` 用与线上同一条严格解码路径锁死。
 
 ### 4. 计分与复盘时序单口径
 
@@ -61,13 +63,15 @@
 
 接龙新增**独立的聊天事件**，聊天是自由社交频道、永远不携带作答内容；作答走两条专用提交事件（提交答案带文本、提交作画只标记完成），不进聊天流、不给其他人任何提示。经典模式保持「猜词未命中即聊天」的现状不变（本次不把经典切到独立聊天事件）。
 
-### 7. 实现期修订（与设计文档的偏差，已登记）
+### 7. 实现期修订与缺陷修正（已登记）
 
-以下三条是实施期对设计文档的修订，不改写历史决策，在此登记：
+以下条目是实施期对设计文档的修订与后续缺陷修正，不改写历史决策，在此登记：
 
 1. **S16 的一半分支不可实现**：共识 S16 说「猜词代交＝当前输入框内容，未输入则『？』」，但协议没有承载未提交草稿的通道、且接龙请求事件被冻结为固定条数；经用户拍板**收敛为固定兜底文本**（`RELAY_AUTO_SUBMIT_GUESS_TEXT`，位于 `apps/server/src/domain/relay/relay-steps.ts`，并留了可替换的单点 seam）。**该常量取值于 2026-10-05 按玩家可读性口径从「？」改为「上家未作答」**（读者须知见 `consensus.md` §十一「实现期修订」）。
 2. **接龙请求事件实际为 9 条**（不是规格 §2.6 / §5.1 写的 8 条）：投票必须有入口，实现期新增 `relay:vote`（已登记事件名 / 请求 Schema / ack / 处理器 / 协议守卫测试）。`PROTOCOL_VERSION` 保持 `'18'`——该事件与初版契约同批发布，未产生额外的线上不兼容窗口。
 3. **S52（服务端严格拒绝模式不生效字段）** 在规格 §5.2 未指派工单，由实现期的房间三幕改造一并落地：`MODE_SETTINGS_KEYS` 单一来源 + `updateSettings` 白名单 + 两端一致性单测。
+4. **`chat:say` 的登记处唯一**：接龙自由聊天归接龙模块（`apps/server/src/modules/relay/relay.gateway.ts` → `RelayService.chat` → `RelayMachine` 用注入的 `RandomSource` 产出消息 id），经典侧只保留猜词 / 预设 / 画布微表情。此前 chat 模块里留了一份手写 `relay.messages.push`（id 用 `Date.now()-Math.random()`，不是协议要求的 UUID），客户端严格解码会把**整份快照**判为损坏而丢弃。
+5. **运行时禁令的作用域随目录纵切同步扩张**：`apps/server/src/modules/**` 与 `core/**` 一并纳入 `project-conventions/require-server-runtime`（豁免仅 `core/runtime.ts` 这一真实适配层），否则 `Math.random()` 这类调用会绕过 ESLint 直接进业务模块（上面第 4 条即由此漏出）。作用域断言见 `test/unit/eslint-custom-rules.spec.ts`。
 
 ## 后果
 
@@ -79,11 +83,14 @@
 ## 关联
 
 - 代码：`apps/server/src/domain/relay/`（状态机 / 视图裁剪 / 步骤 / 复盘 / 投票 / 计分）、
-  `apps/server/src/domain/drawing/drawing-core.ts`（绘图内核）、`apps/server/src/domain/drawing/drawing-service.ts`（发布策略注入点）、
-  `apps/client/src/stores/relay.ts`、`apps/client/src/components/game/relay/`、
+  `apps/server/src/modules/drawing/drawing-core.ts`（绘图内核）、`apps/server/src/modules/drawing/drawing.service.ts`（发布策略注入点）、
+  `apps/server/src/modules/relay/`（接龙网关 / 服务）、
+  `apps/client/src/stores/relay.ts`、`apps/client/src/stores/snapshot-gate.ts`、`apps/client/src/components/game/relay/`、
   `packages/shared/src/protocol/relay.ts`、`packages/config/src/relay.ts`
-- 测试：`test/unit/relay-*.spec.ts`、`test/integration/relay-*.spec.ts`、`test/component/Relay*.spec.ts`、
-  `test/e2e/specs/10-relay-mode.spec.ts`（4 人全流程：四步 → 复盘轮播 → 逐链投票 → 终局战报）
+- 测试：`test/unit/relay-*.spec.ts`、`test/unit/snapshot-wire-contract.spec.ts`、`test/integration/relay-*.spec.ts`、
+  `test/integration/snapshot-gate-relay.spec.ts`、`test/component/Relay*.spec.ts`、
+  `test/e2e/specs/10-relay-mode.spec.ts`（4 人全流程：四步 → 复盘轮播 → 逐链投票 → 终局战报）、
+  `test/e2e/specs/11-end-early-after-departure.spec.ts`、`test/e2e/specs/12-relay-chat.spec.ts`
 - 相关：ADR-0010（绘图历史上限）、ADR-0018（画布重放状态机）、ADR-0021（快照裁剪矩阵）、
   ADR-0024（回合所有权）、ADR-0047（固定 100 分制）、ADR-0056（黄金三栏布局）
 - 设计来源：`.scratch/relay-mode/spec.md`、`.scratch/relay-mode/consensus.md`
