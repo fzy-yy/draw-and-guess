@@ -32,18 +32,30 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const tempDir = path.join(repoRoot, 'node_modules', '.cache', 'draw-guess-tmp')
 mkdirSync(tempDir, { recursive: true })
 
-const command = process.argv.slice(2).join(' ')
-if (command === '') {
+const rawArgs = process.argv.slice(2)
+if (rawArgs.length === 0) {
   process.stderr.write('用法：node scripts/with-local-temp.mjs <命令> [参数…]\n')
   process.exit(2)
 }
 
+const [command, ...args] = rawArgs
+
 // TMPDIR 在 Windows 上同样优先于 TEMP/TMP（Node os.tmpdir 的取值顺序），三个都设以免漏改。
-const child = spawn(command, {
-  stdio: 'inherit',
-  shell: true,
-  env: { ...process.env, TEMP: tempDir, TMP: tempDir, TMPDIR: tempDir },
-})
+// 平台分流：
+// - POSIX 系统：使用 shell: false + 参数数组直接交付 execvp，避免 /bin/sh 参数语法解析错误（如包含括号导致语法错误）；
+// - Windows 系统：pnpm/vite 等为 .cmd 垫片需开启 shell，按单命令字符串交付以满足 DEP0190 规范并避免转义告警。
+const child =
+  process.platform === 'win32'
+    ? spawn([command, ...args].map((arg) => (arg.includes(' ') ? `"${arg}"` : arg)).join(' '), {
+        stdio: 'inherit',
+        shell: true,
+        env: { ...process.env, TEMP: tempDir, TMP: tempDir, TMPDIR: tempDir },
+      })
+    : spawn(command, args, {
+        stdio: 'inherit',
+        shell: false,
+        env: { ...process.env, TEMP: tempDir, TMP: tempDir, TMPDIR: tempDir },
+      })
 
 child.on('error', (error) => {
   process.stderr.write(`[with-local-temp] 命令启动失败：${error.message}\n`)
