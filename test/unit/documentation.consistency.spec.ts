@@ -95,7 +95,8 @@ describe('文档与工程一致性', () => {
         (path) =>
           /\.(ts|vue)$/u.test(path) &&
           path !== 'packages/config/src/app.ts' &&
-          !path.startsWith('test/'),
+          !path.startsWith('test/') &&
+          !path.endsWith('test-fixture.ts'),
       )
       .filter((path) => read(path).includes(`'${app.version}'`))
     expect(

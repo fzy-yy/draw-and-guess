@@ -7,7 +7,7 @@ export const app = {
   /** 应用名：浏览器标题、诊断信息与无障碍标签中展示的「你画我猜」。 */
   name: '你画我猜',
   /** 产品版本号：分发包产物命名与 /api/info 都读它，是应用版本的唯一权威源。 */
-  version: '2.7.0',
+  version: '1.0.0',
   /** 线上协议版本：与服务端不匹配时客户端拒绝注册；改协议必须两端同步 +1（引用 shared 常量）。 */
   protocolVersion: PROTOCOL_VERSION,
   /** 浏览器 localStorage 的「玩家资料」存储键（昵称、头像编号、恢复令牌）。 */

@@ -125,7 +125,7 @@ export async function loadVocabulary(
       description: loaded.meta.description || '',
       author: loaded.meta.author || '',
       remark: loaded.meta.remark || '',
-      version: loaded.meta.fileVersion || '1.0.0',
+      version: loaded.meta.fileVersion || '',
       updatedAt: loaded.meta.updatedAt || '',
     })
   }
