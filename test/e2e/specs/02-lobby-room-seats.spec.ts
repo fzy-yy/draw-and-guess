@@ -122,31 +122,37 @@ test.describe('02 - 大厅房间与席位网格 (Lobby, Room & Seats)', () => {
       const toggleBtn = dialog.getByRole('button', { name: '切换词库选择' })
       await toggleBtn.click()
 
-      // 3. 验证表格 5 列顺序与字段：词库名称、词数、词库描述、版本号、更新日期
-      await expect(dialog.getByText('词库名称')).toBeVisible()
-      await expect(dialog.getByText('词数')).toBeVisible()
-      await expect(dialog.getByText('词库描述')).toBeVisible()
-      await expect(dialog.getByText('版本号')).toBeVisible()
-      await expect(dialog.getByText('更新日期')).toBeVisible()
-
-      // 行首单选按钮同时负责选择与当前状态提示：行内不再有额外状态徽标或逐行操作按钮
+      // 3. 验证表格 7 列顺序与字段：词库名称、作者、词数、词库描述、备注、版本号、更新日期
+      const thead = dialog.locator('thead')
+      await expect(thead.getByText('词库名称')).toBeVisible()
+      await expect(thead.getByText('作者')).toBeVisible()
+      await expect(thead.getByText('词数')).toBeVisible()
+      await expect(thead.getByText('词库描述')).toBeVisible()
+      await expect(thead.getByText('备注')).toBeVisible()
+      await expect(thead.getByText('版本号')).toBeVisible()
+      await expect(thead.getByText('更新日期')).toBeVisible()
+      // 行首复选框同时负责多选与当前状态提示：行内不再有额外状态徽标或逐行操作按钮
       await expect(dialog.getByText('draw_guess_words')).toBeVisible()
       const defaultPackageRow = dialog.locator('tr:has-text("draw_guess_words")')
-      const defaultPackageRadio = dialog.getByRole('radio', {
+      const defaultPackageCheckbox = dialog.getByRole('checkbox', {
         name: '选择词库 draw_guess_words',
       })
-      await expect(defaultPackageRadio).toBeChecked()
-      await expect(defaultPackageRow.getByRole('radio')).toHaveCount(1)
+      await expect(defaultPackageCheckbox).toBeChecked()
+      await expect(defaultPackageRow.getByRole('checkbox')).toHaveCount(1)
       await expect(defaultPackageRow.getByRole('button')).toHaveCount(0)
 
-      // 4. 使用第二行单选按钮切换词库，选中状态应成为唯一的当前状态提示
+      // 4. 多选词库包：勾选第二行词库包，支持同时选中多个词库包
       const testWordsRow = dialog.locator('tr:has-text("test_words")')
       await expect(testWordsRow).toBeVisible()
-      const testWordsRadio = testWordsRow.getByRole('radio', { name: '选择词库 test_words' })
-      await testWordsRadio.check()
-      await expect(testWordsRadio).toBeChecked()
-      await expect(defaultPackageRadio).not.toBeChecked()
+      const testWordsCheckbox = testWordsRow.getByRole('checkbox', { name: '选择词库 test_words' })
+      await testWordsCheckbox.check()
+      await expect(testWordsCheckbox).toBeChecked()
+      await expect(defaultPackageCheckbox).toBeChecked()
 
+      // 取消勾选默认词库包，验证可切换为仅选中第二行词库包
+      await defaultPackageCheckbox.uncheck()
+      await expect(defaultPackageCheckbox).not.toBeChecked()
+      await expect(testWordsCheckbox).toBeChecked()
       // 5. 点击返回词条列表
       await dialog.getByRole('button', { name: '返回词条列表' }).first().click()
       await expect(dialog.getByText('词面')).toBeVisible()
