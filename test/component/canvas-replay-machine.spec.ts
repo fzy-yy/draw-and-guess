@@ -508,3 +508,86 @@ describe('定尺寸与历史容量', () => {
     expect(vi.mocked(present).mock.calls.length).toBeGreaterThan(presentsBefore)
   })
 })
+
+/**
+ * 回放（speedrun）在飞时到达的同回合快照：聊天等纯展示推送会整棵替换房间快照，
+ * 画布数据源随之换成一个**内容相同、身份不同**的新数组，`sync` 因此照常被调用。
+ * 这类快照不得改写逻辑层——机器是「历史 → 栅格」的唯一所有者，回放期间逻辑层归回放所有。
+ */
+describe('回放期间的快照同步', () => {
+  it('回放进行中到达的同回合新快照：不取消回放、也不一次性补完剩余笔迹', async () => {
+    const { machine, logical } = harness()
+    const commands = [
+      strokeCommand({
+        id: 's1',
+        sequence: 1,
+        points: [
+          { x: 0.1, y: 0.1 },
+          { x: 0.3, y: 0.3 },
+          { x: 0.5, y: 0.5 },
+        ],
+      }),
+      strokeCommand({
+        id: 's2',
+        sequence: 2,
+        points: [
+          { x: 0.6, y: 0.2 },
+          { x: 0.8, y: 0.4 },
+        ],
+      }),
+    ]
+    machine.sync(snapshotOf(commands))
+    await flush()
+    vi.mocked(logical.stroke).mockClear()
+
+    const replay = machine.speedrun(100)
+    const settled = vi.fn()
+    void replay.then(settled)
+    // 内容与权威一致、仅身份不同：模拟聊天推送后画布数据源被整棵快照替换。
+    machine.sync(snapshotOf(commands.map((command) => ({ ...command }))))
+    await flush()
+
+    expect(settled).not.toHaveBeenCalled()
+    expect(logical.stroke).not.toHaveBeenCalled()
+
+    await replay
+    expect(settled).toHaveBeenCalledTimes(1)
+  })
+
+  it('回放进行中到达的同回合含填充新快照：不取消回放，回放照常跑完', async () => {
+    const { machine, fill, logical } = harness()
+    const commands = [
+      strokeCommand({
+        id: 's1',
+        sequence: 1,
+        points: [
+          { x: 0.1, y: 0.1 },
+          { x: 0.3, y: 0.3 },
+          { x: 0.5, y: 0.5 },
+        ],
+      }),
+      fillCommand({ id: 'f1' }),
+    ]
+    machine.sync(snapshotOf(commands))
+    await flush()
+    fill.complete(1)
+    await flush()
+    vi.mocked(logical.stroke).mockClear()
+
+    const replay = machine.speedrun(60)
+    const settled = vi.fn()
+    void replay.then(settled)
+    machine.sync(snapshotOf(commands.map((command) => ({ ...command }))))
+    await flush()
+    // 旧行为命中「未着色填充」分支 → 整帧重放 → 取消回放，Promise 当场 resolve。
+    expect(settled).not.toHaveBeenCalled()
+
+    // 回放推进到填充并完成它：回放以整帧重放收尾，Promise 才 resolve。
+    await vi.waitFor(() => expect(fill.requests.length).toBeGreaterThan(1))
+    fill.complete(1)
+    await replay
+    expect(settled).toHaveBeenCalledTimes(1)
+    fill.complete(1)
+    await flush()
+  })
+})

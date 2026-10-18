@@ -35,6 +35,7 @@
 | [0017](0017-drawing-replay-atomic-commit.md)             | 画布重放原子提交：后备缓冲整帧换入除空白窗   | 已采纳 |
 | [0018](0018-canvas-replay-machine.md)                    | 画布重放状态机：决策入机、单快照入口与锁分家 | 已采纳 |
 | [0022](0022-geometry-single-source-and-request-flags.md) | 坐标几何单口径与请求标志语义分离             | 已采纳 |
+| [0061](0061-replay-owns-layer-during-speedrun.md)        | 回放进行中逻辑层归回放所有                   | 已采纳 |
 
 ### 协议与类型护栏
 
