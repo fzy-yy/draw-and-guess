@@ -8,80 +8,16 @@
  */
 import { describe, expect, it } from 'vitest'
 import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
-import { createBackend, type Backend } from '../../apps/server/src/backend.ts'
-import type { AppServer } from '../../apps/server/src/socket-types.ts'
-import type { RuntimeDependencies } from '../../apps/server/src/runtime.ts'
 import type { Stroke } from '@draw-guess/shared'
-import { createFakeRuntime } from './helpers/fake-clock.ts'
-import { createMemoryRepositories } from './helpers/in-memory-repositories.ts'
-import { createMemoryVocabularyRegistry } from './helpers/mini-vocabulary.ts'
+import { createBackendHarness } from './helpers/backend-harness.ts'
 import { testRoomSettings } from './helpers/game-harness.ts'
 
-interface TestSocket {
-  id: string
-  data: Record<string, unknown>
-  rooms: Set<string>
-  disconnected: boolean
-  emit(event: string, payload: unknown): void
-  join(roomId: string): void
-  leave(roomId: string): void
-  disconnect(force?: boolean): void
-  to(roomId: string): { emit(event: string, payload: unknown): void }
-}
-
-function createFakeIo(): AppServer {
-  const broadcast = () => ({ emit: () => undefined, except: () => broadcast() })
-  return {
-    to: () => broadcast(),
-    in: () => broadcast(),
-    emit: () => undefined,
-  } as unknown as AppServer
-}
-
-function createTestSocket(id: string): TestSocket {
-  const socket: TestSocket = {
-    id,
-    data: {},
-    rooms: new Set([id]),
-    disconnected: false,
-    emit: () => undefined,
-    join: (roomId) => void socket.rooms.add(roomId),
-    leave: (roomId) => void socket.rooms.delete(roomId),
-    disconnect: () => {
-      socket.disconnected = true
-    },
-    to: () => ({ emit: () => undefined }),
-  }
-  return socket
-}
-
-/** 注册所需的连接类型：由生产服务签名推导，避免测试自造 Socket 形状。 */
-type RegisterSocket = Parameters<Backend['session']['register']>[0]
-
-/** 两条玩家身份 + 一个已开局的经典房；返回 backend 与关键现场。 */
+/** 两条玩家身份 + 一个已开局的经典房。 */
 function createClassicScenario() {
-  const runtime = createFakeRuntime()
-  const backend = createBackend({
-    io: createFakeIo(),
-    vocabulary: createMemoryVocabularyRegistry(),
-    repositories: createMemoryRepositories(),
-    runtime: runtime as unknown as RuntimeDependencies,
-  })
-
-  let socketSequence = 0
-  const register = (nickname: string) => {
-    socketSequence += 1
-    const socket = createTestSocket(`socket-${socketSequence}`)
-    const identity = backend.session.register(socket as unknown as RegisterSocket, {
-      protocolVersion: APP_CONFIG.app.protocolVersion,
-      profile: { nickname, avatarId: '01' },
-      preferences: { discoverable: true, acceptsInvites: true },
-    })
-    return { playerId: identity.player.id, socket }
-  }
-
-  const host = register('房主')
-  const guest = register('客人')
+  const harness = createBackendHarness()
+  const backend = harness.backend
+  const host = harness.register('房主')
+  const guest = harness.register('客人')
   const snapshot = backend.room.createRoom(host.playerId, {
     name: '测试房间',
     visibility: 'public',
@@ -90,11 +26,11 @@ function createClassicScenario() {
   backend.room.joinRoom(guest.playerId, snapshot.id)
   const ready = backend.room.setReady(guest.playerId, true)
   backend.gameplay.startGame(host.playerId, ready.stateVersion)
-  runtime.advance(APP_CONFIG.game.startingCountdownSeconds * 1_000)
+  harness.runtime.advance(APP_CONFIG.game.startingCountdownSeconds * 1_000)
 
   const room = backend.rooms.get(snapshot.id)
   if (!room?.game) throw new Error('对局未启动')
-  return { backend, runtime, room, game: room.game, host, guest }
+  return { harness, backend, room, game: room.game, host, guest }
 }
 
 function stroke(sequence: number): Stroke {
@@ -120,13 +56,18 @@ function rejectionCode(fn: () => unknown): string | undefined {
   }
 }
 
+/** 进入作画阶段：画家选定第一个候选词。 */
+function enterDrawing(scenario: ReturnType<typeof createClassicScenario>): void {
+  const candidate = scenario.game.candidates[0]
+  if (!candidate) throw new Error('缺少候选词')
+  scenario.backend.gameplay.chooseWord(scenario.game.drawerId, scenario.game.roundId, candidate.id)
+}
+
 describe('生产装配缝的绘图拒绝码', () => {
   it('非画家在作画阶段提交笔画：NOT_DRAWER，而不是 INTERNAL_ERROR', () => {
     const scenario = createClassicScenario()
+    enterDrawing(scenario)
     const game = scenario.game
-    const candidate = game.candidates[0]
-    if (!candidate) throw new Error('缺少候选词')
-    scenario.backend.gameplay.chooseWord(game.drawerId, game.roundId, candidate.id)
 
     const nonDrawer = game.drawerId === scenario.host.playerId ? scenario.guest : scenario.host
     const code = rejectionCode(() =>
@@ -139,13 +80,14 @@ describe('生产装配缝的绘图拒绝码', () => {
 
   it('笔画挂到别的回合 id 上：仍是 NOT_DRAWER（不因上下文陈旧而升格为内部错误）', () => {
     const scenario = createClassicScenario()
-    const game = scenario.game
-    const candidate = game.candidates[0]
-    if (!candidate) throw new Error('缺少候选词')
-    scenario.backend.gameplay.chooseWord(game.drawerId, game.roundId, candidate.id)
+    enterDrawing(scenario)
 
     const code = rejectionCode(() =>
-      scenario.backend.drawing.classic.addStroke(game.drawerId, 'stale-round-id', stroke(1)),
+      scenario.backend.drawing.classic.addStroke(
+        scenario.game.drawerId,
+        'stale-round-id',
+        stroke(1),
+      ),
     )
 
     expect(code).toBe('NOT_DRAWER')

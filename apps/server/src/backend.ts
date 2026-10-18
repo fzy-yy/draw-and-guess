@@ -20,6 +20,7 @@ import {
 import { ArchiveService } from './modules/archive/archive.service.ts'
 import { ChatService } from './modules/chat/chat.service.ts'
 import { RoomPublisher } from './application/room-publisher.ts'
+import { RoomPersistenceCoordinator } from './application/room-persistence-coordinator.ts'
 import { DomainContext } from './domain/domain-context.ts'
 import { markAllSynced } from './domain/drawing/canvas-sync.ts'
 import {
@@ -201,6 +202,22 @@ export function createBackend(deps: BackendDeps): Backend {
   // ── 4. 视图裁剪、发布与归档 ────────────────────────────────────────
   const archiveService = new ArchiveService(repositories.archive, logger)
 
+  /**
+   * 归档与身份落盘的统一映射：两种模式的字段口径、空榜守卫都只在这里维护。
+   * 写库仍经 ArchiveService，保留「落盘失败不阻断结算广播」的既有语义与白名单日志。
+   */
+  const persistence = new RoomPersistenceCoordinator({
+    clock: runtime.clock,
+    repositories: {
+      players: repositories.players,
+      archive: {
+        saveGame: (record, results) => {
+          archiveService.archiveGame(record, results)
+        },
+      },
+    },
+  })
+
   const snapshotter = new SnapshotBuilder({
     players,
     rooms,
@@ -225,60 +242,9 @@ export function createBackend(deps: BackendDeps): Backend {
   const emitRoom = (roomId: string): void => publisher.emitRoom(roomId)
   const broadcastPresence = (): void => publisher.broadcastPresence()
 
-  /**
-   * 完成局落盘：经典与接龙的结算秘密互斥，按房间模式取对应榜单。
-   * 归档映射的单一实现是 RoomPersistenceCoordinator（下一提交接回，行为修复见提交说明）。
-   */
+  /** 完成局落盘：映射与空榜守卫归 RoomPersistenceCoordinator，两种模式同一个入口。 */
   const persistGameResult = (room: RoomSecret, reason: string): void => {
-    if (room.gameMode === 'relay') {
-      const relay = room.relay
-      if (!relay?.finalRanking) return
-      archiveService.archiveGame(
-        {
-          id: relay.id,
-          roomId: room.id,
-          startedAt: relay.startedAt,
-          finishedAt: runtime.clock.now(),
-          totalRounds: relay.chains.length,
-          finalRanking: JSON.stringify(relay.finalRanking),
-          reason,
-          mode: room.gameMode,
-        },
-        relay.finalRanking.map((entry) => ({
-          gameId: relay.id,
-          playerId: entry.id,
-          nickname: entry.nickname,
-          avatarId: entry.avatarId,
-          rank: entry.rank,
-          score: entry.score,
-          stats: '{}',
-        })),
-      )
-      return
-    }
-    const game = room.game
-    if (!game?.finalRanking) return
-    archiveService.archiveGame(
-      {
-        id: game.id,
-        roomId: room.id,
-        startedAt: game.startedAt,
-        finishedAt: runtime.clock.now(),
-        totalRounds: game.totalRounds,
-        finalRanking: JSON.stringify(game.finalRanking),
-        reason,
-        mode: room.gameMode,
-      },
-      game.finalRanking.map((entry) => ({
-        gameId: game.id,
-        playerId: entry.id,
-        nickname: entry.nickname,
-        avatarId: entry.avatarId,
-        rank: entry.rank,
-        score: entry.score,
-        stats: JSON.stringify(entry.stats),
-      })),
-    )
+    persistence.persistGameResult(room, reason)
   }
 
   // ── 5. 两个平级状态机（模式独有的推进归各自，生命周期公共面见 ADR-0058）──
@@ -375,18 +341,7 @@ export function createBackend(deps: BackendDeps): Backend {
     toPublicPlayer: (player) => snapshotter.toPublicPlayer(player),
     finishRound: (room, drawerAbandoned) => roundMachine.finishRound(room, drawerAbandoned),
     leaveRoom: (playerId, reason) => roomService.leaveRoom(playerId, reason),
-    persistPlayer: (player) =>
-      repositories.players.upsert({
-        id: player.id,
-        tokenDigest: player.tokenDigest,
-        nickname: player.profile.nickname,
-        avatarId: player.profile.avatarId,
-        discoverable: player.preferences.discoverable,
-        acceptsInvites: player.preferences.acceptsInvites,
-        connected: player.connected,
-        joinedAt: player.joinedAt,
-        disconnectedAt: player.disconnectedAt,
-      }),
+    persistPlayer: (player) => persistence.persistPlayer(player),
     transferDisconnectedHost: (room, playerId) =>
       roomService.transferDisconnectedHost(room, playerId),
     safeRun,
@@ -401,24 +356,20 @@ export function createBackend(deps: BackendDeps): Backend {
     getPlayer: requirePlayer,
     getRoom: (roomId) => rooms.get(roomId),
     join: (playerId, room) => roomService.joinResolvedRoom(requirePlayer(playerId), room, 'invite'),
-    toPublicInvite: (invite) => {
-      const room = rooms.get(invite.roomId)
-      return {
-        id: invite.id,
-        roomId: invite.roomId,
-        roomName: room?.name ?? '',
-        from: snapshotter.toPublicPlayer(requirePlayer(invite.fromPlayerId)),
-        expiresAt: invite.expiresAt,
-      }
-    },
+    // 公开邀请视图归快照构建器（与角色裁剪同一处）：房间已关闭时抛 ROOM_NOT_FOUND，
+    // 而不是悄悄给出空房间名——邀请一旦不可达就不该继续出现在界面上。
+    toPublicInvite: (invite) => snapshotter.toPublicInvite(invite),
     emitInvite: (target, publicInvite) => {
       target.socket?.emit(
         EVENTS.inviteReceived,
         createServerPush(EVENTS.inviteReceived, publicInvite),
       )
     },
-    emitResolved: (_invite, id, status) => {
-      io.emit(EVENTS.inviteResolved, createServerPush(EVENTS.inviteResolved, { id, status }))
+    // 邀请解析只与当事人有关：定向发给收发双方，不做全局广播（隐私口径）。
+    emitResolved: (invite, id, status) => {
+      const payload = createServerPush(EVENTS.inviteResolved, { id, status })
+      emitToPlayer(invite.fromPlayerId, EVENTS.inviteResolved, payload)
+      emitToPlayer(invite.toPlayerId, EVENTS.inviteResolved, payload)
     },
     safeRun,
   })
