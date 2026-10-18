@@ -1,20 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { defaultRoomSettings } from '@draw-guess/config'
 import { serverStrings } from '@draw-guess/strings'
-import type { RoomSettings } from '@draw-guess/shared'
-import { MODE_SETTINGS_KEYS } from '../../apps/server/src/game-service.ts'
-import {
-  MODE_SETTINGS_KEYS as CLIENT_MODE_SETTINGS_KEYS,
-  scopeSettingsPatch,
-} from '../../apps/client/src/utils/room-facts.ts'
+import { MODE_SETTINGS_KEYS, type RoomSettings } from '@draw-guess/shared'
+import { scopeSettingsPatch } from '../../apps/client/src/utils/room-facts.ts'
 import { GameError } from '../../apps/server/src/errors.ts'
 import { createGameHarness, testRoomSettings, type GameHarness } from './helpers/game-harness.ts'
 
 /**
  * 房间规则的模式白名单（S52 / S68）：
  * 服务端对当前模式不生效的字段**严格拒绝**（沿用既有 INVALID_SETTINGS 码与文案），
- * 共用字段两种模式都接受；模式 → 生效键名的唯一来源是 game-service.ts 的 MODE_SETTINGS_KEYS，
- * 客户端在 utils/room-facts.ts 按同一清单派生（两端清单不得漂移，见最后一个用例）。
+ * 共用字段两种模式都接受；模式 → 生效键名的唯一来源是共享协议层的 MODE_SETTINGS_KEYS，
+ * 服务端拒绝口径与客户端裁剪口径同时引用它（不再各存一份，见 docs/adr/0064）。
  */
 
 /** 经典专属字段（接龙下不生效）：每个键取一个与默认值不同的合法值。 */
@@ -148,17 +144,18 @@ describe('房间规则模式白名单（S52）', () => {
     expect('relayDrawSeconds' in classicPatch).toBe(false)
   })
 
-  it('服务端与客户端的模式键集合清单完全一致（防两端各拍脑袋）', () => {
+  it('清单是共享协议层唯一来源：客户端裁剪与服务端拒绝用同一份，且键都真实存在', () => {
     const allKeys = Object.keys(defaultRoomSettings()).sort()
     for (const mode of ['classic', 'relay'] as const) {
-      expect([...MODE_SETTINGS_KEYS[mode]].sort()).toEqual(
-        [...CLIENT_MODE_SETTINGS_KEYS[mode]].sort(),
-      )
       // 清单只能引用真实存在的规则键，且不得重复
       const keys = [...MODE_SETTINGS_KEYS[mode]]
       expect(new Set(keys).size).toBe(keys.length)
       for (const key of keys) expect(allKeys).toContain(key)
     }
+
+    // 客户端裁剪出来的键集合与清单逐条一致（不是另一份手写清单）
+    const relayPatch = scopeSettingsPatch(defaultRoomSettings(), 'relay')
+    expect(Object.keys(relayPatch).sort()).toEqual([...MODE_SETTINGS_KEYS.relay].sort())
 
     // 两个模式的清单互补且并集覆盖全部规则键：模式专属键各自只在一个清单里
     const classicKeys = new Set<string>(MODE_SETTINGS_KEYS.classic)

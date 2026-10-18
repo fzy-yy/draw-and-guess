@@ -9,44 +9,19 @@
  */
 import {
   DEFAULT_GAME_MODE,
+  MODE_SETTINGS_KEYS,
   type GameMode,
   type RoomMember,
   type RoomSettings,
 } from '@draw-guess/shared'
 
 /**
- * 模式 → 生效的规则键名，**按服务端 `apps/server/src/game-service.ts` 的 `MODE_SETTINGS_KEYS` 逐条镜像**
- * （客户端不能 import 服务端模块，因此这里只能声明一份；两端一致由
- * `test/unit/room-settings-mode-whitelist.spec.ts` 守护，禁止只改一边）。
+ * 模式 → 生效的规则键名直接来自共享协议层（唯一来源）。
  *
  * 用途：规则弹窗据此决定渲染哪些字段、`updateRoomSettings` 据此把完整草稿裁剪成当前模式生效的补丁
  * ——服务端会严格拒绝出现不生效键的补丁（S52），不裁剪的完整草稿必然被拒。
+ * 本文件不再维护镜像副本（见 docs/adr/0064-single-backend-assembly.md）。
  */
-export const MODE_SETTINGS_KEYS: Record<GameMode, readonly (keyof RoomSettings)[]> = {
-  classic: [
-    'roundsPerPlayer',
-    'drawSeconds',
-    'chooseSeconds',
-    'showWordLength',
-    'progressiveHints',
-    'allowNearMissHint',
-    'allowCanvasReactions',
-    'allowRoundReplay',
-    'optionCount',
-    'allowWordReroll',
-    'allowCustomWord',
-    'allowPlayerInvite',
-  ],
-  relay: [
-    'relayChooseSeconds',
-    'relayDrawSeconds',
-    'relayGuessSeconds',
-    'optionCount',
-    'allowWordReroll',
-    'allowCustomWord',
-    'allowPlayerInvite',
-  ],
-}
 
 /** 取某模式生效的规则键名（缺省按协议默认模式，用于尚未装配房间快照的调用点）。 */
 function modeSettingsKeys(gameMode: GameMode | undefined): readonly (keyof RoomSettings)[] {

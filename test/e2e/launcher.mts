@@ -146,7 +146,8 @@ async function main(): Promise<void> {
     logger: SILENT_LOGGER,
     publicBaseUrl: () => `http://127.0.0.1:${PORT}`,
   })
-  application.service.recoverOnStartup()
+  // 启动期持久化收敛：与生产入口同一入口（application.backend，见 ADR-0064）。
+  application.backend.recoverOnStartup()
 
   let cleanedUp = false
   const cleanup = async () => {
