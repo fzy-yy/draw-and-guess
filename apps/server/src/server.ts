@@ -215,6 +215,7 @@ export async function createApplication(
     clock: runtime.clock,
     isPlaying,
     getRoomVocabularyStore,
+    vocabularyPackages: () => vocabulary.packages,
     requirePlayer,
   })
 

@@ -29,7 +29,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   sort: [key: string]
-  select: [packageId: string]
+  /** 行勾选：只上抛这一条事件（宿主只绑它，重复上抛会让一次点击执行两次切换）。 */
   toggle: [packageId: string]
 }>()
 
@@ -52,7 +52,6 @@ const activeSelectedPackageIds = computed<Set<string>>(() => {
 })
 
 function handleToggle(packageId: string): void {
-  emit('select', packageId)
   emit('toggle', packageId)
 }
 const table = ref<ScrollableTable>()

@@ -103,6 +103,7 @@
 | [0032](0032-drawer-hint-full-and-progressive.md)           | 画家模式完整提示、猜词者逐渐披露（wordHint） | 已废弃（被 0042 取代）           |
 | [0042](0042-remove-structured-hints.md)                    | 移除结构化提示：只保留逐字遮罩               | 已采纳                           |
 | [0053](0053-vocabulary-collection-and-toolbar-redesign.md) | 词库分类升级为自定义合集与工具栏图文胶囊化   | 已采纳                           |
+| [0062](0062-vocabulary-package-names-by-id.md)             | 多词库包名按 ID 解析、行勾选只上抛一条事件   | 已采纳                           |
 
 ### 本机反馈
 

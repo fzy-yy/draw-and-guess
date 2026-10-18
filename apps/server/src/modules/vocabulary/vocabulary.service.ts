@@ -116,10 +116,10 @@ export class RoomVocabularyService {
     room.selectedWordIds = new Set(target.items.map((word) => word.id))
     room.stateVersion += 1
 
-    this.context.addNotice(
-      room,
-      serverStrings.notices.vocabularyPackageSwitched(target.meta.name || packageIds.join('、')),
-    )
+    // 通知按「实际选中的包」逐个列出包名：合并展示名是用「、」把包名拼起来的，
+    // 直接整体塞进一对引号时，包名自带「、」就分不清哪个是名、哪个是分隔（ADR-0062）。
+    const selectedNames = packageIds.map((id) => this.context.registry.get(id)?.meta.name || id)
+    this.context.addNotice(room, serverStrings.notices.vocabularyPackageSwitched(selectedNames))
     this.context.emitRoom(room.id)
 
     return this.get(playerId)

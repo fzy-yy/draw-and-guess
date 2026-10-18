@@ -284,6 +284,8 @@ function makePort(
     // 与生产实现（phase-facts 的 isInMatchPhase）一致：经典四个阶段都算对局进行中
     isPlaying: (phase) => ['starting', 'choosing_word', 'drawing', 'round_result'].includes(phase),
     getRoomVocabularyStore: () => createMemoryVocabularyRegistry().getDefault(),
+    // 包清单与生产同源（词库注册表的 packages）；包名按包 ID 解析（ADR-0062）。
+    vocabularyPackages: () => createMemoryVocabularyRegistry().packages,
     requirePlayer: (playerId) => {
       const player = players.get(playerId)
       if (!player) throw new GameError('UNAUTHORIZED', 'requirePlayer')

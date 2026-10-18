@@ -66,17 +66,19 @@ function vocabularyFixture(packageId = 'basic'): VocabularySnapshot {
 /**
  * happy-dom 没有可用布局尺寸，虚拟表格不会挂载数据行；这里仅替换表格渲染边界，
  * 保留 VocabularyDialog、Pinia、请求门禁与包切换 composable 的真实实现。
+ * 替身必须与真实表格同语义（多选 checkbox + 单条 `toggle` 事件）——曾按单选 radio +
+ * `select` 事件建模，掩盖了真实表格「一次点击上抛两条事件」的缺陷。
  */
 const VocabularyPackageTableStub = defineComponent({
   name: 'VocabPackageTableView',
   inheritAttrs: false,
   props: {
     rows: { type: Array, required: true },
-    selectedPackageId: { type: String, required: true },
+    selectedPackageIds: { type: Object, default: () => new Set<string>() },
     isReadOnly: Boolean,
     selectionPending: Boolean,
   },
-  emits: ['select'],
+  emits: ['toggle'],
   setup(props, { emit, expose }) {
     expose({ scrollToTop: () => undefined })
     return () =>
@@ -84,11 +86,11 @@ const VocabularyPackageTableStub = defineComponent({
         'div',
         (props.rows as VocabularySnapshot['packages']).map((item) =>
           h('input', {
-            type: 'radio',
-            checked: item.id === props.selectedPackageId,
+            type: 'checkbox',
+            checked: (props.selectedPackageIds as Set<string>).has(item.id),
             disabled: props.isReadOnly || props.selectionPending,
             'aria-label': strings.a11y.room.vocabPackageSelectAria(item.name),
-            onChange: () => emit('select', item.id),
+            onChange: () => emit('toggle', item.id),
           }),
         ),
       )
@@ -176,7 +178,7 @@ describe('VocabularyDialog 权限与竞态', () => {
     expect(dialog).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: strings.a11y.room.vocabSwitchToPackages }))
-    const packageChoice = await screen.findByRole('radio', {
+    const packageChoice = await screen.findByRole('checkbox', {
       name: strings.a11y.room.vocabPackageSelectAria('进阶词库'),
     })
     expect((packageChoice as HTMLInputElement).disabled).toBe(true)
@@ -227,7 +229,7 @@ describe('VocabularyDialog 权限与竞态', () => {
     renderVocabularyDialog()
     await screen.findByRole('dialog', { name: strings.ui.room.vocabTitle })
     await user.click(screen.getByRole('button', { name: strings.a11y.room.vocabSwitchToPackages }))
-    const advanced = await screen.findByRole('radio', {
+    const advanced = await screen.findByRole('checkbox', {
       name: strings.a11y.room.vocabPackageSelectAria('进阶词库'),
     })
     await user.click(advanced)

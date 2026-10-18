@@ -14,6 +14,7 @@ import {
   type PublicRoom,
   type RoomPhase,
   type RoomSnapshot,
+  type VocabularyPackageInfo,
 } from '@draw-guess/shared'
 import { GameError } from './errors.ts'
 import type { InviteSecret, PlayerSecret, RoomSecret } from './models.ts'
@@ -40,6 +41,8 @@ export interface SnapshotViewPort {
   readonly clock: Clock
   isPlaying(phase: RoomPhase): boolean
   getRoomVocabularyStore(room?: RoomSecret): VocabularyStore
+  /** 可用词库包清单（只读）：快照按包 ID 查包名，避免拆合并展示名导致错位。 */
+  vocabularyPackages(): readonly VocabularyPackageInfo[]
   requirePlayer(playerId: string): PlayerSecret
 }
 
@@ -130,7 +133,9 @@ export class SnapshotBuilder {
             : {}),
         }
       : undefined
-    // 词库元信息在同一快照里被三个字段引用：取一次端口结果即可（原实现连调 4 次）。
+    // 本局绑定的词库包 ID 列表（快照对外与包名推导共用同一份，保证两者同源）。
+    const packageIds =
+      room.vocabularyPackageIds ?? (room.vocabularyPackageId ? [room.vocabularyPackageId] : [])
     const vocabulary = this.port.getRoomVocabularyStore(room)
     // 接龙视图：只在房间挂着接龙局且当前是接龙阶段时产出；经典房间恒为 undefined（S57）
     const relayView = this.relayViews.build(room, viewerId)
@@ -186,11 +191,13 @@ export class SnapshotBuilder {
       selectedWordCount: room.selectedWordIds.size,
       // 同一次快照对词库 store 只取一份（旧实现连调 4 次，均为同参数重复）。
       totalWordCount: vocabulary.items.length,
-      vocabularyPackageIds:
-        room.vocabularyPackageIds ?? (room.vocabularyPackageId ? [room.vocabularyPackageId] : []),
-      vocabularyPackageNames: vocabulary.meta.name
-        ? vocabulary.meta.name.split('、')
-        : [vocabulary.meta.id || ''],
+      vocabularyPackageIds: packageIds,
+      // 包名与包 ID **逐位对应**：按 ID 逐个查注册表，而不是拆合并展示名——
+      // 展示名的拼接顺序来自目录扫描顺序，与用户勾选顺序无关，拆分会错位；
+      // 且包名自身含「、」时拆分还会多出元素（见 docs/adr/0062-vocabulary-package-names-by-id.md）。
+      vocabularyPackageNames: packageIds.map(
+        (id) => this.port.vocabularyPackages().find((pkg) => pkg.id === id)?.name ?? id,
+      ),
       ...(gameView ? { game: gameView } : {}),
       // 接龙视图与经典 game 并列、互斥出现（S56 / S57）
       ...(relayView ? { relay: relayView } : {}),

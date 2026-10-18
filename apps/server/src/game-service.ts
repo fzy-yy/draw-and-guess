@@ -298,6 +298,7 @@ export class GameService {
       clock: this.clock,
       isPlaying: this.ports.isPlaying,
       getRoomVocabularyStore: this.ports.getRoomVocabularyStore,
+      vocabularyPackages: () => this.vocabulary.packages,
       requirePlayer: this.ports.requirePlayer,
     })
     this.publisher = new RoomPublisher({
