@@ -193,7 +193,7 @@ describe('接龙复盘轮播（工单 07）', () => {
     const voteView = showcaseOf(scenario, viewer.playerId)
     expect(voteView?.prompt.text).toBe(content.promptOf(0))
     expect(voteView?.answer.text).toBe(content.step4Of(0))
-    // 投票窗口由工单 08 的收票状态机写入：固定 relay.voteSeconds，到点才结算（S21）
+    // 投票窗口由收票状态机写入：入场即 relay.voteSeconds 上限，全员投完后才会压缩（ADR-0063）
     expect(scenario.relay.phaseEndsAt - scenario.relay.phaseStartedAt).toBe(
       APP_CONFIG.relay.voteSeconds * 1_000,
     )

@@ -409,10 +409,14 @@ export function startRelayGame(
     }
   }
 
-  /** 推进固定投票倒计时到点：服务端结算本链并推进到下一条链的展示入口或终局。 */
+  /**
+   * 把当前投票窗口推进到点：服务端结算本链并推进到下一条链的展示入口或终局。
+   * 推进量取「当前窗口剩余」，不写死上限——全员投完后窗口会被压缩，写死上限会越过
+   * 结算后新排的复盘页计时器（见 docs/adr/0063-relay-vote-settle-acceleration.md）。
+   */
   const advanceVoteWindow = (): void => {
     if (room.phase !== 'relay_vote') throw new Error('只有在投票期才能推进投票倒计时')
-    harness.runtime.advance(APP_CONFIG.relay.voteSeconds * 1_000)
+    harness.runtime.advance(Math.max(0, relay.phaseEndsAt - harness.runtime.now()))
   }
 
   return {

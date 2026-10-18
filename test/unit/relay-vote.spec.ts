@@ -4,9 +4,10 @@
  * 断言口径以外部可观察行为为主：快照载荷（匿名票行 / 已投票集合）、ack 错误码、系统通知、
  * 假时钟推进与结算后的分数；「行尾补不赞同」这类只有到点瞬间才存在的票行状态，
  * 由装配缝暴露的权威记录读取（与工单 07 读取链画布的写法一致）。
- * - 每条链展示完毕后进入固定 `relay.voteSeconds` 的投票窗口（S21），游标保留在该链（投票卡要并排展示两个答案）；
+ * - 每条链展示完毕后进入 `relay.voteSeconds` 上限的投票窗口，游标保留在该链（投票卡要并排展示两个答案）；
  * - 只有赞同 / 不赞同两项、点下即锁定（重复投票被拒），票行**匿名 + 到达顺序**实时公开（S42）；
- * - 即使全员投完也一律等满倒计时（S21），从不提前公布；
+ * - 链阵容全员投完即把剩余时间压到收尾窗口（ADR-0063），剩余不足收尾窗口时原样不动；
+ *   掉线 / 离局者不豁免，他们没投就照旧走满上限；
  * - 无弃权：倒计时到点仍未投的链阵容成员一律计不赞同（S14），离局 / 离房者同样按未投处理。
  */
 import { describe, expect, it } from 'vitest'
@@ -152,24 +153,121 @@ describe('接龙链投票（工单 08）', () => {
     expect(relayViewOf(scenario, scenario.host.playerId).showcase?.votes).toEqual(['agree'])
   })
 
-  it('全员投完也不提前公布：仍等满固定倒计时，到点才结算（S21）', () => {
+  it('全员投完即压缩窗口：剩余 > 收尾窗口时压到收尾窗口，到点进入下一条链（S21 修订 / ADR-0063）', () => {
     const scenario = toVotePhase()
-    const voteMs = APP_CONFIG.relay.voteSeconds * 1_000
+    const voteStartedAt = scenario.relay.phaseStartedAt
+    const graceMs = APP_CONFIG.relay.voteAllSubmittedSeconds * 1_000
 
+    // 投了 2 秒才收齐：剩余 8 秒，远大于收尾窗口
+    scenario.harness.runtime.advance(2_000)
     scenario.voteAll('agree')
 
-    // 全员已投：票行已满，但阶段仍在投票期
+    // 阶段未变，但窗口被重设：起点＝最后一票到达时刻，长度＝收尾窗口
     expect(scenario.room.phase).toBe('relay_vote')
+    expect(scenario.relay.phaseStartedAt).toBe(voteStartedAt + 2_000)
+    expect(scenario.relay.phaseEndsAt - scenario.relay.phaseStartedAt).toBe(graceMs)
+    // 票行已收齐（无弃权补票，因为全员都已投）
     expect(relayViewOf(scenario, scenario.host.playerId).showcase?.votes).toHaveLength(
       scenario.players.length,
     )
-    // 到点前 1ms 仍是投票期，完全没有提前公布
-    scenario.harness.runtime.advance(voteMs - 1)
+
+    // 收尾窗口内仍是投票期，到点才结算并进入下一条链
+    scenario.harness.runtime.advance(graceMs - 1)
     expect(scenario.room.phase).toBe('relay_vote')
-    // 到点才结算：本链匹配成功 → 进入下一条链的展示入口
     scenario.harness.runtime.advance(1)
     expect(scenario.room.phase).toBe('relay_showcase')
     expect(scenario.showcaseCursor()).toEqual({ chainIndex: 2, half: 1, page: 'replay' })
+    // 判定口径不变：全员赞同 → 本链匹配通过、参与者入账
+    expect(scenario.relay.chains[0]?.result?.matched).toBe(true)
+  })
+
+  it('全员投完但剩余已不足收尾窗口：窗口原样不动，不延长也不缩短（ADR-0063）', () => {
+    const scenario = toVotePhase()
+    const startedAt = scenario.relay.phaseStartedAt
+    const endsAt = scenario.relay.phaseEndsAt
+    const voteMs = APP_CONFIG.relay.voteSeconds * 1_000
+
+    // 拖到只剩 2 秒才收齐
+    scenario.harness.runtime.advance(voteMs - 2_000)
+    scenario.voteAll('agree')
+
+    expect(scenario.room.phase).toBe('relay_vote')
+    expect(scenario.relay.phaseStartedAt).toBe(startedAt)
+    expect(scenario.relay.phaseEndsAt).toBe(endsAt)
+
+    // 按原窗口到点结算
+    scenario.harness.runtime.advance(2_000)
+    expect(scenario.room.phase).toBe('relay_showcase')
+    expect(scenario.showcaseCursor()).toEqual({ chainIndex: 2, half: 1, page: 'replay' })
+  })
+
+  it('只有部分人投票：窗口保持上限，到点才结算（ADR-0063）', () => {
+    const scenario = toVotePhase()
+    const startedAt = scenario.relay.phaseStartedAt
+    const endsAt = scenario.relay.phaseEndsAt
+    const voteMs = APP_CONFIG.relay.voteSeconds * 1_000
+    const [first, second] = scenario.players
+    if (!first || !second) throw new Error('场景缺少玩家')
+
+    scenario.vote(first, 'agree')
+    scenario.vote(second, 'disagree')
+
+    // 未收齐：窗口不动
+    expect(scenario.relay.phaseStartedAt).toBe(startedAt)
+    expect(scenario.relay.phaseEndsAt).toBe(endsAt)
+
+    scenario.harness.runtime.advance(voteMs - 1)
+    expect(scenario.room.phase).toBe('relay_vote')
+    scenario.harness.runtime.advance(1)
+    expect(scenario.room.phase).toBe('relay_showcase')
+  })
+
+  it('掉线者未投不加速：窗口走满上限，到点按未投补不赞同（ADR-0063）', () => {
+    const scenario = toVotePhase()
+    const startedAt = scenario.relay.phaseStartedAt
+    const endsAt = scenario.relay.phaseEndsAt
+    const voteMs = APP_CONFIG.relay.voteSeconds * 1_000
+    const dropped = scenario.players[2]
+    if (!dropped) throw new Error('场景缺少玩家')
+
+    scenario.disconnect(dropped)
+    scenario.voteAll('agree')
+
+    // 掉线者不豁免：链阵容没凑齐，窗口保持满上限
+    expect(scenario.relay.phaseStartedAt).toBe(startedAt)
+    expect(scenario.relay.phaseEndsAt).toBe(endsAt)
+
+    scenario.harness.runtime.advance(voteMs)
+    expect(scenario.room.phase).toBe('relay_showcase')
+    // 未投的掉线者被补成不赞同（无弃权口径不变）
+    expect(scenario.relay.chains[0]?.votes.map((vote) => vote.choice)).toEqual([
+      'agree',
+      'agree',
+      'agree',
+      'disagree',
+    ])
+  })
+
+  it('最后一条链收齐同样压缩：收尾窗口结束即进终局（ADR-0063）', () => {
+    const scenario = startRelayGame()
+    scenario.playToShowcase()
+    const graceMs = APP_CONFIG.relay.voteAllSubmittedSeconds * 1_000
+    const chainCount = scenario.relay.chains.length
+
+    // 前几条链照常结算
+    for (let chainIndex = 1; chainIndex < chainCount; chainIndex += 1) {
+      scenario.finishShowcaseChain()
+      scenario.voteAll('agree')
+      scenario.advanceVoteWindow()
+    }
+
+    // 最后一条链：收齐后窗口压缩，收尾窗口结束进终局
+    scenario.finishShowcaseChain()
+    expect(scenario.room.phase).toBe('relay_vote')
+    scenario.voteAll('agree')
+    expect(scenario.relay.phaseEndsAt - scenario.relay.phaseStartedAt).toBe(graceMs)
+    scenario.harness.runtime.advance(graceMs)
+    expect(scenario.room.phase).toBe('game_result')
   })
 
   it('无弃权：未投者计不赞同，够翻转阈值（2 赞同 vs 2 未投 → 本链 0 分）（S13 / S14）', () => {
