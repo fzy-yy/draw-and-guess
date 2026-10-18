@@ -10,9 +10,10 @@ import {
  * 三类对局时长：档位白名单来自共享协议常量（线上可观察范围），**默认值**落在这里——
  * 默认值不是协议约定而是产品选择，房间规则与规则弹窗初值统一从这里取。
  *
- * 复盘四时长（replaySeconds / replayPauseSeconds / revealSeconds / voteSeconds）与下面的
- * 计分、占位字符数都是**固定常量**、房主不可改：每链节奏由服务端权威计时与客户端动画
- * 共用同一份，改这里即两端同步改变。接龙不新增服务端私有策略（沿用断线宽限、限频与幂等缓存上限）。
+ * 复盘固定节奏（replaySeconds / replayPauseSeconds / revealSeconds / voteSeconds /
+ * voteAllSubmittedSeconds）与下面的计分、占位字符数都是**固定常量**、房主不可改：每链节奏由
+ * 服务端权威计时与客户端动画共用同一份，改这里即两端同步改变。接龙不新增服务端私有策略
+ *（沿用断线宽限、限频与幂等缓存上限）。
  */
 export const relay = {
   /** 选词时长（步 1 的 `relay_choose`）：可选档位与默认值。 */

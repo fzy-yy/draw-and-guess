@@ -107,7 +107,7 @@ apps/server/       Express、Socket.IO、权威领域状态与 SQLite 本地持�
   └─ src/build/dist-templates.ts # 分发文本模板：start.cmd / 使用说明（纯函数，两包启动差异有单测锁定）
   └─ scripts/package-dist.ts    # 构建 Windows 分发包（esbuild 单文件 + 资源 + 内置 Node + zip）
 packages/shared/   DTO、Zod schema、协议常量、事件名和领域纯函数（完全自包含）
-packages/config/   浏览器安全的公开应用配置 workspace 包（含接龙三时长默认值与复盘四时长 `relay.ts`）
+packages/config/   浏览器安全的公开应用配置 workspace 包（含接龙三时长默认值与复盘固定节奏 `relay.ts`）
 packages/strings/  展示文案包（`strings.ui` 可见 / `strings.a11y` 无障碍 / `serverStrings` 服务端）
 vocabulary/        唯一权威词库目录（SQLite 数据库，Provider 加载）
 docs/adr/          架构决策记录（背景 / 决策 / 后果），源码注释引用此处

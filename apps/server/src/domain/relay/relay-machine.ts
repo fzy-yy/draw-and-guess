@@ -47,6 +47,7 @@ import {
 } from './relay-models.ts'
 import {
   freezeRelayFinalRanking,
+  missingVoterIds,
   relayParticipantIndices,
   tallyChainVotes,
 } from './relay-voting.ts'
@@ -419,25 +420,29 @@ export class RelayMachine {
    */
   private enterChainVote(room: RoomSecret): void {
     const relay = this.requireRelay(room)
-    this.clearStepTimers(relay)
     this.transition(room, 'relay_vote')
-    const voteMs = APP_CONFIG.relay.voteSeconds * 1_000
-    relay.phaseStartedAt = this.service.clock.now()
-    relay.phaseEndsAt = relay.phaseStartedAt + voteMs
+    this.setVoteWindow(room, relay, APP_CONFIG.relay.voteSeconds * 1_000)
     this.addSystemNotice(room, serverStrings.notices.relayVoteStarted)
-    this.scheduleVoteSettlement(room, relay, voteMs)
     this.service.emitRoom(room.id)
   }
 
   /**
-   * 排一次投票到点结算：`relay.timer` 是唯一句柄，调用方负责先清旧计时器。
-   * 守卫只有这一份——迟到的旧回调让路（房间可能已关闭、已被结算，或接龙局已更换）。
+   * 重设本次投票窗口并重排结算：唯一的窗口写入点（入场与收齐加速共用）。
+   * 起点恒为「现在」——这样「剩余 / 窗口长度」的进度条语义始终成立。
    */
-  private scheduleVoteSettlement(
-    room: RoomSecret,
-    relay: RelayGameSecret,
-    delayMs: number,
-  ): void {
+  private setVoteWindow(room: RoomSecret, relay: RelayGameSecret, durationMs: number): void {
+    // 旧计时器必须先清掉：否则它会在新窗口之外再结算一次
+    this.clearStepTimers(relay)
+    relay.phaseStartedAt = this.service.clock.now()
+    relay.phaseEndsAt = relay.phaseStartedAt + durationMs
+    this.scheduleVoteSettlement(room, relay, durationMs)
+  }
+
+  /**
+   * 排一次投票到点结算：`relay.timer` 是唯一句柄，调用方负责先清旧计时器。
+   * 回调守卫沿用入场口径（阶段仍是投票期且接龙局未更换），迟到的旧回调据此让路。
+   */
+  private scheduleVoteSettlement(room: RoomSecret, relay: RelayGameSecret, delayMs: number): void {
     relay.timer = this.service.scheduler.set(delayMs, () =>
       this.service.safeRun('relayVoteTimeout', () => {
         if (room.phase !== 'relay_vote' || room.relay?.id !== relay.id) return
@@ -488,20 +493,14 @@ export class RelayMachine {
     const chain = cursor ? relay.chains[cursor.chainIndex - 1] : undefined
     // 残缺现场（投票期没有游标 / 链越界）不压缩：由到点结算的统一兜底处理
     if (!chain) return
-    const allVoted = relay.chains.every((candidate) =>
-      chain.votes.some((vote) => vote.playerId === candidate.originPlayerId),
-    )
-    if (!allVoted) return
+    // 收齐判据与结算补票共用同一份「还差谁没投」（missingVoterIds），两处口径不会漂移
+    if (missingVoterIds(relay, chain).length > 0) return
 
     const now = this.service.clock.now()
-    const graceMs = APP_CONFIG.relay.voteAllSubmittedSeconds * 1_000
-    if (relay.phaseEndsAt - now <= graceMs) return
+    const settleWindowMs = APP_CONFIG.relay.voteAllSubmittedSeconds * 1_000
+    if (relay.phaseEndsAt - now <= settleWindowMs) return
 
-    // 旧的到点计时器必须先清掉：否则它会在被压缩后的窗口之外再结算一次
-    this.clearStepTimers(relay)
-    relay.phaseStartedAt = now
-    relay.phaseEndsAt = now + graceMs
-    this.scheduleVoteSettlement(room, relay, graceMs)
+    this.setVoteWindow(room, relay, settleWindowMs)
   }
 
   /**
@@ -518,8 +517,7 @@ export class RelayMachine {
       this.finishGame(room, serverStrings.notices.relayFinished)
       return
     }
-    for (const originPlayerId of relay.chains.map((candidate) => candidate.originPlayerId)) {
-      if (chain.votes.some((vote) => vote.playerId === originPlayerId)) continue
+    for (const originPlayerId of missingVoterIds(relay, chain)) {
       chain.votes.push({ playerId: originPlayerId, choice: 'disagree' })
     }
     const tally = tallyChainVotes(chain.votes)

@@ -17,6 +17,7 @@ import {
   EVENTS,
   RelayVoteSchema,
   RoomSnapshotSchema,
+  SERVER_PUSH_SCHEMAS,
 } from '@draw-guess/shared'
 import { serverStrings } from '@draw-guess/strings'
 import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
@@ -35,6 +36,12 @@ function relayViewOf(scenario: RelayGameScenario, playerId: string) {
   return view
 }
 
+/** 投票窗口的对外形状（快照下发字段）：测试只读快照，不碰服务端秘密记录。 */
+function voteWindowOf(scenario: RelayGameScenario, playerId: string) {
+  const view = relayViewOf(scenario, playerId)
+  return { startedAt: view.phaseStartedAt, endsAt: view.phaseEndsAt }
+}
+
 /** 走到第 1 条链的投票期（四步 → 复盘 6 页）。 */
 function toVotePhase(): RelayGameScenario {
   const scenario = startRelayGame()
@@ -48,9 +55,10 @@ describe('接龙链投票（工单 08）', () => {
     const scenario = toVotePhase()
 
     expect(scenario.room.phase).toBe('relay_vote')
-    // 投票窗口固定为配置时长（断言值与配置包同源，防止魔法数字漂移）
+    // 入场窗口＝配置上限（断言值与配置包同源，防止魔法数字漂移）
     const voteMs = APP_CONFIG.relay.voteSeconds * 1_000
-    expect(scenario.relay.phaseEndsAt - scenario.relay.phaseStartedAt).toBe(voteMs)
+    const window = voteWindowOf(scenario, scenario.host.playerId)
+    expect(window.endsAt - window.startedAt).toBe(voteMs)
     // 游标保留在该链的最后一个半场揭晓页：投票卡要并排展示两个答案（S78 / S23）
     expect(scenario.showcaseCursor()).toEqual({ chainIndex: 1, half: 2, page: 'reveal' })
     // 关键节点通知（S65）：每条链的投票开始播一次
@@ -155,8 +163,8 @@ describe('接龙链投票（工单 08）', () => {
 
   it('全员投完即压缩窗口：剩余 > 收尾窗口时压到收尾窗口，到点进入下一条链（S21 修订 / ADR-0063）', () => {
     const scenario = toVotePhase()
-    const voteStartedAt = scenario.relay.phaseStartedAt
-    const graceMs = APP_CONFIG.relay.voteAllSubmittedSeconds * 1_000
+    const voteStartedAt = voteWindowOf(scenario, scenario.host.playerId).startedAt
+    const settleWindowMs = APP_CONFIG.relay.voteAllSubmittedSeconds * 1_000
 
     // 投了 2 秒才收齐：剩余 8 秒，远大于收尾窗口
     scenario.harness.runtime.advance(2_000)
@@ -164,15 +172,16 @@ describe('接龙链投票（工单 08）', () => {
 
     // 阶段未变，但窗口被重设：起点＝最后一票到达时刻，长度＝收尾窗口
     expect(scenario.room.phase).toBe('relay_vote')
-    expect(scenario.relay.phaseStartedAt).toBe(voteStartedAt + 2_000)
-    expect(scenario.relay.phaseEndsAt - scenario.relay.phaseStartedAt).toBe(graceMs)
+    const window = voteWindowOf(scenario, scenario.host.playerId)
+    expect(window.startedAt).toBe(voteStartedAt + 2_000)
+    expect(window.endsAt - window.startedAt).toBe(settleWindowMs)
     // 票行已收齐（无弃权补票，因为全员都已投）
     expect(relayViewOf(scenario, scenario.host.playerId).showcase?.votes).toHaveLength(
       scenario.players.length,
     )
 
     // 收尾窗口内仍是投票期，到点才结算并进入下一条链
-    scenario.harness.runtime.advance(graceMs - 1)
+    scenario.harness.runtime.advance(settleWindowMs - 1)
     expect(scenario.room.phase).toBe('relay_vote')
     scenario.harness.runtime.advance(1)
     expect(scenario.room.phase).toBe('relay_showcase')
@@ -183,8 +192,7 @@ describe('接龙链投票（工单 08）', () => {
 
   it('全员投完但剩余已不足收尾窗口：窗口原样不动，不延长也不缩短（ADR-0063）', () => {
     const scenario = toVotePhase()
-    const startedAt = scenario.relay.phaseStartedAt
-    const endsAt = scenario.relay.phaseEndsAt
+    const before = voteWindowOf(scenario, scenario.host.playerId)
     const voteMs = APP_CONFIG.relay.voteSeconds * 1_000
 
     // 拖到只剩 2 秒才收齐
@@ -192,8 +200,7 @@ describe('接龙链投票（工单 08）', () => {
     scenario.voteAll('agree')
 
     expect(scenario.room.phase).toBe('relay_vote')
-    expect(scenario.relay.phaseStartedAt).toBe(startedAt)
-    expect(scenario.relay.phaseEndsAt).toBe(endsAt)
+    expect(voteWindowOf(scenario, scenario.host.playerId)).toEqual(before)
 
     // 按原窗口到点结算
     scenario.harness.runtime.advance(2_000)
@@ -203,8 +210,7 @@ describe('接龙链投票（工单 08）', () => {
 
   it('只有部分人投票：窗口保持上限，到点才结算（ADR-0063）', () => {
     const scenario = toVotePhase()
-    const startedAt = scenario.relay.phaseStartedAt
-    const endsAt = scenario.relay.phaseEndsAt
+    const before = voteWindowOf(scenario, scenario.host.playerId)
     const voteMs = APP_CONFIG.relay.voteSeconds * 1_000
     const [first, second] = scenario.players
     if (!first || !second) throw new Error('场景缺少玩家')
@@ -213,8 +219,7 @@ describe('接龙链投票（工单 08）', () => {
     scenario.vote(second, 'disagree')
 
     // 未收齐：窗口不动
-    expect(scenario.relay.phaseStartedAt).toBe(startedAt)
-    expect(scenario.relay.phaseEndsAt).toBe(endsAt)
+    expect(voteWindowOf(scenario, scenario.host.playerId)).toEqual(before)
 
     scenario.harness.runtime.advance(voteMs - 1)
     expect(scenario.room.phase).toBe('relay_vote')
@@ -224,8 +229,7 @@ describe('接龙链投票（工单 08）', () => {
 
   it('掉线者未投不加速：窗口走满上限，到点按未投补不赞同（ADR-0063）', () => {
     const scenario = toVotePhase()
-    const startedAt = scenario.relay.phaseStartedAt
-    const endsAt = scenario.relay.phaseEndsAt
+    const before = voteWindowOf(scenario, scenario.host.playerId)
     const voteMs = APP_CONFIG.relay.voteSeconds * 1_000
     const dropped = scenario.players[2]
     if (!dropped) throw new Error('场景缺少玩家')
@@ -234,8 +238,7 @@ describe('接龙链投票（工单 08）', () => {
     scenario.voteAll('agree')
 
     // 掉线者不豁免：链阵容没凑齐，窗口保持满上限
-    expect(scenario.relay.phaseStartedAt).toBe(startedAt)
-    expect(scenario.relay.phaseEndsAt).toBe(endsAt)
+    expect(voteWindowOf(scenario, scenario.host.playerId)).toEqual(before)
 
     scenario.harness.runtime.advance(voteMs)
     expect(scenario.room.phase).toBe('relay_showcase')
@@ -251,7 +254,7 @@ describe('接龙链投票（工单 08）', () => {
   it('最后一条链收齐同样压缩：收尾窗口结束即进终局（ADR-0063）', () => {
     const scenario = startRelayGame()
     scenario.playToShowcase()
-    const graceMs = APP_CONFIG.relay.voteAllSubmittedSeconds * 1_000
+    const settleWindowMs = APP_CONFIG.relay.voteAllSubmittedSeconds * 1_000
     const chainCount = scenario.relay.chains.length
 
     // 前几条链照常结算
@@ -265,9 +268,58 @@ describe('接龙链投票（工单 08）', () => {
     scenario.finishShowcaseChain()
     expect(scenario.room.phase).toBe('relay_vote')
     scenario.voteAll('agree')
-    expect(scenario.relay.phaseEndsAt - scenario.relay.phaseStartedAt).toBe(graceMs)
-    scenario.harness.runtime.advance(graceMs)
+    const window = voteWindowOf(scenario, scenario.host.playerId)
+    expect(window.endsAt - window.startedAt).toBe(settleWindowMs)
+    scenario.harness.runtime.advance(settleWindowMs)
     expect(scenario.room.phase).toBe('game_result')
+  })
+
+  it('收齐的那一票只广播一次快照：票行与新截止时间同帧到达（ADR-0063 / 故事 21）', () => {
+    const scenario = toVotePhase()
+    const settleWindowMs = APP_CONFIG.relay.voteAllSubmittedSeconds * 1_000
+    const voteMs = APP_CONFIG.relay.voteSeconds * 1_000
+    const others = scenario.players.slice(0, -1)
+    const lastVoter = scenario.players.at(-1)
+    if (!lastVoter) throw new Error('场景缺少玩家')
+
+    // 先让除最后一人外全部投完：此时不该触发加速，窗口仍是上限
+    for (const player of others) scenario.vote(player, 'agree')
+    const beforeLastVote = voteWindowOf(scenario, scenario.host.playerId)
+    expect(beforeLastVote.endsAt - beforeLastVote.startedAt).toBe(voteMs)
+
+    // 最后一人投票：每个观看者各收到一份快照，且票行与压缩后的窗口在同一份载荷里
+    const pushesOf = (player: (typeof scenario.players)[number]) =>
+      player.socket.events.filter((record) => record.event === EVENTS.roomSnapshot)
+    const before = scenario.players.map((player) => pushesOf(player).length)
+    scenario.vote(lastVoter, 'agree')
+
+    for (const [index, player] of scenario.players.entries()) {
+      expect(pushesOf(player)).toHaveLength((before[index] ?? 0) + 1)
+      const latest = pushesOf(player).at(-1)
+      if (!latest) throw new Error('缺少房间快照推送')
+      const view = SERVER_PUSH_SCHEMAS[EVENTS.roomSnapshot].parse(latest.payload).data.relay
+      if (!view) throw new Error('快照缺少接龙视图')
+      expect(view.showcase?.votes).toHaveLength(scenario.players.length)
+      expect(view.phaseEndsAt - view.phaseStartedAt).toBe(settleWindowMs)
+    }
+  })
+
+  it('收齐后断线重连：重连者看到的截止时间与服务端一致（故事 9）', () => {
+    const scenario = toVotePhase()
+    const settleWindowMs = APP_CONFIG.relay.voteAllSubmittedSeconds * 1_000
+    scenario.harness.runtime.advance(2_000)
+    scenario.voteAll('agree')
+    const window = voteWindowOf(scenario, scenario.host.playerId)
+    expect(window.endsAt - window.startedAt).toBe(settleWindowMs)
+
+    const dropped = scenario.players[1]
+    if (!dropped) throw new Error('场景缺少玩家')
+    scenario.disconnect(dropped)
+    scenario.reconnect(dropped)
+
+    // 重连后的快照仍是压缩后的窗口，不会退回满窗口
+    expect(voteWindowOf(scenario, dropped.playerId)).toEqual(window)
+    expect(scenario.room.phase).toBe('relay_vote')
   })
 
   it('无弃权：未投者计不赞同，够翻转阈值（2 赞同 vs 2 未投 → 本链 0 分）（S13 / S14）', () => {

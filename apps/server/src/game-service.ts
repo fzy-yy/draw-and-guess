@@ -959,7 +959,8 @@ export class GameService {
   }
 
   /**
-   * 投票（`relay:vote`，S13 / S14）：只有赞同 / 不赞同，点下即锁定、无弃权、一律等满倒计时。
+   * 投票（`relay:vote`，S13 / S14）：只有赞同 / 不赞同，点下即锁定、无弃权；
+   * 倒计时到点必结算，链阵容全员投完后剩余时间被压到收尾窗口（ADR-0063）。
    * 目标是服务端权威游标指向的那条链（请求里不带链信息），收票与结算全归接龙状态机。
    */
   voteRelay(playerId: string, choice: RelayVoteChoice): void {

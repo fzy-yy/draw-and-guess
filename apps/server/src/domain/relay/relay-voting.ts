@@ -15,7 +15,7 @@ import { RELAY_STEP_COUNT, type RelayFinalRankingEntry } from '@draw-guess/share
 import { APP_CONFIG } from '../../config/index.ts'
 import { rankMembers } from '../../scoring.ts'
 import type { PlayerSecret, RoomSecret } from '../../models.ts'
-import type { RelayChainVote, RelayGameSecret } from './relay-models.ts'
+import type { RelayChainSecret, RelayChainVote, RelayGameSecret } from './relay-models.ts'
 
 /** 一条链的结算明细：入账与展示取同一份（S13）。 */
 export interface RelayChainVoteTally {
@@ -40,6 +40,23 @@ export function tallyChainVotes(votes: readonly RelayChainVote[]): RelayChainVot
     matched,
     pointsPerParticipant: matched ? agreeCount * APP_CONFIG.relay.scorePerAgreeVote : 0,
   }
+}
+
+/**
+ * 尚未投票的链阵容成员 id（按链数组顺序）。
+ *
+ * 「谁该投这一票」只有这一处判据：结算时按它补「不赞同」（S14 无弃权），
+ * 投票窗口的「是否收齐」也按它判空（ADR-0063）——两处若各写一遍「链阵容 − 已投」，
+ * 补票口径与加速口径迟早会漂移。集合只取链发起人（＝开局链阵容），不含连接状态。
+ */
+export function missingVoterIds(
+  relay: Pick<RelayGameSecret, 'chains'>,
+  chain: Pick<RelayChainSecret, 'votes'>,
+): string[] {
+  const voted = new Set(chain.votes.map((vote) => vote.playerId))
+  return relay.chains
+    .map((candidate) => candidate.originPlayerId)
+    .filter((playerId) => !voted.has(playerId))
 }
 
 /**
