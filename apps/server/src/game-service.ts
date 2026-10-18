@@ -10,14 +10,12 @@ import { SessionService } from './domain/session/session-service.ts'
 import { slidingWindowAllow } from './rate-limit.ts'
 import {
   type CanvasPingType,
-  ERROR_CODES,
   EVENTS,
   MIN_SELECTED_VOCABULARY_WORDS,
   RELAY_MIN_PLAYERS,
   createServerPush,
   isNearMissAnswer,
   normalizeAnswer,
-  type ErrorCode,
   type FillCommand,
   type GameMode,
   type Invite,
@@ -44,12 +42,9 @@ import { markAllSynced } from './domain/drawing/canvas-sync.ts'
 import {
   DrawingService,
   createRoomBroadcastPublisher,
-  type DrawingSession,
+  type DrawingTargetDecision,
 } from './domain/drawing/drawing-service.ts'
-import {
-  resolveRelayCanvasTarget,
-  type RelayCanvasRejection,
-} from './domain/relay/relay-canvas-target.ts'
+import { resolveRelayCanvasTarget } from './domain/relay/relay-canvas-target.ts'
 import { createSilentPublisher } from './domain/relay/relay-publisher.ts'
 import { RelayMachine } from './domain/relay/relay-machine.ts'
 import type { RelayGameSecret } from './domain/relay/relay-models.ts'
@@ -125,17 +120,6 @@ interface RoomLifecycle {
 }
 
 /**
- * 接龙绘图解析拒绝 → 协议错误码（复用既有错误码体系，不新增码；映射表放装配层，
- * 领域原因本身在 domain/relay 只表达「为什么拒绝」）。
- */
-const RELAY_CANVAS_ERROR_CODES: Record<RelayCanvasRejection, ErrorCode> = {
-  'stale-step': ERROR_CODES.STALE_DRAW_EVENT,
-  'not-drawing-step': ERROR_CODES.NOT_DRAWER,
-  'not-participant': ERROR_CODES.NOT_DRAWER,
-  'already-submitted': ERROR_CODES.ALREADY_SUBMITTED,
-}
-
-/**
  * 模式 → 生效的规则键名（S52 的**唯一来源**）。
  *
  * 共用键（候选词数 / 换一批 / 自定义题目 / 房间内邀请）两种模式都生效；
@@ -171,7 +155,9 @@ export const MODE_SETTINGS_KEYS = {
 } as const satisfies Record<GameMode, readonly (keyof RoomSettings)[]>
 
 /**
- * 计时器全部保存在房间秘密状态中。每次切换阶段前清理旧计时器，可阻止旧回调在新回合中误执行。
+ * 兼容层（待删除，见 docs/adr/0064-single-backend-assembly.md）：本类只在测试装配里被使用，
+ * 生产请求面归 `backend.ts` 的 `createBackend`。保留期间它必须与生产同口径，
+ * 因此绘图目标解析也改成「返回值表达拒绝」，与 `DrawingService` 的新端口一致。
  */
 export class GameService {
   readonly session: SessionService
@@ -401,14 +387,14 @@ export class GameService {
     })
     this.drawing = new DrawingService({
       clock: this.clock,
-      getSession: (playerId, roundId) => this.classicDrawingSession(playerId, roundId),
+      resolveSession: (playerId, roundId) => this.classicDrawingSession(playerId, roundId),
       // 经典模式的发布策略：全房广播（接龙实例注入「静默」实现，见工单 04 / S2）。
       publisher: createRoomBroadcastPublisher(roomEventPorts),
     })
     // 接龙绘图用例：目标＝本棒链画布，发布策略＝静默——命令只留在链的权威历史里，不广播（S2）。
     this.relayDrawing = new DrawingService({
       clock: this.clock,
-      getSession: (playerId, stepId) => this.relayDrawingSession(playerId, stepId),
+      resolveSession: (playerId, stepId) => this.relayDrawingSession(playerId, stepId),
       publisher: createSilentPublisher(),
     })
     this.invitation = new InviteService({
@@ -1052,60 +1038,72 @@ export class GameService {
     return this.ports.requirePlayer(playerId)
   }
 
-  /** @internal 绘图协作者的窄查询入口。 */
-  public getDrawingSession(
-    playerId: string,
-    roundId: string,
-  ): { player: PlayerSecret; room: RoomSecret; game: GameSecret } {
-    const membership = this.membership.requireMembership(playerId)
-    return {
-      ...membership,
-      game: this.requireDrawerGame(membership.room, playerId, roundId),
-    }
-  }
-
   /**
-   * 经典绘图会话：画布＝本局画布（身份 / 回合 / 阶段门禁全在 `getDrawingSession` 内裁决）；
-   * 命令落地后推进全员差分游标，撤销 / 重做 / 清空后刷新房间快照。
+   * 经典绘图目标：本回合画布。
+   * 拒绝以返回值表达——错误码由 DrawingService 统一映射（ADR-0064），这里只说「为什么」。
    */
-  private classicDrawingSession(playerId: string, roundId: string): DrawingSession {
-    const { player, room, game } = this.getDrawingSession(playerId, roundId)
-    return {
-      player,
-      canvas: game,
-      roomId: room.id,
-      gameId: game.id,
-      roundId,
-      // 差分游标读的是画布的最新序号（闭包在命令落地后才执行），与旧的 markAllSynced 调用点同口径。
-      markSynced: () => markAllSynced(room, game.lastSequence),
-      refreshRoom: () => this.emitRoom(room.id),
-    }
-  }
-
-  /**
-   * 接龙绘图会话：把「观看者 + 步骤 id」解析到本棒链的画布（S53），解析拒绝映射成既有错误码。
-   * 与经典会话不同，两个房间级副作用都是 no-op：接龙命令只留在链的权威历史里，
-   * 本棒期间对房间零推送，画布随下一棒快照整幅下发（S2，工单 05/06）。
-   */
-  private relayDrawingSession(playerId: string, stepId: string): DrawingSession {
+  private classicDrawingSession(playerId: string, roundId: string): DrawingTargetDecision {
     const { player, room } = this.membership.requireMembership(playerId)
-    // 与经典 requireGame 同口径：房间没有进行中的接龙局即 NO_GAME（经典房收到接龙事件也走这里）。
-    const relay = room.relay
-    if (!relay) throw new GameError('NO_GAME', serverStrings.errors.NO_GAME)
-    const decision = resolveRelayCanvasTarget({ phase: room.phase, relay }, playerId, stepId)
-    // 越权与非法阶段沿用经典的 NOT_DRAWER（经典 requireDrawerGame 同样把阶段 / 身份 / 回合归到这一档），
-    // 步骤 id 落后用旧包码，客户端据此重新同步画布与步骤。
-    if (!decision.accepted) throw new GameError(RELAY_CANVAS_ERROR_CODES[decision.reason])
-    if (isPhaseExpired(relay, this.clock.now()))
-      throw new GameError('PHASE_EXPIRED', serverStrings.errors.PHASE_EXPIRED)
+    const game = room.game
+    if (!game) return { accepted: false, reason: 'no-game' }
+    if (room.phase !== 'drawing' || game.drawerId !== playerId || game.roundId !== roundId) {
+      return { accepted: false, reason: 'not-drawer' }
+    }
+    if (isPhaseExpired(game, this.clock.now())) {
+      return { accepted: false, reason: 'phase-expired' }
+    }
     return {
-      player,
-      canvas: decision.value.canvas,
-      roomId: room.id,
-      gameId: relay.id,
-      roundId: stepId,
-      markSynced: () => undefined,
-      refreshRoom: () => undefined,
+      accepted: true,
+      session: {
+        player,
+        canvas: game,
+        roomId: room.id,
+        gameId: game.id,
+        roundId,
+        // 差分游标读的是画布的最新序号（闭包在命令落地后才执行）。
+        markSynced: () => markAllSynced(room, game.lastSequence),
+        refreshRoom: () => this.emitRoom(room.id),
+      },
+    }
+  }
+
+  /**
+   * 接龙绘图目标：把「观看者 + 步骤 id」解析到本棒链的画布（S53）。
+   * 两个房间级副作用都是 no-op：接龙命令只留在链的权威历史里，本棒期间对房间零推送
+   *（S2，工单 05/06），画布随下一棒快照整幅下发。
+   */
+  private relayDrawingSession(playerId: string, stepId: string): DrawingTargetDecision {
+    const { player, room } = this.membership.requireMembership(playerId)
+    const relay = room.relay
+    if (!relay) return { accepted: false, reason: 'no-game' }
+    const decision = resolveRelayCanvasTarget({ phase: room.phase, relay }, playerId, stepId)
+    if (!decision.accepted) {
+      // 越权与非法阶段归到 NOT_DRAWER（与经典同口径）；步骤 id 落后用旧包码，客户端据此重同步。
+      switch (decision.reason) {
+        case 'stale-step':
+          return { accepted: false, reason: 'stale-target' }
+        case 'not-drawing-step':
+          return { accepted: false, reason: 'not-drawer' }
+        case 'not-participant':
+          return { accepted: false, reason: 'not-participant' }
+        case 'already-submitted':
+          return { accepted: false, reason: 'already-submitted' }
+      }
+    }
+    if (isPhaseExpired(relay, this.clock.now())) {
+      return { accepted: false, reason: 'phase-expired' }
+    }
+    return {
+      accepted: true,
+      session: {
+        player,
+        canvas: decision.value.canvas,
+        roomId: room.id,
+        gameId: relay.id,
+        roundId: stepId,
+        markSynced: () => undefined,
+        refreshRoom: () => undefined,
+      },
     }
   }
 
@@ -1115,16 +1113,6 @@ export class GameService {
    */
   public requireGame(room: RoomSecret): GameSecret {
     return this.ports.requireGame(room)
-  }
-
-  /** 取对局并要求调用者是当前回合画家（绘图权限守卫）。 */
-  private requireDrawerGame(room: RoomSecret, playerId: string, roundId: string): GameSecret {
-    const game = this.requireGame(room)
-    if (room.phase !== 'drawing' || game.drawerId !== playerId || game.roundId !== roundId)
-      throw new GameError('NOT_DRAWER', serverStrings.errors.NOT_DRAWER)
-    if (isPhaseExpired(game, this.clock.now()))
-      throw new GameError('PHASE_EXPIRED', serverStrings.errors.PHASE_EXPIRED)
-    return game
   }
 
   /**

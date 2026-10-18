@@ -85,7 +85,8 @@ async function main(): Promise<void> {
     clientDist: layout.clientDist,
     healthMetricsEnabled: deployment.healthMetricsEnabled,
   })
-  application.service.recoverOnStartup()
+  // 启动期持久化收敛（唯一一次）：清掉过期断线记录并把全部身份标为断开。
+  application.backend.recoverOnStartup()
 
   application.httpServer.on('error', (error: NodeJS.ErrnoException) => {
     if (error.code === 'EADDRINUSE') {

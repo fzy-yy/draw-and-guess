@@ -60,6 +60,7 @@
 | [0040](0040-round-timing-and-phase-facts.md)                   | 回合时序与阶段事实收口：RoundMachine 独占时序 | 已采纳（暂停部分被 0059 取代） |
 | [0047](0047-fixed-100-point-scoring.md)                        | 计分改为固定 100 分制                         | 已采纳                         |
 | [0059](0059-remove-game-pause-and-unified-offline-handling.md) | 移除游戏内暂停与统一断线挂机化处理            | 已采纳                         |
+| [0064](0064-single-backend-assembly.md)                        | 单一后端装配根与唯一请求面                    | 已采纳                         |
 
 ### 玩法模式（接龙）
 

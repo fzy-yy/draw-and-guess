@@ -19,7 +19,7 @@ import {
   type StrokeAck,
   type StrokePush,
 } from '@draw-guess/shared'
-import { AppError } from '../../core/errors.ts'
+import { GameError } from '../../core/errors.ts'
 import type { PlayerSecret } from '../../models.ts'
 import { enforceEventRate } from '../../rate-limit.ts'
 import type { Clock } from '../../core/runtime.ts'
@@ -53,20 +53,58 @@ const REJECTION_ERROR_CODES: Record<DrawingRejection, ErrorCode> = {
   'budget-exceeded': ERROR_CODES.DRAW_BUDGET_EXCEEDED,
 }
 
-function drawingError(reason: DrawingRejection, staleMessage: string): AppError {
+/**
+ * 目标解析拒绝原因（领域语汇）：只表达「为什么不能画」，错误码由本服务统一映射。
+ *
+ * 归属理由见 docs/adr/0064-single-backend-assembly.md：拒绝语义属于命令用例，
+ * 不属于装配根——否则同一件事会在装配根、网关与两份会话解析器里各说一遍。
+ */
+export type DrawingTargetRejection =
+  | 'no-game'
+  | 'not-drawer'
+  | 'not-participant'
+  | 'stale-target'
+  | 'already-submitted'
+  | 'phase-expired'
+
+/** 目标解析结果：会话或拒绝原因，调用方不再用异常表达「没资格画」。 */
+export type DrawingTargetDecision =
+  | { readonly accepted: true; readonly session: DrawingSession }
+  | { readonly accepted: false; readonly reason: DrawingTargetRejection }
+
+/** 目标拒绝 → 协议错误码与状态码（唯一映射处）。 */
+const TARGET_REJECTION_RESPONSES: Record<
+  DrawingTargetRejection,
+  { code: ErrorCode; status: number }
+> = {
+  'no-game': { code: ERROR_CODES.NO_GAME, status: 409 },
+  'not-drawer': { code: ERROR_CODES.NOT_DRAWER, status: 403 },
+  'not-participant': { code: ERROR_CODES.NOT_DRAWER, status: 403 },
+  'stale-target': { code: ERROR_CODES.STALE_DRAW_EVENT, status: 409 },
+  'already-submitted': { code: ERROR_CODES.ALREADY_SUBMITTED, status: 409 },
+  'phase-expired': { code: ERROR_CODES.PHASE_EXPIRED, status: 410 },
+}
+
+/**
+ * 拒绝一律用 GameError 表达：binder 只把非 GameError 记成「未预期错误」，
+ * 预期内的拒绝（迟到笔画、越权、阶段过期）不该污染错误日志。
+ */
+function drawingError(reason: DrawingRejection, staleMessage: string): GameError {
   if (reason === 'stale-sequence') {
-    return new AppError({
-      message: staleMessage,
-      code: ERROR_CODES.STALE_DRAW_EVENT,
-      status: 409,
-    })
+    return new GameError(ERROR_CODES.STALE_DRAW_EVENT, staleMessage, undefined, 409)
   }
   const code = REJECTION_ERROR_CODES[reason]
-  return new AppError({
-    message: serverErrorMessages[code],
-    code,
-    status: 422,
-  })
+  return new GameError(code, serverErrorMessages[code], undefined, 422)
+}
+
+/** 目标拒绝的可读文案：过期用调用方给的按操作文案，其余用错误码默认文案。 */
+function targetRejectionError(reason: DrawingTargetRejection, staleMessage: string): GameError {
+  const { code, status } = TARGET_REJECTION_RESPONSES[reason]
+  const message =
+    reason === 'stale-target'
+      ? staleMessage
+      : (serverErrorMessages[code] ?? serverStrings.errors.STALE_DRAWING_CONTEXT)
+  return new GameError(code, message, undefined, status)
 }
 
 /**
@@ -127,7 +165,8 @@ export interface DrawingSession {
  */
 export interface DrawingContext {
   clock: Clock
-  getSession(playerId: string, targetId: string): DrawingSession
+  /** 解析「这次绘图命令作用于哪块画布」；拒绝以返回值表达，不以异常表达（ADR-0064）。 */
+  resolveSession(playerId: string, targetId: string): DrawingTargetDecision
   publisher: DrawingPublisher
 }
 
@@ -137,8 +176,19 @@ export interface DrawingContext {
 export class DrawingService {
   constructor(private readonly context: DrawingContext) {}
 
+  /** 解析目标会话；被拒绝时抛出带稳定错误码的业务错误（唯一映射处）。 */
+  private requireSession(playerId: string, targetId: string, staleMessage: string): DrawingSession {
+    const decision = this.context.resolveSession(playerId, targetId)
+    if (decision.accepted) return decision.session
+    throw targetRejectionError(decision.reason, staleMessage)
+  }
+
   addStroke(playerId: string, targetId: string, stroke: Stroke): StrokeAck {
-    const session = this.context.getSession(playerId, targetId)
+    const session = this.requireSession(
+      playerId,
+      targetId,
+      serverStrings.errors.STALE_DRAW_EVENT_STROKE,
+    )
     enforceEventRate(session.player, 'draw', this.context.clock)
     const decision = applyStroke(session.canvas, stroke, DRAWING_BUDGET)
     if (!decision.accepted) {
@@ -163,7 +213,11 @@ export class DrawingService {
   }
 
   addFill(playerId: string, targetId: string, fill: FillCommand): { drawingRevision: number } {
-    const session = this.context.getSession(playerId, targetId)
+    const session = this.requireSession(
+      playerId,
+      targetId,
+      serverStrings.errors.STALE_DRAW_EVENT_FILL,
+    )
     enforceEventRate(session.player, 'draw', this.context.clock)
     const decision = applyFill(session.canvas, fill, DRAWING_BUDGET)
     if (!decision.accepted) {
@@ -183,7 +237,11 @@ export class DrawingService {
   }
 
   undo(playerId: string, targetId: string): void {
-    const session = this.context.getSession(playerId, targetId)
+    const session = this.requireSession(
+      playerId,
+      targetId,
+      serverStrings.errors.STALE_DRAW_EVENT_STROKE,
+    )
     enforceEventRate(session.player, 'draw', this.context.clock)
     if (undoCommand(session.canvas)) {
       session.refreshRoom()
@@ -191,7 +249,11 @@ export class DrawingService {
   }
 
   redo(playerId: string, targetId: string): void {
-    const session = this.context.getSession(playerId, targetId)
+    const session = this.requireSession(
+      playerId,
+      targetId,
+      serverStrings.errors.STALE_DRAW_EVENT_STROKE,
+    )
     enforceEventRate(session.player, 'draw', this.context.clock)
     if (redoCommand(session.canvas)) {
       session.refreshRoom()
@@ -199,7 +261,11 @@ export class DrawingService {
   }
 
   clear(playerId: string, targetId: string): void {
-    const session = this.context.getSession(playerId, targetId)
+    const session = this.requireSession(
+      playerId,
+      targetId,
+      serverStrings.errors.STALE_DRAW_EVENT_STROKE,
+    )
     enforceEventRate(session.player, 'draw', this.context.clock)
     if (clearCanvas(session.canvas)) {
       session.refreshRoom()
