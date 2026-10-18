@@ -1,16 +1,21 @@
+/**
+ * 服务端测试脚手架：经 `createBackend` 构造**生产同一个世界**，再用假 io 与假连接驱动它。
+ *
+ * 历史：这里曾装配 `GameService`（一套与生产并行的用例层），于是单测跨的接缝与生产不是同一条。
+ * 迁移完成后只保留 `backend`——测试与生产共用装配函数（docs/adr/0064-single-backend-assembly.md）。
+ */
 import { APP_CONFIG } from '../../../apps/server/src/config/index.ts'
 import type { RoomSettings } from '@draw-guess/shared'
 import { defaultRoomSettings } from '@draw-guess/config'
-import { GameService } from '../../../apps/server/src/game-service.ts'
+import { createBackend, type Backend } from '../../../apps/server/src/backend.ts'
 import { SILENT_LOGGER, type RuntimeLogger } from '../../../apps/server/src/errors.ts'
+import type { AppServer } from '../../../apps/server/src/socket-types.ts'
 import type { RuntimeDependencies } from '../../../apps/server/src/runtime.ts'
 import type { VocabularyRegistry } from '../../../apps/server/src/vocabulary/index.ts'
 import { createMemoryRepositories } from './in-memory-repositories.ts'
 import { createMemoryVocabularyRegistry } from './mini-vocabulary.ts'
 import { createFakeRuntime, type FakeRuntime } from './fake-clock.ts'
-
-type ServiceIo = ConstructorParameters<typeof GameService>[0]
-type RegisterSocket = Parameters<GameService['register']>[0]
+import type { RegisterSocket } from './backend-harness.ts'
 
 export interface RecordedEvent {
   target: string
@@ -32,7 +37,8 @@ export interface TestSocket {
 }
 
 export interface GameHarness {
-  service: GameService
+  /** 生产装配的世界：测试直接经它驱动领域，与生产跨同一条接缝。 */
+  backend: Backend
   runtime: FakeRuntime
   repositories: ReturnType<typeof createMemoryRepositories>
   ioEvents: RecordedEvent[]
@@ -74,14 +80,15 @@ export function createGameHarness(
       emit: (event: string, payload: unknown) => ioEvents.push({ target, event, payload }),
     }),
     emit: (event: string, payload: unknown) => ioEvents.push({ target: '*', event, payload }),
-  } as unknown as ServiceIo
-  const service = new GameService(
+  } as unknown as AppServer
+
+  const backend = createBackend({
     io,
-    options.vocabulary ?? createMemoryVocabularyRegistry(),
+    vocabulary: options.vocabulary ?? createMemoryVocabularyRegistry(),
     repositories,
-    options.logger ?? SILENT_LOGGER,
-    runtime as RuntimeDependencies,
-  )
+    logger: options.logger ?? SILENT_LOGGER,
+    runtime: runtime as unknown as RuntimeDependencies,
+  })
 
   function createSocket(id: string): TestSocket {
     const events: RecordedEvent[] = []
@@ -106,7 +113,7 @@ export function createGameHarness(
 
   let socketSequence = 0
   return {
-    service,
+    backend,
     runtime,
     repositories,
     ioEvents,
@@ -114,7 +121,7 @@ export function createGameHarness(
     register: (nickname, socketId, recoveryToken) => {
       socketSequence += 1
       const socket = createSocket(socketId ?? `socket-${socketSequence}`)
-      const registration = service.register(socket as unknown as RegisterSocket, {
+      const registration = backend.session.register(socket as unknown as RegisterSocket, {
         protocolVersion: APP_CONFIG.app.protocolVersion,
         profile: { nickname, avatarId: '01' },
         preferences: { discoverable: true, acceptsInvites: true },
@@ -144,16 +151,16 @@ export function startTwoPlayerGame(
 ) {
   const host = harness.register('房主')
   const guest = harness.register('客人')
-  const room = harness.service.createRoom(host.playerId, {
+  const room = harness.backend.room.createRoom(host.playerId, {
     name: '测试房间',
     visibility: 'public',
     settings,
   })
-  harness.service.joinRoom(guest.playerId, room.id)
-  const ready = harness.service.setReady(guest.playerId, true)
-  harness.service.startGame(host.playerId, ready.stateVersion)
+  harness.backend.room.joinRoom(guest.playerId, room.id)
+  const ready = harness.backend.room.setReady(guest.playerId, true)
+  harness.backend.gameplay.startGame(host.playerId, ready.stateVersion)
   harness.runtime.advance(APP_CONFIG.game.startingCountdownSeconds * 1_000)
-  const secret = harness.service.rooms.get(room.id)
+  const secret = harness.backend.rooms.get(room.id)
   if (!secret?.game) throw new Error('对局未启动')
   return { host, guest, room: secret, game: secret.game }
 }

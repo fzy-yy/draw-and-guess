@@ -5,7 +5,7 @@ import { createGameHarness, startTwoPlayerGame } from './helpers/game-harness.ts
 function enterGameResult() {
   const harness = createGameHarness()
   const state = startTwoPlayerGame(harness)
-  harness.service.endEarly(state.host.playerId)
+  harness.backend.gameplay.endEarly(state.host.playerId)
   return { harness, ...state }
 }
 
@@ -15,9 +15,9 @@ describe('最终结算再来一局', () => {
     const resultVersion = room.stateVersion
 
     await Promise.all([
-      Promise.resolve().then(() => harness.service.returnWaiting(guest.playerId)),
-      Promise.resolve().then(() => harness.service.returnWaiting(host.playerId)),
-      Promise.resolve().then(() => harness.service.returnWaiting(guest.playerId)),
+      Promise.resolve().then(() => harness.backend.gameplay.returnWaiting(guest.playerId)),
+      Promise.resolve().then(() => harness.backend.gameplay.returnWaiting(host.playerId)),
+      Promise.resolve().then(() => harness.backend.gameplay.returnWaiting(guest.playerId)),
     ])
 
     expect(room.phase).toBe('game_result')
@@ -35,8 +35,8 @@ describe('最终结算再来一局', () => {
     expect(room.members.every((member) => !member.rematchReady && !member.ready)).toBe(true)
     const waitingVersion = room.stateVersion
 
-    expect(() => harness.service.returnWaiting(host.playerId)).not.toThrow()
-    expect(() => harness.service.returnWaiting(guest.playerId)).not.toThrow()
+    expect(() => harness.backend.gameplay.returnWaiting(host.playerId)).not.toThrow()
+    expect(() => harness.backend.gameplay.returnWaiting(guest.playerId)).not.toThrow()
     expect(room.stateVersion).toBe(waitingVersion)
     expect(harness.runtime.pendingTimerCount()).toBe(0)
   })
@@ -44,21 +44,21 @@ describe('最终结算再来一局', () => {
   it('普通玩家不能全局提前返回，自动上限到点后服务端收敛', () => {
     const { harness, guest, room } = enterGameResult()
 
-    harness.service.returnWaiting(guest.playerId)
+    harness.backend.gameplay.returnWaiting(guest.playerId)
     harness.runtime.advance(APP_CONFIG.game.gameResultMinSeconds * 1_000)
 
     expect(room.phase).toBe('game_result')
     expect(room.members.find((member) => member.playerId === guest.playerId)?.rematchReady).toBe(
       true,
     )
-    const guestView = harness.service.snapshotter.snapshot(room, guest.playerId)
+    const guestView = harness.backend.snapshotter.snapshot(room, guest.playerId)
     expect(guestView.members.find((member) => member.id === guest.playerId)?.rematchReady).toBe(
       true,
     )
     expect(guestView.game).toMatchObject({ canReturnWaiting: false })
     expect(guestView.game?.gameResultMinEndsAt).toBeGreaterThan(guestView.game!.phaseStartedAt)
 
-    const hostView = harness.service.snapshotter.snapshot(room, room.hostId)
+    const hostView = harness.backend.snapshotter.snapshot(room, room.hostId)
     expect(hostView.game?.canReturnWaiting).toBe(true)
 
     harness.runtime.advance(
@@ -70,13 +70,13 @@ describe('最终结算再来一局', () => {
   it('最终结算中房主断线后迁移，新房主可在最短展示期结束时全局返回', () => {
     const { harness, host, guest, room } = enterGameResult()
 
-    harness.service.handleDisconnect(host.socket as never)
+    harness.backend.session.handleDisconnect(host.socket as never)
     // 最终结算中短宽限后房主迁移给在线成员，断线原房主席位保留在房间中（ADR-0059）
     harness.runtime.advance(APP_CONFIG.network.hostReconnectGraceMs)
     expect(room.hostId).toBe(guest.playerId)
     expect(room.members.some((member) => member.playerId === host.playerId)).toBe(true)
 
-    harness.service.returnWaiting(guest.playerId)
+    harness.backend.gameplay.returnWaiting(guest.playerId)
     harness.runtime.advance(APP_CONFIG.game.gameResultMinSeconds * 1_000)
 
     expect(room.phase).toBe('waiting')

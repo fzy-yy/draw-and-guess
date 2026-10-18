@@ -57,7 +57,7 @@ function atSecondDrawingStepWithPaintedFirstHalf(): RelayGameScenario {
   const scenario = startRelayGame()
   scenario.chooseAll()
   scenario.players.forEach((player, index) => {
-    scenario.harness.service.addRelayStroke(
+    scenario.harness.backend.drawing.relay.addStroke(
       player.playerId,
       scenario.stepId,
       dotStroke(0, `half1-${index}`),
@@ -74,8 +74,8 @@ describe('接龙步 2 / 4 猜词', () => {
     const [first, second] = scenario.players
     if (!first || !second) throw new Error('场景缺少玩家')
 
-    scenario.harness.service.submitRelayGuess(first.playerId, scenario.stepId, '一只狐狸')
-    scenario.harness.service.submitRelayGuess(second.playerId, scenario.stepId, '一个西瓜')
+    scenario.harness.backend.relay.submitGuess(first.playerId, scenario.stepId, '一只狐狸')
+    scenario.harness.backend.relay.submitGuess(second.playerId, scenario.stepId, '一个西瓜')
 
     // 步 2 的观看链＝自己那条链向前回退 1 条（S9）：两人的答案落在各自不同的链上
     const firstChain = scenario.chainOf(first.playerId, 2)
@@ -120,7 +120,7 @@ describe('接龙步 2 / 4 猜词', () => {
     const [first, second] = scenario.players
     if (!first || !second) throw new Error('场景缺少玩家')
 
-    scenario.harness.service.submitRelayGuess(first.playerId, scenario.stepId, '先交的人')
+    scenario.harness.backend.relay.submitGuess(first.playerId, scenario.stepId, '先交的人')
 
     expect(scenario.snapshotOf(first.playerId).relay?.submitted).toBe(true)
     expect(scenario.snapshotOf(second.playerId).relay?.submitted).toBe(false)
@@ -133,18 +133,18 @@ describe('接龙步 2 / 4 猜词', () => {
 
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.submitRelayGuess(player.playerId, scenario.stepId, ''),
+        scenario.harness.backend.relay.submitGuess(player.playerId, scenario.stepId, ''),
       ),
     ).toBe(ERROR_CODES.INVALID_MESSAGE)
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.submitRelayGuess(player.playerId, scenario.stepId, '   '),
+        scenario.harness.backend.relay.submitGuess(player.playerId, scenario.stepId, '   '),
       ),
     ).toBe(ERROR_CODES.INVALID_MESSAGE)
     const tooLong = '字'.repeat(APP_CONFIG.player.chatMaxLength + 1)
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.submitRelayGuess(player.playerId, scenario.stepId, tooLong),
+        scenario.harness.backend.relay.submitGuess(player.playerId, scenario.stepId, tooLong),
       ),
     ).toBe(ERROR_CODES.INVALID_MESSAGE)
     // 被拒的请求不改任何权威状态：本棒仍未提交、链上仍无产出
@@ -152,7 +152,7 @@ describe('接龙步 2 / 4 猜词', () => {
     expect(scenario.guessOf(player.playerId, 2)).toBeUndefined()
 
     // 随后的合法提交照常生效（输入上限与聊天同口径，S15）
-    scenario.harness.service.submitRelayGuess(player.playerId, scenario.stepId, '  合法答案  ')
+    scenario.harness.backend.relay.submitGuess(player.playerId, scenario.stepId, '  合法答案  ')
     expect(scenario.guessOf(player.playerId, 2)).toBe('合法答案')
   })
 
@@ -162,15 +162,15 @@ describe('接龙步 2 / 4 猜词', () => {
     if (!player) throw new Error('场景缺少玩家')
     const stepTwoId = scenario.stepId
 
-    scenario.harness.service.submitRelayGuess(player.playerId, stepTwoId, '第一次')
+    scenario.harness.backend.relay.submitGuess(player.playerId, stepTwoId, '第一次')
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.submitRelayGuess(player.playerId, stepTwoId, '第二次'),
+        scenario.harness.backend.relay.submitGuess(player.playerId, stepTwoId, '第二次'),
       ),
     ).toBe(ERROR_CODES.ALREADY_SUBMITTED)
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.submitRelayGuess(
+        scenario.harness.backend.relay.submitGuess(
           player.playerId,
           '00000000-0000-4000-8000-0000000000d2',
           '旧包',
@@ -183,12 +183,12 @@ describe('接龙步 2 / 4 猜词', () => {
     expect(scenario.room.phase).toBe('relay_draw')
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.submitRelayGuess(player.playerId, stepTwoId, '迟到'),
+        scenario.harness.backend.relay.submitGuess(player.playerId, stepTwoId, '迟到'),
       ),
     ).toBe(ERROR_CODES.STALE_DRAW_EVENT)
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.submitRelayGuess(player.playerId, scenario.stepId, '阶段不对'),
+        scenario.harness.backend.relay.submitGuess(player.playerId, scenario.stepId, '阶段不对'),
       ),
     ).toBe(ERROR_CODES.INVALID_PHASE)
   })
@@ -258,13 +258,13 @@ describe('接龙步 3 按答案作画', () => {
     const stepThreeId = scenario.stepId
     const firstCanvasBefore = players.map((player) => scenario.canvasOf(player.playerId, 1))
 
-    scenario.harness.service.addRelayStroke(
+    scenario.harness.backend.drawing.relay.addStroke(
       players[0]?.playerId ?? '',
       stepThreeId,
       dotStroke(0, 'second-half-0'),
     )
     for (const player of players)
-      scenario.harness.service.submitRelayDrawing(player.playerId, stepThreeId)
+      scenario.harness.backend.relay.submitDrawing(player.playerId, stepThreeId)
 
     expect(scenario.room.phase).toBe('relay_guess')
     expect(scenario.relay.currentStep).toBe(4)
@@ -289,7 +289,7 @@ describe('接龙步 3 按答案作画', () => {
     const players = scenario.players
     const painter = players[0]
     if (!painter) throw new Error('场景缺少玩家')
-    scenario.harness.service.addRelayStroke(
+    scenario.harness.backend.drawing.relay.addStroke(
       painter.playerId,
       scenario.stepId,
       dotStroke(0, 'half-drawn'),
@@ -319,7 +319,7 @@ describe('接龙步 4 与复盘入口', () => {
     const players = scenario.players
     // 每位画家在第二幅画上各留一笔，便于断言「我看到的正是那位画者的画」
     for (const player of players) {
-      scenario.harness.service.addRelayStroke(
+      scenario.harness.backend.drawing.relay.addStroke(
         player.playerId,
         scenario.stepId,
         dotStroke(0, `half2-${player.playerId.slice(-2)}`),
@@ -389,7 +389,7 @@ describe('接龙掉队代交与离开者占位', () => {
     const stepTwoId = scenario.stepId
     scenario.disconnect(offline)
     for (const player of others) {
-      scenario.harness.service.submitRelayGuess(
+      scenario.harness.backend.relay.submitGuess(
         player.playerId,
         scenario.stepId,
         `答案-${player.nickname}`,
@@ -411,7 +411,7 @@ describe('接龙掉队代交与离开者占位', () => {
     scenario.reconnect(offline)
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.submitRelayGuess(offline.playerId, stepTwoId, '我的迟到答案'),
+        scenario.harness.backend.relay.submitGuess(offline.playerId, stepTwoId, '我的迟到答案'),
       ),
     ).toBe(ERROR_CODES.STALE_DRAW_EVENT)
   })
@@ -425,7 +425,7 @@ describe('接龙掉队代交与离开者占位', () => {
 
     scenario.disconnect(offline)
     for (const player of players.slice(1)) {
-      scenario.harness.service.submitRelayGuess(
+      scenario.harness.backend.relay.submitGuess(
         player.playerId,
         scenario.stepId,
         `答案-${player.nickname}`,
@@ -437,7 +437,7 @@ describe('接龙掉队代交与离开者占位', () => {
     expect(scenario.relay.stepId).toBe(stepTwoId)
 
     scenario.reconnect(offline)
-    scenario.harness.service.submitRelayGuess(offline.playerId, stepTwoId, '我连回来了')
+    scenario.harness.backend.relay.submitGuess(offline.playerId, stepTwoId, '我连回来了')
 
     expect(scenario.room.phase).toBe('relay_draw')
     expect(scenario.guessOf(offline.playerId, 2)).toBe('我连回来了')
@@ -455,7 +455,7 @@ describe('接龙掉队代交与离开者占位', () => {
 
     // 其余人作画提交
     for (const player of others) {
-      scenario.harness.service.submitRelayDrawing(player.playerId, scenario.stepId)
+      scenario.harness.backend.relay.submitDrawing(player.playerId, scenario.stepId)
     }
     // 步 1 作画倒计时走完后大扫掠代交，切入步 2
     scenario.harness.runtime.advance(scenario.room.settings.relayDrawSeconds * 1_000)
@@ -463,7 +463,7 @@ describe('接龙掉队代交与离开者占位', () => {
 
     // 步 2 猜词：其余人提交后，等到猜词倒计时结束大扫掠代交
     for (const player of others) {
-      scenario.harness.service.submitRelayGuess(
+      scenario.harness.backend.relay.submitGuess(
         player.playerId,
         scenario.stepId,
         `答案-${player.nickname}`,
@@ -482,7 +482,7 @@ describe('接龙掉队代交与离开者占位', () => {
     const chainsBefore = scenario.relay.chains.length
 
     // 主动退出本局：房间保留一张冻结成绩卡，链位由占位代交承接（S37 / S7）
-    scenario.harness.service.leaveGame(leaver.playerId)
+    scenario.harness.backend.room.leaveGame(leaver.playerId)
 
     expect(scenario.room.members.filter((member) => member.leftGame)).toHaveLength(1)
     // 链数组不变：离开者仍占链位，代交在本步立即发生（其余人不必等他）
@@ -510,8 +510,8 @@ describe('接龙掉队代交与离开者占位', () => {
     if (!first || !second) throw new Error('场景缺少玩家')
 
     // 开局后立刻一人离房、一人退局：两条离场路径都不动链位，本步交回给占位代交
-    scenario.harness.service.leaveRoom(first.playerId)
-    scenario.harness.service.leaveGame(second.playerId)
+    scenario.harness.backend.room.leaveRoom(first.playerId)
+    scenario.harness.backend.room.leaveGame(second.playerId)
     expect(scenario.room.members).toHaveLength(players.length - 1)
     expect(scenario.room.relay).toBeDefined()
 
@@ -544,11 +544,11 @@ describe('接龙掉队代交与离开者占位', () => {
     if (!p0 || !p1 || !p2 || !p3) throw new Error('场景缺少玩家')
 
     // P1 负责猜 Chain 0（发起人是 P0），P1 提交有效猜词
-    scenario.harness.service.submitRelayGuess(p1.playerId, scenario.stepId, 'P1提交的猫咪')
+    scenario.harness.backend.relay.submitGuess(p1.playerId, scenario.stepId, 'P1提交的猫咪')
     // P2 负责猜 Chain 1，P2 提交有效猜词
-    scenario.harness.service.submitRelayGuess(p2.playerId, scenario.stepId, 'P2提交的小狗')
+    scenario.harness.backend.relay.submitGuess(p2.playerId, scenario.stepId, 'P2提交的小狗')
     // P3 负责猜 Chain 2，P3 提交有效猜词
-    scenario.harness.service.submitRelayGuess(p3.playerId, scenario.stepId, 'P3提交的兔子')
+    scenario.harness.backend.relay.submitGuess(p3.playerId, scenario.stepId, 'P3提交的兔子')
 
     // P0 负责猜 Chain 3（发起人是 P3）。P0 超时未交
     scenario.harness.runtime.advance(scenario.room.settings.relayGuessSeconds * 1_000)

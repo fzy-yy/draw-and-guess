@@ -34,15 +34,15 @@ function relayRoomBeforeStart(
   })
   const [host, ...guests] = registrations
   if (!host) throw new Error('测试房缺少房主')
-  const created = harness.service.createRoom(host.playerId, {
+  const created = harness.backend.room.createRoom(host.playerId, {
     name: '接龙门禁房',
     visibility: 'public',
     gameMode: 'relay',
     settings: testRoomSettings(settings),
   })
   let latest = created
-  for (const guest of guests) latest = harness.service.joinRoom(guest.playerId, created.id)
-  const room = harness.service.rooms.get(created.id)
+  for (const guest of guests) latest = harness.backend.room.joinRoom(guest.playerId, created.id)
+  const room = harness.backend.rooms.get(created.id)
   if (!room) throw new Error('接龙房未创建')
   return { host, guests, room, version: latest.stateVersion }
 }
@@ -50,7 +50,8 @@ function relayRoomBeforeStart(
 /** 让所有非房主成员准备（房主为隐式准备，S62 沿用经典准备口径）。 */
 function readyAll(harness: GameHarness, guests: { playerId: string }[]): number {
   let version = 0
-  for (const guest of guests) version = harness.service.setReady(guest.playerId, true).stateVersion
+  for (const guest of guests)
+    version = harness.backend.room.setReady(guest.playerId, true).stateVersion
   return version
 }
 
@@ -58,14 +59,14 @@ describe('接龙开局门禁', () => {
   it('4 人全员准备后开局：进入 starting 倒计时，到期进入步 1 选词', () => {
     const harness = createGameHarness()
     const { host, guests, room, version } = relayRoomBeforeStart(harness, RELAY_MIN_PLAYERS)
-    harness.service.startGame(host.playerId, readyAll(harness, guests))
+    harness.backend.gameplay.startGame(host.playerId, readyAll(harness, guests))
 
     // 开局先复用经典 starting 倒计时（S22），此阶段还没有接龙视图（视图阶段是接龙子集）
     expect(room.phase).toBe('starting')
     expect(room.relay?.chains).toHaveLength(RELAY_MIN_PLAYERS)
     // 接龙房只挂 relay，不挂经典 game：两个秘密字段由 gameMode 保证恰一个非空（S56）
     expect(room.game).toBeUndefined()
-    expect(harness.service.snapshotForPlayer(host.playerId)?.relay).toBeUndefined()
+    expect(harness.backend.publisher.snapshotForPlayer(host.playerId)?.relay).toBeUndefined()
 
     harness.runtime.advance(APP_CONFIG.game.startingCountdownSeconds * 1_000)
 
@@ -107,23 +108,25 @@ describe('接龙开局门禁', () => {
     const three = relayRoomBeforeStart(threeHarness, RELAY_MIN_PLAYERS - 1)
     const threeVersion = readyAll(threeHarness, three.guests)
     expect(
-      errorCodeOf(() => threeHarness.service.startGame(three.host.playerId, threeVersion)),
+      errorCodeOf(() => threeHarness.backend.gameplay.startGame(three.host.playerId, threeVersion)),
     ).toBe(ERROR_CODES.NOT_ENOUGH_PLAYERS)
     // 文案里的下限取自协议常量，不是写死的 2 人
-    expect(() => threeHarness.service.startGame(three.host.playerId, threeVersion)).toThrow(
-      serverStrings.errors.NOT_ENOUGH_PLAYERS_RELAY(RELAY_MIN_PLAYERS),
-    )
+    expect(() =>
+      threeHarness.backend.gameplay.startGame(three.host.playerId, threeVersion),
+    ).toThrow(serverStrings.errors.NOT_ENOUGH_PLAYERS_RELAY(RELAY_MIN_PLAYERS))
 
     const fourHarness = createGameHarness()
     const four = relayRoomBeforeStart(fourHarness, RELAY_MIN_PLAYERS)
     const fourVersion = readyAll(fourHarness, four.guests)
     const leaving = four.guests[0]
     if (!leaving) throw new Error('测试房缺少成员')
-    fourHarness.service.handleDisconnect(leaving.socket as never)
+    fourHarness.backend.session.handleDisconnect(leaving.socket as never)
     // 掉线会让成员离开房间并递增版本号：用最新版本号发开局请求，才能命中人数门禁而不是版本冲突
     expect(four.room.stateVersion).toBeGreaterThan(fourVersion)
     expect(
-      errorCodeOf(() => fourHarness.service.startGame(four.host.playerId, four.room.stateVersion)),
+      errorCodeOf(() =>
+        fourHarness.backend.gameplay.startGame(four.host.playerId, four.room.stateVersion),
+      ),
     ).toBe(ERROR_CODES.NOT_ENOUGH_PLAYERS)
   })
 
@@ -133,35 +136,38 @@ describe('接龙开局门禁', () => {
     const firstGuest = guests[0]
     if (!firstGuest) throw new Error('测试房缺少成员')
     // 只让第一个客人准备：其余客人仍未准备
-    const version = harness.service.setReady(firstGuest.playerId, true).stateVersion
+    const version = harness.backend.room.setReady(firstGuest.playerId, true).stateVersion
 
-    expect(errorCodeOf(() => harness.service.startGame(host.playerId, version))).toBe(
+    expect(errorCodeOf(() => harness.backend.gameplay.startGame(host.playerId, version))).toBe(
       ERROR_CODES.NOT_ALL_READY,
     )
 
     let readyVersion = version
     for (const guest of guests.slice(1))
-      readyVersion = harness.service.setReady(guest.playerId, true).stateVersion
-    expect(harness.service.startGame(host.playerId, readyVersion).phase).toBe('starting')
+      readyVersion = harness.backend.room.setReady(guest.playerId, true).stateVersion
+    expect(harness.backend.gameplay.startGame(host.playerId, readyVersion).phase).toBe('starting')
   })
 
   it('经典房不受接龙门禁影响：2 人可开局（门禁按模式分流）', () => {
     const harness = createGameHarness()
     const host = harness.register('经典房主')
     const guest = harness.register('经典客人')
-    const created = harness.service.createRoom(host.playerId, {
+    const created = harness.backend.room.createRoom(host.playerId, {
       name: '经典房',
       visibility: 'public',
       settings: testRoomSettings(),
     })
-    harness.service.joinRoom(guest.playerId, created.id)
-    const ready = harness.service.setReady(guest.playerId, true)
+    harness.backend.room.joinRoom(guest.playerId, created.id)
+    const ready = harness.backend.room.setReady(guest.playerId, true)
 
-    const snapshot: RoomSnapshot = harness.service.startGame(host.playerId, ready.stateVersion)
+    const snapshot: RoomSnapshot = harness.backend.gameplay.startGame(
+      host.playerId,
+      ready.stateVersion,
+    )
 
     expect(snapshot.phase).toBe('starting')
-    expect(harness.service.rooms.get(created.id)?.game).toBeDefined()
-    expect(harness.service.rooms.get(created.id)?.relay).toBeUndefined()
+    expect(harness.backend.rooms.get(created.id)?.game).toBeDefined()
+    expect(harness.backend.rooms.get(created.id)?.relay).toBeUndefined()
   })
 })
 

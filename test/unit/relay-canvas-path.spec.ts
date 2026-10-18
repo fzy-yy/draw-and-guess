@@ -88,7 +88,7 @@ function addStroke(
   stepId: string = scenario.stepId,
 ) {
   scenario.harness.runtime.jump(COMMAND_STEP_MS)
-  return scenario.harness.service.addRelayStroke(playerId, stepId, stroke)
+  return scenario.harness.backend.drawing.relay.addStroke(playerId, stepId, stroke)
 }
 
 function addFill(
@@ -98,7 +98,7 @@ function addFill(
   stepId: string = scenario.stepId,
 ) {
   scenario.harness.runtime.jump(COMMAND_STEP_MS)
-  return scenario.harness.service.addRelayFill(playerId, stepId, fill)
+  return scenario.harness.backend.drawing.relay.addFill(playerId, stepId, fill)
 }
 
 /**
@@ -128,9 +128,9 @@ describe('接龙画布写入通路', () => {
     // 五种命令全部走一遍：笔画（1 修订）→ 填充（2）→ 撤销（3）→ 重做（4）→ 清空（5）→ 笔画（6）。
     addStroke(scenario, drawer.playerId, polylineStroke(0, 'stroke-0', 2))
     addFill(scenario, drawer.playerId, fillCommand(1))
-    scenario.harness.service.relayUndo(drawer.playerId, scenario.stepId)
-    scenario.harness.service.relayRedo(drawer.playerId, scenario.stepId)
-    scenario.harness.service.relayClear(drawer.playerId, scenario.stepId)
+    scenario.harness.backend.drawing.relay.undo(drawer.playerId, scenario.stepId)
+    scenario.harness.backend.drawing.relay.redo(drawer.playerId, scenario.stepId)
+    scenario.harness.backend.drawing.relay.clear(drawer.playerId, scenario.stepId)
     // 清空把序号推进到 2（-1 → 0 → 1 → 2），因此重新起笔从 3 开始。
     addStroke(scenario, drawer.playerId, dotStroke(3, 3))
 
@@ -203,23 +203,39 @@ describe('接龙画布写入通路', () => {
 
     // 旧包（含上一棒残留）：按过期绘图包拒绝，客户端据此重新同步。
     expect(() =>
-      scenario.harness.service.addRelayStroke(drawer.playerId, staleStepId, dotStroke(0, 0)),
+      scenario.harness.backend.drawing.relay.addStroke(
+        drawer.playerId,
+        staleStepId,
+        dotStroke(0, 0),
+      ),
     ).toThrow(serverErrorMessages[ERROR_CODES.STALE_DRAW_EVENT])
 
     // 猜词棒不允许作画（当前步骤不是作画棒）。
     scenario.moveTo({ step: 2, phase: 'relay_guess' })
     expect(() =>
-      scenario.harness.service.addRelayStroke(drawer.playerId, scenario.stepId, dotStroke(0, 0)),
+      scenario.harness.backend.drawing.relay.addStroke(
+        drawer.playerId,
+        scenario.stepId,
+        dotStroke(0, 0),
+      ),
     ).toThrow(serverErrorMessages[ERROR_CODES.NOT_DRAWER])
     expect(() =>
-      scenario.harness.service.addRelayFill(drawer.playerId, scenario.stepId, fillCommand(0)),
+      scenario.harness.backend.drawing.relay.addFill(
+        drawer.playerId,
+        scenario.stepId,
+        fillCommand(0),
+      ),
     ).toThrow(serverErrorMessages[ERROR_CODES.NOT_DRAWER])
 
     // 本棒倒计时结束：与经典一致按 PHASE_EXPIRED 拒绝（代交归工单 06，画布内容不动）。
     scenario.moveTo({ step: 1, phase: 'relay_draw' })
     scenario.harness.runtime.jump(APP_CONFIG.relay.drawSeconds.default * 1_000)
     expect(() =>
-      scenario.harness.service.addRelayStroke(drawer.playerId, scenario.stepId, dotStroke(0, 0)),
+      scenario.harness.backend.drawing.relay.addStroke(
+        drawer.playerId,
+        scenario.stepId,
+        dotStroke(0, 0),
+      ),
     ).toThrow(serverErrorMessages[ERROR_CODES.PHASE_EXPIRED])
 
     // 被拒绝的命令不触碰任何画布状态。
@@ -237,11 +253,15 @@ describe('接龙画布写入通路', () => {
     expect(scenario.players.map((player) => player.playerId)).not.toContain(outsider.playerId)
 
     expect(() =>
-      scenario.harness.service.addRelayStroke(outsider.playerId, scenario.stepId, dotStroke(0, 0)),
+      scenario.harness.backend.drawing.relay.addStroke(
+        outsider.playerId,
+        scenario.stepId,
+        dotStroke(0, 0),
+      ),
     ).toThrow(serverErrorMessages[ERROR_CODES.NOT_DRAWER])
-    expect(() => scenario.harness.service.relayClear(outsider.playerId, scenario.stepId)).toThrow(
-      serverErrorMessages[ERROR_CODES.NOT_DRAWER],
-    )
+    expect(() =>
+      scenario.harness.backend.drawing.relay.clear(outsider.playerId, scenario.stepId),
+    ).toThrow(serverErrorMessages[ERROR_CODES.NOT_DRAWER])
   })
 
   it('每幅画的预算独立计数：第一幅满不累及第二幅', () => {
@@ -290,15 +310,15 @@ describe('接龙画布写入通路', () => {
     )
 
     // 撤销把最新命令标记为已撤销；下一条命令会先作废它，从而腾出名额（历史长度不变）。
-    scenario.harness.service.relayUndo(drawer.playerId, scenario.stepId)
+    scenario.harness.backend.drawing.relay.undo(drawer.playerId, scenario.stepId)
     addStroke(scenario, drawer.playerId, dotStroke(limit, 0))
     expect(canvas.strokes).toHaveLength(limit)
 
     // 重做：弹出撤销栈顶，命令重新生效（修订号前移，撤销栈清空）。
     const revisionBeforeUndo = canvas.drawingRevision
-    scenario.harness.service.relayUndo(drawer.playerId, scenario.stepId)
+    scenario.harness.backend.drawing.relay.undo(drawer.playerId, scenario.stepId)
     expect(canvas.undoneStrokeIds).toHaveLength(1)
-    scenario.harness.service.relayRedo(drawer.playerId, scenario.stepId)
+    scenario.harness.backend.drawing.relay.redo(drawer.playerId, scenario.stepId)
     expect(canvas.undoneStrokeIds).toEqual([])
     expect(canvas.drawingRevision).toBe(revisionBeforeUndo + 2)
   })
@@ -317,7 +337,7 @@ describe('接龙画布写入通路', () => {
       serverErrorMessages[ERROR_CODES.DRAW_BUDGET_EXCEEDED],
     )
 
-    scenario.harness.service.relayClear(drawer.playerId, scenario.stepId)
+    scenario.harness.backend.drawing.relay.clear(drawer.playerId, scenario.stepId)
     expect(canvas.strokes).toEqual([])
     expect(canvas.undoneStrokeIds).toEqual([])
     expect(canvas.strokePointTotal).toBe(0)
@@ -335,10 +355,10 @@ describe('接龙画布写入通路', () => {
     })
 
     // 空画布清空为无变化：先清空一次（修订 +1），再对空画布清空，修订号不再变化。
-    scenario.harness.service.relayClear(drawer.playerId, scenario.stepId)
+    scenario.harness.backend.drawing.relay.clear(drawer.playerId, scenario.stepId)
     expect(canvas.strokes).toEqual([])
     const revisionAfterClear = canvas.drawingRevision
-    scenario.harness.service.relayClear(drawer.playerId, scenario.stepId)
+    scenario.harness.backend.drawing.relay.clear(drawer.playerId, scenario.stepId)
     expect(canvas.drawingRevision).toBe(revisionAfterClear)
   })
   it('玩家完成提交后作画被拒（ALREADY_SUBMITTED）：提交即锁定不可继续修改画布（S30）', () => {
@@ -348,7 +368,7 @@ describe('接龙画布写入通路', () => {
 
     addStroke(scenario, drawer.playerId, dotStroke(0, 1))
 
-    scenario.harness.service.submitRelayDrawing(drawer.playerId, scenario.stepId)
+    scenario.harness.backend.relay.submitDrawing(drawer.playerId, scenario.stepId)
 
     expect(errorCodeOf(() => addStroke(scenario, drawer.playerId, dotStroke(1, 2)))).toBe(
       ERROR_CODES.ALREADY_SUBMITTED,

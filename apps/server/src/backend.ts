@@ -46,7 +46,8 @@ import { SessionService } from './modules/session/session.service.ts'
 import { RoomVocabularyService } from './modules/vocabulary/vocabulary.service.ts'
 import type { RelayGameSecret } from './domain/relay/relay-models.ts'
 import { SnapshotBuilder } from './snapshot.ts'
-import { SILENT_LOGGER, runtimeErrorType, type RuntimeLogger } from './core/errors.ts'
+import { GameError, SILENT_LOGGER, runtimeErrorType, type RuntimeLogger } from './core/errors.ts'
+import { serverStrings } from '@draw-guess/strings'
 import { SYSTEM_RUNTIME, type RuntimeDependencies } from './runtime.ts'
 import type { AppServer } from './socket-types.ts'
 import type { ArchiveRepository, PlayerRepository } from './repositories/index.ts'
@@ -68,17 +69,23 @@ export interface BackendDeps {
 
 /**
  * 装配结果。字段顺序即构造顺序，便于读者对照上面的依赖链。
- * 内存表以只读视图暴露：测试可以断言，写入必须经服务。
+ * 身份相关的两张表以可变 Map 暴露：测试需要模拟「身份已被清理」「令牌已被轮换掉」这类
+ * 陈旧状态（生产代码只读它们）；房间与邀请表是只读视图。
  */
 export interface Backend {
-  readonly players: ReadonlyMap<string, PlayerSecret>
+  readonly players: Map<string, PlayerSecret>
+  /** 恢复令牌摘要索引：测试需要模拟「令牌已被轮换掉」的陈旧状态，故暴露可变表。 */
+  readonly playersByTokenDigest: Map<string, PlayerSecret>
   readonly rooms: ReadonlyMap<string, RoomSecret>
+  readonly roomsByPrivateCode: ReadonlyMap<string, string>
   readonly invites: ReadonlyMap<string, InviteSecret>
   /** 持久化适配器：与内存表同属这个世界的状态，运维/测试经它核对落盘。 */
   readonly repositories: {
     readonly players: PlayerRepository
     readonly archive: ArchiveRepository
   }
+  /** 归档与身份落盘的统一映射（历史战绩字段口径的唯一实现）。 */
+  readonly persistence: RoomPersistenceCoordinator
   readonly snapshotter: SnapshotBuilder
   readonly publisher: RoomPublisher
   readonly roundMachine: RoundMachine
@@ -96,6 +103,8 @@ export interface Backend {
   readonly gateways: WsGatewayDependencies
   emitRoom(roomId: string): void
   broadcastPresence(): void
+  /** 取玩家身份（不存在即抛 UNAUTHORIZED）；与内部读取断言同源，供测试与运维核对。 */
+  requirePlayer(playerId: string): PlayerSecret
   /** 启动期持久化收敛：清掉过期断线记录并把全部身份标为断开。只调用一次。 */
   recoverOnStartup(): void
 }
@@ -162,19 +171,20 @@ export function createBackend(deps: BackendDeps): Backend {
   }
 
   // ── 3. 读取断言与事实选择器 ────────────────────────────────────────
+  // 断言一律抛 GameError：错误码是客户端恢复动作的唯一依据，裸 Error 会退化成 INTERNAL_ERROR。
   const requirePlayer = (playerId: string): PlayerSecret => {
     const player = players.get(playerId)
-    if (!player) throw new Error('UNAUTHORIZED')
+    if (!player) throw new GameError('UNAUTHORIZED', serverStrings.errors.UNAUTHORIZED)
     return player
   }
 
   const requireGame = (room: RoomSecret): GameSecret => {
-    if (!room.game) throw new Error('NO_GAME')
+    if (!room.game) throw new GameError('NO_GAME', serverStrings.errors.NO_GAME)
     return room.game
   }
 
   const requireRelay = (room: RoomSecret): RelayGameSecret => {
-    if (!room.relay) throw new Error('NO_GAME')
+    if (!room.relay) throw new GameError('NO_GAME', serverStrings.errors.NO_GAME)
     return room.relay
   }
 
@@ -509,9 +519,12 @@ export function createBackend(deps: BackendDeps): Backend {
 
   return {
     players,
+    playersByTokenDigest,
     rooms,
+    roomsByPrivateCode,
     invites,
     repositories,
+    persistence,
     snapshotter,
     publisher,
     roundMachine,
@@ -527,6 +540,7 @@ export function createBackend(deps: BackendDeps): Backend {
     gateways,
     emitRoom,
     broadcastPresence,
+    requirePlayer,
     recoverOnStartup: () => sessionService.recoverOnStartup(),
   }
 }

@@ -86,12 +86,12 @@ function registryOf(stores: VocabularyStore[]): VocabularyRegistry {
 function setup() {
   const harness = createGameHarness({ vocabulary: registryOf([PACKAGE_A, PACKAGE_B]) })
   const host = harness.register('房主')
-  const snapshot = harness.service.createRoom(host.playerId, {
+  const snapshot = harness.backend.room.createRoom(host.playerId, {
     name: '多词库房',
     visibility: 'public',
     settings: testRoomSettings(),
   })
-  const room = harness.service.rooms.get(snapshot.id)
+  const room = harness.backend.rooms.get(snapshot.id)
   if (!room) throw new Error('房间未创建')
   return { harness, host, room }
 }
@@ -99,9 +99,13 @@ function setup() {
 describe('词库包名含「、」时的边界', () => {
   it('快照的包名列表按包 ID 逐位给出，不因包名含分隔符而多出元素', () => {
     const { harness, host, room } = setup()
-    harness.service.selectVocabularyPackages(host.playerId, ['pkg_a', 'pkg_b'], room.stateVersion)
+    harness.backend.roomVocabulary.selectPackages(
+      host.playerId,
+      ['pkg_a', 'pkg_b'],
+      room.stateVersion,
+    )
 
-    const snapshot = harness.service.snapshotter.snapshot(room, host.playerId)
+    const snapshot = harness.backend.snapshotter.snapshot(room, host.playerId)
 
     expect(snapshot.vocabularyPackageIds).toEqual(['pkg_a', 'pkg_b'])
     expect(snapshot.vocabularyPackageNames).toEqual(['水果、蔬菜', '日常词库'])
@@ -110,7 +114,11 @@ describe('词库包名含「、」时的边界', () => {
   it('切包系统通知逐条列出所选的包名（含分隔符的包名保持完整）', () => {
     const { harness, host, room } = setup()
     const before = harness.ioEvents.length
-    harness.service.selectVocabularyPackages(host.playerId, ['pkg_a', 'pkg_b'], room.stateVersion)
+    harness.backend.roomVocabulary.selectPackages(
+      host.playerId,
+      ['pkg_a', 'pkg_b'],
+      room.stateVersion,
+    )
 
     const texts = harness.ioEvents
       .slice(before)

@@ -46,12 +46,12 @@ describe('接龙步 1 作画', () => {
     const [first, second] = scenario.players
     if (!first || !second) throw new Error('场景缺少玩家')
 
-    scenario.harness.service.addRelayStroke(
+    scenario.harness.backend.drawing.relay.addStroke(
       first.playerId,
       scenario.stepId,
       dotStroke(0, 'first-0'),
     )
-    scenario.harness.service.addRelayStroke(
+    scenario.harness.backend.drawing.relay.addStroke(
       second.playerId,
       scenario.stepId,
       dotStroke(0, 'second-0'),
@@ -116,13 +116,13 @@ describe('接龙步 1 作画', () => {
     // 步 id 是活值（换棒会变），断言「旧包」必须先把它固定下来
     const stepOneId = scenario.stepId
 
-    scenario.harness.service.submitRelayDrawing(player.playerId, stepOneId)
+    scenario.harness.backend.relay.submitDrawing(player.playerId, stepOneId)
     expect(
-      errorCodeOf(() => scenario.harness.service.submitRelayDrawing(player.playerId, stepOneId)),
+      errorCodeOf(() => scenario.harness.backend.relay.submitDrawing(player.playerId, stepOneId)),
     ).toBe(ERROR_CODES.ALREADY_SUBMITTED)
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.submitRelayDrawing(
+        scenario.harness.backend.relay.submitDrawing(
           player.playerId,
           '00000000-0000-4000-8000-0000000000d1',
         ),
@@ -134,7 +134,7 @@ describe('接龙步 1 作画', () => {
     expect(scenario.room.phase).toBe('relay_guess')
     expect(scenario.relay.stepId).not.toBe(stepOneId)
     expect(
-      errorCodeOf(() => scenario.harness.service.submitRelayDrawing(player.playerId, stepOneId)),
+      errorCodeOf(() => scenario.harness.backend.relay.submitDrawing(player.playerId, stepOneId)),
     ).toBe(ERROR_CODES.STALE_DRAW_EVENT)
   })
 
@@ -158,7 +158,7 @@ describe('接龙步 1 作画', () => {
     )
     if (!previousPlayer) throw new Error('场景缺少上家')
     // 上家先画一笔：步 2 必须能看到这幅成品
-    scenario.harness.service.addRelayStroke(
+    scenario.harness.backend.drawing.relay.addStroke(
       previousPlayer.playerId,
       scenario.stepId,
       dotStroke(0, 'previous-0'),
@@ -171,7 +171,7 @@ describe('接龙步 1 作画', () => {
     expect(view?.previousDrawing?.strokes.map((command) => command.id)).toEqual(['previous-0'])
     expect(view?.previousArtist?.id).toBe(previousPlayer.playerId)
     expect(view?.previousArtist?.nickname).toBe(
-      scenario.harness.service.requirePlayer(previousPlayer.playerId).profile.nickname,
+      scenario.harness.backend.requirePlayer(previousPlayer.playerId).profile.nickname,
     )
     expect(view?.prompt).toBeUndefined()
     expect(view?.ownCanvas).toBeUndefined()
@@ -191,8 +191,8 @@ describe('接龙步 1 作画', () => {
     const [first, second] = scenario.players
     if (!first || !second) throw new Error('场景缺少玩家')
 
-    scenario.harness.service.sendRelayChat(first.playerId, '大家好呀')
-    scenario.harness.service.submitRelayDrawing(first.playerId, scenario.stepId)
+    scenario.harness.backend.relay.chat(first.playerId, '大家好呀')
+    scenario.harness.backend.relay.submitDrawing(first.playerId, scenario.stepId)
 
     const messages = scenario.snapshotOf(second.playerId).relay?.messages ?? []
     // 房间里只有一条玩家发言（提交作画不产生任何聊天消息，S20 / S79）
@@ -209,7 +209,7 @@ describe('接龙步 1 作画', () => {
     // 空串 / 空格 / 制表符：trim 后为空，与经典猜词同口径拒绝
     for (const blank of ['', '   ', '\t']) {
       expect(
-        errorCodeOf(() => scenario.harness.service.sendRelayChat(first.playerId, blank)),
+        errorCodeOf(() => scenario.harness.backend.relay.chat(first.playerId, blank)),
         JSON.stringify(blank),
       ).toBe(ERROR_CODES.INVALID_MESSAGE)
     }
@@ -221,32 +221,32 @@ describe('接龙步 1 作画', () => {
     expect(chatOf(second.playerId)).toHaveLength(0)
 
     // 正常聊天照旧：前后空白被裁掉后入流
-    scenario.harness.service.sendRelayChat(first.playerId, ' 大家好呀 ')
+    scenario.harness.backend.relay.chat(first.playerId, ' 大家好呀 ')
     expect(chatOf(second.playerId)).toMatchObject([{ text: '大家好呀', playerId: first.playerId }])
   })
 
   it('经典房与等待中的接龙房都不接受 chat:say（保持经典「猜词未命中即聊天」现状，S85）', () => {
     const classic = createGameHarness()
     const classicHost = classic.register('经典房主')
-    classic.service.createRoom(classicHost.playerId, {
+    classic.backend.room.createRoom(classicHost.playerId, {
       name: '经典房',
       visibility: 'public',
       settings: testRoomSettings(),
     })
-    expect(errorCodeOf(() => classic.service.sendRelayChat(classicHost.playerId, '喂'))).toBe(
+    expect(errorCodeOf(() => classic.backend.relay.chat(classicHost.playerId, '喂'))).toBe(
       ERROR_CODES.NO_GAME,
     )
 
     // 接龙房在等待阶段（还没开局）同样没有聊天流
     const waiting = createGameHarness()
     const waitingHost = waiting.register('接龙房主')
-    waiting.service.createRoom(waitingHost.playerId, {
+    waiting.backend.room.createRoom(waitingHost.playerId, {
       name: '接龙等待房',
       visibility: 'public',
       gameMode: 'relay',
       settings: testRoomSettings(),
     })
-    expect(errorCodeOf(() => waiting.service.sendRelayChat(waitingHost.playerId, '喂'))).toBe(
+    expect(errorCodeOf(() => waiting.backend.relay.chat(waitingHost.playerId, '喂'))).toBe(
       ERROR_CODES.NO_GAME,
     )
   })
@@ -259,7 +259,7 @@ describe('接龙步 1 作画', () => {
       harness.register('接龙玩家3'),
       harness.register('接龙玩家4'),
     ]
-    const created = harness.service.createRoom(host.playerId, {
+    const created = harness.backend.room.createRoom(host.playerId, {
       name: '接龙房',
       visibility: 'public',
       gameMode: 'relay',
@@ -267,15 +267,15 @@ describe('接龙步 1 作画', () => {
     })
     let latest = created
     for (const guest of guests) {
-      harness.service.joinRoom(guest.playerId, created.id)
-      latest = harness.service.setReady(guest.playerId, true)
+      harness.backend.room.joinRoom(guest.playerId, created.id)
+      latest = harness.backend.room.setReady(guest.playerId, true)
     }
-    harness.service.startGame(host.playerId, latest.stateVersion)
-    const room = harness.service.rooms.get(created.id)
+    harness.backend.gameplay.startGame(host.playerId, latest.stateVersion)
+    const room = harness.backend.rooms.get(created.id)
     if (!room) throw new Error('接龙房未创建')
     expect(room.relay).toBeDefined()
 
-    harness.service.leaveRoom(guests[0]?.playerId ?? '')
+    harness.backend.room.leaveRoom(guests[0]?.playerId ?? '')
 
     expect(room.phase).toBe('waiting')
     expect(room.relay).toBeUndefined()

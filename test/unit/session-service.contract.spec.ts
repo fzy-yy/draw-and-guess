@@ -38,15 +38,17 @@ describe('SessionService 与 Facade 契约', () => {
     persist.mockImplementationOnce(() => {
       throw new Error('storage unavailable')
     })
-    expect(harness.service.session).toBeInstanceOf(SessionService)
-    expect(() => harness.service.session.register(socket as never, input)).toThrow(
+    expect(harness.backend.session).toBeInstanceOf(SessionService)
+    expect(() => harness.backend.session.register(socket as never, input)).toThrow(
       'storage unavailable',
     )
-    expect(harness.service.players.size).toBe(0)
+    expect(harness.backend.players.size).toBe(0)
     expect(socket.data.playerId).toBeUndefined()
-    const identity = harness.service.session.register(socket as never, input)
-    expect(harness.service.register(socket as never, input).player.id).toBe(identity.player.id)
-    expect(harness.service.players.size).toBe(1)
+    const identity = harness.backend.session.register(socket as never, input)
+    expect(harness.backend.session.register(socket as never, input).player.id).toBe(
+      identity.player.id,
+    )
+    expect(harness.backend.players.size).toBe(1)
   })
 
   it('协议版本错配在注册入口拒绝：不落库、不绑定连接，可凭正确版本重试', () => {
@@ -54,31 +56,31 @@ describe('SessionService 与 Facade 契约', () => {
     const socket = harness.createSocket('protocol-mismatch')
     const upsert = vi.spyOn(harness.repositories.players, 'upsert')
     expect(() =>
-      harness.service.session.register(socket as never, {
+      harness.backend.session.register(socket as never, {
         protocolVersion: 'stale-version',
         profile: { nickname: '旧客户端', avatarId: '01' },
         preferences: { discoverable: true, acceptsInvites: true },
       }),
     ).toThrow(serverErrorMessages[ERROR_CODES.PROTOCOL_MISMATCH])
-    expect(harness.service.players.size).toBe(0)
+    expect(harness.backend.players.size).toBe(0)
     expect(socket.data.playerId).toBeUndefined()
     expect(upsert).not.toHaveBeenCalled()
 
     // 同一连接改用受支持的协议版本仍可正常注册，不被上一条失败污染。
-    const identity = harness.service.session.register(socket as never, {
+    const identity = harness.backend.session.register(socket as never, {
       protocolVersion: APP_CONFIG.app.protocolVersion,
       profile: { nickname: '新客户端', avatarId: '01' },
       preferences: { discoverable: true, acceptsInvites: true },
     })
     expect(identity.player.id).toBeTruthy()
-    expect(harness.service.players.size).toBe(1)
+    expect(harness.backend.players.size).toBe(1)
   })
 
   it('玩家昵称超过 10 字符被服务端拒绝 (INVALID_NICKNAME)', () => {
     const harness = createGameHarness()
     const socket = harness.createSocket('long-nickname')
     expect(() =>
-      harness.service.session.register(socket as never, {
+      harness.backend.session.register(socket as never, {
         protocolVersion: APP_CONFIG.app.protocolVersion,
         profile: { nickname: '一二三四五六七八九十一', avatarId: '01' },
         preferences: { discoverable: true, acceptsInvites: true },
@@ -90,11 +92,11 @@ describe('SessionService 与 Facade 契约', () => {
     const harness = createGameHarness()
     const first = harness.register('接管玩家', 'old')
     const second = harness.register('接管玩家', 'new', first.recoveryToken)
-    harness.service.session.handleDisconnect(first.socket as never)
-    expect(harness.service.requirePlayer(second.playerId).connected).toBe(true)
-    harness.service.session.logout(second.socket as never)
-    expect(harness.service.players.size).toBe(0)
-    expect(harness.service.playersByTokenDigest.size).toBe(0)
+    harness.backend.session.handleDisconnect(first.socket as never)
+    expect(harness.backend.requirePlayer(second.playerId).connected).toBe(true)
+    harness.backend.session.logout(second.socket as never)
+    expect(harness.backend.players.size).toBe(0)
+    expect(harness.backend.playersByTokenDigest.size).toBe(0)
     expect(second.socket.data.playerId).toBeUndefined()
     expect(second.socket.data.requestCache).toEqual(new Map())
   })
@@ -103,7 +105,7 @@ describe('SessionService 与 Facade 契约', () => {
     const logger = createRecordingLogger()
     const harness = createGameHarness({ logger })
     const player = harness.register('原子注销', 'logout-socket')
-    const room = harness.service.createRoom(player.playerId, {
+    const room = harness.backend.room.createRoom(player.playerId, {
       name: '注销房',
       visibility: 'public',
       settings: testRoomSettings(),
@@ -112,18 +114,18 @@ describe('SessionService 与 Facade 契约', () => {
       throw new Error('database is locked')
     })
 
-    expect(() => harness.service.session.logout(player.socket as never)).toThrow(
+    expect(() => harness.backend.session.logout(player.socket as never)).toThrow(
       serverErrorMessages[ERROR_CODES.INTERNAL_ERROR],
     )
     expect(remove).toHaveBeenCalledTimes(1)
 
     // 内存身份、令牌索引与当前连接必须原样保留：注销整体不生效，而不是半途而废。
-    const live = harness.service.requirePlayer(player.playerId)
+    const live = harness.backend.requirePlayer(player.playerId)
     expect(live.connected).toBe(true)
     expect(live.socketId).toBe('logout-socket')
     expect(live.roomId).toBe(room.id)
     expect(
-      harness.service.playersByTokenDigest.get(digestRecoveryToken(player.recoveryToken)),
+      harness.backend.playersByTokenDigest.get(digestRecoveryToken(player.recoveryToken)),
     ).toBe(live)
     expect(player.socket.data.playerId).toBe(player.playerId)
     expect(player.socket.rooms.has(room.id)).toBe(true)
@@ -141,9 +143,9 @@ describe('SessionService 与 Facade 契约', () => {
     expect(JSON.stringify(logger.errors)).not.toContain(player.recoveryToken)
 
     // 失败后重试成功：状态自愈，两层同时失效。
-    expect(() => harness.service.session.logout(player.socket as never)).not.toThrow()
-    expect(harness.service.players.size).toBe(0)
-    expect(harness.service.playersByTokenDigest.size).toBe(0)
+    expect(() => harness.backend.session.logout(player.socket as never)).not.toThrow()
+    expect(harness.backend.players.size).toBe(0)
+    expect(harness.backend.playersByTokenDigest.size).toBe(0)
     expect(harness.repositories.players.has(player.playerId)).toBe(false)
   })
 
@@ -175,7 +177,7 @@ describe('SessionService 与 Facade 契约', () => {
       socket,
       EVENTS.sessionLogout,
       () => {
-        harness.service.logout(socket as never)
+        harness.backend.session.logout(socket as never)
         return { success: true }
       },
       { registration: true },
@@ -190,7 +192,7 @@ describe('SessionService 与 Facade 契约', () => {
     await listener(request, (ack) => acks.push(ack as never))
     expect(acks[1]).toMatchObject({ ok: true, data: { success: true } })
     expect(harness.repositories.players.has(player.playerId)).toBe(false)
-    expect(harness.service.players.size).toBe(0)
+    expect(harness.backend.players.size).toBe(0)
   })
 
   it('重复注销幂等：第二次不再触发持久化删除，也不抛错', () => {
@@ -198,13 +200,13 @@ describe('SessionService 与 Facade 契约', () => {
     const player = harness.register('重复注销')
     const remove = vi.spyOn(harness.repositories.players, 'remove')
 
-    harness.service.session.logout(player.socket as never)
+    harness.backend.session.logout(player.socket as never)
     expect(remove).toHaveBeenCalledTimes(1)
     expect(harness.repositories.players.has(player.playerId)).toBe(false)
 
-    expect(() => harness.service.session.logout(player.socket as never)).not.toThrow()
+    expect(() => harness.backend.session.logout(player.socket as never)).not.toThrow()
     expect(remove).toHaveBeenCalledTimes(1)
-    expect(harness.service.players.size).toBe(0)
+    expect(harness.backend.players.size).toBe(0)
     expect(player.socket.data.playerId).toBeUndefined()
     expect(player.socket.data.requestCache).toEqual(new Map())
   })
@@ -213,11 +215,11 @@ describe('SessionService 与 Facade 契约', () => {
     const harness = createGameHarness()
     const player = harness.register('身份已过期')
     // 模拟恢复宽限到期：内存身份与令牌索引都已被移除（持久化行由启动清理兜底）。
-    harness.service.players.delete(player.playerId)
-    harness.service.playersByTokenDigest.delete(digestRecoveryToken(player.recoveryToken))
+    harness.backend.players.delete(player.playerId)
+    harness.backend.playersByTokenDigest.delete(digestRecoveryToken(player.recoveryToken))
     const remove = vi.spyOn(harness.repositories.players, 'remove')
 
-    expect(() => harness.service.session.logout(player.socket as never)).not.toThrow()
+    expect(() => harness.backend.session.logout(player.socket as never)).not.toThrow()
     expect(remove).not.toHaveBeenCalled()
     expect(player.socket.data.playerId).toBeUndefined()
     expect(player.socket.data.requestCache).toEqual(new Map())
@@ -227,23 +229,21 @@ describe('SessionService 与 Facade 契约', () => {
     const logger = createRecordingLogger()
     const harness = createGameHarness({ logger })
     const player = harness.register('离房失败')
-    harness.service.createRoom(player.playerId, {
+    harness.backend.room.createRoom(player.playerId, {
       name: '离房失败房',
       visibility: 'public',
       settings: testRoomSettings(),
     })
-    const leaveRoom = vi
-      .spyOn(harness.service.membership, 'leaveRoom')
-      .mockImplementationOnce(() => {
-        throw new Error('room state corrupted')
-      })
+    const leaveRoom = vi.spyOn(harness.backend.room, 'leaveRoom').mockImplementationOnce(() => {
+      throw new Error('room state corrupted')
+    })
 
-    expect(() => harness.service.session.logout(player.socket as never)).not.toThrow()
+    expect(() => harness.backend.session.logout(player.socket as never)).not.toThrow()
     expect(leaveRoom).toHaveBeenCalledTimes(1)
     expect(logger.errors.map((entry) => entry.message)).toEqual(['玩家注销离房失败'])
     expect(JSON.stringify(logger.errors)).not.toContain(player.recoveryToken)
     expect(harness.repositories.players.has(player.playerId)).toBe(false)
-    expect(harness.service.players.size).toBe(0)
+    expect(harness.backend.players.size).toBe(0)
     expect(player.socket.data.playerId).toBeUndefined()
   })
 
@@ -254,26 +254,26 @@ describe('SessionService 与 Facade 契约', () => {
     expect(second.playerId).toBe(first.playerId)
     const remove = vi.spyOn(harness.repositories.players, 'remove')
 
-    harness.service.session.logout(first.socket as never)
+    harness.backend.session.logout(first.socket as never)
 
-    const live = harness.service.requirePlayer(second.playerId)
+    const live = harness.backend.requirePlayer(second.playerId)
     expect(live.connected).toBe(true)
     expect(live.socketId).toBe('socket-new')
     expect(live.tokenDigest).toBe(digestRecoveryToken(second.recoveryToken))
-    expect(harness.service.playersByTokenDigest.get(live.tokenDigest)).toBe(live)
+    expect(harness.backend.playersByTokenDigest.get(live.tokenDigest)).toBe(live)
     expect(harness.repositories.players.has(second.playerId)).toBe(true)
     expect(remove).not.toHaveBeenCalled()
     expect(first.socket.data.playerId).toBeUndefined()
     // 新连接仍可正常注销自己的身份。
-    harness.service.session.logout(second.socket as never)
-    expect(harness.service.players.size).toBe(0)
+    harness.backend.session.logout(second.socket as never)
+    expect(harness.backend.players.size).toBe(0)
     expect(harness.repositories.players.has(second.playerId)).toBe(false)
   })
 
   it('并发恢复只有一个请求能接管原身份，且每次成功后旧令牌立即失效', async () => {
     const original = createGameHarness()
     const player = original.register('并发恢复')
-    original.service.handleDisconnect(player.socket as never)
+    original.backend.session.handleDisconnect(player.socket as never)
 
     const first = createGameHarness({
       runtime: original.runtime,

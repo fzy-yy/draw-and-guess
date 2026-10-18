@@ -15,13 +15,13 @@ describe('最终榜单成员口径', () => {
     const { host, guest, room } = startTwoPlayerGame(harness)
 
     // 客人中途退出本局：真实路径保留离局占位并冻结其公开资料（leftProfile）
-    harness.service.leaveGame(guest.playerId)
+    harness.backend.room.leaveGame(guest.playerId)
     // 移除自动暂停（ADR-0059）：对局继续推进，房主可提前结束并进入最终结算
     expect(room.phase).toBe('choosing_word')
     expect(room.members.find((member) => member.playerId === guest.playerId)?.leftGame).toBe(true)
 
-    harness.service.endEarly(host.playerId)
-    const view = harness.service.snapshotter.snapshot(room, host.playerId)
+    harness.backend.gameplay.endEarly(host.playerId)
+    const view = harness.backend.snapshotter.snapshot(room, host.playerId)
     expect(view.game?.finalRanking?.map((entry) => entry.id)).toContain(guest.playerId)
   })
 })

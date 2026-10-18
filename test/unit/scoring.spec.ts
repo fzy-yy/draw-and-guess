@@ -14,19 +14,19 @@ function startGame(harness: GameHarness, guesserCount: number) {
   const guests = Array.from({ length: guesserCount }, (_item, index) =>
     harness.register(`客人${index + 1}`),
   )
-  const room = harness.service.createRoom(host.playerId, {
+  const room = harness.backend.room.createRoom(host.playerId, {
     name: '测试房间',
     visibility: 'public',
     settings: testRoomSettings({ drawSeconds: 60 }),
   })
   let stateVersion = room.stateVersion
   for (const guest of guests)
-    stateVersion = harness.service.joinRoom(guest.playerId, room.id).stateVersion
+    stateVersion = harness.backend.room.joinRoom(guest.playerId, room.id).stateVersion
   for (const guest of guests)
-    stateVersion = harness.service.setReady(guest.playerId, true).stateVersion
-  harness.service.startGame(host.playerId, stateVersion)
+    stateVersion = harness.backend.room.setReady(guest.playerId, true).stateVersion
+  harness.backend.gameplay.startGame(host.playerId, stateVersion)
   harness.runtime.advance(APP_CONFIG.game.startingCountdownSeconds * 1_000)
-  const secret = harness.service.rooms.get(room.id)
+  const secret = harness.backend.rooms.get(room.id)
   if (!secret?.game) throw new Error('对局未启动')
   return { host, guests, room: secret, game: secret.game }
 }
@@ -42,13 +42,15 @@ describe('固定 100 分制计分', () => {
     const { room, game } = startGame(harness, 5)
     const answer = game.candidates[0]
     if (!answer) throw new Error('测试词库未生成候选词')
-    harness.service.chooseWord(game.drawerId, game.roundId, answer.id)
+    harness.backend.gameplay.chooseWord(game.drawerId, game.roundId, answer.id)
 
     const guessers = guessersOf(room, game.drawerId)
     for (const guesser of guessers)
-      expect(harness.service.submitGuess(guesser.playerId, game.roundId, answer.text)).toEqual({
-        correct: true,
-      })
+      expect(harness.backend.chat.submitGuess(guesser.playerId, game.roundId, answer.text)).toEqual(
+        {
+          correct: true,
+        },
+      )
 
     const orderScores = APP_CONFIG.game.score.orderScores
     expect(game.correctDetails.map((detail) => detail.order)).toEqual(
@@ -70,10 +72,10 @@ describe('固定 100 分制计分', () => {
     const { room, game } = startGame(harness, 1)
     const answer = game.candidates[0]
     if (!answer) throw new Error('测试词库未生成候选词')
-    harness.service.chooseWord(game.drawerId, game.roundId, answer.id)
+    harness.backend.gameplay.chooseWord(game.drawerId, game.roundId, answer.id)
     const only = guessersOf(room, game.drawerId)[0]
     if (!only) throw new Error('未生成猜词者')
-    harness.service.submitGuess(only.playerId, game.roundId, answer.text)
+    harness.backend.chat.submitGuess(only.playerId, game.roundId, answer.text)
 
     expect(game.correctDetails.map((detail) => detail.total)).toEqual([100])
     expect(game.roundResult?.drawerScore).toBe(20)
@@ -84,7 +86,7 @@ describe('固定 100 分制计分', () => {
     const { room, game } = startGame(harness, 2)
     const answer = game.candidates[0]
     if (!answer) throw new Error('测试词库未生成候选词')
-    harness.service.chooseWord(game.drawerId, game.roundId, answer.id)
+    harness.backend.gameplay.chooseWord(game.drawerId, game.roundId, answer.id)
     // 作画时长耗尽，无人猜中
     harness.runtime.advance(room.settings.drawSeconds * 1_000)
 

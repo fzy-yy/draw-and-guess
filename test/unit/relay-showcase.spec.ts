@@ -84,7 +84,7 @@ function playToShowcaseWithSentinels(): {
   // 步 1：全员各选自定义题面（选满即秒切作画）。笔画只为第 1 / 2 条链留哨兵——
   // 其余链保持**空白画布**，供 S66 的用例断言「空白保持空白、不加标注」。
   scenario.players.forEach((player) =>
-    scenario.harness.service.chooseCustomWord(
+    scenario.harness.backend.gameplay.chooseCustomWord(
       player.playerId,
       scenario.stepId,
       promptOf(chainOfPlayer(player, 1)),
@@ -92,7 +92,7 @@ function playToShowcaseWithSentinels(): {
   )
   scenario.players.forEach((player, playerIndex) => {
     if (playerIndex >= 2) return
-    scenario.harness.service.addRelayStroke(
+    scenario.harness.backend.drawing.relay.addStroke(
       player.playerId,
       scenario.stepId,
       dotStroke(0, strokeOf(chainOfPlayer(player, 1), 1)),
@@ -103,7 +103,7 @@ function playToShowcaseWithSentinels(): {
   scenario.submitAllGuesses((player) => step2Of(chainOfPlayer(player, 2)))
   scenario.players.forEach((player, playerIndex) => {
     if (playerIndex < 2) return
-    scenario.harness.service.addRelayStroke(
+    scenario.harness.backend.drawing.relay.addStroke(
       player.playerId,
       scenario.stepId,
       dotStroke(0, strokeOf(chainOfPlayer(player, 3), 2)),
@@ -241,7 +241,7 @@ describe('接龙复盘轮播（工单 07）', () => {
       scenario.finishShowcaseChain()
       expect(scenario.room.phase).toBe('relay_vote')
       if (chainIndex < chainCount)
-        scenario.harness.service.relay.beginShowcaseForChain(scenario.room, chainIndex + 1)
+        scenario.harness.backend.relayMachine.beginShowcaseForChain(scenario.room, chainIndex + 1)
     }
 
     expect(seen).toEqual([1, 2, 3, 4])
@@ -323,9 +323,9 @@ describe('接龙复盘轮播（工单 07）', () => {
     if (!blank) throw new Error('场景缺少链')
 
     scenario.finishShowcaseChain()
-    scenario.harness.service.relay.beginShowcaseForChain(scenario.room, 2)
+    scenario.harness.backend.relayMachine.beginShowcaseForChain(scenario.room, 2)
     scenario.finishShowcaseChain()
-    scenario.harness.service.relay.beginShowcaseForChain(scenario.room, 3)
+    scenario.harness.backend.relayMachine.beginShowcaseForChain(scenario.room, 3)
 
     expect(blank.step1Canvas.strokes).toEqual([])
     expect(blank.step3Canvas.strokes).toEqual([])
@@ -346,7 +346,7 @@ describe('接龙复盘轮播（工单 07）', () => {
   it('展示期完全不可干预：跳过 / 提前结束 / 提交 / 选词一律拒绝，且现场原样（S12）', () => {
     const { scenario } = playToShowcaseWithSentinels()
     const host = scenario.host
-    const service = scenario.harness.service
+    const backend = scenario.harness.backend
     const before = {
       cursor: scenario.showcaseCursor(),
       phaseStartedAt: scenario.relay.phaseStartedAt,
@@ -354,23 +354,25 @@ describe('接龙复盘轮播（工单 07）', () => {
     }
 
     // 房主提前结束：复盘期没有这个入口（S12）
-    expect(errorCodeOf(() => service.endEarly(host.playerId))).toBe(ERROR_CODES.INVALID_PHASE)
+    expect(errorCodeOf(() => backend.gameplay.endEarly(host.playerId))).toBe(
+      ERROR_CODES.INVALID_PHASE,
+    )
     // 提交 / 选词：非对应阶段被拒——没有任何一条路径能替别人把展示翻页
     expect(
-      errorCodeOf(() => service.submitRelayDrawing(host.playerId, scenario.relay.stepId)),
+      errorCodeOf(() => backend.relay.submitDrawing(host.playerId, scenario.relay.stepId)),
     ).toBe(ERROR_CODES.NOT_DRAWER)
     expect(
-      errorCodeOf(() => service.submitRelayGuess(host.playerId, scenario.relay.stepId, '抢跑')),
+      errorCodeOf(() => backend.relay.submitGuess(host.playerId, scenario.relay.stepId, '抢跑')),
     ).toBe(ERROR_CODES.INVALID_PHASE)
     expect(
-      errorCodeOf(() => service.chooseWord(host.playerId, scenario.relay.stepId, '抢跑')),
+      errorCodeOf(() => backend.gameplay.chooseWord(host.playerId, scenario.relay.stepId, '抢跑')),
     ).toBe(ERROR_CODES.INVALID_PHASE)
     // 内部接管入口也守规矩：展示期内调它（＝跳链）在阶段转换白名单上失败
-    expect(errorCodeOf(() => service.relay.beginShowcaseForChain(scenario.room, 3))).toBe(
+    expect(errorCodeOf(() => backend.relayMachine.beginShowcaseForChain(scenario.room, 3))).toBe(
       ERROR_CODES.INVALID_TRANSITION,
     )
     // 越界的链序号显式失败，绝不静默换一条链展示
-    expect(errorCodeOf(() => service.relay.beginShowcaseForChain(scenario.room, 9))).toBe(
+    expect(errorCodeOf(() => backend.relayMachine.beginShowcaseForChain(scenario.room, 9))).toBe(
       ERROR_CODES.INTERNAL_ERROR,
     )
 
@@ -388,7 +390,7 @@ describe('接龙复盘轮播（工单 07）', () => {
     if (!firstOrigin || !secondOrigin || !viewer) throw new Error('场景缺少玩家')
 
     // 当前链（第 1 条）的发起人直接离房（含房主迁移）：轮播不为他停下
-    scenario.harness.service.leaveRoom(firstOrigin.playerId)
+    scenario.harness.backend.room.leaveRoom(firstOrigin.playerId)
     expect(scenario.showcaseCursor()).toEqual({ chainIndex: 1, half: 1, page: 'replay' })
 
     const pages = scenario.finishShowcaseChain()
@@ -396,8 +398,8 @@ describe('接龙复盘轮播（工单 07）', () => {
     expect(pages).toHaveLength(6)
     expect(scenario.room.phase).toBe('relay_vote')
     // 下一棒玩家在展示期主动退出本局：链位保留、轮播继续（S37）
-    scenario.harness.service.leaveGame(secondOrigin.playerId)
-    scenario.harness.service.relay.beginShowcaseForChain(scenario.room, 2)
+    scenario.harness.backend.room.leaveGame(secondOrigin.playerId)
+    scenario.harness.backend.relayMachine.beginShowcaseForChain(scenario.room, 2)
 
     expect(scenario.showcaseCursor()).toEqual({ chainIndex: 2, half: 1, page: 'replay' })
     const showcase = showcaseOf(scenario, viewer.playerId)
@@ -416,7 +418,7 @@ describe('接龙复盘轮播（工单 07）', () => {
 
     // 保席：展示期掉线不再走 leaveRoom 分支，断线者仍在成员表与房间里（开局后不可加入，S36）
     expect(scenario.room.members.some((member) => member.playerId === dropped.playerId)).toBe(true)
-    expect(scenario.harness.service.players.get(dropped.playerId)?.roomId).toBe(scenario.room.id)
+    expect(scenario.harness.backend.players.get(dropped.playerId)?.roomId).toBe(scenario.room.id)
 
     // 轮播不因成员变动而中止（S12）：本链照常走完进入投票；断线者宽限内重连后仍能补投
     scenario.finishShowcaseChain()
@@ -439,7 +441,7 @@ describe('接龙复盘轮播（工单 07）', () => {
     // 推进到超过重连宽限：身份被回收（不在玩家册，展示他的链时 chip 走中性占位身份兜底），
     // 本局不因成员离场而中止——按服务端计时走完全部链与投票并落盘（S7）
     scenario.harness.runtime.advance(APP_CONFIG.network.reconnectGraceMs)
-    expect(scenario.harness.service.players.has(dropped.playerId)).toBe(false)
+    expect(scenario.harness.backend.players.has(dropped.playerId)).toBe(false)
     const games = scenario.harness.repositories.archive.games
     expect(games).toHaveLength(1)
     expect(games[0]?.archive.mode).toBe('relay')
@@ -466,7 +468,7 @@ describe('接龙复盘轮播（工单 07）', () => {
     ).toHaveLength(1)
 
     // 切到下一条链才再播「第 k / N 条链开始展示」，而「复盘开始」全程只有一次
-    scenario.harness.service.relay.beginShowcaseForChain(scenario.room, 2)
+    scenario.harness.backend.relayMachine.beginShowcaseForChain(scenario.room, 2)
     const notices = scenario.notices()
     expect(notices).toContain(serverStrings.notices.relayChainShowcaseStarted(2, chainCount))
     expect(

@@ -22,7 +22,7 @@ import {
   type RoomSnapshot,
 } from '@draw-guess/shared'
 import { APP_CONFIG } from '../../../apps/server/src/config/index.ts'
-import { GameError } from '../../../apps/server/src/errors.ts'
+import { AppError } from '../../../apps/server/src/errors.ts'
 import type { DrawingCanvasState } from '../../../apps/server/src/domain/drawing/drawing-core.ts'
 import {
   createRelayChainSecret,
@@ -54,7 +54,8 @@ export function errorCodeOf(run: () => unknown): ErrorCode {
   try {
     run()
   } catch (error) {
-    if (error instanceof GameError) return error.code
+    // 生产错误模型以 AppError 为基类（GameError 是其一员）；这里只关心「码」。
+    if (error instanceof AppError) return error.code
     throw error
   }
   throw new Error('期望请求被拒绝，但没有抛出错误')
@@ -132,15 +133,15 @@ export function startRelayDrawing(
   if (!host) throw new Error('接龙测试房缺少房主')
 
   // 接龙房：模式在建房时确定（S27 / S28）；容量与规则沿用共享协议口径。
-  const created = harness.service.createRoom(host.playerId, {
+  const created = harness.backend.room.createRoom(host.playerId, {
     name: '接龙测试房间',
     visibility: 'public',
     gameMode: 'relay',
     settings: testRoomSettings(),
   })
   for (const player of [...players.slice(1), ...unseated])
-    harness.service.joinRoom(player.playerId, created.id)
-  const room = harness.service.rooms.get(created.id)
+    harness.backend.room.joinRoom(player.playerId, created.id)
+  const room = harness.backend.rooms.get(created.id)
   if (!room) throw new Error('接龙测试房间未创建')
 
   // 链顺序 = 席位顺序（S11）：每个成员都是自己那条链的发起人，环状顺延由步骤解析负责。
@@ -290,7 +291,7 @@ export function startRelayGame(
   if (!host) throw new Error('接龙测试房缺少房主')
 
   // 接龙房：模式在建房时确定（S27 / S28），容量与规则沿用共享协议口径。
-  const created = harness.service.createRoom(host.playerId, {
+  const created = harness.backend.room.createRoom(host.playerId, {
     name: '接龙测试房间',
     visibility: 'public',
     gameMode: 'relay',
@@ -298,12 +299,12 @@ export function startRelayGame(
   })
   let latest = created
   for (const player of players.slice(1)) {
-    harness.service.joinRoom(player.playerId, created.id)
+    harness.backend.room.joinRoom(player.playerId, created.id)
     // 接龙门禁沿用经典准备口径：非房主成员必须显式准备（S62）
-    latest = harness.service.setReady(player.playerId, true)
+    latest = harness.backend.room.setReady(player.playerId, true)
   }
-  harness.service.startGame(host.playerId, latest.stateVersion)
-  const room = harness.service.rooms.get(created.id)
+  harness.backend.gameplay.startGame(host.playerId, latest.stateVersion)
+  const room = harness.backend.rooms.get(created.id)
   if (!room) throw new Error('接龙测试房间未创建')
   // 开局倒计时（复用经典 starting 阶段，S22）到期后进入步 1 选词
   harness.runtime.advance(APP_CONFIG.game.startingCountdownSeconds * 1_000)
@@ -325,7 +326,7 @@ export function startRelayGame(
    * 三类都由服务端兜底，用例既不必也不能代替他们提交。
    */
   const stillCanAct = (player: RelayTestPlayer): boolean =>
-    harness.service.players.get(player.playerId)?.connected === true &&
+    harness.backend.players.get(player.playerId)?.connected === true &&
     room.members.some((member) => member.playerId === player.playerId && !member.leftGame) &&
     !relay.stepSubmissions.has(player.playerId)
 
@@ -334,7 +335,7 @@ export function startRelayGame(
    * 四步走完时全员都提交过本步，投票权与提交记录无关（重复投票由服务端拒绝）。
    */
   const stillCanVote = (player: RelayTestPlayer): boolean =>
-    harness.service.players.get(player.playerId)?.connected === true &&
+    harness.backend.players.get(player.playerId)?.connected === true &&
     room.members.some((member) => member.playerId === player.playerId && !member.leftGame)
 
   const chooseAll = (): void => {
@@ -343,7 +344,7 @@ export function startRelayGame(
       const chain = chainOf(player.playerId, 1)
       const word = chain.candidates[0]
       if (!word) throw new Error('步 1 选词候选为空')
-      harness.service.chooseWord(player.playerId, relay.stepId, word.id)
+      harness.backend.gameplay.chooseWord(player.playerId, relay.stepId, word.id)
     }
     if (room.phase === 'relay_choose') {
       harness.runtime.advance(room.settings.relayChooseSeconds * 1_000)
@@ -353,7 +354,7 @@ export function startRelayGame(
   const submitAllDrawings = (): void => {
     for (const player of players) {
       if (!stillCanAct(player)) continue
-      harness.service.submitRelayDrawing(player.playerId, relay.stepId)
+      harness.backend.relay.submitDrawing(player.playerId, relay.stepId)
     }
     if (room.phase === 'relay_draw') {
       harness.runtime.advance(room.settings.relayDrawSeconds * 1_000)
@@ -368,7 +369,7 @@ export function startRelayGame(
     for (const player of players) {
       if (!stillCanAct(player)) continue
       const text = textOf(player)
-      harness.service.submitRelayGuess(player.playerId, relay.stepId, text)
+      harness.backend.relay.submitGuess(player.playerId, relay.stepId, text)
       submitted.set(player.playerId, text)
     }
     if (room.phase === 'relay_guess') {
@@ -405,7 +406,7 @@ export function startRelayGame(
     if (room.phase !== 'relay_vote') throw new Error('只有在投票期才能投票')
     for (const player of players) {
       if (!stillCanVote(player)) continue
-      harness.service.voteRelay(player.playerId, choice)
+      harness.backend.relay.vote(player.playerId, choice)
     }
   }
 
@@ -432,7 +433,7 @@ export function startRelayGame(
       return relay.stepId
     },
     snapshotOf: (playerId) => {
-      const snapshot = harness.service.snapshotForPlayer(playerId)
+      const snapshot = harness.backend.publisher.snapshotForPlayer(playerId)
       if (!snapshot) throw new Error(`玩家 ${playerId} 没有房间快照`)
       return snapshot
     },
@@ -469,7 +470,7 @@ export function startRelayGame(
     finishShowcaseChain,
     disconnect: (player) => {
       // 走真实断线编排：接龙对局阶段保席（不提前代交，等本棒倒计时到点），与「掉线者不入链」的经典口径分开
-      harness.service.handleDisconnect(player.socket as never)
+      harness.backend.session.handleDisconnect(player.socket as never)
     },
     reconnect: (player) => {
       const registration = harness.register(player.nickname, undefined, player.recoveryToken)
@@ -477,7 +478,7 @@ export function startRelayGame(
       return player
     },
     vote: (player, choice) => {
-      harness.service.voteRelay(player.playerId, choice)
+      harness.backend.relay.vote(player.playerId, choice)
     },
     voteAll: (choice = 'agree') => voteAll(choice),
     advanceVoteWindow,
@@ -492,7 +493,7 @@ export function startRelayGame(
         finishShowcaseChain()
         for (const player of players) {
           if (!stillCanVote(player)) continue
-          harness.service.voteRelay(player.playerId, choiceOf(chainIndex, player))
+          harness.backend.relay.vote(player.playerId, choiceOf(chainIndex, player))
         }
         advanceVoteWindow()
       }

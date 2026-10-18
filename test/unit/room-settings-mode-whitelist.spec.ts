@@ -58,13 +58,13 @@ function rejection(run: () => unknown): GameError {
 /** 建一个等待阶段的测试房（模式由用例指定），返回房主身份与房间秘密。 */
 function createRoom(harness: GameHarness, gameMode: 'classic' | 'relay') {
   const host = harness.register('白名单房主')
-  const snapshot = harness.service.createRoom(host.playerId, {
+  const snapshot = harness.backend.room.createRoom(host.playerId, {
     name: '白名单测试房',
     visibility: 'public',
     gameMode,
     settings: testRoomSettings(),
   })
-  const room = harness.service.rooms.get(snapshot.id)
+  const room = harness.backend.rooms.get(snapshot.id)
   if (!room) throw new Error('测试房间未创建')
   return { host, room }
 }
@@ -78,7 +78,7 @@ describe('房间规则模式白名单（S52）', () => {
 
     for (const patch of CLASSIC_ONLY_PATCHES) {
       const error = rejection(() =>
-        harness.service.updateSettings(host.playerId, patch, room.stateVersion),
+        harness.backend.room.updateSettings(host.playerId, patch, room.stateVersion),
       )
       // 沿用既有错误码与既有文案，不为模式白名单新增码
       expect(error.code).toBe('INVALID_SETTINGS')
@@ -98,7 +98,7 @@ describe('房间规则模式白名单（S52）', () => {
 
     for (const patch of RELAY_ONLY_PATCHES) {
       const error = rejection(() =>
-        harness.service.updateSettings(host.playerId, patch, room.stateVersion),
+        harness.backend.room.updateSettings(host.playerId, patch, room.stateVersion),
       )
       expect(error.code).toBe('INVALID_SETTINGS')
       expect(error.message).toBe(serverStrings.errors.INVALID_SETTINGS)
@@ -114,7 +114,7 @@ describe('房间规则模式白名单（S52）', () => {
       const { host, room } = createRoom(harness, gameMode)
       for (const patch of SHARED_PATCHES) {
         const versionBefore = room.stateVersion
-        const updated = harness.service.updateSettings(host.playerId, patch, versionBefore)
+        const updated = harness.backend.room.updateSettings(host.playerId, patch, versionBefore)
         const key = Object.keys(patch)[0]! as keyof RoomSettings
         expect(updated.settings[key]).toBe(patch[key])
         expect(room.stateVersion).toBeGreaterThan(versionBefore)
@@ -128,7 +128,7 @@ describe('房间规则模式白名单（S52）', () => {
 
     for (const patch of RELAY_ONLY_PATCHES) {
       const versionBefore = room.stateVersion
-      const updated = harness.service.updateSettings(host.playerId, patch, versionBefore)
+      const updated = harness.backend.room.updateSettings(host.playerId, patch, versionBefore)
       const key = Object.keys(patch)[0]! as keyof RoomSettings
       expect(updated.settings[key]).toBe(patch[key])
     }

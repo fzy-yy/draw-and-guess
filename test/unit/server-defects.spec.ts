@@ -9,7 +9,7 @@ function enterDrawing() {
   const state = startTwoPlayerGame(harness)
   const candidate = state.game.candidates[0]
   if (!candidate) throw new Error('测试词库未生成候选词')
-  harness.service.chooseWord(state.game.drawerId, state.game.roundId, candidate.id)
+  harness.backend.gameplay.chooseWord(state.game.drawerId, state.game.roundId, candidate.id)
   return { harness, ...state }
 }
 
@@ -17,21 +17,21 @@ describe('会话恢复与断线时序', () => {
   it('恢复令牌跨服务重启后恢复同一玩家 UUID，房间按约定作废', () => {
     const first = createGameHarness()
     const player = first.register('重启玩家')
-    first.service.createRoom(player.playerId, {
+    first.backend.room.createRoom(player.playerId, {
       name: '重启房',
       visibility: 'public',
       settings: testRoomSettings(),
     })
-    first.service.handleDisconnect(player.socket as never)
+    first.backend.session.handleDisconnect(player.socket as never)
 
     const second = createGameHarness({
       runtime: first.runtime,
       repositories: first.repositories,
     })
-    second.service.recoverOnStartup()
+    second.backend.recoverOnStartup()
     const restored = second.register('忽略的新昵称', 'new-socket', player.recoveryToken)
     expect(restored.playerId).toBe(player.playerId)
-    expect(second.service.requirePlayer(restored.playerId).roomId).toBeUndefined()
+    expect(second.backend.requirePlayer(restored.playerId).roomId).toBeUndefined()
   })
 
   it('新 Socket 接管身份后，旧 Socket 的迟到断线不会误伤新连接', () => {
@@ -39,8 +39,8 @@ describe('会话恢复与断线时序', () => {
     const first = harness.register('接管玩家', 'old-socket')
     const second = harness.register('接管玩家', 'new-socket', first.recoveryToken)
     expect(first.socket.disconnected).toBe(true)
-    harness.service.handleDisconnect(first.socket as never)
-    const player = harness.service.requirePlayer(second.playerId)
+    harness.backend.session.handleDisconnect(first.socket as never)
+    const player = harness.backend.requirePlayer(second.playerId)
     expect(player.connected).toBe(true)
     expect(player.socketId).toBe('new-socket')
   })
@@ -48,7 +48,7 @@ describe('会话恢复与断线时序', () => {
   it('画家兼房主断线：房主控制权按短宽限迁移，回合不提前废弃、走完作画倒计时自然结算', () => {
     const { harness, host, guest, room, game } = enterDrawing()
     expect(game.drawerId).toBe(host.playerId)
-    harness.service.handleDisconnect(host.socket as never)
+    harness.backend.session.handleDisconnect(host.socket as never)
 
     // 短宽限后房主控制权迁移给在线客人，但不提前结算回合（ADR-0059 断线挂机化）
     harness.runtime.advance(APP_CONFIG.network.hostReconnectGraceMs)
@@ -66,16 +66,18 @@ describe('私密房与邀请竞态', () => {
     const harness = createGameHarness()
     const host = harness.register('私密房主')
     const guest = harness.register('访客')
-    const room = harness.service.createRoom(host.playerId, {
+    const room = harness.backend.room.createRoom(host.playerId, {
       name: '私密房',
       visibility: 'private',
       settings: testRoomSettings(),
     })
-    expect(() => harness.service.joinRoom(guest.playerId, room.id)).toThrow(GameError)
+    expect(() => harness.backend.room.joinRoom(guest.playerId, room.id)).toThrow(GameError)
     for (let index = 0; index < APP_CONFIG.room.privateJoinMaxAttempts; index += 1) {
-      expect(() => harness.service.joinPrivateRoom(guest.playerId, 'AAAAAA')).toThrow(GameError)
+      expect(() => harness.backend.room.joinPrivateRoom(guest.playerId, 'AAAAAA')).toThrow(
+        GameError,
+      )
     }
-    expect(() => harness.service.joinPrivateRoom(guest.playerId, 'AAAAAA')).toThrow(/频繁/)
+    expect(() => harness.backend.room.joinPrivateRoom(guest.playerId, 'AAAAAA')).toThrow(/频繁/)
   })
 
   it('邀请过期与重复接受均拒绝，满员失败不会误消费邀请', () => {
@@ -86,27 +88,29 @@ describe('私密房与邀请竞态', () => {
     const fillers = Array.from({ length: PLAYER_PROTOCOL_LIMITS.maxPlayers - 1 }, (_item, index) =>
       harness.register(`占位者${index + 1}`),
     )
-    const room = harness.service.createRoom(host.playerId, {
+    const room = harness.backend.room.createRoom(host.playerId, {
       name: '邀请房',
       visibility: 'public',
       settings: testRoomSettings(),
     })
 
-    const expiring = harness.service.sendInvite(host.playerId, target.playerId)
+    const expiring = harness.backend.invitation.send(host.playerId, target.playerId)
     harness.runtime.advance(APP_CONFIG.network.inviteExpiryMs)
-    expect(() => harness.service.respondInvite(target.playerId, expiring.id, true)).toThrow(
+    expect(() => harness.backend.invitation.respond(target.playerId, expiring.id, true)).toThrow(
       /邀请|失效|过期/,
     )
 
     harness.runtime.advance(APP_CONFIG.network.inviteCooldownMs)
-    const pending = harness.service.sendInvite(host.playerId, target.playerId)
-    for (const filler of fillers) harness.service.joinRoom(filler.playerId, room.id)
-    expect(() => harness.service.respondInvite(target.playerId, pending.id, true)).toThrow(/满员/)
-    expect(harness.service.invites.has(pending.id)).toBe(true)
+    const pending = harness.backend.invitation.send(host.playerId, target.playerId)
+    for (const filler of fillers) harness.backend.room.joinRoom(filler.playerId, room.id)
+    expect(() => harness.backend.invitation.respond(target.playerId, pending.id, true)).toThrow(
+      /满员/,
+    )
+    expect(harness.backend.invites.has(pending.id)).toBe(true)
 
-    harness.service.leaveRoom(fillers[0]!.playerId)
-    expect(harness.service.respondInvite(target.playerId, pending.id, true)?.id).toBe(room.id)
-    expect(() => harness.service.respondInvite(target.playerId, pending.id, true)).toThrow(
+    harness.backend.room.leaveRoom(fillers[0]!.playerId)
+    expect(harness.backend.invitation.respond(target.playerId, pending.id, true)?.id).toBe(room.id)
+    expect(() => harness.backend.invitation.respond(target.playerId, pending.id, true)).toThrow(
       /邀请|失效|过期/,
     )
   })
@@ -131,11 +135,15 @@ describe('快照隐私与绘图边界', () => {
         { x: 0.2, y: 0.2 },
       ],
     }
-    expect(harness.service.addStroke(game.drawerId, game.roundId, base).drawingRevision).toBe(1)
-    expect(() => harness.service.addStroke(game.drawerId, game.roundId, base)).toThrow(/过期|重复/)
+    expect(
+      harness.backend.drawing.classic.addStroke(game.drawerId, game.roundId, base).drawingRevision,
+    ).toBe(1)
+    expect(() =>
+      harness.backend.drawing.classic.addStroke(game.drawerId, game.roundId, base),
+    ).toThrow(/过期|重复/)
     harness.runtime.advance(1_000)
     expect(() =>
-      harness.service.addStroke(game.drawerId, game.roundId, {
+      harness.backend.drawing.classic.addStroke(game.drawerId, game.roundId, {
         ...base,
         sequence: 1,
         startPointIndex: 2,
@@ -147,7 +155,7 @@ describe('快照隐私与绘图边界', () => {
     game.strokePointTotal = APP_CONFIG.drawing.maxPointsPerRound - 1
     harness.runtime.advance(1_000)
     expect(() =>
-      harness.service.addStroke(game.drawerId, game.roundId, {
+      harness.backend.drawing.classic.addStroke(game.drawerId, game.roundId, {
         ...base,
         id: 'stroke-budget',
         sequence: 2,
@@ -157,7 +165,7 @@ describe('快照隐私与绘图边界', () => {
     game.strokePointTotal = base.points.length
     const guestMember = room.members.find((member) => member.playerId === guest.playerId)!
     guestMember.lastSyncedSeq = undefined
-    const full = harness.service.snapshotForPlayer(guest.playerId, true)!
+    const full = harness.backend.publisher.snapshotForPlayer(guest.playerId, true)!
     expect(full.game?.strokesOmitted).not.toBe(true)
     expect(full.game?.strokes).toHaveLength(1)
   })
@@ -174,22 +182,22 @@ describe('快照隐私与绘图边界', () => {
     const limit = APP_CONFIG.drawing.maxFillsPerRound
     for (let index = 0; index < limit; index += 1) {
       harness.runtime.advance(1_000) // 绕过服务端绘图事件限频
-      harness.service.addFill(game.drawerId, game.roundId, fill(index))
+      harness.backend.drawing.classic.addFill(game.drawerId, game.roundId, fill(index))
     }
     harness.runtime.advance(1_000)
-    expect(() => harness.service.addFill(game.drawerId, game.roundId, fill(limit))).toThrow(
-      /上限|预算/,
-    )
+    expect(() =>
+      harness.backend.drawing.classic.addFill(game.drawerId, game.roundId, fill(limit)),
+    ).toThrow(/上限|预算/)
 
     // 撤销一次填充释放一次额度后可以继续提交
-    harness.service.undo(game.drawerId, game.roundId)
+    harness.backend.drawing.classic.undo(game.drawerId, game.roundId)
     harness.runtime.advance(1_000)
     expect(() =>
-      harness.service.addFill(game.drawerId, game.roundId, fill(limit + 1)),
+      harness.backend.drawing.classic.addFill(game.drawerId, game.roundId, fill(limit + 1)),
     ).not.toThrow()
 
     // 清空画布同时清零点数与填充额度
-    harness.service.clearDrawing(game.drawerId, game.roundId)
+    harness.backend.drawing.classic.clear(game.drawerId, game.roundId)
     expect(game.fillCount).toBe(0)
     expect(game.strokePointTotal).toBe(0)
   })
@@ -202,7 +210,7 @@ describe('快照隐私与绘图边界', () => {
     if (!answer) throw new Error('作画阶段应存在答案')
 
     // 1. 画家发送非答案聊天消息：成功进入消息流并广播
-    const chatResult = harness.service.submitGuess(drawerId, game.roundId, '画得好不好看？')
+    const chatResult = harness.backend.chat.submitGuess(drawerId, game.roundId, '画得好不好看？')
     expect(chatResult).toEqual({ correct: false })
     const lastMsg = game.messages.at(-1)
     expect(lastMsg?.type).toBe('guess')
@@ -210,11 +218,11 @@ describe('快照隐私与绘图边界', () => {
     expect(lastMsg?.text).toBe('画得好不好看？')
 
     // 2. 画家发送完全匹配的答案词面：拦截并抛出 DRAWER_CANNOT_GUESS 且文案为无法发送答案
-    expect(() => harness.service.submitGuess(drawerId, game.roundId, answer.text)).toThrowError(
-      '无法发送答案',
-    )
+    expect(() =>
+      harness.backend.chat.submitGuess(drawerId, game.roundId, answer.text),
+    ).toThrowError('无法发送答案')
     try {
-      harness.service.submitGuess(drawerId, game.roundId, answer.text)
+      harness.backend.chat.submitGuess(drawerId, game.roundId, answer.text)
     } catch (error) {
       expect((error as GameError).code).toBe('DRAWER_CANNOT_GUESS')
     }
@@ -222,7 +230,7 @@ describe('快照隐私与绘图边界', () => {
     // 3. 若答案包含别称，发送别称同样被拦截
     if (answer.aliases.length > 0) {
       expect(() =>
-        harness.service.submitGuess(drawerId, game.roundId, answer.aliases[0]!),
+        harness.backend.chat.submitGuess(drawerId, game.roundId, answer.aliases[0]!),
       ).toThrowError('无法发送答案')
     }
   })

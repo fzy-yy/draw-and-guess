@@ -92,7 +92,7 @@ describe('接龙链投票（工单 08）', () => {
     scenario.disconnect(dropped)
     // 保席：断线者没有被 leaveRoom 移出成员表，仍指向房间（开局后不可加入，S36）
     expect(scenario.room.members.some((member) => member.playerId === dropped.playerId)).toBe(true)
-    expect(scenario.harness.service.players.get(dropped.playerId)?.roomId).toBe(scenario.room.id)
+    expect(scenario.harness.backend.players.get(dropped.playerId)?.roomId).toBe(scenario.room.id)
 
     // 宽限内重连：回到同一席位并投出自己的票（若已被移出房间，这里会以 NOT_IN_ROOM 失败）
     scenario.reconnect(dropped)
@@ -356,8 +356,8 @@ describe('接龙链投票（工单 08）', () => {
     // 第二名玩家主动退出本局（保留成绩卡与链位）、第三名直接离房：两者都不能再投票
     const second = scenario.players[1]
     if (!second) throw new Error('场景缺少玩家')
-    scenario.harness.service.leaveGame(second.playerId)
-    scenario.harness.service.leaveRoom(third.playerId)
+    scenario.harness.backend.room.leaveGame(second.playerId)
+    scenario.harness.backend.room.leaveRoom(third.playerId)
 
     scenario.vote(first, 'agree')
     scenario.vote(fourth, 'agree')

@@ -14,7 +14,7 @@ describe('RoomPersistenceCoordinator 映射契约', () => {
         archive: { saveGame: vi.fn() },
       },
     })
-    coordinator.persistPlayer(harness.service.requirePlayer(host.playerId))
+    coordinator.persistPlayer(harness.backend.requirePlayer(host.playerId))
     expect(Object.keys(upsert.mock.calls[0]![0]).sort()).toEqual(
       [
         'acceptsInvites',
@@ -31,19 +31,19 @@ describe('RoomPersistenceCoordinator 映射契约', () => {
     expect(upsert.mock.calls[0]![0]).not.toHaveProperty('roomId')
     expect(upsert.mock.calls[0]![0]).not.toHaveProperty('token')
     expect(upsert.mock.calls[0]![0]).toMatchObject({
-      tokenDigest: harness.service.requirePlayer(host.playerId).tokenDigest,
+      tokenDigest: harness.backend.requirePlayer(host.playerId).tokenDigest,
     })
   })
 
   it('战报只读取冻结榜单，未结算时不写入', () => {
     const harness = createGameHarness()
     const { host, room } = startTwoPlayerGame(harness)
-    harness.service.persistence.persistGameResult(room, '未结算')
+    harness.backend.persistence.persistGameResult(room, '未结算')
     expect(harness.repositories.archive.games).toHaveLength(0)
-    harness.service.endEarly(host.playerId)
+    harness.backend.gameplay.endEarly(host.playerId)
     const snapshot = structuredClone(harness.repositories.archive.games[0])
     room.members.length = 0
-    harness.service.persistence.persistGameResult(room, '再次映射')
+    harness.backend.persistence.persistGameResult(room, '再次映射')
     expect(harness.repositories.archive.games[1]?.results).toEqual(snapshot?.results)
   })
 })

@@ -7,16 +7,16 @@ import { createGameHarness, testRoomSettings, type GameHarness } from './helpers
 function startGame(harness: GameHarness, allowCustomWord: boolean) {
   const host = harness.register('房主')
   const guest = harness.register('客人')
-  const room = harness.service.createRoom(host.playerId, {
+  const room = harness.backend.room.createRoom(host.playerId, {
     name: '测试房间',
     visibility: 'public',
     settings: testRoomSettings({ allowCustomWord }),
   })
-  harness.service.joinRoom(guest.playerId, room.id)
-  const ready = harness.service.setReady(guest.playerId, true)
-  harness.service.startGame(host.playerId, ready.stateVersion)
+  harness.backend.room.joinRoom(guest.playerId, room.id)
+  const ready = harness.backend.room.setReady(guest.playerId, true)
+  harness.backend.gameplay.startGame(host.playerId, ready.stateVersion)
   harness.runtime.advance(APP_CONFIG.game.startingCountdownSeconds * 1_000)
-  const secret = harness.service.rooms.get(room.id)
+  const secret = harness.backend.rooms.get(room.id)
   if (!secret?.game) throw new Error('对局未启动')
   return { host, guest, room: secret, game: secret.game }
 }
@@ -57,7 +57,7 @@ describe('画家自定义题目（端到端领域行为）', () => {
   it('开关开启时画家提交合法词，立即进入作画且答案是规范化后的词', () => {
     const harness = createGameHarness()
     const { room, game } = startGame(harness, true)
-    harness.service.chooseCustomWord(game.drawerId, game.roundId, '  屋顶  上的猫 ')
+    harness.backend.gameplay.chooseCustomWord(game.drawerId, game.roundId, '  屋顶  上的猫 ')
 
     expect(room.phase).toBe('drawing')
     expect(game.answer?.text).toBe('屋顶 上的猫')
@@ -65,7 +65,9 @@ describe('画家自定义题目（端到端领域行为）', () => {
     expect(game.roundDurationMs).toBe(room.settings.drawSeconds * 1_000)
     // 猜词者看到的仍是遮罩，而不是明文
     const guesserId = room.members.find((member) => member.playerId !== game.drawerId)?.playerId
-    const view = guesserId ? harness.service.snapshotForPlayer(guesserId)?.game : undefined
+    const view = guesserId
+      ? harness.backend.publisher.snapshotForPlayer(guesserId)?.game
+      : undefined
     expect(view?.answer).toBeUndefined()
     expect(view?.answerMask).not.toBe('屋顶 上的猫')
   })
@@ -74,7 +76,7 @@ describe('画家自定义题目（端到端领域行为）', () => {
     const harness = createGameHarness()
     const { game } = startGame(harness, false)
     expect(() =>
-      harness.service.chooseCustomWord(game.drawerId, game.roundId, '屋顶上的猫'),
+      harness.backend.gameplay.chooseCustomWord(game.drawerId, game.roundId, '屋顶上的猫'),
     ).toThrowError(/未开启自定义题目功能/)
   })
 
@@ -82,7 +84,7 @@ describe('画家自定义题目（端到端领域行为）', () => {
     const harness = createGameHarness()
     const { guest, game } = startGame(harness, true)
     expect(() =>
-      harness.service.chooseCustomWord(guest.playerId, game.roundId, '屋顶上的猫'),
+      harness.backend.gameplay.chooseCustomWord(guest.playerId, game.roundId, '屋顶上的猫'),
     ).toThrowError(/只有当前画家/)
   })
 
@@ -92,17 +94,17 @@ describe('画家自定义题目（端到端领域行为）', () => {
     const candidate = game.candidates[0]
     if (!candidate) throw new Error('测试词库未生成候选词')
     expect(() =>
-      harness.service.chooseCustomWord(game.drawerId, game.roundId, candidate.text),
+      harness.backend.gameplay.chooseCustomWord(game.drawerId, game.roundId, candidate.text),
     ).toThrowError(/已经出现过/)
   })
 
   it('提交后阶段提交被拒（同一回合不能再次自定义）', () => {
     const harness = createGameHarness()
     const { room, game } = startGame(harness, true)
-    harness.service.chooseCustomWord(game.drawerId, game.roundId, '屋顶上的猫')
+    harness.backend.gameplay.chooseCustomWord(game.drawerId, game.roundId, '屋顶上的猫')
     expect(room.phase).toBe('drawing')
     expect(() =>
-      harness.service.chooseCustomWord(game.drawerId, game.roundId, '另一只猫'),
+      harness.backend.gameplay.chooseCustomWord(game.drawerId, game.roundId, '另一只猫'),
     ).toThrowError(/只有当前画家/)
   })
 })

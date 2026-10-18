@@ -91,7 +91,7 @@ describe('房间规则产品闭环', () => {
     const { game } = startTwoPlayerGame(harness, testRoomSettings({ drawSeconds: 150 }))
     const answer = game.candidates[0]
     if (!answer) throw new Error('测试词库未生成候选词')
-    harness.service.chooseWord(game.drawerId, game.roundId, answer.id)
+    harness.backend.gameplay.chooseWord(game.drawerId, game.roundId, answer.id)
     // 回合时长只认房间档位（见 ADR-0046）
     expect(game.roundDurationMs).toBe(150 * 1_000)
   })
@@ -110,7 +110,7 @@ describe('房间规则产品闭环', () => {
   it('房主可成功开启/关闭差一字私密提示与画布微表情并广播生效', () => {
     const harness = createGameHarness()
     const host = harness.register('房主')
-    const room = harness.service.createRoom(host.playerId, {
+    const room = harness.backend.room.createRoom(host.playerId, {
       name: '测试房间',
       visibility: 'public',
       settings: testRoomSettings({
@@ -121,7 +121,7 @@ describe('房间规则产品闭环', () => {
     })
 
     // 修改规则关闭这些项
-    const updated = harness.service.updateSettings(
+    const updated = harness.backend.room.updateSettings(
       host.playerId,
       {
         allowNearMissHint: false,
