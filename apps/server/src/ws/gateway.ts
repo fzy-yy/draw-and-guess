@@ -5,7 +5,7 @@
  * 连接回调只做装配，不承载业务；
  * 集中挂载各业务模块的 Gateway（Session、Room、Drawing、Chat、Gameplay、Relay）。
  */
-import type { AppSocket } from './contracts.ts'
+import type { AppSocket } from '../socket-types.ts'
 import {
   registerSessionGateway,
   type SessionGatewayDeps,

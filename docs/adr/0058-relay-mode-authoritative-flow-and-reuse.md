@@ -1,6 +1,7 @@
 # 0058 接龙模式：服务端权威推进、策略分流与插槽式复用
 
-**状态**：已采纳
+**状态**：已采纳（其中「投票时长固定 10 秒、一律等满」一条已被
+[ADR-0063](0063-relay-vote-settle-acceleration.md) 取代；其余决策仍然有效）
 
 - 来源：接龙模式（传话接龙）实施规格 `.scratch/relay-mode/spec.md` 与共识 `.scratch/relay-mode/consensus.md`（S1–S86）
 

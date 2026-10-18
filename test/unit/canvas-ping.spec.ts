@@ -23,7 +23,7 @@ describe('画布轻量微表情广播 (Ticket 04)', () => {
     const initialStrokesLen = game.strokes.length
 
     // 由 host 发送点赞表情
-    harness.service.sendCanvasPing(host.playerId, 0.45, 0.65, 'thumbs_up')
+    harness.backend.chat.sendCanvasPing(host.playerId, 0.45, 0.65, 'thumbs_up')
 
     // 检查广播并按 push schema 校验
     const pingEvent = harness.ioEvents.find((e) => e.event === EVENTS.gameCanvasPing)
@@ -49,7 +49,7 @@ describe('画布轻量微表情广播 (Ticket 04)', () => {
     const { host } = startTwoPlayerGame(harness, testRoomSettings({ allowCanvasReactions: false }))
 
     expect(() => {
-      harness.service.sendCanvasPing(host.playerId, 0.5, 0.5, 'confused')
+      harness.backend.chat.sendCanvasPing(host.playerId, 0.5, 0.5, 'confused')
     }).toThrow()
   })
 
@@ -58,17 +58,17 @@ describe('画布轻量微表情广播 (Ticket 04)', () => {
     const { guest } = startTwoPlayerGame(harness, testRoomSettings({ allowCanvasReactions: true }))
 
     // 第一次发送成功
-    harness.service.sendCanvasPing(guest.playerId, 0.2, 0.3, 'fire')
+    harness.backend.chat.sendCanvasPing(guest.playerId, 0.2, 0.3, 'fire')
 
     // 立即再次发送，时间戳未前进 1.5s，应被拒绝
     expect(() => {
-      harness.service.sendCanvasPing(guest.playerId, 0.2, 0.3, 'fire')
+      harness.backend.chat.sendCanvasPing(guest.playerId, 0.2, 0.3, 'fire')
     }).toThrow()
 
     // 模拟时间前进 1500ms 后重新允许发送
     harness.runtime.advance(1500)
     expect(() => {
-      harness.service.sendCanvasPing(guest.playerId, 0.2, 0.3, 'fire')
+      harness.backend.chat.sendCanvasPing(guest.playerId, 0.2, 0.3, 'fire')
     }).not.toThrow()
   })
 })
@@ -83,7 +83,7 @@ describe('接龙模式禁用画布微表情 (S19)', () => {
     const harness = createGameHarness()
     const host = harness.register('接龙房主')
     // allowCanvasReactions 取默认 true：证明拒绝来自模式守卫而非规则开关
-    const room = harness.service.createRoom(host.playerId, {
+    const room = harness.backend.room.createRoom(host.playerId, {
       name: '接龙拒绝房',
       visibility: 'public',
       gameMode: 'relay',
@@ -92,7 +92,7 @@ describe('接龙模式禁用画布微表情 (S19)', () => {
     expect(room.settings.allowCanvasReactions).toBe(true)
 
     expect(
-      errorCodeOf(() => harness.service.sendCanvasPing(host.playerId, 0.5, 0.5, 'thumbs_up')),
+      errorCodeOf(() => harness.backend.chat.sendCanvasPing(host.playerId, 0.5, 0.5, 'thumbs_up')),
     ).toBe(ERROR_CODES.FORBIDDEN)
     expect(
       harness.ioEvents.filter((record) => record.event === EVENTS.gameCanvasPing),
@@ -108,7 +108,7 @@ describe('接龙模式禁用画布微表情 (S19)', () => {
 
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.sendCanvasPing(player.playerId, 0.3, 0.4, 'confused'),
+        scenario.harness.backend.chat.sendCanvasPing(player.playerId, 0.3, 0.4, 'confused'),
       ),
     ).toBe(ERROR_CODES.FORBIDDEN)
 
@@ -116,7 +116,9 @@ describe('接龙模式禁用画布微表情 (S19)', () => {
     scenario.finishShowcaseChain()
     expect(scenario.room.phase).toBe('relay_vote')
     expect(
-      errorCodeOf(() => scenario.harness.service.sendCanvasPing(player.playerId, 0.3, 0.4, 'fire')),
+      errorCodeOf(() =>
+        scenario.harness.backend.chat.sendCanvasPing(player.playerId, 0.3, 0.4, 'fire'),
+      ),
     ).toBe(ERROR_CODES.FORBIDDEN)
 
     expect(

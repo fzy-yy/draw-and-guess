@@ -47,6 +47,7 @@ import {
 } from './relay-models.ts'
 import {
   freezeRelayFinalRanking,
+  missingVoterIds,
   relayParticipantIndices,
   tallyChainVotes,
 } from './relay-voting.ts'
@@ -414,25 +415,40 @@ export class RelayMachine {
 
   /**
    * 切入该链投票（S23）：游标**保留**在「半场 2 · 揭晓」——投票期的快照仍要展示这条链的两个答案与画作。
-   * 写权威投票窗口（固定 `relay.voteSeconds`，S21）、播「投票开始」关键节点通知（S65），
-   * 并排投票到点计时器：到点一律结算，**从不**因为「全员投完」提前公布（S21）。
+   * 入场先写满 `relay.voteSeconds` 的窗口并播「投票开始」关键节点通知（S65）；
+   * 若本链随后被全员投完，窗口由 `compressVoteWindowWhenAllVoted` 压到收尾窗口（ADR-0063）。
    */
   private enterChainVote(room: RoomSecret): void {
     const relay = this.requireRelay(room)
-    this.clearStepTimers(relay)
     this.transition(room, 'relay_vote')
-    const voteMs = APP_CONFIG.relay.voteSeconds * 1_000
-    relay.phaseStartedAt = this.service.clock.now()
-    relay.phaseEndsAt = relay.phaseStartedAt + voteMs
+    this.setVoteWindow(room, relay, APP_CONFIG.relay.voteSeconds * 1_000)
     this.addSystemNotice(room, serverStrings.notices.relayVoteStarted)
-    relay.timer = this.service.scheduler.set(voteMs, () =>
+    this.service.emitRoom(room.id)
+  }
+
+  /**
+   * 重设本次投票窗口并重排结算：唯一的窗口写入点（入场与收齐加速共用）。
+   * 起点恒为「现在」——这样「剩余 / 窗口长度」的进度条语义始终成立。
+   */
+  private setVoteWindow(room: RoomSecret, relay: RelayGameSecret, durationMs: number): void {
+    // 旧计时器必须先清掉：否则它会在新窗口之外再结算一次
+    this.clearStepTimers(relay)
+    relay.phaseStartedAt = this.service.clock.now()
+    relay.phaseEndsAt = relay.phaseStartedAt + durationMs
+    this.scheduleVoteSettlement(room, relay, durationMs)
+  }
+
+  /**
+   * 排一次投票到点结算：`relay.timer` 是唯一句柄，调用方负责先清旧计时器。
+   * 回调守卫沿用入场口径（阶段仍是投票期且接龙局未更换），迟到的旧回调据此让路。
+   */
+  private scheduleVoteSettlement(room: RoomSecret, relay: RelayGameSecret, delayMs: number): void {
+    relay.timer = this.service.scheduler.set(delayMs, () =>
       this.service.safeRun('relayVoteTimeout', () => {
-        // 迟到的旧回调一律让路（房间可能已关闭或已被结算）：只有仍在投票期才结算
         if (room.phase !== 'relay_vote' || room.relay?.id !== relay.id) return
         this.settleChainVote(room)
       }),
     )
-    this.service.emitRoom(room.id)
   }
 
   /**
@@ -456,7 +472,35 @@ export class RelayMachine {
     chain.votes.push({ playerId, choice })
     // 票行是全房实时可见的状态：递增版本号让客户端门禁接受这份快照（其他高频刷新不动版本号）
     room.stateVersion += 1
+    // 收齐即压缩（ADR-0063）：与票行同一次快照下发，客户端不会先看到旧倒计时再跳。
+    this.compressVoteWindowWhenAllVoted(room, relay)
     this.service.emitRoom(room.id)
+  }
+
+  /**
+   * 链阵容全员投完后压缩投票窗口（ADR-0063，修订 S21「一律等满」）。
+   *
+   * 口径：本链票行覆盖 `relay.chains` 的全部链发起人（＝开局链阵容）。该集合不含连接状态，
+   * 因此掉线 / 主动离局者**不豁免**——他们没投票就凑不齐，投票照旧走满上限，由到点补票兜底
+   *（保住 ADR-0058「给断线者完整补投窗口」的原意）。
+   *
+   * 剩余严格大于收尾窗口才压缩；不足或刚好等于时完全不动（不延长、不缩短、不重设计时器）。
+   * 窗口起点同步改写为最后一票的到达时刻：进度条按「剩余 / 窗口长度」计算，若只缩截止时间，
+   * 分母变小会让进度条往回缩；同步起点后表现为「瞬间满格 → 排空收尾窗口」。
+   */
+  private compressVoteWindowWhenAllVoted(room: RoomSecret, relay: RelayGameSecret): void {
+    const cursor = relay.showcase
+    const chain = cursor ? relay.chains[cursor.chainIndex - 1] : undefined
+    // 残缺现场（投票期没有游标 / 链越界）不压缩：由到点结算的统一兜底处理
+    if (!chain) return
+    // 收齐判据与结算补票共用同一份「还差谁没投」（missingVoterIds），两处口径不会漂移
+    if (missingVoterIds(relay, chain).length > 0) return
+
+    const now = this.service.clock.now()
+    const settleWindowMs = APP_CONFIG.relay.voteAllSubmittedSeconds * 1_000
+    if (relay.phaseEndsAt - now <= settleWindowMs) return
+
+    this.setVoteWindow(room, relay, settleWindowMs)
   }
 
   /**
@@ -473,8 +517,7 @@ export class RelayMachine {
       this.finishGame(room, serverStrings.notices.relayFinished)
       return
     }
-    for (const originPlayerId of relay.chains.map((candidate) => candidate.originPlayerId)) {
-      if (chain.votes.some((vote) => vote.playerId === originPlayerId)) continue
+    for (const originPlayerId of missingVoterIds(relay, chain)) {
       chain.votes.push({ playerId: originPlayerId, choice: 'disagree' })
     }
     const tally = tallyChainVotes(chain.votes)

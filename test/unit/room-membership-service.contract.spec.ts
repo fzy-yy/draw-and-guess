@@ -8,22 +8,22 @@ describe('RoomMembershipService 契约', () => {
     const harness = createGameHarness()
     const host = harness.register('房主')
     const guest = harness.register('访客')
-    const created = harness.service.membership.createRoom(host.playerId, {
+    const created = harness.backend.room.createRoom(host.playerId, {
       name: '成员房间',
       visibility: 'public',
       settings: testRoomSettings(),
     })
-    const room = harness.service.rooms.get(created.id)!
+    const room = harness.backend.rooms.get(created.id)!
     const persistIdentity = vi
       .spyOn(harness.repositories.players, 'upsert')
       .mockImplementation(() => {
         throw new Error('房间流程不应触达身份仓储')
       })
     const persistArchive = vi.spyOn(harness.repositories.archive, 'saveGame')
-    expect(() => harness.service.membership.joinRoom(guest.playerId, room.id)).not.toThrow()
+    expect(() => harness.backend.room.joinRoom(guest.playerId, room.id)).not.toThrow()
     expect(room.members.map((member) => member.playerId)).toEqual([host.playerId, guest.playerId])
     expect(guest.socket.rooms.has(room.id)).toBe(true)
-    expect(harness.service.requirePlayer(guest.playerId).roomId).toBe(room.id)
+    expect(harness.backend.requirePlayer(guest.playerId).roomId).toBe(room.id)
     expect(persistIdentity).not.toHaveBeenCalled()
     expect(persistArchive).not.toHaveBeenCalled()
   })
@@ -32,19 +32,19 @@ describe('RoomMembershipService 契约', () => {
     const harness = createGameHarness()
     const host = harness.register('房主')
     const guest = harness.register('访客')
-    const created = harness.service.membership.createRoom(host.playerId, {
+    const created = harness.backend.room.createRoom(host.playerId, {
       name: '私密房',
       visibility: 'private',
       settings: testRoomSettings(),
     })
     const oldCode = created.privateJoinCode!
-    harness.service.membership.joinPrivateRoom(guest.playerId, oldCode)
-    harness.service.membership.transferHost(host.playerId, guest.playerId)
-    const room = harness.service.rooms.get(created.id)!
+    harness.backend.room.joinPrivateRoom(guest.playerId, oldCode)
+    harness.backend.room.transferHost(host.playerId, guest.playerId)
+    const room = harness.backend.rooms.get(created.id)!
     expect(room.hostId).toBe(guest.playerId)
     expect(room.privateJoinCode).not.toBe(oldCode)
-    expect(harness.service.roomsByPrivateCode.has(oldCode)).toBe(false)
-    harness.service.membership.kick(guest.playerId, host.playerId)
+    expect(harness.backend.roomsByPrivateCode.has(oldCode)).toBe(false)
+    harness.backend.room.kick(guest.playerId, host.playerId)
     expect(room.members.map((member) => member.playerId)).toEqual([guest.playerId])
     expect(host.socket.rooms.has(room.id)).toBe(false)
     // 被踢通知必须携带稳定关闭码，客户端不再依赖展示文案判定业务语义。

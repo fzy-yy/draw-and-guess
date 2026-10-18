@@ -1,6 +1,6 @@
 # 0024 · 回合所有权归 RoundMachine
 
-**状态**：已采纳
+**状态**：已采纳（接龙模式下由平级的 RelayMachine 承担同类写入；请求 API 在 modules 服务、装配在 backend.ts；见 ADR-0058 / ADR-0064）
 
 ## 背景
 

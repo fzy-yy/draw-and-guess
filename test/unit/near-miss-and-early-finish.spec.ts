@@ -53,7 +53,7 @@ describe('差一字私密通知与全员猜中提前结算端到端行为', () =
     const guest1 = harness.register('猜词者1')
     const guest2 = harness.register('猜词者2')
 
-    const room = harness.service.createRoom(host.playerId, {
+    const room = harness.backend.room.createRoom(host.playerId, {
       name: '测试房间',
       visibility: 'public',
       settings: testRoomSettings({
@@ -62,21 +62,21 @@ describe('差一字私密通知与全员猜中提前结算端到端行为', () =
       }),
     })
 
-    harness.service.joinRoom(guest1.playerId, room.id)
-    harness.service.joinRoom(guest2.playerId, room.id)
+    harness.backend.room.joinRoom(guest1.playerId, room.id)
+    harness.backend.room.joinRoom(guest2.playerId, room.id)
 
-    harness.service.setReady(guest1.playerId, true)
-    const ready2 = harness.service.setReady(guest2.playerId, true)
+    harness.backend.room.setReady(guest1.playerId, true)
+    const ready2 = harness.backend.room.setReady(guest2.playerId, true)
 
-    harness.service.startGame(host.playerId, ready2.stateVersion)
+    harness.backend.gameplay.startGame(host.playerId, ready2.stateVersion)
     harness.runtime.advance(APP_CONFIG.game.startingCountdownSeconds * 1_000)
 
-    const secret = harness.service.rooms.get(room.id)
+    const secret = harness.backend.rooms.get(room.id)
     if (!secret?.game) throw new Error('对局未启动')
 
     const candidate = secret.game.candidates[0]
     if (!candidate) throw new Error('未生成候选词')
-    harness.service.chooseWord(secret.game.drawerId, secret.game.roundId, candidate.id)
+    harness.backend.gameplay.chooseWord(secret.game.drawerId, secret.game.roundId, candidate.id)
 
     return { host, guest1, guest2, room: secret, game: secret.game }
   }
@@ -101,22 +101,22 @@ describe('差一字私密通知与全员猜中提前结算端到端行为', () =
     }
 
     // 猜词者 A 发送差一个字的猜测「冰淇林」
-    const result = harness.service.submitGuess(guesserA.playerId, game.roundId, '冰淇林')
+    const result = harness.backend.chat.submitGuess(guesserA.playerId, game.roundId, '冰淇林')
     expect(result.correct).toBe(false)
 
     // 检查猜词者 A 收到的快照：包含差一字私密提示
-    const snapshotA = harness.service.snapshotter.snapshot(room, guesserA.playerId)
+    const snapshotA = harness.backend.snapshotter.snapshot(room, guesserA.playerId)
     const messagesA = snapshotA.game?.messages ?? []
     const nearMissMsgA = messagesA.find((m) => m.type === 'near_miss')
     expect(nearMissMsgA).toBeDefined()
     expect(nearMissMsgA?.text).toContain('离答案只差一个字了')
 
     // 检查猜词者 B 与画家收到的快照：绝不包含 near_miss 私密提示，公屏无泄漏
-    const snapshotB = harness.service.snapshotter.snapshot(room, guesserB.playerId)
+    const snapshotB = harness.backend.snapshotter.snapshot(room, guesserB.playerId)
     const messagesB = snapshotB.game?.messages ?? []
     expect(messagesB.some((m) => m.type === 'near_miss')).toBe(false)
 
-    const snapshotDrawer = harness.service.snapshotter.snapshot(room, drawerId)
+    const snapshotDrawer = harness.backend.snapshotter.snapshot(room, drawerId)
     const messagesDrawer = snapshotDrawer.game?.messages ?? []
     expect(messagesDrawer.some((m) => m.type === 'near_miss')).toBe(false)
 
@@ -124,8 +124,8 @@ describe('差一字私密通知与全员猜中提前结算端到端行为', () =
     expect(messagesB.some((m) => m.type === 'guess' && m.text === '冰淇林')).toBe(true)
 
     // 再次提交差一字猜测，不限提醒次数
-    harness.service.submitGuess(guesserA.playerId, game.roundId, '冰淇凌')
-    const snapshotA2 = harness.service.snapshotter.snapshot(room, guesserA.playerId)
+    harness.backend.chat.submitGuess(guesserA.playerId, game.roundId, '冰淇凌')
+    const snapshotA2 = harness.backend.snapshotter.snapshot(room, guesserA.playerId)
     const nearMissCount = (snapshotA2.game?.messages ?? []).filter(
       (m) => m.type === 'near_miss',
     ).length
@@ -149,9 +149,9 @@ describe('差一字私密通知与全员猜中提前结算端到端行为', () =
     }
 
     // 提交差一字答案「短颈鹿」
-    harness.service.submitGuess(guesserA.playerId, game.roundId, '短颈鹿')
+    harness.backend.chat.submitGuess(guesserA.playerId, game.roundId, '短颈鹿')
 
-    const snapshotA = harness.service.snapshotter.snapshot(room, guesserA.playerId)
+    const snapshotA = harness.backend.snapshotter.snapshot(room, guesserA.playerId)
     const messagesA = snapshotA.game?.messages ?? []
     expect(messagesA.some((m) => m.type === 'near_miss')).toBe(false)
   })
@@ -177,12 +177,12 @@ describe('差一字私密通知与全员猜中提前结算端到端行为', () =
     expect(room.phase).toBe('drawing')
 
     // 第一个猜词者答对：回合保持 drawing 阶段
-    const res1 = harness.service.submitGuess(guesser1.playerId, game.roundId, '哈密瓜')
+    const res1 = harness.backend.chat.submitGuess(guesser1.playerId, game.roundId, '哈密瓜')
     expect(res1.correct).toBe(true)
     expect(room.phase).toBe('drawing')
 
     // 第二个猜词者（即最后一个在线猜词者）答对：立即提前结算切入 round_result
-    const res2 = harness.service.submitGuess(guesser2.playerId, game.roundId, '哈密瓜')
+    const res2 = harness.backend.chat.submitGuess(guesser2.playerId, game.roundId, '哈密瓜')
     expect(res2.correct).toBe(true)
     expect(room.phase).toBe('round_result')
     expect(game.roundResult).toBeDefined()

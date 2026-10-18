@@ -12,7 +12,8 @@ import type { DrawingService } from './drawing.service.ts'
 
 export interface DrawingGatewayDeps {
   drawingService: DrawingService
-  relayDrawingService?: DrawingService
+  /** 接龙绘图适配器：与经典同一接口、不同发布策略（静默）。必选——缺省会静默丢掉整族事件。 */
+  relayDrawingService: DrawingService
 }
 
 /**
@@ -53,37 +54,35 @@ export function registerDrawingGateway(socket: AppSocket, deps: DrawingGatewayDe
     { rateLimit: false },
   )
 
-  // 2. 接龙模式绘图
-  if (relayDrawingService) {
-    bindRequest(
-      socket,
-      EVENTS.relayDrawStrokeBatch,
-      (input, playerId) => relayDrawingService.addStroke(playerId, input.stepId, input.stroke),
-      { rateLimit: false },
-    )
-    bindRequest(
-      socket,
-      EVENTS.relayDrawFillCommit,
-      (input, playerId) => relayDrawingService.addFill(playerId, input.stepId, input.fill),
-      { rateLimit: false },
-    )
-    bindRequest(
-      socket,
-      EVENTS.relayDrawUndo,
-      (input, playerId) => relayDrawingService.undo(playerId, input.stepId),
-      { rateLimit: false },
-    )
-    bindRequest(
-      socket,
-      EVENTS.relayDrawRedo,
-      (input, playerId) => relayDrawingService.redo(playerId, input.stepId),
-      { rateLimit: false },
-    )
-    bindRequest(
-      socket,
-      EVENTS.relayDrawClear,
-      (input, playerId) => relayDrawingService.clear(playerId, input.stepId),
-      { rateLimit: false },
-    )
-  }
+  // 2. 接龙模式绘图（事件族与经典同构，差异只在目标解析：本棒链画布）
+  bindRequest(
+    socket,
+    EVENTS.relayDrawStrokeBatch,
+    (input, playerId) => relayDrawingService.addStroke(playerId, input.stepId, input.stroke),
+    { rateLimit: false },
+  )
+  bindRequest(
+    socket,
+    EVENTS.relayDrawFillCommit,
+    (input, playerId) => relayDrawingService.addFill(playerId, input.stepId, input.fill),
+    { rateLimit: false },
+  )
+  bindRequest(
+    socket,
+    EVENTS.relayDrawUndo,
+    (input, playerId) => relayDrawingService.undo(playerId, input.stepId),
+    { rateLimit: false },
+  )
+  bindRequest(
+    socket,
+    EVENTS.relayDrawRedo,
+    (input, playerId) => relayDrawingService.redo(playerId, input.stepId),
+    { rateLimit: false },
+  )
+  bindRequest(
+    socket,
+    EVENTS.relayDrawClear,
+    (input, playerId) => relayDrawingService.clear(playerId, input.stepId),
+    { rateLimit: false },
+  )
 }

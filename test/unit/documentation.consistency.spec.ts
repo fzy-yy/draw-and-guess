@@ -7,12 +7,13 @@ import { app } from '../../packages/config/src/app.ts'
 /**
  * 文档与工程一致性守卫。
  *
- * 守护四类容易「悄悄漂移」的约定：
- * 1. **路径与大小写**：AGENTS.md / README.md 里写的仓库路径必须存在于 git 索引，且逐字符大小写一致
- *    （Windows 大小写不敏感，本地看不出的错误会在 Linux CI 上炸掉——历史上 AGENTS.md 就这么错过一次）；
+ * 守护五类容易「悄悄漂移」的约定：
+ * 1. **路径与大小写**：AGENTS.md / README.md / 后端架构规范.md 里写的仓库路径必须存在于 git 索引，
+ *    且逐字符大小写一致（Windows 大小写不敏感，本地看不出的错误会在 Linux CI 上炸掉）；
  * 2. **版本单一权威源**：产品版本只允许定义在 `packages/config/src/app.ts`，文档里的版本号必须与它一致；
  * 3. **TS 文件命名**：统一 kebab-case，例外仅 `useXxx.ts` 组合式函数与 `*.config/*.spec/*.page`；
- * 4. **README 登记结构**：README 声明的组件目录与样式分层必须真实存在。
+ * 4. **README 登记结构**：README 声明的组件目录与样式分层必须真实存在；
+ * 5. **已退役的平行实现**：文档不得再指向 GameService / handlers / ws 孪生（见 ADR-0064）。
  */
 const root = process.cwd()
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8')
@@ -39,6 +40,9 @@ describe('文档与工程一致性', () => {
   const tracked = new Set(trackedFiles())
   const agents = read('AGENTS.md')
   const readme = read('README.md')
+  // 后端架构规范是「怎么做」的方法论文档，其中的路径是模板示例（`user/`、`docs/api.md` 等），
+  // 因此不参与「路径必须存在于本仓」的扫描，只参与「不得指向已退役实现」的扫描。
+  const backendSpec = read('docs/后端架构规范.md')
   const docs: Array<[string, string]> = [
     ['AGENTS.md', agents],
     ['README.md', readme],
@@ -193,5 +197,21 @@ describe('文档与工程一致性', () => {
   it('不再引用已删除的旧配置路径', () => {
     expect(agents).not.toContain('`config.ts`')
     expect(agents).not.toContain('`config/strings.ts`')
+  })
+
+  it('文档不再指向已退役的平行实现（GameService / handlers / ws 孪生）', () => {
+    // 入口表指向死文件，是这次「两个装配点」问题最贵的代价：照做会得到静默失效的端点。
+    const retired = ['game-service', 'handlers/', 'handler-kit', 'ws/contracts']
+    const offenders: string[] = []
+    const scanned: Array<readonly [string, string]> = [
+      ...docs,
+      ['docs/后端架构规范.md', backendSpec],
+    ]
+    for (const [docName, text] of scanned) {
+      for (const name of retired) {
+        if (text.includes(name)) offenders.push(`${docName}: ${name}`)
+      }
+    }
+    expect(offenders, `文档仍指向已退役的路径：\n${offenders.join('\n')}`).toEqual([])
   })
 })

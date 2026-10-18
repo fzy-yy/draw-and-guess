@@ -46,7 +46,7 @@ describe('应用数据库实例隔离', () => {
     ])
     runningApplications.push(first, second)
 
-    first.service.repositories.players.upsert({
+    first.backend.repositories.players.upsert({
       id: 'player-first',
       tokenDigest: 'shared-token',
       nickname: '第一库',
@@ -56,7 +56,7 @@ describe('应用数据库实例隔离', () => {
       connected: false,
       joinedAt: 1,
     })
-    second.service.repositories.players.upsert({
+    second.backend.repositories.players.upsert({
       id: 'player-second',
       tokenDigest: 'shared-token',
       nickname: '第二库',
@@ -68,10 +68,10 @@ describe('应用数据库实例隔离', () => {
     })
 
     expect(
-      first.service.repositories.players.consumeRecoveryToken('shared-token', 'first-next')?.id,
+      first.backend.repositories.players.consumeRecoveryToken('shared-token', 'first-next')?.id,
     ).toBe('player-first')
     expect(
-      second.service.repositories.players.consumeRecoveryToken('shared-token', 'second-next')?.id,
+      second.backend.repositories.players.consumeRecoveryToken('shared-token', 'second-next')?.id,
     ).toBe('player-second')
 
     await Promise.all([listen(first), listen(second)])

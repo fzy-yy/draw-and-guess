@@ -2,16 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { APP_CONFIG } from '../../apps/server/src/config/index.ts'
 import { EVENTS } from '@draw-guess/shared'
 import type { RoomSettings } from '@draw-guess/shared'
-import { GameService } from '../../apps/server/src/game-service.ts'
+import { createBackend, type Backend } from '../../apps/server/src/backend.ts'
+import type { AppServer } from '../../apps/server/src/socket-types.ts'
 import { SILENT_LOGGER } from '../../apps/server/src/errors.ts'
 import { createFakeClock, type FakeClock } from './helpers/fake-clock.ts'
 import { createMemoryRepositories } from './helpers/in-memory-repositories.ts'
 import { createMemoryVocabularyRegistry } from './helpers/mini-vocabulary.ts'
 
 // 不直接 import socket.io（test/ 目录在 pnpm 严格 node_modules 下解析不到它），
-// 而是从 GameService 的形参类型派生 io/Socket 的精确类型，保持 stub 的类型一致性。
-type GameServiceIo = ConstructorParameters<typeof GameService>[0]
-type RegisterSocket = Parameters<GameService['register']>[0]
+// 而是从生产装配根派生 io/Socket 的精确类型，保持 stub 的类型一致性。
+type RegisterSocket = Parameters<Backend['session']['register']>[0]
 
 /** 最小合法房间设置：全部值落在 shared protocol constants 的合法区间内。 */
 const settings: RoomSettings = {
@@ -58,31 +58,31 @@ function createSocket(id: string): RecordingSocket {
   }
 }
 
-/** 用内存仓储 + 假时钟构建 GameService（io 用轻量桩，不开 Socket.IO、不碰 SQLite）。 */
-function buildService(clock: FakeClock): { service: GameService; clock: FakeClock } {
+/** 用内存仓储 + 假时钟构建生产装配世界（io 用轻量桩，不开 Socket.IO、不碰 SQLite）。 */
+function buildBackend(clock: FakeClock): { backend: Backend; clock: FakeClock } {
   const io = {
     to: () => ({ emit: () => undefined }),
     in: () => ({ emit: () => undefined }),
     emit: () => undefined,
-  } as unknown as GameServiceIo
-  const service = new GameService(
+  } as unknown as AppServer
+  const backend = createBackend({
     io,
-    createMemoryVocabularyRegistry(),
-    createMemoryRepositories(),
-    SILENT_LOGGER,
-    clock,
-  )
-  return { service, clock }
+    vocabulary: createMemoryVocabularyRegistry(),
+    repositories: createMemoryRepositories(),
+    logger: SILENT_LOGGER,
+    runtime: clock,
+  })
+  return { backend, clock }
 }
 
 /** 注册一名玩家，返回其 playerId 与录制 socket。 */
 function registerPlayer(
-  service: GameService,
+  backend: Backend,
   id: string,
   nickname: string,
 ): { playerId: string; socket: RecordingSocket } {
   const socket = createSocket(id)
-  const result = service.register(socket as unknown as RegisterSocket, {
+  const result = backend.session.register(socket as unknown as RegisterSocket, {
     protocolVersion: APP_CONFIG.app.protocolVersion,
     profile: { nickname, avatarId: '01' },
     preferences: { discoverable: true, acceptsInvites: true },
@@ -93,22 +93,25 @@ function registerPlayer(
 /**
  * 搭建一局 2 人对局并推进到「作画阶段」：
  * 注册两名玩家 → 建房 → 加入 → 客就绪 → 开局（假调度器推进 3s）→ 选词。
- * 返回 { service, clock, drawerId, roundId, answer, drawerSocket }。
  */
 function setupDrawingRound(
-  service: GameService,
+  backend: Backend,
   clock: FakeClock,
   host: { playerId: string; socket: RecordingSocket },
   guest: { playerId: string; socket: RecordingSocket },
 ) {
   // 建房（房主）→ 公开房
-  const room = service.createRoom(host.playerId, { name: '测试房', visibility: 'public', settings })
+  const room = backend.room.createRoom(host.playerId, {
+    name: '测试房',
+    visibility: 'public',
+    settings,
+  })
   // 客人加入
-  service.joinRoom(guest.playerId, room.id)
+  backend.room.joinRoom(guest.playerId, room.id)
   // 客人就绪；返回快照中的 stateVersion 作为随后 startGame 的乐观并发版本号
-  const guestReady = service.setReady(guest.playerId, true)
+  const guestReady = backend.room.setReady(guest.playerId, true)
   // 开局（房主发起）。开局会进入 3 秒开始倒计时，随后单独时序切换到选词阶段。
-  service.startGame(host.playerId, guestReady.stateVersion)
+  backend.gameplay.startGame(host.playerId, guestReady.stateVersion)
   clock.advance(APP_CONFIG.game.startingCountdownSeconds * 1_000)
   return { roomId: room.id }
 }
@@ -141,10 +144,10 @@ function gameView(socket: RecordingSocket): {
 
 describe('假时钟下的截止时间校验（submitGuess）', () => {
   it('截止前可提交；截止后按服务端权威时间拒绝（PHASE_EXPIRED）', () => {
-    const { service, clock } = buildService(createFakeClock())
-    const host = registerPlayer(service, 's-host', '房主')
-    const guest = registerPlayer(service, 's-guest', '客人')
-    setupDrawingRound(service, clock, host, guest)
+    const { backend, clock } = buildBackend(createFakeClock())
+    const host = registerPlayer(backend, 's-host', '房主')
+    const guest = registerPlayer(backend, 's-guest', '客人')
+    setupDrawingRound(backend, clock, host, guest)
 
     // 开局后房主收到 choosing 快照；宣读 drawerId，找画家再取其 wordOptions
     const hostView = gameView(host.socket)
@@ -155,28 +158,30 @@ describe('假时钟下的截止时间校验（submitGuess）', () => {
     if (!wordOptions?.length) throw new Error('选词阶段未提供候选词')
 
     // 画家选择第一个候选词 → 进入作画阶段
-    service.chooseWord(drawerId, drawerView.roundId, wordOptions[0]!.id)
+    backend.gameplay.chooseWord(drawerId, drawerView.roundId, wordOptions[0]!.id)
     const drawingView = gameView(host.socket)
     if (drawingView.phase !== 'drawing') throw new Error(`期望作画阶段，实际 ${drawingView.phase}`)
     const nonDrawer = drawerId === host.playerId ? guest : host
 
     // A) 截止前：非画家提交任意猜词，作为普通猜词进入聊天流，返回 correct=false（不抛错）
-    expect(service.submitGuess(nonDrawer.playerId, drawingView.roundId, '不存在的词')).toEqual({
-      correct: false,
-    })
+    expect(backend.chat.submitGuess(nonDrawer.playerId, drawingView.roundId, '不存在的词')).toEqual(
+      {
+        correct: false,
+      },
+    )
 
     // B) 截止后：把服务端假时钟推进到作画截止之后，再提交应被权威拒绝（PHASE_EXPIRED）
     clock.jump(settings.drawSeconds * 1_000 + 1)
-    expect(() => service.submitGuess(nonDrawer.playerId, drawingView.roundId, '任意')).toThrowError(
-      /当前操作已超时|阶段已结束/,
-    )
+    expect(() =>
+      backend.chat.submitGuess(nonDrawer.playerId, drawingView.roundId, '任意'),
+    ).toThrowError(/当前操作已超时|阶段已结束/)
   })
 
   it('在认过的词语内选词可用（回归：画家选择合法词不报 INVALID_WORD_ID）', () => {
-    const { service, clock } = buildService(createFakeClock())
-    const host = registerPlayer(service, 's-host2', '房主2')
-    const guest = registerPlayer(service, 's-guest2', '客人2')
-    setupDrawingRound(service, clock, host, guest)
+    const { backend, clock } = buildBackend(createFakeClock())
+    const host = registerPlayer(backend, 's-host2', '房主2')
+    const guest = registerPlayer(backend, 's-guest2', '客人2')
+    setupDrawingRound(backend, clock, host, guest)
     const hostView = gameView(host.socket)
     const drawerId = hostView.drawerId
     const drawerSocket = drawerId === host.playerId ? host.socket : guest.socket
@@ -185,6 +190,8 @@ describe('假时钟下的截止时间校验（submitGuess）', () => {
     if (!wordOptions?.length) throw new Error('选词阶段未提供候选词')
 
     // 选择第一个候选词不抛错（INVALID_WORD_ID）即视为通过
-    expect(() => service.chooseWord(drawerId, drawerView.roundId, wordOptions[0]!.id)).not.toThrow()
+    expect(() =>
+      backend.gameplay.chooseWord(drawerId, drawerView.roundId, wordOptions[0]!.id),
+    ).not.toThrow()
   })
 })

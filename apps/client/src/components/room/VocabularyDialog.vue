@@ -317,7 +317,6 @@ const { handleClose, saveVocabulary } = useVocabularyDialogSession({
           :is-read-only="isReadOnly"
           :selection-pending="Boolean(pendingPackageIds?.length || pendingPackageId)"
           @sort="handlePackageSort"
-          @select="handleTogglePackage"
           @toggle="handleTogglePackage"
         />
       </div>

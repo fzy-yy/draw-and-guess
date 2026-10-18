@@ -50,7 +50,7 @@ function enterDrawing() {
   const state = startTwoPlayerGame(harness)
   const candidate = state.game.candidates[0]
   if (!candidate) throw new Error('测试词库未生成候选词')
-  harness.service.chooseWord(state.game.drawerId, state.game.roundId, candidate.id)
+  harness.backend.gameplay.chooseWord(state.game.drawerId, state.game.roundId, candidate.id)
   return { harness, ...state }
 }
 
@@ -81,12 +81,20 @@ function fillCommand(sequence: number): FillCommand {
 
 function addStroke(scenario: Scenario, stroke: Stroke) {
   scenario.harness.runtime.jump(COMMAND_STEP_MS)
-  return scenario.harness.service.addStroke(scenario.game.drawerId, scenario.game.roundId, stroke)
+  return scenario.harness.backend.drawing.classic.addStroke(
+    scenario.game.drawerId,
+    scenario.game.roundId,
+    stroke,
+  )
 }
 
 function addFill(scenario: Scenario, fill: FillCommand) {
   scenario.harness.runtime.jump(COMMAND_STEP_MS)
-  return scenario.harness.service.addFill(scenario.game.drawerId, scenario.game.roundId, fill)
+  return scenario.harness.backend.drawing.classic.addFill(
+    scenario.game.drawerId,
+    scenario.game.roundId,
+    fill,
+  )
 }
 
 /** 早期封闭边界（竖直墨线）+ 后续填充（只覆盖左侧封闭区域）+ 填充到命令上限。 */
@@ -186,7 +194,7 @@ function visibleIds(commands: readonly DrawingCommand[], undoneIds: readonly str
 }
 
 function authoritativeSnapshot(harness: GameHarness, viewerId: string): RoomSnapshot {
-  const snapshot = harness.service.snapshotForPlayer(viewerId, true)
+  const snapshot = harness.backend.publisher.snapshotForPlayer(viewerId, true)
   if (!snapshot) throw new Error('缺少权威快照')
   return snapshot
 }
@@ -232,14 +240,18 @@ describe('绘图历史镜像一致性', () => {
     incremental.applyPushes()
 
     // 容量压力之下仍可继续撤销：撤销释放名额，下一条命令可以正常提交。
-    harness.service.undo(game.drawerId, game.roundId)
+    harness.backend.drawing.classic.undo(game.drawerId, game.roundId)
     incremental.applyPushes()
     // 客户端从权威房间快照同步撤销结果与画布修订（真实路径由 useRoomSync 应用快照完成）。
     incremental.roomStore.room!.game!.undoneStrokeIds = [...game.undoneStrokeIds]
     incremental.roomStore.room!.game!.drawingRevision = game.drawingRevision
     harness.runtime.jump(COMMAND_STEP_MS)
     expect(() =>
-      harness.service.addStroke(game.drawerId, game.roundId, dotStroke(nextSequence++, limit + 10)),
+      harness.backend.drawing.classic.addStroke(
+        game.drawerId,
+        game.roundId,
+        dotStroke(nextSequence++, limit + 10),
+      ),
     ).not.toThrow()
     incremental.applyPushes()
     expect(incremental.strokes).toHaveLength(limit)

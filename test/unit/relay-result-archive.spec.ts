@@ -79,19 +79,19 @@ describe('接龙终局载荷（S33 / S77）', () => {
     expect(scenario.snapshotOf(guest.playerId).relay?.canReturnWaiting).toBe(false)
 
     // 房主「再来一局」→ 直接回等待；模式仍是接龙（S60），且本局对局秘密已清场
-    scenario.harness.service.returnWaiting(scenario.host.playerId)
+    scenario.harness.backend.gameplay.returnWaiting(scenario.host.playerId)
     expect(scenario.room.phase).toBe('waiting')
     expect(scenario.room.gameMode).toBe('relay')
     expect(scenario.room.relay).toBeUndefined()
     // 到等待后重复请求按成功处理（迟到 / 重复请求不报错，与经典同口径）
-    scenario.harness.service.returnWaiting(scenario.host.playerId)
+    scenario.harness.backend.gameplay.returnWaiting(scenario.host.playerId)
 
     // 再开一局仍是接龙：链数组重新建立、分数清零（回等待会清掉全员准备位，需重新准备）
     let latest = scenario.snapshotOf(scenario.host.playerId)
     for (const member of scenario.players.slice(1)) {
-      latest = scenario.harness.service.setReady(member.playerId, true)
+      latest = scenario.harness.backend.room.setReady(member.playerId, true)
     }
-    scenario.harness.service.startGame(scenario.host.playerId, latest.stateVersion)
+    scenario.harness.backend.gameplay.startGame(scenario.host.playerId, latest.stateVersion)
     scenario.harness.runtime.advance(APP_CONFIG.game.startingCountdownSeconds * 1_000)
     expect(scenario.room.phase).toBe('relay_choose')
     expect(scenario.room.relay?.chains).toHaveLength(4)
@@ -118,7 +118,7 @@ describe('对局期房主提前结束（S34 / S38 / S12）', () => {
     const scenario = startRelayGame()
     // 选词期（步 1）
     expect(scenario.room.phase).toBe('relay_choose')
-    scenario.harness.service.endEarly(scenario.host.playerId)
+    scenario.harness.backend.gameplay.endEarly(scenario.host.playerId)
 
     expect(scenario.room.phase).toBe('game_result')
     // 接龙没有任何链走过投票 → 全员 0 分，「按当前分数结算」不会凭空加分
@@ -139,7 +139,7 @@ describe('对局期房主提前结束（S34 / S38 / S12）', () => {
     scenario.playToShowcase()
     const host = scenario.host
     // 展示期
-    expect(errorCodeOf(() => scenario.harness.service.endEarly(host.playerId))).toBe(
+    expect(errorCodeOf(() => scenario.harness.backend.gameplay.endEarly(host.playerId))).toBe(
       ERROR_CODES.INVALID_PHASE,
     )
     expect(scenario.room.phase).toBe('relay_showcase')
@@ -147,7 +147,7 @@ describe('对局期房主提前结束（S34 / S38 / S12）', () => {
     scenario.finishShowcaseChain()
     expect(scenario.room.phase).toBe('relay_vote')
     const before = scenario.relay.phaseEndsAt
-    expect(errorCodeOf(() => scenario.harness.service.endEarly(host.playerId))).toBe(
+    expect(errorCodeOf(() => scenario.harness.backend.gameplay.endEarly(host.playerId))).toBe(
       ERROR_CODES.INVALID_PHASE,
     )
     expect(scenario.room.phase).toBe('relay_vote')
@@ -159,7 +159,7 @@ describe('对局期房主提前结束（S34 / S38 / S12）', () => {
     const guest = scenario.players[1]
     if (!guest) throw new Error('场景缺少玩家')
 
-    expect(errorCodeOf(() => scenario.harness.service.endEarly(guest.playerId))).toBe(
+    expect(errorCodeOf(() => scenario.harness.backend.gameplay.endEarly(guest.playerId))).toBe(
       ERROR_CODES.FORBIDDEN,
     )
     expect(scenario.room.phase).toBe('relay_choose')
@@ -171,9 +171,9 @@ describe('主动退出本局（S37）', () => {
     const scenario = startRelayGame({ playerCount: 4 })
     const quitter = scenario.players[1]
     if (!quitter) throw new Error('场景缺少玩家')
-    const quitterProfile = scenario.harness.service.requirePlayer(quitter.playerId).profile
+    const quitterProfile = scenario.harness.backend.requirePlayer(quitter.playerId).profile
 
-    scenario.harness.service.leaveGame(quitter.playerId)
+    scenario.harness.backend.room.leaveGame(quitter.playerId)
     // 链位仍在（代交口径）：本局链阵容不变，退局者只是不再自己动手
     expect(scenario.relay.chains.map((chain) => chain.originPlayerId)).toContain(quitter.playerId)
 
@@ -195,7 +195,7 @@ describe('主动退出本局（S37）', () => {
 describe('战报 mode 列（S25 / S59）', () => {
   it('接龙局写 relay、经典局写 classic，且仍只存最终排名与玩家总分', () => {
     const scenario = startRelayGame({ playerCount: 4 })
-    scenario.harness.service.endEarly(scenario.host.playerId)
+    scenario.harness.backend.gameplay.endEarly(scenario.host.playerId)
 
     const games = scenario.harness.repositories.archive.games
     expect(games).toHaveLength(1)
@@ -224,16 +224,16 @@ describe('战报 mode 列（S25 / S59）', () => {
     // 不复用接龙场景：另开一个经典房（走既有结算路径）后落盘
     const host = harness.register('经典房主')
     const guest = harness.register('经典客人')
-    const room = harness.service.createRoom(host.playerId, {
+    const room = harness.backend.room.createRoom(host.playerId, {
       name: '经典测试房间',
       visibility: 'public',
       settings: testRoomSettings(),
     })
-    harness.service.joinRoom(guest.playerId, room.id)
-    const ready = harness.service.setReady(guest.playerId, true)
-    harness.service.startGame(host.playerId, ready.stateVersion)
+    harness.backend.room.joinRoom(guest.playerId, room.id)
+    const ready = harness.backend.room.setReady(guest.playerId, true)
+    harness.backend.gameplay.startGame(host.playerId, ready.stateVersion)
     harness.runtime.advance(APP_CONFIG.game.startingCountdownSeconds * 1_000)
-    harness.service.endEarly(host.playerId)
+    harness.backend.gameplay.endEarly(host.playerId)
 
     const record = harness.repositories.archive.games.at(-1)
     expect(record?.archive.mode).toBe('classic')

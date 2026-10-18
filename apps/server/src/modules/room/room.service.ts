@@ -10,6 +10,7 @@ import {
   DEFAULT_GAME_MODE,
   ERROR_CODES,
   EVENTS,
+  MODE_SETTINGS_KEYS,
   PLAYER_PROTOCOL_LIMITS,
   ROOM_CLOSE_CODE,
   createServerPush,
@@ -47,35 +48,6 @@ import {
   type OnlineLookup,
 } from '../../domain/room/member-facts.ts'
 import { phaseEquivalent, reseatMembers } from '../../domain/room/room-facts.ts'
-
-/**
- * 模式 → 生效的规则键名。
- */
-export const MODE_SETTINGS_KEYS = {
-  classic: [
-    'roundsPerPlayer',
-    'drawSeconds',
-    'chooseSeconds',
-    'showWordLength',
-    'progressiveHints',
-    'allowNearMissHint',
-    'allowCanvasReactions',
-    'allowRoundReplay',
-    'optionCount',
-    'allowWordReroll',
-    'allowCustomWord',
-    'allowPlayerInvite',
-  ],
-  relay: [
-    'relayChooseSeconds',
-    'relayDrawSeconds',
-    'relayGuessSeconds',
-    'optionCount',
-    'allowWordReroll',
-    'allowCustomWord',
-    'allowPlayerInvite',
-  ],
-} as const satisfies Record<GameMode, readonly (keyof RoomSettings)[]>
 
 /**
  * 房间服务运行期所需依赖与跨模块出口上下文契约。

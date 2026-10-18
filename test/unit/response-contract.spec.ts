@@ -29,27 +29,33 @@ describe('真实服务端响应与 ack Schema 契约', () => {
   it('注册、资料、在线状态与身份恢复的返回值全部通过对应 Schema', () => {
     const harness = createGameHarness()
     const socket = harness.createSocket('contract-register')
-    const identity = harness.service.register(socket as never, registrationInput('契约玩家'))
+    const identity = harness.backend.session.register(
+      socket as never,
+      registrationInput('契约玩家'),
+    )
 
     // 与实际处理器一致的组装方式：注册身份 + room|null。
     expectSuccessAck(EVENTS.sessionRegister, {
       ...identity,
-      room: harness.service.snapshotForPlayer(identity.player.id, true) ?? null,
+      room: harness.backend.publisher.snapshotForPlayer(identity.player.id, true) ?? null,
     })
     expectSuccessAck(
       EVENTS.sessionUpdateProfile,
-      harness.service.updateProfile(identity.player.id, { nickname: '契约改名', avatarId: '02' }),
+      harness.backend.session.updateProfile(identity.player.id, {
+        nickname: '契约改名',
+        avatarId: '02',
+      }),
     )
-    expectSuccessAck(EVENTS.presenceGet, harness.service.presenceSnapshot())
+    expectSuccessAck(EVENTS.presenceGet, harness.backend.publisher.presenceSnapshot())
     // 与 handlers/session.ts 的 room:list 实现保持一致：只取公开房间列表。
-    expectSuccessAck(EVENTS.roomList, harness.service.publicRooms())
+    expectSuccessAck(EVENTS.roomList, harness.backend.publisher.publicRooms())
     expectSuccessAck(
       EVENTS.stateResync,
-      harness.service.snapshotForPlayer(identity.player.id, true),
+      harness.backend.publisher.snapshotForPlayer(identity.player.id, true),
     )
     expectSuccessAck(EVENTS.networkPing, {
       clientTime: 1,
-      serverTime: harness.service.clock.now(),
+      serverTime: harness.runtime.clock.now(),
     })
     expectSuccessAck(EVENTS.sessionLogout, { success: true })
   })
@@ -59,49 +65,55 @@ describe('真实服务端响应与 ack Schema 契约', () => {
     const host = harness.register('契约房主')
     const guest = harness.register('契约客人')
 
-    const created = harness.service.createRoom(host.playerId, {
+    const created = harness.backend.room.createRoom(host.playerId, {
       name: '契约房',
       visibility: 'public',
       settings: testRoomSettings(),
     })
     expectSuccessAck(EVENTS.roomCreate, created)
-    expectSuccessAck(EVENTS.roomJoin, harness.service.joinRoom(guest.playerId, created.id))
+    expectSuccessAck(EVENTS.roomJoin, harness.backend.room.joinRoom(guest.playerId, created.id))
 
-    const room = harness.service.rooms.get(created.id)
+    const room = harness.backend.rooms.get(created.id)
     if (!room) throw new Error('房间未创建')
 
-    const settings = harness.service.updateSettings(
+    const settings = harness.backend.room.updateSettings(
       host.playerId,
       { drawSeconds: 90 },
       room.stateVersion,
     )
     expectSuccessAck(EVENTS.roomUpdateSettings, settings)
 
-    const vocabulary = harness.service.getVocabulary(host.playerId)
+    const vocabulary = harness.backend.roomVocabulary.get(host.playerId)
     expectSuccessAck(EVENTS.roomGetVocabulary, vocabulary)
-    const updated = harness.service.updateVocabulary(
+    const updated = harness.backend.roomVocabulary.update(
       host.playerId,
       vocabulary.items.map((item) => item.id),
       room.stateVersion,
     )
     expectSuccessAck(EVENTS.roomUpdateVocabulary, updated)
-    const selected = harness.service.selectVocabularyPackages(
+    const selected = harness.backend.roomVocabulary.selectPackages(
       host.playerId,
       vocabulary.packageIds,
       room.stateVersion,
     )
     expectSuccessAck(EVENTS.roomSelectVocabularyPackage, selected)
-    expectSuccessAck(EVENTS.stateResync, harness.service.snapshotForPlayer(guest.playerId, true))
+    expectSuccessAck(
+      EVENTS.stateResync,
+      harness.backend.publisher.snapshotForPlayer(guest.playerId, true),
+    )
 
     // 规则修改会重置准备状态，因此准备与开局放在最后。
-    const ready = harness.service.setReady(guest.playerId, true)
+    const ready = harness.backend.room.setReady(guest.playerId, true)
     expectSuccessAck(EVENTS.roomSetReady, ready)
-    expectSuccessAck(EVENTS.gameStart, harness.service.startGame(host.playerId, ready.stateVersion))
+    expectSuccessAck(
+      EVENTS.gameStart,
+      harness.backend.gameplay.startGame(host.playerId, ready.stateVersion),
+    )
 
     harness.runtime.advance(APP_CONFIG.game.startingCountdownSeconds * 1_000)
-    const game = harness.service.rooms.get(created.id)?.game
+    const game = harness.backend.rooms.get(created.id)?.game
     if (!game?.candidates[0]) throw new Error('对局未进入选词阶段')
-    harness.service.chooseWord(game.drawerId, game.roundId, game.candidates[0].id)
+    harness.backend.gameplay.chooseWord(game.drawerId, game.roundId, game.candidates[0].id)
 
     const stroke = {
       kind: 'stroke' as const,
@@ -115,11 +127,11 @@ describe('真实服务端响应与 ack Schema 契约', () => {
     }
     expectSuccessAck(
       EVENTS.drawStrokeBatch,
-      harness.service.addStroke(game.drawerId, game.roundId, stroke),
+      harness.backend.drawing.classic.addStroke(game.drawerId, game.roundId, stroke),
     )
     expectSuccessAck(
       EVENTS.drawFillCommit,
-      harness.service.addFill(game.drawerId, game.roundId, {
+      harness.backend.drawing.classic.addFill(game.drawerId, game.roundId, {
         kind: 'fill',
         id: 'fill-contract-1',
         point: { x: 0.5, y: 0.5 },
@@ -131,7 +143,7 @@ describe('真实服务端响应与 ack Schema 契约', () => {
     const guesserId = game.drawerId === host.playerId ? guest.playerId : host.playerId
     expectSuccessAck(
       EVENTS.guessSubmit,
-      harness.service.submitGuess(guesserId, game.roundId, '肯定不是正确答案'),
+      harness.backend.chat.submitGuess(guesserId, game.roundId, '肯定不是正确答案'),
     )
   })
 })

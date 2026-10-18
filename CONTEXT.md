@@ -57,6 +57,8 @@
 | 步骤（step）                                     | 接龙链上的棒次（固定 1–4：画 → 猜 → 画 → 猜），每步一个全局 `stepId`，服务端据「观看者 + 步骤 id」解析该玩家本棒负责的链画布                                                                          | ADR-0058、`apps/server/src/domain/relay/relay-steps.ts`            |
 | 半场（half）                                     | 单条链复盘的两段（第 1 幅画 → 第 2 幅画）：每段「重播 → 停顿 → 揭晓」，两个半场走完才切入该链投票                                                                                                     | ADR-0058、`packages/shared/src/protocol/relay.ts`                  |
 | 接龙阶段（relay phase）                          | 接龙专属的房间阶段（选词 / 作画 / 猜词 / 复盘展示 / 投票），与经典回合阶段平级并存、由装配层按房间模式委托其一                                                                                        | ADR-0058、`apps/server/src/domain/relay/relay-machine.ts`          |
+| 投票收尾窗口（vote grace window）                | 链阵容全员投完后投票阶段剩余的固定收尾时间（3 秒）：剩余严格大于它才压缩，不足时原样不动；掉线 / 离局者不豁免                                                                                         | ADR-0063、`packages/config/src/relay.ts`                           |
+| 服务端装配根（backend / composition root）       | 服务端唯一的业务装配点：`createBackend` 造出内存上下文、两个状态机、模块服务与网关依赖；生产入口与单测共用它，请求面只此一条（历史上曾有两套）                                                        | ADR-0064、`apps/server/src/backend.ts`                             |
 
 ## 待打磨（deliberately unresolved）
 

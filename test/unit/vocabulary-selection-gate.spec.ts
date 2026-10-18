@@ -18,18 +18,18 @@ describe('房间词库包选中门槛', () => {
       vocabulary: createMemoryVocabularyRegistry(smallCount),
     })
     const host = harness.register('小词库房主')
-    const created = harness.service.createRoom(host.playerId, {
+    const created = harness.backend.room.createRoom(host.playerId, {
       name: '小词库房',
       visibility: 'public',
       settings: testRoomSettings(),
     })
-    const room = harness.service.rooms.get(created.id)
+    const room = harness.backend.rooms.get(created.id)
     if (!room) throw new Error('房间未创建')
     const versionBefore = room.stateVersion
     const selectedBefore = room.selectedWordIds
 
     expect(() =>
-      harness.service.selectVocabularyPackage(host.playerId, 'base_words', versionBefore),
+      harness.backend.roomVocabulary.selectPackage(host.playerId, 'base_words', versionBefore),
     ).toThrowError(/不足以开局/)
 
     // 校验先于任何状态写入：勾选集合引用与 stateVersion 均保持不变

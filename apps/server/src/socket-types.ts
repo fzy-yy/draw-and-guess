@@ -33,8 +33,8 @@ export interface AppSocketData {
   /** 当前连接绑定的玩家身份（注册/恢复成功后写入；注销/断线清理后删除）。 */
   playerId?: string
   /**
-   * 权威领域服务（结构上即 GameService）：binder 经它取限频时钟、运维指标与异常日志。
-   * 注册任何 handler 前即写入（app.ts registerSocketHandlers），运行期恒存在，故为必选。
+   * 连接期服务能力（结构即 `socket.data.service`）：binder 经它取限频时钟、运维指标与异常日志。
+   * 注册任何 handler 前即写入（server.ts 的 connection 回调），运行期恒存在，故为必选。
    */
   service: SocketServiceAccess
   /**

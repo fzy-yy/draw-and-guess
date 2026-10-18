@@ -11,6 +11,7 @@ import {
   MIN_SELECTED_VOCABULARY_WORDS,
   RELAY_MIN_PLAYERS,
   normalizeAnswer,
+  type RoomPhase,
   type RoomSnapshot,
 } from '@draw-guess/shared'
 import { APP_CONFIG } from '../../core/config.ts'
@@ -44,7 +45,7 @@ export interface GameplayServiceContext {
   relay: RelayMachine
   emitRoom(roomId: string): void
   snapshot(room: RoomSecret, playerId: string): RoomSnapshot
-  isPlaying(phase: string): boolean
+  isPlaying(phase: RoomPhase): boolean
 }
 
 /**

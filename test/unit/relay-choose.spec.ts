@@ -79,7 +79,7 @@ describe('接龙步 1 选词', () => {
       ids: chain.candidates.map((word) => word.id),
     }))
 
-    scenario.harness.service.rerollWordOptions(first.playerId, scenario.stepId)
+    scenario.harness.backend.gameplay.rerollWordOptions(first.playerId, scenario.stepId)
 
     const mineAfter = scenario.chainOf(first.playerId, 1).candidates.map((word) => word.id)
     // 换批排除本链已展示过的词（S31 的按链去重口径）：抽到的新候选必然与旧的不同
@@ -93,7 +93,7 @@ describe('接龙步 1 选词', () => {
     }
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.rerollWordOptions(first.playerId, scenario.stepId),
+        scenario.harness.backend.gameplay.rerollWordOptions(first.playerId, scenario.stepId),
       ),
     ).toBe(ERROR_CODES.REROLL_ALREADY_USED)
   })
@@ -108,7 +108,7 @@ describe('接龙步 1 选词', () => {
     // 把房间词池收到只剩一条词：第二条链换批时仍能抽到第一条链已有的同一个词（S31 不去重）
     scenario.room.selectedWordIds = new Set([shared.id])
 
-    scenario.harness.service.rerollWordOptions(second.playerId, scenario.stepId)
+    scenario.harness.backend.gameplay.rerollWordOptions(second.playerId, scenario.stepId)
 
     expect(
       scenario.chainOf(second.playerId, 1).candidates.every((word) => word.id === shared.id),
@@ -127,12 +127,16 @@ describe('接龙步 1 选词', () => {
 
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.rerollWordOptions(player.playerId, scenario.stepId),
+        scenario.harness.backend.gameplay.rerollWordOptions(player.playerId, scenario.stepId),
       ),
     ).toBe(ERROR_CODES.REROLL_DISABLED)
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.chooseCustomWord(player.playerId, scenario.stepId, '自定义题'),
+        scenario.harness.backend.gameplay.chooseCustomWord(
+          player.playerId,
+          scenario.stepId,
+          '自定义题',
+        ),
       ),
     ).toBe(ERROR_CODES.FORBIDDEN)
   })
@@ -142,7 +146,11 @@ describe('接龙步 1 选词', () => {
     const player = scenario.players[0]
     if (!player) throw new Error('场景缺少玩家')
 
-    scenario.harness.service.chooseCustomWord(player.playerId, scenario.stepId, '自定义狐狸')
+    scenario.harness.backend.gameplay.chooseCustomWord(
+      player.playerId,
+      scenario.stepId,
+      '自定义狐狸',
+    )
 
     expect(scenario.chainOf(player.playerId, 1).step1Word?.text).toBe('自定义狐狸')
     expect(scenario.relay.stepSubmissions.has(player.playerId)).toBe(true)
@@ -156,7 +164,7 @@ describe('接龙步 1 选词', () => {
     if (!chosen) throw new Error('场景缺少玩家')
     const ownWord = scenario.chainOf(chosen.playerId, 1).candidates[0]
     if (!ownWord) throw new Error('链候选为空')
-    scenario.harness.service.chooseWord(chosen.playerId, scenario.stepId, ownWord.id)
+    scenario.harness.backend.gameplay.chooseWord(chosen.playerId, scenario.stepId, ownWord.id)
     // 记录未选者各自候选，用于断言代选来自「自己的候选」
     const pendingBefore = scenario.relay.chains
       .filter((chain) => !chain.step1Word)
@@ -191,7 +199,7 @@ describe('接龙步 1 选词', () => {
     // 旧包（步骤 id 不符）：客户端据此重新同步步骤与候选
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.chooseWord(
+        scenario.harness.backend.gameplay.chooseWord(
           player.playerId,
           '00000000-0000-4000-8000-0000000000d1',
           word.id,
@@ -199,15 +207,15 @@ describe('接龙步 1 选词', () => {
       ),
     ).toBe(ERROR_CODES.STALE_DRAW_EVENT)
 
-    scenario.harness.service.chooseWord(player.playerId, scenario.stepId, word.id)
+    scenario.harness.backend.gameplay.chooseWord(player.playerId, scenario.stepId, word.id)
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.chooseWord(player.playerId, scenario.stepId, word.id),
+        scenario.harness.backend.gameplay.chooseWord(player.playerId, scenario.stepId, word.id),
       ),
     ).toBe(ERROR_CODES.ALREADY_SUBMITTED)
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.rerollWordOptions(player.playerId, scenario.stepId),
+        scenario.harness.backend.gameplay.rerollWordOptions(player.playerId, scenario.stepId),
       ),
     ).toBe(ERROR_CODES.ALREADY_SUBMITTED)
 
@@ -216,7 +224,7 @@ describe('接龙步 1 选词', () => {
     expect(scenario.room.phase).toBe('relay_draw')
     expect(
       errorCodeOf(() =>
-        scenario.harness.service.chooseWord(player.playerId, scenario.stepId, word.id),
+        scenario.harness.backend.gameplay.chooseWord(player.playerId, scenario.stepId, word.id),
       ),
     ).toBe(ERROR_CODES.INVALID_PHASE)
   })

@@ -11,7 +11,7 @@ function enterDrawing() {
   const state = startTwoPlayerGame(harness)
   const answer = state.game.candidates[0]
   if (!answer) throw new Error('测试词库未生成候选词')
-  harness.service.chooseWord(state.game.drawerId, state.game.roundId, answer.id)
+  harness.backend.gameplay.chooseWord(state.game.drawerId, state.game.roundId, answer.id)
   return { harness, ...state }
 }
 
@@ -28,7 +28,7 @@ describe('房间阶段转换边界', () => {
     const { harness, room } = enterDrawing()
     const version = room.stateVersion
 
-    harness.service.round.finishRound(room, false)
+    harness.backend.roundMachine.finishRound(room, false)
 
     expect(room.phase).toBe('round_result')
     expect(room.stateVersion).toBe(version + 1)
@@ -47,7 +47,7 @@ describe('房间阶段转换边界', () => {
     const { harness, host, room } = enterDrawing()
     const version = room.stateVersion
 
-    harness.service.endEarly(host.playerId)
+    harness.backend.gameplay.endEarly(host.playerId)
 
     expect(room.phase).toBe('game_result')
     expect(room.stateVersion).toBe(version + 1)
@@ -59,20 +59,20 @@ describe('房间阶段转换边界', () => {
     const harness = createGameHarness()
     const host = harness.register('房主')
     const guest = harness.register('客人')
-    const created = harness.service.createRoom(host.playerId, {
+    const created = harness.backend.room.createRoom(host.playerId, {
       name: '倒计时房间',
       visibility: 'public',
       settings: testRoomSettings(),
     })
-    harness.service.joinRoom(guest.playerId, created.id)
-    const ready = harness.service.setReady(guest.playerId, true)
-    harness.service.startGame(host.playerId, ready.stateVersion)
-    const room = harness.service.rooms.get(created.id)!
+    harness.backend.room.joinRoom(guest.playerId, created.id)
+    const ready = harness.backend.room.setReady(guest.playerId, true)
+    harness.backend.gameplay.startGame(host.playerId, ready.stateVersion)
+    const room = harness.backend.rooms.get(created.id)!
     const startingVersion = room.stateVersion
     expect(room.phase).toBe('starting')
     expect(harness.runtime.pendingTimerCount()).toBe(1)
 
-    harness.service.leaveRoom(guest.playerId)
+    harness.backend.room.leaveRoom(guest.playerId)
 
     expect(room.phase).toBe('waiting')
     expect(room.stateVersion).toBe(startingVersion + 2)
@@ -84,11 +84,11 @@ describe('房间阶段转换边界', () => {
 
   it('房主请求在最短展示期结束后返回等待并清理对局', () => {
     const { harness, host, room } = enterDrawing()
-    harness.service.endEarly(host.playerId)
+    harness.backend.gameplay.endEarly(host.playerId)
     room.members.forEach((member) => (member.ready = true))
     const resultVersion = room.stateVersion
 
-    harness.service.returnWaiting(host.playerId)
+    harness.backend.gameplay.returnWaiting(host.playerId)
     expect(room.phase).toBe('game_result')
     harness.runtime.advance(APP_CONFIG.game.gameResultMinSeconds * 1_000)
 
@@ -102,19 +102,19 @@ describe('房间阶段转换边界', () => {
   it('关闭房间通过合法转换释放成员与持久化房间', () => {
     const harness = createGameHarness()
     const host = harness.register('单人房主')
-    const created = harness.service.createRoom(host.playerId, {
+    const created = harness.backend.room.createRoom(host.playerId, {
       name: '待关闭房间',
       visibility: 'public',
       settings: testRoomSettings(),
     })
-    const room = harness.service.rooms.get(created.id)!
+    const room = harness.backend.rooms.get(created.id)!
     const waitingVersion = room.stateVersion
 
-    harness.service.leaveRoom(host.playerId)
+    harness.backend.room.leaveRoom(host.playerId)
 
     expect(room.phase).toBe('closed')
     expect(room.stateVersion).toBe(waitingVersion + 2)
-    expect(harness.service.rooms.has(room.id)).toBe(false)
+    expect(harness.backend.rooms.has(room.id)).toBe(false)
     expect(host.socket.rooms.has(room.id)).toBe(false)
   })
 

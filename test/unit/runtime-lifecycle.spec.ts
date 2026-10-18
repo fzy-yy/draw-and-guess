@@ -11,21 +11,23 @@ describe('统一假运行时驱动完整回合生命周期', () => {
     )
     expect(room.phase).toBe('choosing_word')
     const answer = game.candidates[0]!
-    harness.service.chooseWord(game.drawerId, game.roundId, answer.id)
+    harness.backend.gameplay.chooseWord(game.drawerId, game.roundId, answer.id)
     expect(room.phase).toBe('drawing')
     expect(game.phaseStartedAt).toBe(harness.runtime.now())
     expect(game.phaseEndsAt - game.phaseStartedAt).toBe(90_000)
 
     // 逐步提示：等待首个揭示窗口后，猜词者经快照看到的逐字遮罩应真正揭开至少一个字符（不锁内部下标簿记）。
     const guesser = game.drawerId === host.playerId ? guest : host
-    const maskBefore = harness.service.snapshotForPlayer(guesser.playerId)?.game?.answerMask
+    const maskBefore = harness.backend.publisher.snapshotForPlayer(guesser.playerId)?.game
+      ?.answerMask
     harness.runtime.advance(90_000 * APP_CONFIG.game.progressiveHintRatio + 1)
-    const maskAfter = harness.service.snapshotForPlayer(guesser.playerId)?.game?.answerMask
+    const maskAfter = harness.backend.publisher.snapshotForPlayer(guesser.playerId)?.game
+      ?.answerMask
     expect(maskAfter).toBeDefined()
     expect(maskAfter).not.toBe(maskBefore)
     expect(maskAfter?.length).toBe(maskBefore?.length)
 
-    expect(harness.service.submitGuess(guesser.playerId, game.roundId, answer.text)).toEqual({
+    expect(harness.backend.chat.submitGuess(guesser.playerId, game.roundId, answer.text)).toEqual({
       correct: true,
     })
     expect(room.phase).toBe('round_result')

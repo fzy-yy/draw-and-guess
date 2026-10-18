@@ -22,7 +22,7 @@ function enterDrawing() {
   const state = startTwoPlayerGame(harness)
   const candidate = state.game.candidates[0]
   if (!candidate) throw new Error('测试词库未生成候选词')
-  harness.service.chooseWord(state.game.drawerId, state.game.roundId, candidate.id)
+  harness.backend.gameplay.chooseWord(state.game.drawerId, state.game.roundId, candidate.id)
   return { harness, ...state }
 }
 
@@ -54,12 +54,20 @@ function fillCommand(sequence: number): FillCommand {
 
 function addStroke(scenario: Scenario, stroke: Stroke) {
   scenario.harness.runtime.jump(COMMAND_STEP_MS)
-  return scenario.harness.service.addStroke(scenario.game.drawerId, scenario.game.roundId, stroke)
+  return scenario.harness.backend.drawing.classic.addStroke(
+    scenario.game.drawerId,
+    scenario.game.roundId,
+    stroke,
+  )
 }
 
 function addFill(scenario: Scenario, fill: FillCommand) {
   scenario.harness.runtime.jump(COMMAND_STEP_MS)
-  return scenario.harness.service.addFill(scenario.game.drawerId, scenario.game.roundId, fill)
+  return scenario.harness.backend.drawing.classic.addFill(
+    scenario.game.drawerId,
+    scenario.game.roundId,
+    fill,
+  )
 }
 
 /**
@@ -117,7 +125,7 @@ describe('绘图历史上限', () => {
     expect(strokePushCount(harness)).toBe(pushesBefore)
 
     // 权威全量快照与增量历史一致：边界与填充都还在，且仍是最早的两条命令。
-    const snapshot = harness.service.snapshotForPlayer(game.drawerId, true)
+    const snapshot = harness.backend.publisher.snapshotForPlayer(game.drawerId, true)
     expect(snapshot?.game?.strokes).toHaveLength(limit)
     expect(snapshot?.game?.strokes?.[0]?.id).toBe(BOUNDARY_ID)
     expect(snapshot?.game?.strokes?.[1]?.id).toBe(FILL_ID)
@@ -131,7 +139,7 @@ describe('绘图历史上限', () => {
     expect(game.strokes).toHaveLength(limit)
 
     // 撤销把最新命令标记为已撤销；下一条命令会先清理它，从而腾出名额（与提示文案一致）。
-    harness.service.undo(game.drawerId, game.roundId)
+    harness.backend.drawing.classic.undo(game.drawerId, game.roundId)
     expect(() => addStroke(scenario, dotStroke(nextSequence, limit + 1))).not.toThrow()
     expect(game.strokes).toHaveLength(limit)
     expect(game.strokes.some((command) => command.id === BOUNDARY_ID)).toBe(true)

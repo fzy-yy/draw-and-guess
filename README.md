@@ -72,7 +72,7 @@ pnpm package:dist     # 构建 Windows 分发包（一个可运行目录 + zip�
 ## 配置与词库
 
 - **配置边界**：协议版本、头像白名单和载荷范围以 [`packages/shared/src/protocol/constants.ts`](packages/shared/src/protocol/constants.ts) 为唯一来源；浏览器安全默认值由 [`@draw-guess/config`](packages/config/src/index.ts) 导出；限频、数据库路径和清理策略位于 [`apps/server/src/config/`](apps/server/src/config/)；禁止跨边界复制协议常量。
-- **玩法模式与接龙规则**：玩法模式（经典 / 接龙）只在**建房弹窗**选定，`gameMode` 位于房间顶层、创建后不可修改，房间头部用徽标显示当前模式。接龙房额外有**选词 / 作画 / 猜词**三档时长（各自白名单，默认 20 / 90 / 45 秒），复盘四时长（重播 3 / 停顿 1 / 揭晓 3 / 投票 10 秒）是固定常量、房主不可改；对当前模式不生效的规则字段由服务端在 `updateSettings` 严格拒绝。档位白名单在 [`packages/shared/src/protocol/constants.ts`](packages/shared/src/protocol/constants.ts)，默认值与复盘时长在 `packages/config/src/relay.ts`。
+- **玩法模式与接龙规则**：玩法模式（经典 / 接龙）只在**建房弹窗**选定，`gameMode` 位于房间顶层、创建后不可修改，房间头部用徽标显示当前模式。接龙房额外有**选词 / 作画 / 猜词**三档时长（各自白名单，默认 20 / 90 / 45 秒），复盘四时长（重播 3 / 停顿 1 / 揭晓 3 / 投票上限 10 秒）是固定常量、房主不可改，其中投票在链阵容全员投完后会把剩余时间压到 3 秒（每链 17–24 秒，见 [`docs/adr/0063`](docs/adr/0063-relay-vote-settle-acceleration.md)）；对当前模式不生效的规则字段由服务端在 `updateSettings` 严格拒绝。档位白名单在 [`packages/shared/src/protocol/constants.ts`](packages/shared/src/protocol/constants.ts)，默认值与复盘时长在 `packages/config/src/relay.ts`。
 - **部署覆盖**：复制 [`.env.example`](.env.example) 为根目录 `.env`，可配置 `HOST`、`PORT`、`LOG_LEVEL`、`LOG_ENABLED`、`LOG_MAX_FILES`、`HEALTH_METRICS_ENABLED`、`DRAW_GUESS_OPEN_BROWSER`（浏览器开关仅分发产物模式生效）；服务启动时会自动加载 `.env`（进程已有环境变量优先级更高）。环境变量不会覆盖游戏规则。
   - `LOG_ENABLED=false` 时完全不创建日志记录器、不写日志文件（零内存开销）；
   - `LOG_MAX_FILES` 控制日志文件保留条数（默认 10，每次启动新建一个 `apps/server/log/app-<秒级时间戳>.log`，超出删除最老）；
@@ -107,7 +107,7 @@ apps/server/       Express、Socket.IO、权威领域状态与 SQLite 本地持�
   └─ src/build/dist-templates.ts # 分发文本模板：start.cmd / 使用说明（纯函数，两包启动差异有单测锁定）
   └─ scripts/package-dist.ts    # 构建 Windows 分发包（esbuild 单文件 + 资源 + 内置 Node + zip）
 packages/shared/   DTO、Zod schema、协议常量、事件名和领域纯函数（完全自包含）
-packages/config/   浏览器安全的公开应用配置 workspace 包（含接龙三时长默认值与复盘四时长 `relay.ts`）
+packages/config/   浏览器安全的公开应用配置 workspace 包（含接龙三时长默认值与复盘固定节奏 `relay.ts`）
 packages/strings/  展示文案包（`strings.ui` 可见 / `strings.a11y` 无障碍 / `serverStrings` 服务端）
 vocabulary/        唯一权威词库目录（SQLite 数据库，Provider 加载）
 docs/adr/          架构决策记录（背景 / 决策 / 后果），源码注释引用此处

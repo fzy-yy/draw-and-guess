@@ -114,7 +114,9 @@ export const serverStrings = {
     drawerLeftChoosing: (nickname: string) => `${nickname} 在选词时离开，本回合作废`,
     rulesUpdated: '房间规则已修改，所有人需重新准备',
     vocabularyUpdated: '本局词库已修改，已准备状态保持不变',
-    vocabularyPackageSwitched: (name: string) => `词库已切换为「${name}」`,
+    /** 逐个包名成对引号列出：包名自身可能含「、」等分隔符，整体拼接再包引号会分不清边界。 */
+    vocabularyPackageSwitched: (names: readonly string[]) =>
+      `词库已切换为${names.map((name) => `「${name}」`).join('')}`,
     backToRoom: '已返回房间，请全员重新准备',
     hostTransferred: (nickname: string) => `房主已移交给 ${nickname}`,
     hostMigrated: (nickname: string) => `房主已迁移给 ${nickname}`,

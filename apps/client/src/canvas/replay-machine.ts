@@ -106,10 +106,18 @@ export class DrawingReplayMachine {
     this.snapshot = snapshot
     // 尚未被视口定尺寸（挂载前）：只登记快照，首帧交给 resize() 的整帧重放统一渲染。
     if (!this.sized) return
+    const roundChanged = snapshot.roundId !== this.committedRoundId
+    if (roundChanged) {
+      this.cancelSpeedrun()
+    } else if (this.speedrunCancel) {
+      // 回放进行中：逻辑层这一段归回放所有，同回合快照只登记、不改写画面——否则回放尚未画到的
+      // 笔迹会被增量路径一次性补完（画面跳到成品），或整帧路径直接取消回放。聊天等纯展示推送
+      // 会让画布数据源换成内容相同、身份不同的新数组，正常路径必然踩中
+      // （取舍见 docs/adr/0061-replay-owns-layer-during-speedrun.md）。
+      return
+    }
     const visible = this.visibleCommands()
     const undoChanged = snapshot.undoneIds.length !== this.committedUndoLen
-    const roundChanged = snapshot.roundId !== this.committedRoundId
-    if (roundChanged) this.cancelSpeedrun()
     const visibleIds = new Set(visible.map((command) => command.id))
     const hasRemovedCommand = [...this.drawn.keys()].some(
       (id) => id !== this.preview?.id && !visibleIds.has(id),

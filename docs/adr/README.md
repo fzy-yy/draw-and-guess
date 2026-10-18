@@ -35,6 +35,7 @@
 | [0017](0017-drawing-replay-atomic-commit.md)             | 画布重放原子提交：后备缓冲整帧换入除空白窗   | 已采纳 |
 | [0018](0018-canvas-replay-machine.md)                    | 画布重放状态机：决策入机、单快照入口与锁分家 | 已采纳 |
 | [0022](0022-geometry-single-source-and-request-flags.md) | 坐标几何单口径与请求标志语义分离             | 已采纳 |
+| [0061](0061-replay-owns-layer-during-speedrun.md)        | 回放进行中逻辑层归回放所有                   | 已采纳 |
 
 ### 协议与类型护栏
 
@@ -59,12 +60,14 @@
 | [0040](0040-round-timing-and-phase-facts.md)                   | 回合时序与阶段事实收口：RoundMachine 独占时序 | 已采纳（暂停部分被 0059 取代） |
 | [0047](0047-fixed-100-point-scoring.md)                        | 计分改为固定 100 分制                         | 已采纳                         |
 | [0059](0059-remove-game-pause-and-unified-offline-handling.md) | 移除游戏内暂停与统一断线挂机化处理            | 已采纳                         |
+| [0064](0064-single-backend-assembly.md)                        | 单一后端装配根与唯一请求面                    | 已采纳                         |
 
 ### 玩法模式（接龙）
 
-| 编号                                                    | 主题                                           | 状态   |
-| :------------------------------------------------------ | :--------------------------------------------- | :----- |
-| [0058](0058-relay-mode-authoritative-flow-and-reuse.md) | 接龙模式：服务端权威推进、策略分流与插槽式复用 | 已采纳 |
+| 编号                                                    | 主题                                           | 状态                                   |
+| :------------------------------------------------------ | :--------------------------------------------- | :------------------------------------- |
+| [0058](0058-relay-mode-authoritative-flow-and-reuse.md) | 接龙模式：服务端权威推进、策略分流与插槽式复用 | 已采纳（投票「一律等满」被 0063 取代） |
+| [0063](0063-relay-vote-settle-acceleration.md)          | 接龙投票收齐后压缩结算窗口                     | 已采纳                                 |
 
 ### 客户端架构与 UI 原语
 
@@ -102,6 +105,7 @@
 | [0032](0032-drawer-hint-full-and-progressive.md)           | 画家模式完整提示、猜词者逐渐披露（wordHint） | 已废弃（被 0042 取代）           |
 | [0042](0042-remove-structured-hints.md)                    | 移除结构化提示：只保留逐字遮罩               | 已采纳                           |
 | [0053](0053-vocabulary-collection-and-toolbar-redesign.md) | 词库分类升级为自定义合集与工具栏图文胶囊化   | 已采纳                           |
+| [0062](0062-vocabulary-package-names-by-id.md)             | 多词库包名按 ID 解析、行勾选只上抛一条事件   | 已采纳                           |
 
 ### 本机反馈
 

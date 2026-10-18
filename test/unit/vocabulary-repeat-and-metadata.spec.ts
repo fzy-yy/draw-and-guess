@@ -93,17 +93,17 @@ describe('词库元数据扩展与重词规则解禁', () => {
     })
     const host = harness.register('房主')
     const guest = harness.register('玩家2')
-    const created = harness.service.createRoom(host.playerId, {
+    const created = harness.backend.room.createRoom(host.playerId, {
       name: '单词测试房',
       visibility: 'public',
       settings: testRoomSettings({ optionCount: 3 }),
     })
-    harness.service.joinRoom(guest.playerId, created.id)
-    harness.service.setReady(guest.playerId, true)
+    harness.backend.room.joinRoom(guest.playerId, created.id)
+    harness.backend.room.setReady(guest.playerId, true)
 
     // 开局
-    const room = harness.service.rooms.get(created.id)!
-    expect(() => harness.service.startGame(host.playerId, room.stateVersion)).not.toThrow()
+    const room = harness.backend.rooms.get(created.id)!
+    expect(() => harness.backend.gameplay.startGame(host.playerId, room.stateVersion)).not.toThrow()
 
     // 推进倒计时进入 choosing_word 阶段
     harness.runtime.advance(4_000)
@@ -184,27 +184,27 @@ describe('词库元数据扩展与重词规则解禁', () => {
     const harness = createGameHarness({ vocabulary: registry })
     const host = harness.register('房主')
     const guest = harness.register('玩家2')
-    const created = harness.service.createRoom(host.playerId, {
+    const created = harness.backend.room.createRoom(host.playerId, {
       name: '重词测试房',
       visibility: 'public',
       settings: testRoomSettings({ optionCount: 3, roundsPerPlayer: 2 }),
     })
-    harness.service.joinRoom(guest.playerId, created.id)
-    harness.service.setReady(guest.playerId, true)
+    harness.backend.room.joinRoom(guest.playerId, created.id)
+    harness.backend.room.setReady(guest.playerId, true)
 
-    const room = harness.service.rooms.get(created.id)!
-    harness.service.startGame(host.playerId, room.stateVersion)
+    const room = harness.backend.rooms.get(created.id)!
+    harness.backend.gameplay.startGame(host.playerId, room.stateVersion)
     harness.runtime.advance(4_000)
     expect(room.phase).toBe('choosing_word')
 
     // 第 1 回合选第 1 个词
     const round1Candidates = [...room.game!.candidates]
     const chosen = round1Candidates[0]!
-    harness.service.chooseWord(host.playerId, room.game!.roundId, chosen.id)
+    harness.backend.gameplay.chooseWord(host.playerId, room.game!.roundId, chosen.id)
     expect(room.phase).toBe('drawing')
 
     // 猜对结束本回合
-    harness.service.submitGuess(guest.playerId, room.game!.roundId, chosen.text)
+    harness.backend.chat.submitGuess(guest.playerId, room.game!.roundId, chosen.text)
     // 推进结算进入第 2 回合
     harness.runtime.advance(10_000)
 
@@ -221,32 +221,32 @@ describe('词库元数据扩展与重词规则解禁', () => {
     })
     const host = harness.register('房主')
     const guest = harness.register('玩家2')
-    const created = harness.service.createRoom(host.playerId, {
+    const created = harness.backend.room.createRoom(host.playerId, {
       name: '自定义重词房',
       visibility: 'public',
       settings: testRoomSettings({ allowCustomWord: true }),
     })
-    harness.service.joinRoom(guest.playerId, created.id)
-    harness.service.setReady(guest.playerId, true)
+    harness.backend.room.joinRoom(guest.playerId, created.id)
+    harness.backend.room.setReady(guest.playerId, true)
 
-    const room = harness.service.rooms.get(created.id)!
-    harness.service.startGame(host.playerId, room.stateVersion)
+    const room = harness.backend.rooms.get(created.id)!
+    harness.backend.gameplay.startGame(host.playerId, room.stateVersion)
     harness.runtime.advance(4_000)
     expect(room.phase).toBe('choosing_word')
 
     // 画家输入一个自定义词
-    harness.service.chooseCustomWord(host.playerId, room.game!.roundId, '历史自定义词')
+    harness.backend.gameplay.chooseCustomWord(host.playerId, room.game!.roundId, '历史自定义词')
     expect(room.phase).toBe('drawing')
     expect(room.game!.answer?.text).toBe('历史自定义词')
 
     // 猜对结束回合
-    harness.service.submitGuess(guest.playerId, room.game!.roundId, '历史自定义词')
+    harness.backend.chat.submitGuess(guest.playerId, room.game!.roundId, '历史自定义词')
     harness.runtime.advance(10_000)
 
     // 下一回合：画家再次输入相同自定义词，应正常通过而不被拦截为 DUPLICATE
     expect(room.phase).toBe('choosing_word')
     expect(() =>
-      harness.service.chooseCustomWord(guest.playerId, room.game!.roundId, '历史自定义词'),
+      harness.backend.gameplay.chooseCustomWord(guest.playerId, room.game!.roundId, '历史自定义词'),
     ).not.toThrow()
     expect(room.game!.answer?.text).toBe('历史自定义词')
   })
@@ -355,21 +355,21 @@ describe('词库元数据扩展与重词规则解禁', () => {
 
     const harness = createGameHarness({ vocabulary: registry })
     const host = harness.register('房主')
-    const created = harness.service.createRoom(host.playerId, {
+    const created = harness.backend.room.createRoom(host.playerId, {
       name: '多词库房',
       visibility: 'public',
       settings: testRoomSettings(),
     })
 
     // 同时勾选两个词库
-    const snapshot = harness.service.selectVocabularyPackages(host.playerId, ['pkg1', 'pkg2'])
+    const snapshot = harness.backend.roomVocabulary.selectPackages(host.playerId, ['pkg1', 'pkg2'])
     expect(snapshot.packageIds).toEqual(['pkg1', 'pkg2'])
     expect(snapshot.items).toHaveLength(2)
     expect(snapshot.items[0]!.packageName).toBe('词库一')
     expect(snapshot.items[1]!.packageName).toBe('词库二')
     expect(snapshot.selectedIds).toEqual(['pkg1:1', 'pkg2:1'])
 
-    const room = harness.service.rooms.get(created.id)!
+    const room = harness.backend.rooms.get(created.id)!
     expect(room.vocabularyPackageIds).toEqual(['pkg1', 'pkg2'])
   })
 })
